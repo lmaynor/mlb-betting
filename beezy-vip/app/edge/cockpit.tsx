@@ -160,7 +160,7 @@ function Panel({ title, sub, children }: { title: string; sub?: string; children
   return (
     <section className={cx(CARD, 'px-4 py-3.5')}>
       <div className="mb-2.5 flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="dell-heading tracking-[0.08em] text-text-secondary">{title}</h3>
+        <h3 className="ui-heading tracking-[0.08em] text-text-secondary">{title}</h3>
         {sub && <span className="mono text-[11px] text-text-secondary">{sub}</span>}
       </div>
       {children}
@@ -174,7 +174,7 @@ function StatPills({ items }: { items: { label: string; value: string; color?: s
       {items.map(it => (
         <div key={it.label} className="min-w-0 rounded-lg border border-separator-border bg-background-secondary-default px-[9px] py-[7px]">
           <div className="mono text-[15px] font-bold leading-[1.1] text-text-primary" style={it.color ? { color: it.color } : undefined}>{it.value}</div>
-          <div className="dell-heading mt-1 text-text-secondary">{it.label}</div>
+          <div className="ui-heading mt-1 text-text-secondary">{it.label}</div>
         </div>
       ))}
     </div>
@@ -336,7 +336,7 @@ export function OddsMatrix({ r }: { r: CockpitRow }) {
       <div role="table" aria-label={`Prices from every book quoting ${propText(r)}`} className="overflow-x-auto">
         <div role="row" className="grid min-w-[320px] gap-2 border-b border-separator-border px-1 pb-1.5" style={{ gridTemplateColumns: cols }}>
           {['BOOK', 'OVER', 'UNDER', 'FAIR O%'].map(h => (
-            <span key={h} role="columnheader" className="dell-heading text-text-secondary">{h}</span>
+            <span key={h} role="columnheader" className="ui-heading text-text-secondary">{h}</span>
           ))}
         </div>
         {ranked.map(({ quote, best }) => {
@@ -347,7 +347,7 @@ export function OddsMatrix({ r }: { r: CockpitRow }) {
               style={{ gridTemplateColumns: cols }}>
               <span role="cell" className="flex items-center gap-[6px] flex-wrap">
                 <BookBadge book={quote.book} />
-                {flagged && <span className="dell-heading" style={{ fontSize: '10px', color: SKY }}>TARGET</span>}
+                {flagged && <span className="ui-heading" style={{ fontSize: '10px', color: SKY }}>TARGET</span>}
               </span>
               <span role="cell">{cell(quote.over, best && !under)}</span>
               <span role="cell">{cell(quote.under, best && under)}</span>
@@ -378,10 +378,10 @@ function Inspector({ r, renderMlbExtras, onClose }: { r: CockpitRow; renderMlbEx
           <Avatar r={r} size={56} />
           <div className="min-w-0 flex-1">
             <div className="mb-[3px] flex flex-wrap items-center gap-2">
-              <span className="dell-heading" style={{ fontSize: '10px', color: accent, border: `1px solid ${accent}55`, borderRadius: '4px', padding: '1px 6px' }}>{r.sport.toUpperCase()}</span>
+              <span className="ui-heading" style={{ fontSize: '10px', color: accent, border: `1px solid ${accent}55`, borderRadius: '4px', padding: '1px 6px' }}>{r.sport.toUpperCase()}</span>
               <span className="mono text-caption-1-regular text-text-secondary">{[r.team, r.matchup, whenText(r)].filter(Boolean).join(' \u00b7 ')}</span>
             </div>
-            <h2 className="dell-display text-[clamp(19px,3vw,24px)] leading-[1.15] [overflow-wrap:anywhere]">{r.player ?? 'Unknown player'}</h2>
+            <h2 className="ui-display text-[clamp(19px,3vw,24px)] leading-[1.15] [overflow-wrap:anywhere]">{r.player ?? 'Unknown player'}</h2>
             <div className="mt-[3px] text-body-semibold text-text-primary">{propText(r)}</div>
           </div>
           <button onClick={onClose} className="btn btn-ghost cockpit-close self-start px-3 py-1.5 text-xs" aria-label="Close inspector">Close</button>
@@ -433,8 +433,8 @@ function PropCard({ r, active, onSelect }: { r: CockpitRow; active: boolean; onS
         <span className="truncate text-[14.5px] font-bold text-text-primary">{r.player ?? 'Unknown player'}</span>
         <span className="truncate text-body-2-semibold text-text-primary">{propText(r)}</span>
         <span className="flex min-w-0 items-center gap-[7px]">
-          <span className="dell-heading shrink-0 rounded-[4px] border px-[5px] py-px" style={{ color: accent, borderColor: `${accent}55` }}>{r.sport.toUpperCase()}</span>
-          {r.sport !== 'mlb' && <span className="dell-heading shrink-0 text-[#f59e0b]" title="NFL, NHL and NBA output has no tested edge against prices">UNVALIDATED</span>}
+          <span className="ui-heading shrink-0 rounded-[4px] border px-[5px] py-px" style={{ color: accent, borderColor: `${accent}55` }}>{r.sport.toUpperCase()}</span>
+          {r.sport !== 'mlb' && <span className="ui-heading shrink-0 text-[#f59e0b]" title="NFL, NHL and NBA output has no tested edge against prices">UNVALIDATED</span>}
           <span className="mono min-w-0 flex-1 truncate text-[11px] text-text-secondary">{meta}</span>
         </span>
       </span>

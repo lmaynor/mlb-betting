@@ -29,7 +29,7 @@ export function HeroSparkline({ data }: { data: SparklinePoint[] }) {
   return (
     <div style={{ borderTop: B, padding: '12px 18px 14px', gridColumn: '1 / -1' }}>
       <div className="flex justify-between items-center mb-[8px]">
-        <span className="dell-heading text-[10px] tracking-[0.1em] text-text-secondary">
+        <span className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary">
           30D cumulative &middot; paper &middot; {settled} settled
         </span>
         <span className="mono" style={{ fontSize: '10px', fontWeight: 600, color: lineColor }}>

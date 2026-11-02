@@ -25,8 +25,8 @@ export default async function SignupPage() {
     return (
       <div className="flex min-h-[70vh] items-center justify-center px-4 py-16">
         <div className="w-full max-w-[440px] text-center">
-          <p className="dell-heading mb-4 tracking-[0.12em] text-text-secondary">Pre-Launch</p>
-          <h1 className="dell-display mb-4 text-[30px]">
+          <p className="ui-heading mb-4 tracking-[0.12em] text-text-secondary">Pre-Launch</p>
+          <h1 className="ui-display mb-4 text-[30px]">
             Join the waitlist
           </h1>
           <p className="times mx-auto mb-7 max-w-[360px] text-headline-regular text-text-secondary">
@@ -43,7 +43,7 @@ export default async function SignupPage() {
 
           {/* Live gate progress */}
           <div className="rounded-2xl border border-separator-border bg-background-primary-default p-[22px] text-left shadow-md">
-            <p className="dell-heading mb-[18px] tracking-[0.1em] text-text-secondary">
+            <p className="ui-heading mb-[18px] tracking-[0.1em] text-text-secondary">
               200-Bet Gate Progress
             </p>
             {SYSTEMS.map(s => {
@@ -72,7 +72,7 @@ export default async function SignupPage() {
   return (
     <div className="flex min-h-[70vh] items-center justify-center px-4 py-16">
       <div className="w-full max-w-[360px] text-center">
-        <h1 className="dell-display mb-6 text-[28px]">Create Account</h1>
+        <h1 className="ui-display mb-6 text-[28px]">Create Account</h1>
         {/* <SignUp /> -- uncomment when PRE_LAUNCH = false */}
       </div>
     </div>

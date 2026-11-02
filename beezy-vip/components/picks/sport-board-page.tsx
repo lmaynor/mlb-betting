@@ -89,9 +89,9 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
         <div className="mb-[14px] flex items-baseline justify-between gap-[12px] flex-wrap">
           <div className="flex items-baseline gap-[12px] flex-wrap">
             <h1 className="text-[20px] font-bold text-text-primary m-0">{kind === 'game' ? `${pillar.shortName} game picks` : copy.h1(pillar.shortName)}</h1>
-            <span className="dell-heading" title={pillar.description} style={{ fontSize: '10px', color: pillar.accent, border: `1px solid ${pillar.accent}66`, borderRadius: '6px', padding: '2px 8px' }}>{STATUS_LABEL[pillar.status]}</span>
+            <span className="ui-heading" title={pillar.description} style={{ fontSize: '10px', color: pillar.accent, border: `1px solid ${pillar.accent}66`, borderRadius: '6px', padding: '2px 8px' }}>{STATUS_LABEL[pillar.status]}</span>
             {!tracked && (
-              <span className="dell-heading" title="NFL, NHL and NBA projections are model output with no tested edge against prices. They are not tracked in the public results."
+              <span className="ui-heading" title="NFL, NHL and NBA projections are model output with no tested edge against prices. They are not tracked in the public results."
                 style={{ fontSize: '10px', color: 'var(--warn)', border: '1px solid rgba(245,158,11,0.45)', borderRadius: '6px', padding: '2px 8px' }}>UNVALIDATED</span>
             )}
           </div>

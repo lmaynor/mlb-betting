@@ -555,7 +555,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
       {PRE_LAUNCH && (
         <div className="mb-2.5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgba(87,242,135,0.35)] bg-background-primary-default px-4 py-2.5 shadow-card">
           <div className="flex items-center gap-2.5">
-            <span className="dell-heading rounded-[4px] bg-[var(--brand-dim)] px-2 py-[3px] tracking-[0.08em] text-[var(--signal)]">PRE-LAUNCH PREVIEW</span>
+            <span className="ui-heading rounded-[4px] bg-[var(--brand-dim)] px-2 py-[3px] tracking-[0.08em] text-[var(--signal)]">PRE-LAUNCH PREVIEW</span>
             <span className="text-body-2-regular text-text-secondary">The full Odds Terminal is unlocked for early visitors (included in All-Access Pro at launch).</span>
           </div>
           <Link href="/pricing" className="text-caption-1-semibold text-[var(--signal)] no-underline hover:underline">Lock pre-launch pricing &rarr;</Link>
@@ -720,7 +720,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
                 align="right"
                 header={
                   <div className="flex gap-[8px] items-center">
-                    <span className="dell-heading text-[10px] text-text-secondary">DEVIG</span>
+                    <span className="ui-heading text-[10px] text-text-secondary">DEVIG</span>
                     <PillGroup>
                       <Pill active={method === 'proportional'} onClick={() => setMethod('proportional')} title="Remove the vig in proportion to each side's implied probability">PROPORTIONAL</Pill>
                       <Pill active={method === 'power'} onClick={() => setMethod('power')} title="Raise both implied probabilities to the power that sums them to 1 (shifts less to the favourite)">POWER</Pill>
@@ -981,26 +981,26 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
           {mode === 'ev' && (
             <>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">LINES</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">LINES</div>
                 <PillGroup>
                   <Pill active={lines === 'main'} onClick={() => setLines('main')}>Main Lines</Pill>
                   <Pill active={lines === 'all'} onClick={() => setLines('all')}>Main + Alt Ladders</Pill>
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">O/U</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">O/U</div>
                 <PillGroup>
                   {(['both', 'over', 'under'] as SideFilter[]).map(s => <Pill key={s} active={side === s} onClick={() => setSide(s)}>{s.toUpperCase()}</Pill>)}
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">MIN EV</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">MIN EV</div>
                 <PillGroup>
                   {MIN_EV.map(m => <Pill key={m.v} active={minEv === m.v} onClick={() => setMinEv(m.v)}>{m.label}</Pill>)}
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">SORT</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">SORT</div>
                 <Select id="mobile-ev-sort" value={sort} onChange={v => setSort(v as SortKey)} options={[{ v: 'ev', l: 'Best EV %' }, { v: 'time', l: 'Game time' }, { v: 'player', l: 'Player' }]} />
               </div>
             </>
@@ -1009,7 +1009,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
           {mode === 'outliers' && (
             <>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">MIN GAP</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">MIN GAP</div>
                 <PillGroup>
                   {OUTLIER_GAP_OPTIONS.map(g => (
                     <Pill key={g.v} active={outlierGap === g.v} onClick={() => { setOutlierGap(g.v); setLimit(PAGE) }}>{g.label}</Pill>
@@ -1017,14 +1017,14 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">REQUIRE +EV</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">REQUIRE +EV</div>
                 <PillGroup>
                   <Pill active={!outlierReqEv} onClick={() => { setOutlierReqEv(false); setLimit(PAGE) }}>All Outliers</Pill>
                   <Pill active={outlierReqEv} onClick={() => { setOutlierReqEv(true); setLimit(PAGE) }}>Verified +EV Only</Pill>
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">ODDS BAND</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">ODDS BAND</div>
                 <PillGroup>
                   {OUTLIER_ODDS_OPTIONS.map(b => (
                     <Pill key={b.v} active={outlierOddsBand === b.v} onClick={() => { setOutlierOddsBand(b.v); setLimit(PAGE) }}>{b.label}</Pill>
@@ -1032,7 +1032,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">MIN BOOKS</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">MIN BOOKS</div>
                 <PillGroup>
                   {OUTLIER_MIN_BOOKS.map(b => (
                     <Pill key={b.v} active={outlierMinBooks === b.v} onClick={() => { setOutlierMinBooks(b.v); setLimit(PAGE) }}>{b.label}</Pill>
@@ -1040,7 +1040,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">VIEW</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">VIEW</div>
                 <PillGroup>
                   <Pill active={outlierView === 'cards'} onClick={() => setOutlierView('cards')}>Visual Cards</Pill>
                   <Pill active={outlierView === 'table'} onClick={() => setOutlierView('table')}>Compact Table</Pill>
@@ -1052,20 +1052,20 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
           {mode === 'arb' && (
             <>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">SHOW</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">SHOW</div>
                 <PillGroup>
                   <Pill active={arbView === 'live'} onClick={() => { setArbView('live'); setLimit(PAGE) }}>LIVE ARBS (&gt; 0%)</Pill>
                   <Pill active={arbView === 'near'} onClick={() => { setArbView('near'); setLimit(PAGE) }}>NEAR ARBS (&gt; -1.5%)</Pill>
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">EXCHANGES</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">EXCHANGES</div>
                 <PillGroup>
                   <Pill active={exchanges} onClick={() => setExchanges(v => !v)}>INCLUDE KALSHI / NOVIG</Pill>
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">OUTLAY ($)</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">OUTLAY ($)</div>
                 <input
                   inputMode="decimal"
                   value={outlayText}
@@ -1079,31 +1079,31 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
           {mode === 'middles' && (
             <>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">MAX COST</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">MAX COST</div>
                 <PillGroup>
                   {MID_COST.map(c => <Pill key={c} active={midCost === c} onClick={() => { setMidCost(c); setLimit(PAGE) }}>{`${c}%`}</Pill>)}
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">VALUE</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">VALUE</div>
                 <PillGroup>
                   <Pill active={midPosEv} onClick={() => { setMidPosEv(v => !v); setLimit(PAGE) }}>+EV ONLY</Pill>
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">WINDOW</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">WINDOW</div>
                 <PillGroup>
                   {MID_GAP.map(g => <Pill key={g.v} active={midGap === g.v} onClick={() => { setMidGap(g.v); setLimit(PAGE) }}>{g.label}</Pill>)}
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">EXCHANGES</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">EXCHANGES</div>
                 <PillGroup>
                   <Pill active={exchanges} onClick={() => setExchanges(v => !v)}>INCLUDE KALSHI / NOVIG</Pill>
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">OUTLAY ($)</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">OUTLAY ($)</div>
                 <input
                   inputMode="decimal"
                   value={outlayText}
@@ -1117,7 +1117,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
           {mode === 'longshots' && (
             <>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">STRATEGY</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">STRATEGY</div>
                 <PillGroup>
                   <Pill active={longSub === 'all'} onClick={() => { setLongSub('all'); setLimit(PAGE) }}>All</Pill>
                   <Pill active={longSub === 'plus_ev_over'} onClick={() => { setLongSub('plus_ev_over'); setLimit(PAGE) }}>Buy Over</Pill>
@@ -1125,19 +1125,19 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">MIN PAYOUT</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">MIN PAYOUT</div>
                 <PillGroup>
                   {ODDS_MIN.map(m => <Pill key={m.v} active={oddsMin === m.v} onClick={() => { setOddsMin(m.v); setLimit(PAGE) }}>{m.label}</Pill>)}
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">MIN EV</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">MIN EV</div>
                 <PillGroup>
                   {MIN_EV.map(m => <Pill key={m.v} active={minEv === m.v} onClick={() => setMinEv(m.v)}>{m.label}</Pill>)}
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">FAIR SOURCE</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">FAIR SOURCE</div>
                 <PillGroup>
                   <Pill active={useCurve} onClick={() => setUseCurve(true)}>Multi-Book + Curve</Pill>
                   <Pill active={!useCurve} onClick={() => setUseCurve(false)}>Exact Books Only</Pill>
@@ -1149,7 +1149,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
           {mode === 'sgp' && (
             <>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">ARCHETYPE</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">ARCHETYPE</div>
                 <PillGroup>
                   {SGP_ARCHETYPE_OPTIONS.map(a => (
                     <Pill key={a.v} active={sgpArch === a.v} onClick={() => { setSgpArch(a.v); setLimit(PAGE) }}>{a.label}</Pill>
@@ -1157,7 +1157,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">MIN EV</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">MIN EV</div>
                 <PillGroup>
                   {SGP_MIN_EV_OPTIONS.map(e => (
                     <Pill key={e.v} active={sgpMinEv === e.v} onClick={() => { setSgpMinEv(e.v); setLimit(PAGE) }}>{e.label}</Pill>
@@ -1165,7 +1165,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
                 </PillGroup>
               </div>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">BOOK</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">BOOK</div>
                 <Select
                   id="mobile-sgp-book"
                   value={sgpBook}
@@ -1177,7 +1177,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
                 />
               </div>
               <div>
-                <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">FAIR SOURCE</div>
+                <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">FAIR SOURCE</div>
                 <PillGroup>
                   <Pill active={useCurve} onClick={() => setUseCurve(true)}>Multi-Book + Curve</Pill>
                   <Pill active={!useCurve} onClick={() => setUseCurve(false)}>Exact Books Only</Pill>
@@ -1187,7 +1187,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
           )}
 
             <div style={{ borderTop: `1px solid ${HAIR}`, paddingTop: '12px' }}>
-              <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">PROP MARKET</div>
+              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">PROP MARKET</div>
               <select
                 id="mobile-odds-stat"
                 value={stat}
@@ -1210,7 +1210,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
             </div>
 
             <div>
-              <div className="dell-heading mb-1.5 text-[10px] text-text-secondary">GAME</div>
+              <div className="ui-heading mb-1.5 text-[10px] text-text-secondary">GAME</div>
               <select
                 id="mobile-odds-game"
                 value={game}
@@ -1259,7 +1259,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
             ]}
             extraHeader={
               <div className="flex gap-[8px] items-center mb-[4px]">
-                <span className="dell-heading text-[10px] text-text-secondary">DEVIG METHOD</span>
+                <span className="ui-heading text-[10px] text-text-secondary">DEVIG METHOD</span>
                 <PillGroup>
                   <Pill active={method === 'proportional'} onClick={() => setMethod('proportional')}>PROPORTIONAL</Pill>
                   <Pill active={method === 'power'} onClick={() => setMethod('power')}>POWER</Pill>
@@ -2162,7 +2162,7 @@ function MobileCompareSheet({
         )}
 
         <div>
-          <div className="dell-heading text-[10px] text-text-secondary mb-[8px] tracking-[0.06em]">
+          <div className="ui-heading text-[10px] text-text-secondary mb-[8px] tracking-[0.06em]">
             ALL REPORTING BOOKS ({row.books.length})
           </div>
           <div className="flex flex-col gap-[6px]">
@@ -2817,7 +2817,7 @@ function SgpNotice({ extremeCount, includeExtreme, onToggle }: { extremeCount: n
 function Field({ label, htmlFor, children }: { label: string; htmlFor?: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2">
-      <label htmlFor={htmlFor} className="dell-heading text-text-secondary">{label}</label>
+      <label htmlFor={htmlFor} className="ui-heading text-text-secondary">{label}</label>
       {children}
     </div>
   )
@@ -2990,7 +2990,7 @@ function MobileBookChecklist({
             textAlign: 'left',
           }}
         >
-          <span className="dell-heading text-[11px] text-text-primary tracking-[0.06em]">
+          <span className="ui-heading text-[11px] text-text-primary tracking-[0.06em]">
             {title} ({countLabel})
           </span>
           <span className="mono text-[10px] text-text-secondary">

@@ -206,13 +206,12 @@ body {
      --font-display  Space Grotesk       h1, h2, display classes, the wordmark
      --font-inter    Plus Jakarta Sans   dense UI and body copy (the variable name is historical: ~1,600 inline styles read it)
      --font-mono     IBM Plex Mono       every odd, probability, EV%, stake, timestamp, and every uppercase micro-label
-   Canonical classes are .ui-display / .ui-heading. The .dell-* names are deprecated aliases of the same rules. */
+   Classes: .ui-display (headings, wordmark) and .ui-heading (mono micro-labels). */
 h1, h2,
 .display-xl, .display-lg {
   font-family: var(--font-display), var(--font-inter), sans-serif;
 }
-.ui-display,
-.dell-display {
+.ui-display {
   font-family: var(--font-display), var(--font-inter), sans-serif;
   font-weight: 700;
   letter-spacing: -0.025em;
@@ -220,8 +219,7 @@ h1, h2,
   text-transform: none;
   color: var(--chalk);
 }
-.ui-heading,
-.dell-heading {
+.ui-heading {
   font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px;
   font-weight: 600;
@@ -293,27 +291,8 @@ th {
   color: var(--silver);
 }
 
-/* Accent chip (was the yellow Dell sticker) */
-.dell-sticker {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--win-wash);
-  color: var(--signal);
-  font-family: var(--font-text), system-ui, sans-serif;
-  font-weight: 600;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: 5px 10px;
-  border: 1px solid var(--win-border);
-  border-radius: var(--radius-pill);
-}
-
 /* ── Buttons ────────────────────────────────────────────────────── */
-.btn,
-.dell-btn-primary,
-.dell-btn-red {
+.btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -333,18 +312,14 @@ th {
               transform var(--dur-fast) var(--ease-out),
               box-shadow var(--dur) var(--ease-out);
 }
-/* .btn-primary is canonical; .dell-btn-primary and .dell-btn-red are deprecated aliases. Hover is a flat colour shift, no glow. */
-.btn-primary,
-.dell-btn-primary,
-.dell-btn-red {
+/* Hover is a flat colour shift, no glow. */
+.btn-primary {
   background: var(--signal);
   color: var(--carbon);
   border-color: var(--signal-led);
   box-shadow: var(--shadow-inset);
 }
-.btn-primary:hover,
-.dell-btn-primary:hover,
-.dell-btn-red:hover {
+.btn-primary:hover {
   background: #6bf596;
 }
 .btn-ghost {
@@ -360,11 +335,8 @@ th {
 }
 .btn-secondary:hover { border-color: var(--steel); }
 .btn:active,
-.dell-btn-primary:active,
-.dell-btn-red:active,
 .btn-primary:active { transform: translateY(1px); }
 .btn:focus-visible,
-.dell-btn-primary:focus-visible,
 button:focus-visible,
 a:focus-visible {
   outline: 2px solid var(--signal);

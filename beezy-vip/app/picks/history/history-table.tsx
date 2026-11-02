@@ -21,11 +21,11 @@ export function HistoryTable({ days }: { days: HistoryDay[] }) {
       <table className="w-full border-collapse min-w-[560px] text-[13px]">
         <thead>
           <tr>
-            <th className="dell-heading" style={TH}>Day</th>
-            <th className="dell-heading" style={{ ...TH, textAlign: 'right' }}>Picks</th>
-            <th className="dell-heading" style={{ ...TH, textAlign: 'right' }}>W-L</th>
-            <th className="dell-heading" style={{ ...TH, textAlign: 'right' }}>Units</th>
-            <th className="dell-heading" style={{ ...TH, textAlign: 'right' }}>ROI</th>
+            <th className="ui-heading" style={TH}>Day</th>
+            <th className="ui-heading" style={{ ...TH, textAlign: 'right' }}>Picks</th>
+            <th className="ui-heading" style={{ ...TH, textAlign: 'right' }}>W-L</th>
+            <th className="ui-heading" style={{ ...TH, textAlign: 'right' }}>Units</th>
+            <th className="ui-heading" style={{ ...TH, textAlign: 'right' }}>ROI</th>
           </tr>
         </thead>
         <tbody>

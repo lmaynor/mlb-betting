@@ -64,13 +64,13 @@ export async function RecentPicksTable() {
                   <tr key={b.id}>
                     <td className={cx(TD, 'min-w-0')}>
                       <div className="flex items-center gap-2">
-                        <span className="dell-heading shrink-0 rounded-md px-1.5 py-0.5 font-semibold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{systemLabel(b.system, true)}</span>
+                        <span className="ui-heading shrink-0 rounded-md px-1.5 py-0.5 font-semibold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{systemLabel(b.system, true)}</span>
                         <span className="inline-flex size-[30px] shrink-0">
                           {b.player && <PlayerHeadshot sport={sp} id={playerIdByName(sp, b.player)} name={b.player} size={30} />}
                         </span>
                         <div className="min-w-0">
                           <div className="text-body-2-bold text-text-primary">{b.player ?? pickText(b)}</div>
-                          {b.player && <div className="text-caption-1-regular text-text-secondary">{pickText(b)}{isWinterSport(b.sport) && <span className="dell-heading ml-[8px] text-[#f59e0b]" title="Paper-tracked model output with no tested edge">{b.sport!.toUpperCase()} UNVALIDATED</span>}</div>}
+                          {b.player && <div className="text-caption-1-regular text-text-secondary">{pickText(b)}{isWinterSport(b.sport) && <span className="ui-heading ml-[8px] text-[#f59e0b]" title="Paper-tracked model output with no tested edge">{b.sport!.toUpperCase()} UNVALIDATED</span>}</div>}
                         </div>
                       </div>
                     </td>

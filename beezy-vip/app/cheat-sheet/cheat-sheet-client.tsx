@@ -89,7 +89,7 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
       <div className="flex-1 py-[10px] px-[12px] flex flex-col justify-center min-w-0">
         <div className="mb-[6px] flex items-center justify-between gap-[8px]">
           <span className="inline-flex items-center gap-[6px] min-w-0">
-            <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', padding: '2px 6px', borderRadius: '4px', background: `${color}20`, color, border: `1px solid ${color}` }}>{pillar.shortName}</span>
+            <span className="ui-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', padding: '2px 6px', borderRadius: '4px', background: `${color}20`, color, border: `1px solid ${color}` }}>{pillar.shortName}</span>
           </span>
           {edge && <span className="mono" style={{ fontSize: '11px', fontWeight: 800, color: tierColor, whiteSpace: 'nowrap' }}>{edge}</span>}
         </div>
@@ -112,9 +112,9 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
         style={{ minWidth: '64px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', borderLeft: `1px solid ${color}18`, padding: '8px 6px', background: `${tierColor}08` }}>
         <span className="mono" style={{ fontSize: '22px', fontWeight: 800, color: tierColor, lineHeight: 1 }}>{pick.score}</span>
         {isOfficialCardPlay(pick) ? (
-          <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.04em', padding: '2px 5px', borderRadius: '4px', border: '1px solid #57F287', background: 'rgba(87,242,135,0.12)', color: '#57F287', whiteSpace: 'nowrap' }}>OFFICIAL PLAY</span>
+          <span className="ui-heading" style={{ fontSize: '10px', letterSpacing: '0.04em', padding: '2px 5px', borderRadius: '4px', border: '1px solid #57F287', background: 'rgba(87,242,135,0.12)', color: '#57F287', whiteSpace: 'nowrap' }}>OFFICIAL PLAY</span>
         ) : isEvOutlier(pick) ? (
-          <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.04em', padding: '2px 5px', borderRadius: '4px', border: '1px solid #38bdf8', background: 'rgba(56,189,248,0.12)', color: '#38bdf8', whiteSpace: 'nowrap' }}>+EV OUTLIER</span>
+          <span className="ui-heading" style={{ fontSize: '10px', letterSpacing: '0.04em', padding: '2px 5px', borderRadius: '4px', border: '1px solid #38bdf8', background: 'rgba(56,189,248,0.12)', color: '#38bdf8', whiteSpace: 'nowrap' }}>+EV OUTLIER</span>
         ) : null}
       </div>
     </div>
@@ -125,7 +125,7 @@ function YesterdayRow({ pick }: { pick: CardPick }) {
   const win = pick.result === 'win'
   return (
     <div className="flex items-center gap-[8px] py-[6px] px-[0px] border-b border-b-[color:var(--color-separator-border)]">
-      <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.06em', padding: '2px 5px', borderRadius: '4px', color: win ? 'var(--signal)' : 'var(--loss)', border: `1px solid ${win ? 'var(--signal)' : 'var(--loss)'}`, flexShrink: 0 }}>
+      <span className="ui-heading" style={{ fontSize: '10px', letterSpacing: '0.06em', padding: '2px 5px', borderRadius: '4px', color: win ? 'var(--signal)' : 'var(--loss)', border: `1px solid ${win ? 'var(--signal)' : 'var(--loss)'}`, flexShrink: 0 }}>
         {win ? 'W' : pick.result === 'loss' ? 'L' : '-'}
       </span>
       <span className="mono text-[10px] text-text-secondary overflow-hidden text-ellipsis whitespace-nowrap">
@@ -158,13 +158,13 @@ function PostToX({ sheets }: { sheets: Sheet[] }) {
 
   return (
     <div style={{ border: '1px solid var(--color-separator-border)', background: 'var(--color-background-primary-default)', padding: '16px', marginBottom: '16px', borderRadius: 'var(--radius)', width: '100%', boxSizing: 'border-box' }}>
-      <div className="dell-heading text-[10px] tracking-[0.12em] text-text-secondary mb-[12px]">POST TO X</div>
+      <div className="ui-heading text-[10px] tracking-[0.12em] text-text-secondary mb-[12px]">POST TO X</div>
       {sheets.map(sh => {
         const n = postLength(sh.text)
         return (
           <div key={sh.id} className="mb-[14px]">
             <div className="flex items-center gap-[10px] mb-[6px]">
-              <span className="dell-heading text-[11px] tracking-[0.08em] text-text-primary">{sh.label}</span>
+              <span className="ui-heading text-[11px] tracking-[0.08em] text-text-primary">{sh.label}</span>
               <span className="mono text-[10px] text-[var(--color-border-button-active)]">{n}/{POST_LIMIT}</span>
               <div  className="flex-1"/>
               <button onClick={() => copy(sh.id, sh.text)} className="mono" style={copyBtn(copied === sh.id)}>{copied === sh.id ? 'COPIED' : 'COPY'}</button>
@@ -176,7 +176,7 @@ function PostToX({ sheets }: { sheets: Sheet[] }) {
       })}
       <div className="border-t border-t-[color:var(--color-separator-border)] pt-[12px]">
         <div className="flex items-center gap-[10px] mb-[6px]">
-          <span className="dell-heading text-[11px] tracking-[0.08em] text-text-primary">REPLY</span>
+          <span className="ui-heading text-[11px] tracking-[0.08em] text-text-primary">REPLY</span>
           <div  className="flex-1"/>
           <button onClick={() => copy('reply', LINK_REPLY)} className="mono" style={copyBtn(copied === 'reply')}>{copied === 'reply' ? 'COPIED' : 'COPY'}</button>
         </div>
@@ -279,9 +279,9 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
           {list.length > 0 && (
             <div className="py-[7px] px-[16px] border-b border-b-[color:var(--color-separator-border)] flex flex-wrap gap-[10px] items-center">
               <span className="mono text-[10px] text-text-secondary tracking-[0.08em]">{list.length > DEFAULT_LIMIT ? `TOP ${DEFAULT_LIMIT} OF ${list.length}` : `${list.length} ${list.length === 1 ? 'PICK' : 'PICKS'}`}</span>
-              {strong > 0 && <span className="dell-heading text-[10px] text-[var(--signal)] tracking-[0.06em]">{strong} STRONG</span>}
-              {lean > 0 && <span className="dell-heading text-[10px] text-[var(--signal)] tracking-[0.06em]">{lean} LEAN</span>}
-              {best > 0 && <span className="dell-heading text-[10px] text-[var(--signal)] tracking-[0.06em]">BEST EDGE +{best.toFixed(1)}%</span>}
+              {strong > 0 && <span className="ui-heading text-[10px] text-[var(--signal)] tracking-[0.06em]">{strong} STRONG</span>}
+              {lean > 0 && <span className="ui-heading text-[10px] text-[var(--signal)] tracking-[0.06em]">{lean} LEAN</span>}
+              {best > 0 && <span className="ui-heading text-[10px] text-[var(--signal)] tracking-[0.06em]">BEST EDGE +{best.toFixed(1)}%</span>}
             </div>
           )}
 
@@ -319,7 +319,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
           )}
 
           <div className="border-t border-t-[color:var(--color-separator-border)] py-[11px] px-[16px] flex items-center gap-[10px] bg-[var(--color-background-full)]">
-            <button onClick={handleShare} className="dell-heading"
+            <button onClick={handleShare} className="ui-heading"
               style={{ fontSize: '10px', letterSpacing: '0.08em', padding: '6px 12px', background: 'var(--signal)', color: '#000', border: '1px solid var(--color-separator-border)', borderRadius: 'var(--radius)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
               {copied ? 'COPIED' : 'SHARE CARD'}
             </button>
@@ -336,7 +336,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
           {canPost && <PostToX sheets={sheets} />}
 
           <div className="border border-[color:var(--color-separator-border)] bg-[var(--color-background-primary-default)] p-[16px] mb-[16px] rounded-[var(--radius)]">
-            <div className="dell-heading text-[10px] tracking-[0.12em] text-text-secondary mb-[10px]">WHAT IS THIS</div>
+            <div className="ui-heading text-[10px] tracking-[0.12em] text-text-secondary mb-[10px]">WHAT IS THIS</div>
             <p style={{ fontSize: '13px', color: 'var(--color-neutral-300)', lineHeight: 1.6, margin: '0 0 10px' }}>
               The share-ready version of today&apos;s Top 10 player picks across MLB, NFL, NHL and NBA, ranked by Beezy Score. MLB picks are tracked and settled in the public record; NFL, NHL and NBA picks come from the projection engine and are not tracked yet. Game picks are a separate, paid set.
             </p>
@@ -349,7 +349,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
           </div>
 
           <div className="border border-[color:var(--color-separator-border)] bg-[var(--color-background-primary-default)] p-[16px] rounded-[var(--radius)]">
-            <div className="dell-heading text-[10px] tracking-[0.12em] text-text-secondary mb-[10px]">SCORE LEGEND</div>
+            <div className="ui-heading text-[10px] tracking-[0.12em] text-text-secondary mb-[10px]">SCORE LEGEND</div>
             {[
               { tier: 'strong', desc: 'Score 70+: large edge, many books agree' },
               { tier: 'lean', desc: 'Score 45-69: positive edge, moderate confidence' },
@@ -358,7 +358,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
               const t = row.tier as 'strong' | 'lean' | 'watch'
               return (
                 <div key={t} className="flex items-center gap-[10px] mb-[8px]">
-                  <span className="dell-heading" style={{ fontSize: '10px', letterSpacing: '0.08em', padding: '2px 6px', borderRadius: '4px', color: TIER_COLOR[t], border: `1px solid ${TIER_COLOR[t]}`, flexShrink: 0 }}>{TIER_LABEL[t]}</span>
+                  <span className="ui-heading" style={{ fontSize: '10px', letterSpacing: '0.08em', padding: '2px 6px', borderRadius: '4px', color: TIER_COLOR[t], border: `1px solid ${TIER_COLOR[t]}`, flexShrink: 0 }}>{TIER_LABEL[t]}</span>
                   <span className="mono text-[10px] text-text-secondary">{row.desc}</span>
                 </div>
               )

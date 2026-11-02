@@ -99,7 +99,7 @@ export default async function ModelDetailPage({ params }: Props) {
       {/* Header */}
       <div className="mb-[28px]">
         <div className="flex items-center gap-[12px] mb-[10px]">
-          <h1 className="dell-display text-[30px] text-text-primary">{spec.name}</h1>
+          <h1 className="ui-display text-[30px] text-text-primary">{spec.name}</h1>
           <span className="mono" style={{ fontSize: '11px', color: 'var(--color-neutral-300)', border: B, borderRadius: 'var(--radius-pill)', padding: '3px 10px' }}>{spec.version}</span>
         </div>
         <p className="text-[13px] text-[var(--color-neutral-300)] leading-[1.65] max-w-[560px] mb-[10px]">{spec.description}</p>
@@ -117,7 +117,7 @@ export default async function ModelDetailPage({ params }: Props) {
         <StatBlock label="Win Rate"     value={winRate !== null ? `${winRate.toFixed(1)}%` : '--'}             sub="W / (W+L)" />
         <StatBlock label="ROI"          value={roi !== null ? `${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%` : '--'} accent={roi !== null && roi > 0} sub="Settled bets" />
         <div className="p-[18px]">
-          <div className="dell-heading text-[10px] tracking-[0.1em] text-text-secondary mb-[6px]">Avg Edge</div>
+          <div className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary mb-[6px]">Avg Edge</div>
           <div className="mono" style={{ fontSize: '20px', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: avgEdge === null ? 'var(--color-text-secondary)' : avgEdge >= 0 ? 'var(--signal)' : 'var(--loss)' }}>
             {avgEdge !== null ? `${avgEdge >= 0 ? '+' : ''}${avgEdge.toFixed(1)}%` : '--'}
           </div>
@@ -130,7 +130,7 @@ export default async function ModelDetailPage({ params }: Props) {
 
         {/* Config */}
         <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--color-background-primary-default)', padding: '20px' }}>
-          <div className="dell-display text-[16px] text-text-primary mb-[16px]">Model configuration</div>
+          <div className="ui-display text-[16px] text-text-primary mb-[16px]">Model configuration</div>
           {[
             { label: 'Algorithm',      value: spec.algorithm ?? 'XGBoost (gradient boosted trees)' },
             { label: 'Training Data',  value: spec.dataRange },
@@ -233,7 +233,7 @@ export default async function ModelDetailPage({ params }: Props) {
           <StatBlock label="Avg Edge"    value={avgEdge !== null ? `${avgEdge >= 0 ? '+' : ''}${avgEdge.toFixed(1)}%` : '--'} />
           <StatBlock label="Win Rate"    value={winRate !== null ? `${winRate.toFixed(1)}%` : '--'} />
           <div className="p-[18px]">
-            <div className="dell-heading text-[10px] tracking-[0.1em] text-text-secondary mb-[6px]">Sample Size</div>
+            <div className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary mb-[6px]">Sample Size</div>
             <div className="mono text-[20px] font-semibold leading-[1] mb-[4px] text-text-primary">{bets}</div>
             <div className="times text-[11px] text-text-secondary">Settled bets</div>
           </div>
@@ -242,7 +242,7 @@ export default async function ModelDetailPage({ params }: Props) {
 
       {/* Full bet history */}
       <div className="flex justify-between items-center mb-[14px]">
-        <h2 className="dell-display text-[20px] text-text-primary">Full settled history</h2>
+        <h2 className="ui-display text-[20px] text-text-primary">Full settled history</h2>
         <Link href={`/picks/mlb/${spec.slug}`} className="times" style={{ fontSize: '13px', color: 'var(--link)', textDecoration: 'none' }}>
           Today&apos;s Picks &rarr;
         </Link>

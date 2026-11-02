@@ -38,7 +38,7 @@ Terminal design system v2 (2026-10-14), per the v2 overhaul spec. Dark fintech:
   (--font-mono), with tabular-nums and slashed zeros. 10px is the minimum size for any text.
 - Geometry: ONE surface spec (SURFACE_CARD in lib/tokens.ts): #11131a, 1px #1e2230, 8px radius, at most a 1px shadow.
   6px badges, pills for system badges. Shared table bases are TABLE_TH / TABLE_TD; do not re-declare them per file.
-- Canonical classes are .ui-display, .ui-heading and .btn-primary; the .dell-* names are deprecated aliases.
+- Canonical classes are .ui-display, .ui-heading and .btn-primary. The old .dell-* aliases were removed.
 - Palette is closed: six retired off-palette grays are banned by tests/no-slop-ui.test.tsx.
 - Per-system hues in lib/tokens.ts SYSTEM_COLOR (+ NFL stat keys); book identity in BOOK_META
 - Tokens live in app/globals.css :root + lib/tokens.ts; legacy variable names are aliases.

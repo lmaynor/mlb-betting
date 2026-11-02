@@ -72,9 +72,9 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
 
       <div className="mb-[28px]">
         <div className="flex items-center gap-[12px] mb-[10px] flex-wrap">
-          <h1 className="dell-display text-[30px] text-text-primary">{pillar.shortName} {system.name}</h1>
+          <h1 className="ui-display text-[30px] text-text-primary">{pillar.shortName} {system.name}</h1>
           <span className="mono" style={{ fontSize: '11px', color: 'var(--color-neutral-300)', border: B, borderRadius: 'var(--radius-pill)', padding: '3px 10px' }}>empirical_ewm_v2</span>
-          <span className="dell-heading" style={{ fontSize: '10px', color, border: `1px solid ${color}66`, borderRadius: '6px', padding: '2px 8px' }}>{gap ? 'DATA GAP' : 'UNVALIDATED'}</span>
+          <span className="ui-heading" style={{ fontSize: '10px', color, border: `1px solid ${color}66`, borderRadius: '6px', padding: '2px 8px' }}>{gap ? 'DATA GAP' : 'UNVALIDATED'}</span>
         </div>
         <p className="text-[13px] text-[var(--color-neutral-300)] leading-[1.65] max-w-[640px] mb-[10px]">{system.description}</p>
         <Link href={`/picks/${sport}/${system.slug}`} className="times" style={{ fontSize: '13px', color: 'var(--link)', textDecoration: 'none' }}>
@@ -100,7 +100,7 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '28px' }}>
         <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--color-background-primary-default)', padding: '20px' }}>
-          <div className="dell-display text-[16px] text-text-primary mb-[16px]">Model configuration</div>
+          <div className="ui-display text-[16px] text-text-primary mb-[16px]">Model configuration</div>
           {[
             { label: 'Live engine', value: gap ? 'Not projected' : LIVE_ENGINE.name },
             { label: 'Live distribution', value: system.family },

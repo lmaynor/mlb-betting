@@ -16,7 +16,7 @@ export async function Hero() {
             NFL &middot; NBA &middot; NHL &middot; MLB
           </span>
 
-          <h1 className="dell-display hero-h1 mb-3.5 text-[40px] leading-[1.06] tracking-[-0.025em]">
+          <h1 className="ui-display hero-h1 mb-3.5 text-[40px] leading-[1.06] tracking-[-0.025em]">
             Stop betting into vig. <span className="text-[var(--signal)]">Strike market dislocations.</span>
           </h1>
 

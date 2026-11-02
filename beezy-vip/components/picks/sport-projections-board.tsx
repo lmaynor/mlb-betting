@@ -69,7 +69,7 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
       {status && <div role={statusWarn ? 'status' : undefined} style={{ fontSize: '11.5px', color: statusWarn ? 'var(--warn)' : 'var(--color-text-secondary)', marginBottom: '8px' }}>{status}</div>}
       <div className="pb-wrap" style={{ ...SURFACE, overflowX: 'auto' }}>
         <table className="pb-table w-full border-collapse text-[13px]">
-          <thead><tr>{heads.map(h => <th key={h} className={`dell-heading${HIDE_ON_PHONE.has(h) ? ' pb-hide-m' : ''}`} title={HEAD_TIPS[h]} style={TH}>{h}</th>)}</tr></thead>
+          <thead><tr>{heads.map(h => <th key={h} className={`ui-heading${HIDE_ON_PHONE.has(h) ? ' pb-hide-m' : ''}`} title={HEAD_TIPS[h]} style={TH}>{h}</th>)}</tr></thead>
           <tbody>
             {rows.slice(0, limit).map(r => {
               const b = r.book ? bookDisplay(r.book) : null
@@ -85,9 +85,9 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                     {r.score > 0 ? (
                       <div className="inline-flex items-center gap-[6px]">
                         {isOfficial ? (
-                          <span className="dell-heading pb-hide-m" style={{ fontSize: '10px', color: '#57F287', border: '1px solid #57F287', borderRadius: '4px', padding: '1px 5px', background: 'rgba(87,242,135,0.12)' }}>OFFICIAL PLAY</span>
+                          <span className="ui-heading pb-hide-m" style={{ fontSize: '10px', color: '#57F287', border: '1px solid #57F287', borderRadius: '4px', padding: '1px 5px', background: 'rgba(87,242,135,0.12)' }}>OFFICIAL PLAY</span>
                         ) : isOutlier ? (
-                          <span className="dell-heading pb-hide-m" style={{ fontSize: '10px', color: '#38bdf8', border: '1px solid #38bdf8', borderRadius: '4px', padding: '1px 5px', background: 'rgba(56,189,248,0.12)' }}>+EV OUTLIER</span>
+                          <span className="ui-heading pb-hide-m" style={{ fontSize: '10px', color: '#38bdf8', border: '1px solid #38bdf8', borderRadius: '4px', padding: '1px 5px', background: 'rgba(56,189,248,0.12)' }}>+EV OUTLIER</span>
                         ) : null}
                         <span className="mono" style={{ color: isOfficial ? '#57F287' : isOutlier ? '#38bdf8' : 'var(--color-neutral-300)', fontWeight: 700 }}>{r.score}</span>
                       </div>
@@ -159,8 +159,8 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                   </td>
                   <td className="pb-edge" style={TD}>
                     <span className="mono" title="Model probability minus the de-vigged market probability for this side" style={{ color: (r.modelEdge ?? 0) > 0 ? 'var(--signal)' : 'var(--color-text-secondary)' }}>{signed(r.modelEdge)}</span>
-                    {r.confluence && <span className="dell-heading pb-hide-m" title="The model and the market price both favor this side" style={{ marginLeft: '8px', fontSize: '10px', color: '#57F287', border: '1px solid rgba(87,242,135,0.35)', borderRadius: '4px', padding: '1px 5px' }}>MODEL + MARKET</span>}
-                    {r.isPick && <span className="dell-heading pb-hide-m ml-[8px] text-[var(--signal)]">PICK</span>}
+                    {r.confluence && <span className="ui-heading pb-hide-m" title="The model and the market price both favor this side" style={{ marginLeft: '8px', fontSize: '10px', color: '#57F287', border: '1px solid rgba(87,242,135,0.35)', borderRadius: '4px', padding: '1px 5px' }}>MODEL + MARKET</span>}
+                    {r.isPick && <span className="ui-heading pb-hide-m ml-[8px] text-[var(--signal)]">PICK</span>}
                   </td>
                   {showEv && (
                     <td className="pb-hide-m" style={TD}>
@@ -168,7 +168,7 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                     </td>
                   )}
                   {showResult && (
-                    <td className="dell-heading pb-hide-m" style={{ ...TD, fontSize: '10px', color: r.result ? RESULT_COLOR[r.result] : 'var(--color-text-secondary)' }}>{r.result ? r.result.toUpperCase() : 'PENDING'}</td>
+                    <td className="ui-heading pb-hide-m" style={{ ...TD, fontSize: '10px', color: r.result ? RESULT_COLOR[r.result] : 'var(--color-text-secondary)' }}>{r.result ? r.result.toUpperCase() : 'PENDING'}</td>
                   )}
                 </tr>
                 {isOpen && <DetailRow r={r} span={heads.length} showResult={showResult} />}
@@ -196,7 +196,7 @@ function DetailRow({ r, span, showResult }: { r: BoardRow; span: number; showRes
   const fair = fairAmerican(r.pFair)
   const item = (label: string, value: React.ReactNode) => (
     <div className="flex gap-[6px] min-w-0">
-      <dt className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', flex: '0 0 auto' }}>{label}</dt>
+      <dt className="ui-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', flex: '0 0 auto' }}>{label}</dt>
       <dd className="mono" style={{ margin: 0, color: 'var(--color-neutral-300)', fontSize: '12px', minWidth: 0 }}>{value}</dd>
     </div>
   )

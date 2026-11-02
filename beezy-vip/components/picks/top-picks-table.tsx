@@ -7,7 +7,7 @@ import { formatOdds } from '@/lib/odds'
 import { sportHref } from '@/lib/ia'
 import { isOfficialCardPlay, isEvOutlier, type PickBasis, type TopPick } from '@/lib/top-picks'
 
-const TH = 'dell-heading sticky top-0 whitespace-nowrap border-b border-separator-border bg-background-secondary-default px-2.5 py-2.5 text-left text-text-secondary'
+const TH = 'ui-heading sticky top-0 whitespace-nowrap border-b border-separator-border bg-background-secondary-default px-2.5 py-2.5 text-left text-text-secondary'
 const TD = 'px-2.5 py-2.5 align-middle'
 
 const BASIS_LABEL: Record<PickBasis, string> = { model: 'Model', ev: '+EV alert', projection: 'Projection', confluence: 'Model + market' }
@@ -44,7 +44,7 @@ export function TopPicksTable({ picks, showResult = false, startRank = 1 }: { pi
               <tr key={p.key} className="sys-row border-b border-border-table">
                 <td className={cx(TD, 'whitespace-nowrap')}>
                   <span className="mono inline-block w-[22px] text-text-secondary">{startRank + i}</span>
-                  <Link href={sportHref(p.sport)} className="dell-heading no-underline" style={{ color: pillar.accent }}>{pillar.shortName}</Link>
+                  <Link href={sportHref(p.sport)} className="ui-heading no-underline" style={{ color: pillar.accent }}>{pillar.shortName}</Link>
                 </td>
                 <td className={cx(TD, 'min-w-[170px]')}>
                   <div className="font-semibold text-text-primary">{p.who}</div>
@@ -61,9 +61,9 @@ export function TopPicksTable({ picks, showResult = false, startRank = 1 }: { pi
                 <td className={TD}>
                   <div className="inline-flex items-center gap-1.5">
                     {isOfficial ? (
-                      <span className="dell-heading" style={{ fontSize: '10px', color: '#57F287', border: '1px solid #57F287', borderRadius: '4px', padding: '1px 5px', background: 'rgba(87,242,135,0.12)' }}>OFFICIAL PLAY</span>
+                      <span className="ui-heading" style={{ fontSize: '10px', color: '#57F287', border: '1px solid #57F287', borderRadius: '4px', padding: '1px 5px', background: 'rgba(87,242,135,0.12)' }}>OFFICIAL PLAY</span>
                     ) : isOutlier ? (
-                      <span className="dell-heading" style={{ fontSize: '10px', color: '#38bdf8', border: '1px solid #38bdf8', borderRadius: '4px', padding: '1px 5px', background: 'rgba(56,189,248,0.12)' }}>+EV OUTLIER</span>
+                      <span className="ui-heading" style={{ fontSize: '10px', color: '#38bdf8', border: '1px solid #38bdf8', borderRadius: '4px', padding: '1px 5px', background: 'rgba(56,189,248,0.12)' }}>+EV OUTLIER</span>
                     ) : null}
                     <span className="mono" title={`Beezy Score ${p.score}. Not a win probability.`} style={{ color: isOfficial ? '#57F287' : isOutlier ? '#38bdf8' : 'var(--color-neutral-300)', fontWeight: 700 }}>{p.score}</span>
                   </div>
@@ -73,14 +73,14 @@ export function TopPicksTable({ picks, showResult = false, startRank = 1 }: { pi
                 <td className={cx(TD, 'whitespace-nowrap text-text-secondary')}>
                   {BASIS_LABEL[p.basis]}
                   {p.tracked && p.unvalidated && (
-                    <span className="dell-heading" title="The model behind this pick has no tested edge against prices. It is tracked on paper at 1 unit and graded after the game." style={{ marginLeft: '8px', fontSize: '10px', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.35)', borderRadius: '4px', padding: '1px 5px' }}>UNVALIDATED &middot; PAPER</span>
+                    <span className="ui-heading" title="The model behind this pick has no tested edge against prices. It is tracked on paper at 1 unit and graded after the game." style={{ marginLeft: '8px', fontSize: '10px', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.35)', borderRadius: '4px', padding: '1px 5px' }}>UNVALIDATED &middot; PAPER</span>
                   )}
                   {!p.tracked && (
-                    <span className="dell-heading" title="Projections come from an empirical estimator on game logs and are not tracked in the public results yet." style={{ marginLeft: '8px', fontSize: '10px', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.35)', borderRadius: '4px', padding: '1px 5px' }}>SHADOW &middot; CALIBRATING</span>
+                    <span className="ui-heading" title="Projections come from an empirical estimator on game logs and are not tracked in the public results yet." style={{ marginLeft: '8px', fontSize: '10px', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.35)', borderRadius: '4px', padding: '1px 5px' }}>SHADOW &middot; CALIBRATING</span>
                   )}
                 </td>
                 {showResult && (
-                  <td className={cx('dell-heading', TD)} style={{ color: res?.color ?? 'var(--link)' }}>{res?.label ?? 'PENDING'}</td>
+                  <td className={cx('ui-heading', TD)} style={{ color: res?.color ?? 'var(--link)' }}>{res?.label ?? 'PENDING'}</td>
                 )}
               </tr>
             )

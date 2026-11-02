@@ -56,7 +56,7 @@ function Plan({ name, price, period, note, featured, children }: {
 }) {
   return (
     <div className={cx(CARD, 'flex flex-col px-[18px] pb-5 pt-[18px]', featured && 'border-[rgba(87,242,135,0.55)]')}>
-      <div className={cx('dell-heading mb-2.5 text-[11px] tracking-[0.06em]', featured ? 'text-[var(--signal)]' : 'text-text-secondary')}>{name.toUpperCase()}</div>
+      <div className={cx('ui-heading mb-2.5 text-[11px] tracking-[0.06em]', featured ? 'text-[var(--signal)]' : 'text-text-secondary')}>{name.toUpperCase()}</div>
       <div className="mb-1 flex items-baseline gap-[5px]">
         <span className="mono text-[34px] font-bold leading-none text-text-primary">{price}</span>
         <span className="text-body-2-regular text-text-secondary">{period}</span>
@@ -89,7 +89,7 @@ export function PricingSection() {
       <div className={cx(CARD, 'mb-5 flex flex-wrap items-center justify-between gap-4 border-l-[3px] border-l-[var(--signal)] px-[18px] py-3.5')}>
         <div>
           <div className="flex items-center gap-2">
-            <span className="dell-heading text-[11px] tracking-[0.08em] text-[var(--signal)]">EXPLORER TIER</span>
+            <span className="ui-heading text-[11px] tracking-[0.08em] text-[var(--signal)]">EXPLORER TIER</span>
             <span className="mono text-body-2-bold text-text-primary">$0 / Free Forever</span>
           </div>
           <div className="mt-[3px] text-body-2-regular text-text-secondary">
@@ -144,7 +144,7 @@ export function PricingSection() {
       </div>
 
       <div className={cx(CARD, 'mt-5')}>
-        <div className="dell-heading border-b border-separator-border px-4 py-3 text-[11px] text-text-secondary">HOW THE DUAL-ENGINE TERMINAL WORKS</div>
+        <div className="ui-heading border-b border-separator-border px-4 py-3 text-[11px] text-text-secondary">HOW THE DUAL-ENGINE TERMINAL WORKS</div>
         <div className="pricing-grid" style={{ gap: 0 }}>
           {ENGINES.map((e, i) => (
             <div key={e.n} className={cx('px-4 py-3.5', i > 0 && 'border-l border-separator-border')}>

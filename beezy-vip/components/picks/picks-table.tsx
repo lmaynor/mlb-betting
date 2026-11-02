@@ -35,7 +35,7 @@ function ResultPill({ result }: { result: string | null }) {
   const r = result?.toLowerCase() ?? ''
   const c = cfg[r] ?? { label: 'PENDING', color: 'var(--link)', bg: 'color-mix(in oklab, var(--link) 14%, var(--color-background-full))', border: '1px solid color-mix(in oklab, var(--link) 38%, var(--color-background-full))' }
   return (
-    <span className="dell-heading" style={{
+    <span className="ui-heading" style={{
       display: 'inline-flex',
       alignItems: 'center',
       padding: '3px 8px',
@@ -78,7 +78,7 @@ function CompactScore({ bet, align = 'left' }: { bet: Bet; align?: 'left' | 'cen
         {score}
       </span>
       {badgeLabel && badgeColor && (
-        <span className="dell-heading" style={{
+        <span className="ui-heading" style={{
           fontSize: '10px',
           letterSpacing: '0.06em',
           padding: '2px 5px',
@@ -130,7 +130,7 @@ function pickDetail(label: string, player: string | null) {
 
 /** A tracked NFL / NBA / NHL bet: graded like any pick, but the model has no tested edge, so it says so on every row. */
 function UnvalidatedTag() {
-  return <span className="dell-heading text-[#f59e0b]" title="Paper-tracked model output with no tested edge against prices">UNVALIDATED &middot; PAPER</span>
+  return <span className="ui-heading text-[#f59e0b]" title="Paper-tracked model output with no tested edge against prices">UNVALIDATED &middot; PAPER</span>
 }
 
 function systemDisplay(system: string) {
@@ -175,7 +175,7 @@ function TableRow({ bet }: { bet: Bet }) {
       </div>
 
       <div className="py-[10px] px-[6px]">
-        <span className="dell-heading" style={{
+        <span className="ui-heading" style={{
           display: 'inline-flex',
           maxWidth: '96px',
           padding: '3px 8px',
@@ -256,7 +256,7 @@ function BetCard({ bet }: { bet: Bet }) {
       <div className="flex flex-col gap-[10px] p-[14px]">
       <div className="flex items-start justify-between gap-[12px]">
         <div className="flex items-center gap-[8px] min-w-0">
-          <span className="dell-heading" style={{
+          <span className="ui-heading" style={{
             padding: '3px 8px',
             borderRadius: 'var(--radius-pill)',
             fontSize: '10px',

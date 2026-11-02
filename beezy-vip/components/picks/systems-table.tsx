@@ -89,7 +89,7 @@ export function SystemsTable({ sport, kind, stats = [], today = {}, level = 'h2'
                 <tr key={s.key} className="sys-row">
                   <td style={TD}>
                     <Link href={href} style={{ textDecoration: 'none' }}>
-                      <span className="dell-heading" style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.05em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border }}>{s.shortName}</span>
+                      <span className="ui-heading" style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.05em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border }}>{s.shortName}</span>
                     </Link>
                   </td>
                   <td style={{ ...TD, fontSize: '13.5px', fontWeight: 600 }}>

@@ -68,7 +68,7 @@ export default function BoostEvPage() {
         <div className="border border-[color:var(--color-separator-border)] rounded-[8px] bg-[var(--color-background-primary-default)] overflow-hidden">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: B }}>
             <div style={{ padding: '20px', borderRight: B }}>
-              <div className="dell-heading text-[10px] tracking-[0.1em] text-text-secondary mb-[8px]">Expected value</div>
+              <div className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary mb-[8px]">Expected value</div>
               <div className="mono" style={{ fontSize: '28px', fontWeight: 700, color: ev > 0 ? 'var(--signal)' : 'var(--loss)' }}>
                 {ev > 0 ? '+' : ''}{(ev * 100).toFixed(1)}%
               </div>
@@ -77,7 +77,7 @@ export default function BoostEvPage() {
               </div>
             </div>
             <div className="p-[20px]">
-              <div className="dell-heading text-[10px] tracking-[0.1em] text-text-secondary mb-[8px]">Kelly fraction</div>
+              <div className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary mb-[8px]">Kelly fraction</div>
               <div className="mono text-[28px] font-bold text-text-primary">{(kellyPct * 100).toFixed(1)}%</div>
               <div className="mono text-[13px] text-text-secondary mt-[4px]">of bankroll (full Kelly; bet a quarter of this)</div>
             </div>

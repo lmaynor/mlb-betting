@@ -26,8 +26,8 @@ describe('no-slop-ui', () => {
     'components/picks/systems-table.tsx', 'components/picks/filter-bar.tsx', 'components/picks/games-strip.tsx', 'components/picks/day-toggle.tsx',
   ])('%s: no eyebrow+mood header, no gradient header, no card-per-row stack', (f) => {
     const src = read(f)
-    expect(src).not.toMatch(/dell-display[^}]*clamp\(/)   // the mood-headline h1 style
-    expect(src).not.toMatch(/dell-heading[^>]*>\s*(ANALYTICS|\+EV TERMINAL)</)
+    expect(src).not.toMatch(/ui-display[^}]*clamp\(/)   // the mood-headline h1 style
+    expect(src).not.toMatch(/ui-heading[^>]*>\s*(ANALYTICS|\+EV TERMINAL)</)
     expect(src).not.toMatch(/linear-gradient/)
     expect(src).not.toMatch(/kpi-grid|<Kpi\b/)
     expect(src).not.toMatch(/<article/)
@@ -111,11 +111,12 @@ describe('design-system debt guards', () => {
     }
   })
 
-  it('canonical .ui-* classes exist and the .dell-* names are aliases of the same rules', () => {
+  it('canonical .ui-* classes exist and the retired .dell-* aliases are gone', () => {
     const css = read('app/globals.css')
-    expect(css).toMatch(/\.ui-display,\s*\.dell-display \{/)
-    expect(css).toMatch(/\.ui-heading,\s*\.dell-heading \{/)
-    expect(css).toMatch(/\.btn-primary,\s*\.dell-btn-primary,\s*\.dell-btn-red \{/)
+    expect(css).toMatch(/\.ui-display \{/)
+    expect(css).toMatch(/\.ui-heading \{/)
+    expect(css).toMatch(/\.btn-primary \{/)
+    expect(css).not.toMatch(/\.dell-/)
   })
 
   it('loads the three-face stack with the variable names the CSS and inline styles read', () => {

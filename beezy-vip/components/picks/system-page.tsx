@@ -70,7 +70,7 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
         <div className="flex items-baseline justify-between gap-y-[8px] gap-x-[16px] flex-wrap mb-[12px]">
           <div className="flex items-baseline gap-[12px] flex-wrap">
             <h1 className="text-[20px] font-bold text-text-primary m-0">{pillar.shortName} {system.name}</h1>
-            <span className="dell-heading" style={{ fontSize: '10px', color, border: `1px solid ${color}66`, borderRadius: '6px', padding: '2px 8px' }}>
+            <span className="ui-heading" style={{ fontSize: '10px', color, border: `1px solid ${color}66`, borderRadius: '6px', padding: '2px 8px' }}>
               {system.market === 'game' ? 'GAME' : 'PROP'} / {system.gap ? 'DATA GAP' : tracked ? (pillar.markets.find(m => m.system === system.key)?.status ?? 'PAPER').toUpperCase() : 'UNVALIDATED'}
             </span>
           </div>

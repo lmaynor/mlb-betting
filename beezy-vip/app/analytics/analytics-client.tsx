@@ -79,7 +79,7 @@ export function AnalyticsClient({ initial, stats }: { initial: AnalyticsDeepDive
 function Panel({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
   return (
     <section className={cx(CARD, 'mb-4 px-5 py-[18px]')}>
-      <h2 className="dell-heading text-text-secondary">{title}</h2>
+      <h2 className="ui-heading text-text-secondary">{title}</h2>
       {sub && <p className="times mb-3.5 mt-1.5 max-w-[90ch] text-body-2-regular text-text-secondary">{sub}</p>}
       {children}
     </section>
@@ -164,7 +164,7 @@ function Bankroll({ data, bankroll, setBankroll, fraction, setFraction, mounted 
 function Slider({ label, value, min, max, step, onChange, fmt }: { label: string; value: number; min: number; max: number; step: number; onChange: (n: number) => void; fmt: (n: number) => string }) {
   return (
     <label className="grid min-w-60 gap-1.5">
-      <span className="dell-heading flex justify-between text-text-secondary">
+      <span className="ui-heading flex justify-between text-text-secondary">
         {label}<span className="mono text-text-primary">{fmt(value)}</span>
       </span>
       <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(parseFloat(e.target.value))} style={{ accentColor: '#57f287', padding: 0, background: 'transparent', border: 'none' }} />
@@ -175,7 +175,7 @@ function Slider({ label, value, min, max, step, onChange, fmt }: { label: string
 function Big({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="dell-heading mb-1 text-text-secondary">{label}</div>
+      <div className="ui-heading mb-1 text-text-secondary">{label}</div>
       <div className="mono text-title-1-bold text-text-primary">{value}</div>
     </div>
   )
@@ -239,7 +239,7 @@ function Calibration({ data, system, setSystem, mounted }: { data: AnalyticsDeep
 }
 
 function Th({ children }: { children: React.ReactNode }) {
-  return <th className="dell-heading border-b border-separator-border bg-background-secondary-default px-3 py-2.5 text-left text-text-secondary">{children}</th>
+  return <th className="ui-heading border-b border-separator-border bg-background-secondary-default px-3 py-2.5 text-left text-text-secondary">{children}</th>
 }
 function Td({ children, mono, strong, color }: { children: React.ReactNode; mono?: boolean; strong?: boolean; color?: string }) {
   return <td className={cx('px-3 py-2.5', mono && 'mono', strong ? 'font-semibold text-text-primary' : 'text-text-secondary')} style={color ? { color } : undefined}>{children}</td>

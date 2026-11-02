@@ -12,7 +12,7 @@ export function LiveDot({ label }: { label?: string }) {
       <span className="live-dot" />
       {label && (
         <span
-          className="dell-heading text-[10px] tracking-[0.12em] text-text-secondary"
+          className="ui-heading text-[10px] tracking-[0.12em] text-text-secondary"
          
         >
           {label}
@@ -27,7 +27,7 @@ export function SystemBadge({ system }: { system: string }) {
   const label = systemLabel(system, true)
   return (
     <span
-      className="dell-heading"
+      className="ui-heading"
       style={{ fontSize: '10px', letterSpacing: '0.05em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: p.bg, color: p.color, border: p.border, display: 'inline-block' }}
     >
       {label}
@@ -39,7 +39,7 @@ export function StatCard({ label, value, sub, accent = false }: { label: string;
   return (
     <div className="flex flex-col gap-[6px] p-[20px] border border-[color:var(--color-separator-border)] rounded-[var(--radius-lg)] bg-[var(--color-background-primary-default)]">
       <span
-        className="dell-heading text-[10px] tracking-[0.1em] text-text-secondary mb-[2px]"
+        className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary mb-[2px]"
        
       >
         {label}
@@ -57,7 +57,7 @@ export function StatCard({ label, value, sub, accent = false }: { label: string;
 
 export function ResultPill({ result }: { result: string | null }) {
   if (!result || result === 'pending') {
-    return <span className="dell-heading text-[10px] tracking-[0.06em] text-text-secondary">PENDING</span>
+    return <span className="ui-heading text-[10px] tracking-[0.06em] text-text-secondary">PENDING</span>
   }
   const isWin  = result === 'win'
   const isPush = result === 'push'
@@ -69,7 +69,7 @@ export function ResultPill({ result }: { result: string | null }) {
     : { background: 'var(--loss-wash)', color: 'var(--loss)', border: '1px solid var(--loss-border)' }
   return (
     <span
-      className="dell-heading"
+      className="ui-heading"
       style={{ fontSize: '10px', letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', display: 'inline-block', ...style }}
     >
       {result.toUpperCase()}
@@ -93,7 +93,7 @@ export function PnL({ value, stake, result }: { value: number | null; stake?: nu
 export function SectionHeader({ label, sub }: { label: string; sub?: string }) {
   return (
     <div className="mb-[24px]">
-      <h2 className="dell-display text-[24px] text-text-primary">{label}</h2>
+      <h2 className="ui-display text-[24px] text-text-primary">{label}</h2>
       {sub && <p className="times text-[14px] text-text-secondary mt-[7px] leading-[1.5]">{sub}</p>}
     </div>
   )
@@ -119,7 +119,7 @@ export function ScoreBadge({ bet }: { bet: Bet }) {
         {score}
       </span>
       <span
-        className="dell-heading"
+        className="ui-heading"
         style={{ fontSize: '10px', letterSpacing: '0.08em', padding: '2px 6px', borderRadius: 'var(--radius-pill)', border: `1px solid ${color}`, background: `color-mix(in oklab, ${color} 14%, var(--color-background-full))`, color }}
       >
         {TIER_LABEL[tier]}

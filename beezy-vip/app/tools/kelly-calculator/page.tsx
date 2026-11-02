@@ -55,12 +55,12 @@ export default function KellyCalculatorPage() {
         <div className="border border-[color:var(--color-separator-border)] rounded-[8px] bg-[var(--color-background-primary-default)] overflow-hidden">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: B_INNER }}>
             <div style={{ padding: '20px', borderRight: B_INNER }}>
-              <div className="dell-heading text-[10px] tracking-[0.1em] text-text-secondary mb-[8px]">Full Kelly</div>
+              <div className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary mb-[8px]">Full Kelly</div>
               <div className="mono text-[28px] font-bold text-[var(--signal)]">{result.fullKelly}%</div>
               <div className="mono text-[13px] text-[var(--signal)] mt-[4px]">${result.stakeFullDollars.toFixed(2)}</div>
             </div>
             <div className="p-[20px]">
-              <div className="dell-heading text-[10px] tracking-[0.1em] text-text-secondary mb-[8px]">Half Kelly</div>
+              <div className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary mb-[8px]">Half Kelly</div>
               <div className="mono text-[28px] font-bold text-text-primary">{result.halfKelly}%</div>
               <div className="mono text-[13px] text-text-secondary mt-[4px]">${result.stakeHalfDollars.toFixed(2)}</div>
             </div>

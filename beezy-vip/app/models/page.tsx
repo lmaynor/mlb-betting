@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 }
 
 const CARD = 'rounded-xl border border-separator-border bg-background-primary-default'
-const LBL = 'dell-heading tracking-[0.1em] text-text-secondary'
+const LBL = 'ui-heading tracking-[0.1em] text-text-secondary'
 
 const PILL = SYSTEM_PILL
 
@@ -53,7 +53,7 @@ function SportSection({ sport, open, children }: { sport: SportSlug; open: boole
         <span className="sport-chev inline-block text-[11px] text-text-secondary transition-transform duration-[120ms]" aria-hidden="true">&#9656;</span>
         <span className="text-headline-bold" style={{ color: pillar.accent }}>{pillar.shortName}</span>
         <span className="mono text-caption-1-regular text-text-secondary">{n} systems</span>
-        <span className="dell-heading rounded-md border px-2 py-0.5" style={{ color: pillar.accent, borderColor: `${pillar.accent}66` }}>{STATUS_LABEL[pillar.status]}</span>
+        <span className="ui-heading rounded-md border px-2 py-0.5" style={{ color: pillar.accent, borderColor: `${pillar.accent}66` }}>{STATUS_LABEL[pillar.status]}</span>
         <span className="min-w-0 flex-[1_1_320px] text-caption-1-regular text-text-secondary">{pillar.name}</span>
       </summary>
       <div className="px-[18px] pb-[18px] pt-1">{children}</div>
@@ -124,7 +124,7 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
       </div>
 
       <section className={cx(CARD, 'mb-6 p-5')}>
-        <div className="dell-heading mb-3 tracking-[0.1em] text-text-secondary">Training Methodology</div>
+        <div className="ui-heading mb-3 tracking-[0.1em] text-text-secondary">Training Methodology</div>
         {[
           'Trained models use walk-forward validation: trained on prior seasons and validated on the next season so the model never sees future data.',
           'An MLB pick has to clear model probability, implied probability, edge threshold, and Kelly-positive checks before it reaches the card. NFL, NHL and NBA run projection systems that are shown beside the market but not tracked in the public results.',

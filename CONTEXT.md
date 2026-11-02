@@ -2079,7 +2079,7 @@ colour by editing the value, not by renaming.
 
 Typography: `--font-inter` (UI) + `--font-mono` (JetBrains Mono; all odds, probabilities,
 EV%, stakes, timestamps). `--font-text`/`--font-display` alias Inter. Legacy class names
-`.dell-display`, `.dell-heading`, `.times`, `.mono` are retained but map to Inter/JetBrains.
+`.ui-display`, `.ui-heading`, `.times`, `.mono` are the type classes (the old `.dell-*` aliases were removed; `.times` and `.mono` map to the UI sans and Plex Mono).
 `CARD_STYLE`, `BOOK_META`/`bookDisplay()`, `TIER_META` are exported from `lib/tokens.ts` /
 `lib/beezy-score.ts`. RULE unchanged: `var()` does not work in SVG attributes (recharts) or
 Satori OG routes -- use literal hex there.

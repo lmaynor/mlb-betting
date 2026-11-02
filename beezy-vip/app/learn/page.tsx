@@ -27,11 +27,11 @@ export default function LearnPage() {
   return (
     <div className="mx-auto max-w-[1200px] px-6 py-10">
       <div className="mb-6">
-        <h1 className="dell-display mb-2 text-[32px]">Learn</h1>
+        <h1 className="ui-display mb-2 text-[32px]">Learn</h1>
         <p className="times text-headline-regular text-text-secondary">Data-driven betting education. No gut-feel advice.</p>
       </div>
 
-      <div className="dell-heading mb-4 tracking-[0.12em] text-text-secondary">
+      <div className="ui-heading mb-4 tracking-[0.12em] text-text-secondary">
         {ARTICLES.length} Articles
       </div>
 

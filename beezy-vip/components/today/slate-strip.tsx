@@ -49,7 +49,7 @@ export async function SlateStrip() {
               </div>
               {hasPick && topPick ? (
                 <div className="flex items-center gap-[6px]">
-                  <span className="dell-heading" style={{
+                  <span className="ui-heading" style={{
                     fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em',
                     padding: '2px 6px', background: `color-mix(in oklab, ${sysColor} 16%, var(--color-background-full))`, color: sysColor,
                     border: `1px solid color-mix(in oklab, ${sysColor} 40%, var(--color-background-full))`, borderRadius: 'var(--radius-pill)',
