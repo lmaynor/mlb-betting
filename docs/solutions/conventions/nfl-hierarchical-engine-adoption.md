@@ -45,16 +45,28 @@ so it under-states what the live path can see (no teammate absences, no coverage
 - The serving calibration multiplies the VOLUME input; TD stats take its scale only.
 - Rows stay `validated: false` whatever the replay says: it is accuracy evidence, not edge against a price.
 
-## The allowlist (2026-11-01)
+## The allowlist (2026-11-01, updated after the real-line check)
 
 ```bash
 PYTHONPATH=. python -m nfl.props.engine_eval --seasons 2024-2025 --hierarchical --hier-cache nocontext.parquet \
-  --hier-cache-extra context.parquet --hier-confirm season2026.parquet --write-allowlist nfl/props/hierarchical_allowlist.json
+  --hier-market --hier-market-cache market.parquet --hier-confirm season2026.parquet --write-allowlist nfl/props/hierarchical_allowlist.json
 ```
-A stat is listed only if it is ADOPT (strict rule: log-score z >= 2.81, Brier z >= 1.645, better in the required seasons) on the no-context
-run AND on every `--hier-cache-extra` run (the live path uses context when it loads), and is not contradicted on `--hier-confirm`
-seasons nothing was tuned or selected on (point estimate > 0, not significantly negative). Shipped: **pass_tds, rush_yds** (2024-25 held out,
-priors tuned on 2021-23 only; 2026 weeks 1-8 confirm: +0.026 and +0.102 log score). Not listed: rush_attempts (ADOPT only with context),
-rec_yds (log score +0.17 in every period but the Brier gain at the proxy line is not significant: needs a real-line check), everything passing.
-The 2024-25 verdicts also SELECTED these stats, so 2026 is the only clean check, and it is 8 weeks (208-264 rows per stat). Re-run
-each offseason and when the priors change; the file records the evidence it was written from.
+A stat is listed only if: log-score z >= 2.81 and better in the required seasons (2024-25 held out, priors tuned on 2021-23 only); its Brier z
+>= 1.645 **at the book's own line** when >= 300 real-line rows exist (else at the L5 proxy line); and it is not contradicted on `--hier-confirm`
+seasons nothing was tuned or selected on. Shipped: **pass_tds, rec_yds, rush_yds**. Not listed: rush_attempts (Brier at real lines z +0.1), receptions,
+pass_attempts / completions / yards (worse), interceptions, anytime_td (parity).
+
+**Real-line check (BettingPros consensus, 2024-25, 6,817 scored props after screening; 53% of consensus rows were dropped as post-start quotes and
+3,865 for unresolved names, so it is a selected sample):** hierarchical vs shipped engine Brier z: rec_yds +2.3, rush_yds +3.0, pass_tds +2.7,
+rush_attempts +0.1, receptions -1.4, pass_yds -1.2. The MARKET beats both engines on every stat (e.g. rec_yds Brier market 0.2498 / shipped 0.2759 /
+hierarchical 0.2694), and the engine's blend coefficient on top of the market is only significant for rush_yds (c = +0.25, t 2.9; calibration, not edge). The 2026 real-line
+sample is empty (5 rows: BettingPros quotes for 2026 are stamped after kickoff), so 2026 is confirmed on the proxy line only.
+
+**Served configuration = the tested one.** No context layers (`NFL_HIER_LAYERS`, default `none`) and no weather (`NFL_HIER_WEATHER`, default off).
+Ablation on 2021-23 (paired log score vs no context): teammate-absence layer HURTS receptions / rec_yds (-0.0066, z -3.5; it over-projects) and is
+non-significantly positive for rush; coverage shell ~0; YAC / stuff factors hurt pass_yds (-0.005, z -2.9); OL / pressure ~0. The replay used to feed
+the engine the schedule's REALISED game-day wind (a mild lookahead for wind-sensitive stats); that is removed (`price_row(use_weather=False)` ignores
+env wind / temp and any weather dict) and every number above was re-run without it.
+
+The 2024-25 verdicts both selected the allowlist and tested it, so 2026 weeks 1-8 (208-658 rows per stat) is the only clean check and it is thin.
+Re-run each offseason and when the priors change; the file records the evidence it was written from.

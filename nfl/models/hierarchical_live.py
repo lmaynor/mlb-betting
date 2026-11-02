@@ -21,7 +21,7 @@ import logging
 import math
 import os
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Iterable, Optional
 
 import numpy as np
 import pandas as pd
@@ -213,9 +213,16 @@ def _f(x, default=float("nan")) -> float:
 
 
 # ----------------------------------------------------------------------------------------------------- live context
+LAYERS = ("absence", "shell", "yac_stuff", "ol_pressure")      # switchable context layers (ablation; default = all)
+
+
 @dataclass
 class LiveContext:
-    """Optional pbp / participation / injury / snap layers for ONE slate. All members may be empty (-> neutral)."""
+    """Optional pbp / participation / injury / snap layers for ONE slate. All members may be empty (-> neutral).
+    `layers` switches individual layers OFF for ablation studies: absence = teammate-absence redistribution, shell = coverage-shell
+    rates (two-high / single-high / man), yac_stuff = opponent YAC and run-stuff factors, ol_pressure = own OL-out count and the
+    net pressure mismatch."""
+    layers: frozenset = frozenset(LAYERS)
     positions: dict = field(default_factory=dict)
     injuries: Optional[pd.DataFrame] = None
     absent_by_team: dict = field(default_factory=dict)       # {(team, season, week): [{"pid", "weight"}]}
@@ -227,11 +234,12 @@ class LiveContext:
     _ol_cache: dict = field(default_factory=dict)
 
     @classmethod
-    def load(cls, season: int, with_pbp: bool = True, seasons: Optional[list] = None) -> "LiveContext":
+    def load(cls, season: int, with_pbp: bool = True, seasons: Optional[list] = None,
+             layers: Optional[Iterable] = None) -> "LiveContext":
         """Read what the mirror has for `season` and the one before (or the explicit `seasons`, for a multi-season replay).
         NEVER raises: each layer is independent."""
         from nfl.data.read import load
-        lc = cls()
+        lc = cls(layers=frozenset(LAYERS if layers is None else layers))
         seasons = list(seasons) if seasons else [season - 1, season]
         try:
             pl = load("players", columns=["gsis_id", "pfr_id", "position"])
@@ -243,7 +251,7 @@ class LiveContext:
         try:
             inj = load("injuries", seasons=seasons, strict=False)
             lc.injuries = inj
-            lc.absent_by_team = _absences(inj)
+            lc.absent_by_team = _absences(inj) if "absence" in lc.layers else {}
         except Exception as exc:                                                   # noqa: BLE001
             log.info("injuries unavailable: %s", exc)
         if with_pbp:
@@ -310,17 +318,21 @@ class LiveContext:
         d = self.defense(season, week)
         if d is not None and opp in d.index:
             row, lg = d.loc[opp], d.attrs.get("league", {})
-            for src, dst in (("def_two_high_rate", "def_two_high_rate"), ("def_man_rate", "def_man_rate"),
-                             ("def_middle_closed_rate", "def_single_high_rate")):
-                v = _opt(row.get(src))
-                if v is not None:
-                    out[dst] = v
-            lg_yac, lg_stuff = lg.get("def_yac_per_rec_allowed"), lg.get("def_stuff_rate")
-            y, s = _opt(row.get("def_yac_per_rec_allowed")), _opt(row.get("def_stuff_rate"))
-            if y is not None and lg_yac and math.isfinite(lg_yac) and lg_yac > 0:
-                out["def_yac_factor"] = y / lg_yac
-            if s is not None and lg_stuff and math.isfinite(lg_stuff) and lg_stuff > 0:
-                out["def_stuff_factor"] = s / lg_stuff
+            if "shell" in self.layers:
+                for src, dst in (("def_two_high_rate", "def_two_high_rate"), ("def_man_rate", "def_man_rate"),
+                                 ("def_middle_closed_rate", "def_single_high_rate")):
+                    v = _opt(row.get(src))
+                    if v is not None:
+                        out[dst] = v
+            if "yac_stuff" in self.layers:
+                lg_yac, lg_stuff = lg.get("def_yac_per_rec_allowed"), lg.get("def_stuff_rate")
+                y, s_ = _opt(row.get("def_yac_per_rec_allowed")), _opt(row.get("def_stuff_rate"))
+                if y is not None and lg_yac and math.isfinite(lg_yac) and lg_yac > 0:
+                    out["def_yac_factor"] = y / lg_yac
+                if s_ is not None and lg_stuff and math.isfinite(lg_stuff) and lg_stuff > 0:
+                    out["def_stuff_factor"] = s_ / lg_stuff
+        if "ol_pressure" not in self.layers:
+            return out
         n_out = float(self.ol_out(season, week).get(team, 0))
         out["n_ol_out"] = n_out
         o = self.offense(season, week)
@@ -396,7 +408,7 @@ def _volume_calibration(coef: Optional[dict], stat: str, implied_total, team_spr
 
 def price_row(stat: str, rows: list, team: str, team_ctx: dict, env, ctx_alpha, coef: Optional[dict] = None,
               live: Optional[LiveContext] = None, mu_engine: Optional[float] = None, weather: Optional[dict] = None,
-              pid: Optional[str] = None, opp: Optional[str] = None) -> Optional[HierResult]:
+              pid: Optional[str] = None, opp: Optional[str] = None, use_weather: bool = False) -> Optional[HierResult]:
     """Price one player-stat. `env` = EnvTuple-like (implied_total, team_spread positive = favoured; optional wind / roof /
     temp / season / week) or None. `ctx_alpha(stat)` -> that stat's league NegBin alpha (or normal-family cv for
     pass_attempts via `ctx_alpha.cv`). `mu_engine` = the legacy engine's validated anytime_td mean (used as the TD prior)."""
@@ -407,11 +419,14 @@ def price_row(stat: str, rows: list, team: str, team_ctx: dict, env, ctx_alpha, 
     t = team_ctx.get("teams", {}).get(team) or {}
     it = _opt(getattr(env, "implied_total", None)) if env is not None else None
     sp_fav = _opt(getattr(env, "team_spread", None)) if env is not None else None
-    wx = weather or {}
+    # Weather is OFF unless asked for. The schedule's wind / temp are the REALISED game-day values (NaN before the game in live
+    # use), and the replay evidence was produced without them: serving them would be an unvalidated change of the tested config.
+    wx = (weather or {}) if use_weather else {}
     dome = bool(wx.get("dome")) or (env is not None and str(getattr(env, "roof", "") or "").lower() in ("dome", "closed"))
     gkw = dict(team_spread=None if sp_fav is None else hp.spread_from_favoured_positive(sp_fav), implied_team_total=it,
-               wind_mph=wx.get("wind_mph", _opt(getattr(env, "wind", None)) if env is not None else None), dome=dome,
-               temp_f=wx.get("temp_f", _opt(getattr(env, "temp", None)) if env is not None else None))
+               wind_mph=(wx.get("wind_mph", _opt(getattr(env, "wind", None)) if env is not None else None) if use_weather else None),
+               dome=dome,
+               temp_f=(wx.get("temp_f", _opt(getattr(env, "temp", None)) if env is not None else None) if use_weather else None))
     if live is not None and env is not None and opp:
         gkw.update(live.game_fields(team, opp, getattr(env, "season", None), getattr(env, "week", None)))
     game = hp.GameContext(**gkw)

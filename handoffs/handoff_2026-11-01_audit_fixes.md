@@ -43,3 +43,27 @@ Full pytest, `tsc --noEmit`, full jest (one 9,000-row timing test in `odds-scree
 2. **Stale cutoff**: the game_lines schedulers fire 12:35, 17:35, 21:35, 22:35, 01:00, 03:35 CT. The 12:35 -> 17:35 gap is 300 min, longer than `STALE_MINUTES = 270`, so the badge flips for ~30 min on afternoons; the 03:35 -> 12:35 overnight gap is expected. Cheap fix is cadence, not the cutoff: a game_lines snapshot is only 3 credits.
 3. **Real bad-feed case found and fixed**: betmgm quoted Philadelphia -185 / Utah +150 where eleven books had Utah -180 / Philadelphia +150 (a fake ~28% arb). `_drop_flipped_books` drops a book whose favourite is the opposite of the consensus (>= 4 books, > 0.15 off the median); count in `summary.flipped_quotes_dropped`.
 4. 4 of 8 NBA and 1 of 6 NHL banked events are one-book stubs with no `commence_time`; they are skipped (warning in the log).
+
+## BestBook game lines wired into the price board (owner: "Probe and wire", after PR #143 merged)
+- Probe (live, pre-game NBA LAC@GSW / TOR@LAL, NHL OTT@ANA / DET@FLA): BestBook carries full-game ML / spread / total ladders for 16-18 venues (~90 spread + ~100 total
+  rungs per NBA game, ~10 per NHL game). The props crawl already fetched these rows and dropped them. Row semantics (binary yes/no per rung, `line` = AWAY handicap,
+  real-minus rung labels): `docs/solutions/integration-issues/bestbook-game-line-row-semantics.md`. Earlier "BettingPros / SGO could cover game lines": no -- BettingPros
+  is props-only by design (`nba/game/odds_feed.py`), there is no NBA/NHL SGO job.
+- Code: `ev/bestbook_game_lines.py` (parse + prune), `ev/bestbook_events.py` (crawl collects them from the same snapshot; `write_latest` stores them in
+  `Odds/bestbook_live/{sport}/game_lines_latest.json`, `read_latest_game_lines`), `ev/game_odds_board.py` (`_put` union: fresher snapshot wins per (row, book), either source
+  alone builds a board, `LADDER_MAX_ROWS = 21`, `BESTBOOK_MAX_AGE_MIN = 180`). 15 new tests in `tests/test_bestbook_game_lines.py`.
+- Cross-check vs ParlayAPI on the same (row, book) from live data: NBA 51 pairs (28 identical, 23 within 5%), NHL 35 pairs (29 identical, 5 within 5%, 1 within 20%), none
+  >= 20%, no flipped sides. Board rows: NBA PA-only 11 -> union 86 (2 games), NHL 16 -> 53.
+- Effects: the 300-min stale gap goes away while BestBook is up (crawl hourly :20, board :25/:55); alternate spreads/totals appear. ParlayAPI cadence is untouched
+  (still the only source of bovada-style offshore books and the engines' game odds).
+- Needs: rebuild the image (all four tags), canary + promote the service, then the next `bb-live-*` run writes the new file and the next `daily-projections` run (:25/:55)
+  rebuilds the boards. The frontend needed no change (row shape identical; the Pro/free cut and paging already handle more rows).
+
+### Deployed 2026-11-02 (backend, branch tip 2b7de56, PR #144 unmerged, CI green)
+- Image `sha256:aab13e37...` tagged onto all four repos (`ALLOW_NON_MAIN=1`); service revision `mlb-betting-00351-nan` at 100% after a 0% canary (previous good: `-00349-xev`).
+  The canary answered 401 without the site key, so the API was not exercised on it; instead `gcloud meta list-files-for-upload` confirmed every `*/data/__init__.py` ships,
+  `daily-projections` ran clean on the new image, and after promotion real `api.beezy.fyi/api/public/projections` traffic returned 200 with no 5xx.
+- `bb-live-nba` / `bb-live-nhl` run by hand: `Odds/bestbook_live/{sport}/game_lines_latest.json` written (NBA 652 KB, NHL 54 KB). `daily-projections` re-run: NBA board
+  580 rows / 15 games / 18 books (ml 15, spread 290, total 275, 43 rows per game, 310 KB), NHL 75 rows / 4 games / 19 books, `lines_source` =
+  `oddsaccum_game_lines+bestbook`, `as_of` 1-3 min old, `flipped_quotes_dropped` 0.
+- NOT verified: the authenticated `/api/public/games/odds` response, the Vercel page (PR #144 has no frontend change; the page deploys with the main branch).

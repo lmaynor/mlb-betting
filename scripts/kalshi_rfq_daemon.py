@@ -31,6 +31,7 @@ import os
 import signal
 import sys
 import time
+from dataclasses import replace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -64,6 +65,16 @@ def resolve_run(args, env=None) -> tuple[str, str]:
     if mode == "live" and env.get(LIVE_ENV_FLAG) != "1":
         raise SystemExit(f"--mode live requires {LIVE_ENV_FLAG}=1")
     return rfq_env, mode
+
+
+def risk_config_from_args(args) -> RFQConfig:
+    """RFQConfig defaults, overridden by any --max-* flag that was passed. Defaults are unchanged when none are."""
+    over = {f: getattr(args, a) for f, a in (("max_liability_per_quote_dollars", "max_liability_per_quote"),
+                                             ("max_exposure_per_game_dollars", "max_exposure_per_game"),
+                                             ("max_exposure_per_player_dollars", "max_exposure_per_player"),
+                                             ("max_open_quotes", "max_open_quotes"))
+            if getattr(args, a, None) is not None}
+    return replace(RFQConfig(), **over)
 
 
 def load_credentials(env_file: str | None, rfq_env: str = "demo") -> tuple[str, bytes]:
@@ -191,7 +202,8 @@ async def amain(args) -> int:
             log.warning("%s feed unavailable at start (%r): recording raw RFQs with what loaded; reload retries", what, e)
     max_unpriced = args.max_unpriced_legs if args.max_unpriced_legs is not None else int(
         os.environ.get("KALSHI_RFQ_MAX_UNPRICED_LEGS", "0"))
-    pricer = KalshiRFQPricer(book, PricerConfig(allow_same_game_combos=args.allow_same_game,
+    allow_sgp = args.allow_same_game or os.environ.get("KALSHI_RFQ_ALLOW_SAME_GAME", "") == "1"
+    pricer = KalshiRFQPricer(book, PricerConfig(allow_same_game_combos=allow_sgp,
                                                 quote_single_leg=args.quote_single_leg, max_unpriced_legs=max_unpriced))
     log.info("pricer: max_unpriced_legs=%d game_sports=%s", max_unpriced, list(game_sports))
     loop = asyncio.get_running_loop()
@@ -204,7 +216,7 @@ async def amain(args) -> int:
         maker = None
     else:
         ledger = RFQLedger(args.db)
-        gate = RFQRiskGate(RFQConfig(), ledger, mode)
+        gate = RFQRiskGate(risk_config_from_args(args), ledger, mode)
         maker = handler = RFQMaker(pricer, gate, ledger, client, mode)
         pricer.inventory_fn = maker.inventory
         if gate.killed:
@@ -321,6 +333,12 @@ def main(argv=None) -> int:
                          "$KALSHI_RFQ_MAX_UNPRICED_LEGS or 0 = strict)")
     ap.add_argument("--allow-same-game", action="store_true", help="quote same-game combos (SGP); off until shadow markouts")
     ap.add_argument("--quote-single-leg", action="store_true", help="also quote single-market RFQs (off by default)")
+    ap.add_argument("--max-liability-per-quote", type=float, default=None,
+                    help="$ of collateral one quote may lock (default RFQConfig 1000, scaffolding-loose; was 50)")
+    ap.add_argument("--max-exposure-per-game", type=float, default=None, help="$ across open quotes per game (default RFQConfig 5000, scaffolding-loose; was 150)")
+    ap.add_argument("--max-exposure-per-player", type=float, default=None,
+                    help="$ across open quotes per player; a combo's whole collateral counts against EACH of its players (default 2500, scaffolding-loose; was 75)")
+    ap.add_argument("--max-open-quotes", type=int, default=None, help="open quote cap (default RFQConfig 100 = Kalshi's own cap; was 25)")
     ap.add_argument("--reset-kill", action="store_true", help="clear kill_reason:kalshi_rfq and exit (manual reset only)")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")

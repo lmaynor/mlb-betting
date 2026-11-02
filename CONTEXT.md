@@ -3507,7 +3507,8 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
   LAID only (`yes_bid=0`, padded `no_bid`); fair values are NFL props only (the only mapped Kalshi prop tickers). Wire
   format came from docs.kalshi.com, not the original spec -- see docs/analysis/kalshi_rfq_combo_lay_2026-10-25.md for
   the deviations and the demo-exchange verification list (`accepted_side` semantics first).
-  **GCP recorder (2026-10-25):** Cloud Run Job `mlb-kalshi-rfq-recorder` (`deploy/setup_kalshi_rfq_recorder.sh`), read-only production,
+  **GCP recorder (2026-10-25; as of 2026-11-01 only the DEMO job `mlb-kalshi-rfq-recorder-demo` exists in GCP -- the production job, its
+  `-daily` scheduler and the `kalshi-prod-*` secrets are NOT provisioned; runbook in the analysis doc):** Cloud Run Job `mlb-kalshi-rfq-recorder` (`deploy/setup_kalshi_rfq_recorder.sh`), read-only production,
   daily 10:00 UTC scheduler, tape -> `Kalshi/rfq_tape/production/{day}/*.jsonl`, creds from Secret Manager (`kalshi-prod-api-key-id`,
   `kalshi-prod-private-key`). Fails loud if the stream never connects (Kalshi CDN may block Cloud Run egress -- unverified).
   **Props/spreads/totals (2026-10-26):** `ev/kalshi_props.parse_prop_ticker` + `ev/kalshi_rfq_props.PropFairIndex` resolve NFL/NBA/NHL player-prop legs
@@ -4196,10 +4197,10 @@ backbone. Full detail in `nfl/README.md`.
   - **Spread sign:** the module's `team_spread` is NEGATIVE = favoured (the spec's); `env_adjust` / the engine's env tuple is POSITIVE = favoured.
     `hierarchical_props.spread_from_favoured_positive` converts, `hierarchical_live.price_row` does it at the boundary.
   - **Serving:** `ev.daily_projections` uses it for NFL only when `NFL_ENGINE=hierarchical` (or `--nfl-engine hierarchical`) AND only for stats in
-    `nfl/props/hierarchical_allowlist.json` (written by `engine_eval --write-allowlist` from held-out evidence; shipped: `pass_tds`, `rush_yds`; empty / missing
-    file = nothing served). Board `engine` = `empirical_ewm_v2+hierarchical_v1`, rows carry their own; any failure or thin history falls back per row to the legacy
+    `nfl/props/hierarchical_allowlist.json` (written by `engine_eval --write-allowlist` from held-out evidence; shipped: `pass_tds`, `rec_yds`, `rush_yds`; empty / missing
+    file = nothing served; served WITHOUT context layers (`NFL_HIER_LAYERS=none`) and WITHOUT weather (`NFL_HIER_WEATHER` off): the ablation found no layer that helps). Board `engine` = `empirical_ewm_v2+hierarchical_v1`, rows carry their own; any failure or thin history falls back per row to the legacy
     price. Real-data verdict (2024-25 held out, priors tuned on 2021-23, 2026 wks 1-8 as the clean confirmation): NOT a general improvement -- better
-    for pass_tds / rush_yds (rush_attempts, rec_yds promising but not cleared), worse for passing attempts / completions / yards, parity on anytime_td, MAE
+    for pass_tds / rush_yds / rec_yds (also at REAL book lines, Brier z +2.7 / +3.0 / +2.3; the market still beats both engines), worse for passing attempts / completions / yards, parity on anytime_td, MAE
     unchanged everywhere (shape not mean), injury / coverage / OL context did not help. Details: docs/solutions/conventions/nfl-hierarchical-engine-adoption.md and
     handoffs/handoff_2026-11-01_nfl_hierarchical_props.md. The shipped calibration scales the VOLUME input (TD stats: scale only, since
     the implied total already enters through the anchor).
@@ -4358,6 +4359,16 @@ Catch-up for 20 commits (6835c26..2408d6a) that had no CONTEXT entry, plus the a
   `stale` = lines older than 270 min (the banker runs ~6x/day). Frontend: `lib/game-odds.ts` adapts rows to the terminal's two-way math (`buildScreenRows`,
   `computeRowArb`, Kalshi fee), `app/ev/games/game-prices-client.tsx` (best price, leave-self-out fair >= 3 reference books, EV, 1/4 Kelly, arb with Copy hedge, per-book
   columns, mobile cards), proxy `/api/games/odds` and `limitGameOdds` (free viewers see the best-covered preview). Prices are market data, labelled UNVALIDATED like the
-  terminal. Not built: middles between different lines; the feed may carry only main lines (alternate_* keys accepted if present, unverified against real payloads).
+  terminal. Not built: middles between different lines.
+  **Second source: BestBook ladders (2026-11-01, owner decision to wire it after the probe).** The ParlayAPI feed was MAIN LINES ONLY (verified on banked data) and its
+  snapshots run 6x/day (a 300-min daytime gap > the 270-min stale cutoff), so the board now also unions the BestBook crawl's full-game ladders: `ev/bestbook_game_lines.py`
+  turns the 'lines' rows of each game snapshot (the SAME multi-MB stream the props crawl already fetches, no extra request) into per-book two-way quotes (17-18 venues,
+  ~10 NHL / ~90 NBA rungs a game), `bb-live-*` stores them in `Odds/bestbook_live/{sport}/game_lines_latest.json` (own file; props `latest.json` is unchanged), and
+  `game_odds_board.run` unions them (`_put`): per (row, book) the FRESHER snapshot replaces the whole older quote (never a mix of two snapshots' a/b), a book only one
+  source has is added, either source alone builds a board, `as_of` = the newest source, `lines_source` = `oddsaccum_game_lines+bestbook`. The board rebuilds at :25/:55 and
+  the crawl is hourly at :20, so a live board is <= ~40 min old. Rows keep the `LADDER_MAX_ROWS` (21) nearest the modal line per (game, market) (moneyline uncapped);
+  one-venue rungs are dropped at crawl time; exchange sides at <3c / >97c are placeholders and dropped; DFS venues skipped; the flip guard and rogue filter run on the union.
+  Validated live against ParlayAPI on the same (row, book) pairs: 51 NBA pairs 28 identical / 23 within 5%, 35 NHL pairs 29 identical / 5 within 5% / 1 within 20%,
+  zero >= 20%, no flipped sides. Row semantics: `docs/solutions/integration-issues/bestbook-game-line-row-semantics.md`.
 - **Test hygiene rule:** never put test detection (`PYTEST_CURRENT_TEST`) in production code; isolate with fixtures (`tests/conftest.py`).
 
