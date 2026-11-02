@@ -4186,7 +4186,7 @@ backbone. Full detail in `nfl/README.md`.
     the pbp context features gave NO measurable gain to the XGBoost models (kept off: `include_pbp_ctx`). Shipped file:
     `nfl/props/projection_calibration.json` (only stats that cleared the bar). Re-run `engine_eval --write-calibration` each offseason.
 
-- **2026-11-01 hierarchical NFL prop engine (branch `claude/nfl-props-generative-model-dafff0`, own PR; shipped OFF -- `NFL_ENGINE=ewm` is the
+- **2026-11-01 hierarchical NFL prop engine (branch `claude/nfl-props-generative-model-dafff0`, PR #148; shipped OFF -- `NFL_ENGINE=ewm` is the
   default).** `nfl/models/hierarchical_props.py` prices the 10 NFL stats as ONE generative process instead of 10 independent Normal / NegBin
   averages: pass attempts (3-regime game-script mixture from the spread) -> completions (Beta-Binomial marginalised over the attempts pmf, so
   P(C > A) = 0 exactly) -> pass yards / rush yards / receiving yards (NegBin counts x gamma per-event yards, compound mean / variance by the law
@@ -4195,10 +4195,13 @@ backbone. Full detail in `nfl/README.md`.
   hand-set prior (`PRIORS`), none fitted, none validated against prices; rows stay `validated: false`.
   - **Spread sign:** the module's `team_spread` is NEGATIVE = favoured (the spec's); `env_adjust` / the engine's env tuple is POSITIVE = favoured.
     `hierarchical_props.spread_from_favoured_positive` converts, `hierarchical_live.price_row` does it at the boundary.
-  - **Serving:** `ev.daily_projections` switches NFL to it only when `NFL_ENGINE=hierarchical` (or `--nfl-engine hierarchical`); engine id
-    `hierarchical_v1`; any failure or thin history falls back per row to the legacy price. It must NOT be turned on before
-    `python -m nfl.props.engine_eval --seasons 2024-2025 --hierarchical` clears the adoption bar
-    (docs/solutions/conventions/nfl-hierarchical-engine-adoption.md). The shipped calibration scales the VOLUME input (TD stats: scale only, since
+  - **Serving:** `ev.daily_projections` uses it for NFL only when `NFL_ENGINE=hierarchical` (or `--nfl-engine hierarchical`) AND only for stats in
+    `nfl/props/hierarchical_allowlist.json` (written by `engine_eval --write-allowlist` from held-out evidence; shipped: `pass_tds`, `rush_yds`; empty / missing
+    file = nothing served). Board `engine` = `empirical_ewm_v2+hierarchical_v1`, rows carry their own; any failure or thin history falls back per row to the legacy
+    price. Real-data verdict (2024-25 held out, priors tuned on 2021-23, 2026 wks 1-8 as the clean confirmation): NOT a general improvement -- better
+    for pass_tds / rush_yds (rush_attempts, rec_yds promising but not cleared), worse for passing attempts / completions / yards, parity on anytime_td, MAE
+    unchanged everywhere (shape not mean), injury / coverage / OL context did not help. Details: docs/solutions/conventions/nfl-hierarchical-engine-adoption.md and
+    handoffs/handoff_2026-11-01_nfl_hierarchical_props.md. The shipped calibration scales the VOLUME input (TD stats: scale only, since
     the implied total already enters through the anchor).
   - **Data gaps filled (all optional, degrade to neutral):** `nfl/features/context_gaps.py` (coverage-shell rates from `pbp_participation`,
     receiver aDOT / wopr / racr / deep share, passer CPOE, trailing sack+hit / stuff / pressure rates, starting-OL-out count, `net_pressure_mismatch`

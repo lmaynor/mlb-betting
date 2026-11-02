@@ -16,6 +16,7 @@ ASCII only.
 """
 from __future__ import annotations
 
+import json
 import logging
 import math
 import os
@@ -47,9 +48,41 @@ PBP_COLS = ["game_id", "play_id", "season", "week", "season_type", "posteam", "d
 PART_COLS = ["nflverse_game_id", "play_id", "defense_coverage_type", "defense_man_zone_type", "was_pressure"]
 
 
+ALLOWLIST_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "props",
+                              "hierarchical_allowlist.json")
+
+
 def enabled() -> bool:
-    """The hierarchical engine serves the board only when NFL_ENGINE=hierarchical (default: the legacy EWM engine)."""
+    """The hierarchical engine is consulted only when NFL_ENGINE=hierarchical (default: the legacy EWM engine)."""
     return os.environ.get("NFL_ENGINE", "ewm").strip().lower() == "hierarchical"
+
+
+def load_allowlist(path: Optional[str] = None) -> list:
+    """Stats the shipped evidence clears (nfl/props/hierarchical_allowlist.json, written by `engine_eval --write-allowlist`);
+    [] when the file is absent or unreadable (fail closed: nothing is served by the new engine)."""
+    try:
+        with open(path or ALLOWLIST_PATH) as fh:
+            return [s for s in (json.load(fh).get("stats") or []) if s in hp.STATS]
+    except (OSError, ValueError):
+        return []
+
+
+def allowed_stats() -> tuple:
+    """Stats the hierarchical engine may price: $NFL_HIER_STATS ('all' | 'none' | 'a,b,c') overrides the shipped allowlist
+    (an experiment switch -- the evidence file is what production uses)."""
+    raw = os.environ.get("NFL_HIER_STATS", "").strip().lower()
+    if raw == "all":
+        return tuple(hp.STATS)
+    if raw == "none":
+        return ()
+    if raw:
+        return tuple(x.strip() for x in raw.split(",") if x.strip() in hp.STATS)
+    return tuple(load_allowlist())
+
+
+def stat_enabled(stat: str) -> bool:
+    """True when `stat` is priced by the hierarchical engine: the engine is on AND the stat is allowlisted."""
+    return enabled() and stat in allowed_stats()
 
 
 # ----------------------------------------------------------------------------------------------------------- helpers

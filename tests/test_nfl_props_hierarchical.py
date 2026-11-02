@@ -353,34 +353,78 @@ def test_engine_flag_defaults_off(monkeypatch):
     assert HL.enabled() is True
 
 
-def test_daily_projections_serves_the_hierarchical_engine_only_when_asked(monkeypatch):
-    from ev import daily_projections as dp
+def test_allowlist_file_env_override_and_fail_closed(monkeypatch, tmp_path):
+    import json
+    f = tmp_path / "al.json"
+    f.write_text(json.dumps({"stats": ["pass_tds", "rush_yds", "not_a_stat"]}))
+    assert HL.load_allowlist(str(f)) == ["pass_tds", "rush_yds"]                    # unknown stats dropped
+    assert HL.load_allowlist(str(tmp_path / "missing.json")) == []                    # fail closed
+    f.write_text("{not json")
+    assert HL.load_allowlist(str(f)) == []
+    monkeypatch.setenv("NFL_ENGINE", "hierarchical")
+    monkeypatch.setattr(HL, "ALLOWLIST_PATH", str(tmp_path / "missing.json"))
+    monkeypatch.delenv("NFL_HIER_STATS", raising=False)
+    assert HL.allowed_stats() == () and not HL.stat_enabled("rush_yds")
+    monkeypatch.setenv("NFL_HIER_STATS", "all")
+    assert set(HL.allowed_stats()) == set(hp.STATS) and HL.stat_enabled("rec_yds")
+    monkeypatch.setenv("NFL_HIER_STATS", "rush_yds, bogus ,pass_tds")
+    assert HL.allowed_stats() == ("rush_yds", "pass_tds") and not HL.stat_enabled("rec_yds")
+    monkeypatch.setenv("NFL_HIER_STATS", "none")
+    assert HL.allowed_stats() == () and not HL.stat_enabled("rush_yds")
+    monkeypatch.setenv("NFL_ENGINE", "ewm")
+    monkeypatch.setenv("NFL_HIER_STATS", "all")
+    assert not HL.stat_enabled("rush_yds")                                            # the master switch still wins
+
+
+def test_shipped_allowlist_is_valid_and_carries_its_evidence():
+    import json
+    doc = json.load(open(HL.ALLOWLIST_PATH))
+    assert set(doc["stats"]) <= set(hp.STATS) and set(doc["stats"]) == set(doc["evidence"])
+    for stat, ev in doc["evidence"].items():
+        assert ev["d_logscore"] > 0 and ev["d_logscore"] / ev["d_logscore_se"] > 2.8 and ev["d_brier"] < 0, stat
+
+
+def _logs_and_args(dp):
     from mlb_core.data import cockpit_form as cf
     table = _team_rows()
     for rows in table.values():
         for r in rows:
             r["_date"] = f"W{r['week']}"
     logs = dp.GameLogs("nfl", {"all": table})
+    start = datetime(2025, 11, 2, 18, 0, tzinfo=timezone.utc)
+
+    def args(stat, name, sdef_stat=None):
+        return ("nfl", stat, name.upper(), name, table[name], cf.NFL_STATS[stat], logs, 54.5, None, [], "AAA", "BBB",
+                "nfl:2025-11-02:BBB@AAA", start, 60.0)
+    return logs, args
+
+
+def test_daily_projections_routes_per_stat_through_the_allowlist(monkeypatch):
+    from ev import daily_projections as dp
+    logs, args = _logs_and_args(dp)
     monkeypatch.setattr(dp.GameLogs, "nfl_live", lambda self: None)
     monkeypatch.setattr(dp.GameLogs, "env_lines", lambda self: {})
-    start = datetime(2025, 11, 2, 18, 0, tzinfo=timezone.utc)
-    sdef = cf.NFL_STATS["rec_yds"]
-    args = ("nfl", "rec_yds", "WR1", "wr1", table["wr1"], sdef, logs, 54.5, None, [], "AAA", "BBB", "nfl:2025-11-02:BBB@AAA",
-            start, 60.0)
     monkeypatch.delenv("NFL_ENGINE", raising=False)
-    legacy = dp.make_row(*args)
-    assert legacy["engine"] == dp.ENGINE and dp.engine_id("nfl") == dp.ENGINE
+    monkeypatch.delenv("NFL_HIER_STATS", raising=False)
+    assert dp.make_row(*args("rec_yds", "wr1"))["engine"] == dp.ENGINE and dp.engine_id("nfl") == dp.ENGINE   # default: off
     monkeypatch.setenv("NFL_ENGINE", "hierarchical")
-    hier = dp.make_row(*args)
-    assert hier["engine"] == dp.ENGINE_NFL_HIER == dp.engine_id("nfl") and hier["validated"] is False
+    monkeypatch.setenv("NFL_HIER_STATS", "rec_yds")
+    assert dp.engine_id("nfl") == f"{dp.ENGINE}+{dp.ENGINE_NFL_HIER}"                  # mixed board
+    hier = dp.make_row(*args("rec_yds", "wr1"))
+    other = dp.make_row(*args("receptions", "wr1"))
+    assert hier["engine"] == dp.ENGINE_NFL_HIER and hier["validated"] is False
     assert 0.0 < hier["p_over_model"] < 1.0 and hier["proj_p10"] <= hier["proj_p90"]
-    assert dp.engine_id("nhl") == dp.ENGINE                                   # other sports are untouched
+    assert other["engine"] == dp.ENGINE                                                 # not allowlisted: legacy price
+    monkeypatch.setenv("NFL_HIER_STATS", "none")
+    assert dp.engine_id("nfl") == dp.ENGINE and dp.make_row(*args("rec_yds", "wr1"))["engine"] == dp.ENGINE
+    assert dp.engine_id("nhl") == dp.ENGINE                                             # other sports are untouched
 
 
 def test_hierarchical_failure_falls_back_to_the_legacy_price(monkeypatch):
     from ev import daily_projections as dp
     from mlb_core.data import cockpit_form as cf
     monkeypatch.setenv("NFL_ENGINE", "hierarchical")
+    monkeypatch.setenv("NFL_HIER_STATS", "rec_yds")
     table = _team_rows()
     for rows in table.values():
         for r in rows:
@@ -711,6 +755,21 @@ def test_hierarchical_replay_scores_both_engines_on_identical_rows(monkeypatch):
     assert 0.2 < ry["tails"]["plus200"]["pred_base"] < 0.5 and 0.08 < ry["tails"]["plus400"]["pred_base"] < 0.35
     txt = EE.render_hierarchical(cmp, [2024])
     assert "rec_yds" in txt and "adoption bar" in txt and "NFL_ENGINE" in txt
+
+
+def _cmp(verdict, d=0.05, se=0.01, br=-0.004, brse=0.002, z=5.0, n=1000):
+    return {"verdict": verdict, "d_logscore": d, "d_logscore_se": se, "z_logscore": z, "d_brier": br, "d_brier_se": brse, "n": n}
+
+
+def test_build_allowlist_needs_adopt_everywhere_and_a_clean_confirmation():
+    from nfl.props import engine_eval as EE
+    main = {"a": _cmp("ADOPT"), "b": _cmp("ADOPT"), "c": _cmp("NO CLEAR GAIN"), "d": _cmp("ADOPT"), "e": _cmp("ADOPT")}
+    extra = [{"a": _cmp("ADOPT"), "b": _cmp("NO CLEAR GAIN"), "d": _cmp("ADOPT"), "e": _cmp("ADOPT")}]
+    confirm = {"a": _cmp("NO CLEAR GAIN", d=0.02, z=1.0), "d": _cmp("WORSE", d=-0.03, z=-3.0), "e": _cmp("NO CLEAR GAIN", d=-0.001, z=-0.1)}
+    assert sorted(EE.build_allowlist(main, extra, confirm)) == ["a"]            # b: not ADOPT with context; c: never; d: clean-season WORSE; e: point estimate <= 0
+    assert sorted(EE.build_allowlist(main, extra, None)) == ["a", "d", "e"]      # no confirmation supplied
+    assert sorted(EE.build_allowlist(main, [], None)) == ["a", "b", "d", "e"]
+    assert EE.build_allowlist(main, extra, confirm)["a"]["confirm"]["n"] == 1000
 
 
 def test_hierarchical_replay_has_no_lookahead(monkeypatch):

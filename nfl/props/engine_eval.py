@@ -763,7 +763,48 @@ def _run_hierarchical(args, seasons: list) -> str:
         res = replay_hierarchical(df, seasons, env_tbl, live=live)
         if args.hier_cache:
             res.to_parquet(args.hier_cache)
-    return render_hierarchical(compare_hierarchical(res, seasons), seasons)
+    cmp = compare_hierarchical(res, seasons)
+    report = render_hierarchical(cmp, seasons)
+    if args.write_allowlist:
+        report += _write_allowlist(cmp, seasons, args)
+    return report
+
+
+def build_allowlist(cmp: dict, extra: list, confirm: Optional[dict]) -> dict:
+    """{stat: evidence} for stats ADOPT in `cmp` and in every dict of `extra`, and not contradicted by `confirm`
+    (a compare_hierarchical dict on clean seasons: d_logscore must be > 0 and not significantly negative)."""
+    out = {}
+    for stat, c in cmp.items():
+        if c.get("verdict") != "ADOPT" or any(e.get(stat, {}).get("verdict") != "ADOPT" for e in extra):
+            continue
+        ev = {"d_logscore": round(c["d_logscore"], 4), "d_logscore_se": round(c["d_logscore_se"], 4),
+              "d_brier": round(c["d_brier"], 4), "d_brier_se": round(c["d_brier_se"], 4), "n": c["n"]}
+        if confirm is not None:
+            k = confirm.get(stat, {})
+            if "d_logscore" not in k or k["d_logscore"] <= 0 or k["z_logscore"] <= -1.645:
+                continue
+            ev["confirm"] = {"d_logscore": round(k["d_logscore"], 4), "se": round(k["d_logscore_se"], 4), "n": k["n"]}
+        out[stat] = ev
+    return out
+
+
+def _write_allowlist(cmp: dict, seasons: list, args) -> str:
+    import json
+    from datetime import date
+    extra = [compare_hierarchical(pd.read_parquet(p), seasons) for p in (args.hier_cache_extra or [])]
+    confirm = None
+    if args.hier_confirm:
+        cres = pd.read_parquet(args.hier_confirm)
+        confirm = compare_hierarchical(cres, sorted(cres["season"].unique()))
+    keep = build_allowlist(cmp, extra, confirm)
+    doc = {"generated": date.today().isoformat(), "seasons": f"{seasons[0]}-{seasons[-1]}",
+           "rule": f"log-score z >= {ADOPT_Z_HIER:.2f}, Brier z >= {ADOPT_Z_BRIER:.2f}, better in the required seasons, on every "
+                   "supplied run; and not contradicted on the confirm seasons",
+           "stats": sorted(keep), "evidence": keep}
+    with open(args.write_allowlist, "w") as fh:
+        json.dump(doc, fh, indent=2)
+        fh.write("\n")
+    return f"\nallowlist written to {args.write_allowlist}: {sorted(keep) or 'NO STAT cleared the bar'}\n"
 
 
 def main(argv=None) -> int:
@@ -784,6 +825,14 @@ def main(argv=None) -> int:
     ap.add_argument("--hier-context", action="store_true",
                     help="with --hierarchical: also load injuries / pbp / participation / snap_counts (slow, big)")
     ap.add_argument("--hier-cache", help="parquet path for the hierarchical replay rows (load if present, else save)")
+    ap.add_argument("--write-allowlist", metavar="PATH",
+                    help="write the per-stat allowlist (stats ADOPTed on this run, on every --hier-cache-extra run, and not "
+                         "contradicted by --hier-confirm) as JSON; the serving engine reads nfl/props/hierarchical_allowlist.json")
+    ap.add_argument("--hier-cache-extra", nargs="*", default=[],
+                    help="more replay-row parquets (e.g. the --hier-context run): a stat must be ADOPT on all of them too")
+    ap.add_argument("--hier-confirm", metavar="PATH",
+                    help="replay-row parquet from seasons NOTHING was tuned or selected on: an allowlisted stat must not be "
+                         "worse there (point estimate > 0, not significantly negative)")
     ap.add_argument("--out")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

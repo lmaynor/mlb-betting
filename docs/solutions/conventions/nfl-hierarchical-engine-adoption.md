@@ -11,7 +11,10 @@ date: 2026-11-01
 
 `nfl.models.hierarchical_props` prices the ten NFL stats as one coherent generative process (attempts -> completions -> yards,
 carries -> yards, targets -> receptions -> yards, team-TD-anchored anytime TD). `nfl.models.hierarchical_live` feeds it from the serving
-engine's game-log rows. `ev.daily_projections` uses it for NFL only when `NFL_ENGINE=hierarchical` (default `ewm`).
+engine's game-log rows. `ev.daily_projections` uses it for NFL only when `NFL_ENGINE=hierarchical` (default `ewm`) AND only for the stats listed in
+`nfl/props/hierarchical_allowlist.json` (written by `engine_eval --write-allowlist`; missing / unreadable file = empty list = nothing served).
+The board payload's `engine` is then `empirical_ewm_v2+hierarchical_v1`; every row carries its own `engine`. `NFL_HIER_STATS=all|none|a,b,c`
+overrides the file for experiments only (production uses the file).
 
 ## Why it is off
 
@@ -41,3 +44,17 @@ so it under-states what the live path can see (no teammate absences, no coverage
 - `net_pressure_mismatch` is a ratio (1.0 = league average), not the spec's rate-unit expression.
 - The serving calibration multiplies the VOLUME input; TD stats take its scale only.
 - Rows stay `validated: false` whatever the replay says: it is accuracy evidence, not edge against a price.
+
+## The allowlist (2026-11-01)
+
+```bash
+PYTHONPATH=. python -m nfl.props.engine_eval --seasons 2024-2025 --hierarchical --hier-cache nocontext.parquet \
+  --hier-cache-extra context.parquet --hier-confirm season2026.parquet --write-allowlist nfl/props/hierarchical_allowlist.json
+```
+A stat is listed only if it is ADOPT (strict rule: log-score z >= 2.81, Brier z >= 1.645, better in the required seasons) on the no-context
+run AND on every `--hier-cache-extra` run (the live path uses context when it loads), and is not contradicted on `--hier-confirm`
+seasons nothing was tuned or selected on (point estimate > 0, not significantly negative). Shipped: **pass_tds, rush_yds** (2024-25 held out,
+priors tuned on 2021-23 only; 2026 weeks 1-8 confirm: +0.026 and +0.102 log score). Not listed: rush_attempts (ADOPT only with context),
+rec_yds (log score +0.17 in every period but the Brier gain at the proxy line is not significant: needs a real-line check), everything passing.
+The 2024-25 verdicts also SELECTED these stats, so 2026 is the only clean check, and it is 8 weeks (208-264 rows per stat). Re-run
+each offseason and when the priors change; the file records the evidence it was written from.

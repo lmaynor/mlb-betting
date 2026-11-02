@@ -125,10 +125,14 @@ STAT_PARAMS = {
 
 
 def engine_id(sport: str) -> str:
-    """The engine that prices this sport's board. NFL switches to the hierarchical engine only when NFL_ENGINE=hierarchical:
-    it changes every NFL price, so it ships OFF until nfl.props.engine_eval --hierarchical clears the adoption bar
-    (docs/solutions/conventions/nfl-projection-engine-changes-need-walkforward-evidence.md)."""
-    return ENGINE_NFL_HIER if sport == "nfl" and _hl.enabled() else ENGINE
+    """The engine id of a sport's board payload. NFL is "empirical_ewm_v2+hierarchical_v1" (a mix; each row carries its own
+    `engine`) only when NFL_ENGINE=hierarchical AND at least one stat is allowlisted; otherwise the legacy id. The hierarchical
+    engine changes the price of the stats it serves, so it ships OFF and only for stats whose held-out evidence cleared the
+    adoption bar (nfl/props/hierarchical_allowlist.json;
+    docs/solutions/conventions/nfl-hierarchical-engine-adoption.md)."""
+    if sport == "nfl" and _hl.enabled() and _hl.allowed_stats():
+        return f"{ENGINE}+{ENGINE_NFL_HIER}"
+    return ENGINE
 
 
 def stat_params(sport: str, stat: str) -> tuple:
@@ -990,7 +994,7 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
         p_model_over = p_over(family, mu, line, ctx, sd_mu=mu_raw) if line is not None else None
         p_floor, p_ceil = proj_range(family, mu, ctx, sd_mu=mu_raw)
     engine = ENGINE
-    if sport == "nfl" and _hl.enabled() and team is not None and stat in _hl.hp.STATS:
+    if sport == "nfl" and team is not None and _hl.stat_enabled(stat):
         env_t = logs.env_lines().get((team, start.astimezone(_ET).date().isoformat())) if start is not None else None
         hier = _price_hier(stat, rows, team, opp, env_t, logs, coef, mu_raw, start)
         if hier is not None:
