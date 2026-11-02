@@ -16,6 +16,9 @@ const FLAT = "#9ca3af";
 const MAX_ROWS = 7;
 const SPORTS = ["mlb", "nhl", "nba", "nfl"];
 
+/** The slice of the deep-dive payload the card reads. */
+type DeepDive = { ev_headline?: { flat_roi_pct: number; kelly_roi_pct: number; graded: number } | null }
+
 type Row = {
   sport: string; system: string; game_date: string; bet_type: string; player: string | null
   away_team: string | null; home_team: string | null; odds: number; stake: number
@@ -49,7 +52,7 @@ function prop(r: Row): string {
   return `${who}${bt.replace(/_/g, " ")}`.trim();
 }
 
-async function get(path: string): Promise<any> {
+async function get<T>(path: string): Promise<T> {
   const r = await fetch(`${API}${path}`, { headers: { "X-API-Key": KEY }, cache: "no-store" });
   if (!r.ok) throw new Error(`${path} -> ${r.status}`);
   return r.json();
@@ -64,11 +67,11 @@ export async function GET(req: Request) {
   const [perSport, deep] = await Promise.all([
     Promise.all(sports.map(async (s) => {
       try {
-        const d = await get(`/api/public/picks/recent?limit=200&sport=${s}`);
+        const d = await get<Row[] | { picks?: Row[] }>(`/api/public/picks/recent?limit=200&sport=${s}`);
         return ((Array.isArray(d) ? d : d.picks ?? []) as Row[]).map(r => ({ ...r, sport: s }));
       } catch { return [] as Row[]; }
     })),
-    get(`/api/public/analytics/deep-dive?system=EV`).catch(() => null),
+    get<DeepDive>(`/api/public/analytics/deep-dive?system=EV`).catch(() => null),
   ]);
   const settled = perSport.flat().filter(r => r.result === "win" || r.result === "loss" || r.result === "push");
   const date = wantDate ?? settled.map(r => r.game_date).sort().pop() ?? "";

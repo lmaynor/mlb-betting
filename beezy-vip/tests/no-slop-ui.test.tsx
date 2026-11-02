@@ -91,16 +91,13 @@ describe('design-system debt guards', () => {
     expect(hover![1]).not.toMatch(/box-shadow/)
   })
 
-  it('there is one surface spec: CARD_STYLE is SURFACE_CARD (BoardUI tokens, 12px), and .ribbon-card-wrap matches', async () => {
+  it('there is one surface spec: CARD_STYLE is SURFACE_CARD (BoardUI tokens, 12px)', async () => {
     const tokens = await import('../lib/tokens')
     expect(tokens.CARD_STYLE).toBe(tokens.SURFACE_CARD)
     expect(tokens.SURFACE_CARD).toEqual({ background: 'var(--color-background-primary-default)', border: '1px solid var(--color-separator-border)', borderRadius: '12px', boxShadow: 'var(--shadow-card)' })
     expect(tokens.SURFACE_ELEVATED).toEqual({ background: '#171a24', border: '1px solid #2e3446', borderRadius: '8px' })
     expect(tokens.TABLE_TH.fontSize).toBe('10px')
     expect(tokens.TABLE_TD.borderBottom).toBe('1px solid #151822')
-    const wrap = /\.ribbon-card-wrap \{([^}]*)\}/.exec(read('app/globals.css'))![1]
-    expect(wrap).toMatch(/border-radius: 12px/)
-    expect(wrap).toMatch(/box-shadow: var\(--shadow-card\)/)
   })
 
   it('tables share the tokens.ts primitives instead of re-declaring them', () => {

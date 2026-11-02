@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { SystemSparkline } from './system-sparkline'
 import { SYSTEM_PILL } from '@/lib/tokens'
 import type { SparklinePoint } from '@/lib/betting-api'
-import { cx } from '@/utils/cx'
 
 export interface SystemCard {
   system: string

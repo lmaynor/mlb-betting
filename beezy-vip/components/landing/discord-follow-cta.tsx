@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import { DiscordMark } from '@/components/ui/discord-mark'
 import { XMark } from '@/components/ui/x-mark'
 

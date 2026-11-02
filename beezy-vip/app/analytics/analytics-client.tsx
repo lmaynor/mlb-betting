@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useMounted } from '@/lib/use-mounted'
 import { useSearchParams } from 'next/navigation'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { AnalyticsDeepDive, SystemStats } from '@/lib/types'
@@ -27,8 +28,7 @@ const tipStyle = { background: 'var(--color-background-tertiary-default)', borde
 const CARD = 'rounded-xl border border-separator-border bg-background-primary-default shadow-card'
 
 export function AnalyticsClient({ initial, stats }: { initial: AnalyticsDeepDive | null; stats: SystemStats[] }) {
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
+  const mounted = useMounted()
   // The tab lives in the URL (?tab=) and is chosen from the Results section tabs under the nav, so it is linkable.
   const sp = useSearchParams()
   const tabParam = sp.get('tab')
@@ -224,7 +224,7 @@ function Calibration({ data, system, setSystem, mounted }: { data: AnalyticsDeep
           </table>
         </div>
         <p className="times mt-2.5 text-caption-1-regular text-text-secondary">
-          Mean CLV is the average of each bet's price against the closing price, and a few extreme closes can move it a lot; the CLV Tracker shows the full spread and the median. Buckets under 30 bets are marked low n and should not be read for ROI.
+          Mean CLV is the average of each bet&apos;s price against the closing price, and a few extreme closes can move it a lot; the CLV Tracker shows the full spread and the median. Buckets under 30 bets are marked low n and should not be read for ROI.
         </p>
       </Panel>
       <Panel title="HOW MODEL PROBABILITIES ARE CONTROLLED">

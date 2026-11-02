@@ -42,7 +42,6 @@ type View = 'cockpit' | 'board'
 
 const PITCHER_SYSTEMS = new Set(['K', 'OUTS', 'PITCHER_ER'])
 const BATTER_SYSTEMS = new Set(['HR', 'BATTER_HITS', 'BATTER_TB', 'BATTER_K'])
-const GAME_SYSTEMS = new Set(['NRFI', 'F5', 'F1H', 'F3', 'F7', 'GAME'])
 
 type Group = 'all' | 'batter' | 'pitcher' | 'game'
 function groupOf(system: string): Group {
@@ -475,6 +474,13 @@ export interface MatchupOpt { key: string; away: string; home: string }
 // Matchup filter: bettors think in games, not single teams. Custom popover so
 // each option can carry both team logos (native <option> can't). Values are
 // game_pk strings; 'all' clears the filter.
+function TeamSelLogo({ team }: { team: string }) {
+  const l = teamLogoSrc(team)
+  return l
+    ? <img src={l} alt="" width={16} height={16} className="edge-teamsel-logo" />
+    : <span className="edge-teamsel-logo" aria-hidden />
+}
+
 function MatchupSelect({ value, matchups, onChange }: {
   value: string; matchups: MatchupOpt[]; onChange: (v: string) => void
 }) {
@@ -495,12 +501,6 @@ function MatchupSelect({ value, matchups, onChange }: {
   }, [open])
   const sel = value !== 'all' ? matchups.find(m => m.key === value) ?? null : null
   const pick = (v: string) => { onChange(v); setOpen(false) }
-  const Logo = ({ team }: { team: string }) => {
-    const l = teamLogoSrc(team)
-    return l
-      ? <img src={l} alt="" width={16} height={16} className="edge-teamsel-logo" />
-      : <span className="edge-teamsel-logo" aria-hidden />
-  }
   return (
     <div className="edge-select edge-teamsel" ref={ref}>
       <span className="edge-select-k">Matchup</span>
@@ -513,7 +513,7 @@ function MatchupSelect({ value, matchups, onChange }: {
         onClick={() => setOpen(o => !o)}
       >
         {sel
-          ? <span className="edge-matchsel-val"><Logo team={sel.away} />{sel.away}<span className="edge-matchsel-at">@</span><Logo team={sel.home} />{sel.home}</span>
+          ? <span className="edge-matchsel-val"><TeamSelLogo team={sel.away} />{sel.away}<span className="edge-matchsel-at">@</span><TeamSelLogo team={sel.home} />{sel.home}</span>
           : <span>All games</span>}
         <span className="edge-teamsel-caret" aria-hidden>{'\u25be'}</span>
       </button>
@@ -533,9 +533,9 @@ function MatchupSelect({ value, matchups, onChange }: {
               className={`edge-teamsel-opt edge-matchsel-opt${m.key === value ? ' is-sel' : ''}`}
               onClick={() => pick(m.key)}
             >
-              <Logo team={m.away} /><span>{m.away}</span>
+              <TeamSelLogo team={m.away} /><span>{m.away}</span>
               <span className="edge-matchsel-at">@</span>
-              <Logo team={m.home} /><span>{m.home}</span>
+              <TeamSelLogo team={m.home} /><span>{m.home}</span>
             </button>
           ))}
         </div>
@@ -558,13 +558,6 @@ function notePillColor(text: string): string {
 }
 
 // American odds from a model win probability (fair line)
-function fairFromProb(pct: number | null | undefined): number | null {
-  if (pct == null) return null
-  const dp = pct / 100
-  if (dp <= 0 || dp >= 1) return null
-  return dp >= 0.5 ? -Math.round((dp / (1 - dp)) * 100) : Math.round(((1 - dp) / dp) * 100)
-}
-
 // Quarter-Kelly stake in dollars, HARD-CAPPED at 2.5% of bankroll. Model
 // edges on longshot props produce huge raw Kelly fractions (a 60% model prob
 // at +450 says "bet 51%" -- the old half-Kelly was suggesting ~25% of
@@ -579,9 +572,8 @@ function kellyDollars(bankroll: number, modelPct: number | null, odds: number): 
   return Math.min(bankroll * f * 0.25, bankroll * STAKE_CAP_PCT)
 }
 
-function SeasonLine({ season }: { season?: SeasonStats | null }) {
-  if (!season || (!season.realized?.length && !season.expected?.length)) return null
-  const Row = ({ items, dim }: { items: { label: string; value: string }[]; dim?: boolean }) => (
+function SeasonRow({ items, dim }: { items: { label: string; value: string }[]; dim?: boolean }) {
+  return (
     <div className="edge-season-row">
       {items.map(s => (
         <span key={s.label} className="edge-season-cell">
@@ -591,13 +583,17 @@ function SeasonLine({ season }: { season?: SeasonStats | null }) {
       ))}
     </div>
   )
+}
+
+function SeasonLine({ season }: { season?: SeasonStats | null }) {
+  if (!season || (!season.realized?.length && !season.expected?.length)) return null
   return (
     <div className="edge-season">
-      {season.realized?.length ? <Row items={season.realized} /> : null}
+      {season.realized?.length ? <SeasonRow items={season.realized} /> : null}
       {season.expected?.length ? (
         <div className="edge-season-x">
           <span className="edge-season-xk">Expected</span>
-          <Row items={season.expected} dim />
+          <SeasonRow items={season.expected} dim />
         </div>
       ) : null}
     </div>
@@ -620,7 +616,6 @@ function Detail({ p, bankroll, inSlip, onToggleSlip }: {
   const liveImplied = oddsValid ? americanToImplied(enteredOdds) * 100 : (p.marketProbPct ?? americanToImplied(p.odds) * 100)
   const gap = p.modelProbPct != null ? p.modelProbPct - liveImplied : null
   const kelly = kellyDollars(bankroll, p.modelProbPct, oddsValid ? enteredOdds : p.odds)
-  const market = p.marketProbPct ?? americanToImplied(p.odds) * 100
   const fairOdds = (() => {
     if (p.modelProbPct == null) return null
     const dp = p.modelProbPct / 100

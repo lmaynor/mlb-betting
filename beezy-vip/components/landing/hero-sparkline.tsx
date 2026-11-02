@@ -5,7 +5,7 @@ import type { SparklinePoint } from '@/lib/betting-api'
 
 const B = '1px solid var(--color-separator-border)'
 
-function CustomTooltip({ active, payload }: any) {
+function CustomTooltip({ active, payload }: { active?: boolean; payload?: { payload: SparklinePoint }[] }) {
   if (!active || !payload?.length) return null
   const d = payload[0].payload as SparklinePoint
   const pos = d.cum_pnl >= 0
