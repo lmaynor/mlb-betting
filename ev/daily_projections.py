@@ -144,16 +144,14 @@ BLEND_C = 0.10                                       # model weight (in logit sp
 # 2026-10-15 BettingPros study (docs/analysis/bettingpros_model_vs_market_2026-10-15.md; mlb_core/risk/calibration.py
 # BLEND_C) MEASURED c for the TRAINED research models only: NBA points +0.07, rebounds +0.19, assists +0.18, threes +0.28,
 # pra +0.05, NHL SOG +0.30. Nothing was measured for THIS empirical engine, and nothing at all for NBA pr / pa / ra /
-# steals / blocks or any NFL stat (the calibration table gives those c = 0). NHL values are the design spec's (sog 0.30 =
-# the trained SOG model's measured c, applied as a prior). The NBA / NFL numbers are the PR #147 specification's priors:
-# near the measured ones where one exists (NBA pra 0.12 and points 0.10 are ABOVE the measured 0.05 / 0.07) and unmeasured
-# elsewhere.
+# steals / blocks (the calibration table gives those c = 0). NHL values are the design spec's (sog 0.30 = the trained SOG
+# model's measured c, applied as a prior). The NBA numbers are the PR #147 specification's priors: near the measured ones
+# where one exists (pra 0.12 and points 0.10 are ABOVE the measured 0.05 / 0.07) and unmeasured elsewhere. NFL is untouched.
 BLEND_C_BY_SPORT_STAT = {
     "nba": {"threes": 0.25, "rebounds": 0.18, "assists": 0.18, "ra": 0.18, "pr": 0.14, "pa": 0.14, "pra": 0.12,
             "points": 0.10, "steals": 0.12, "blocks": 0.12},
     "nhl": {"sog": 0.30, "saves": 0.15, "blocked_shots": 0.15, "points": 0.12, "goals": 0.10, "assists": 0.12,
             "pp_points": 0.10},
-    "nfl": {"rec_yds": 0.15, "anytime_td": 0.12, "default": 0.10},
 }
 NBA_MODEL = "hier_v1"                                # NBA rows: role redistribution + minutes + attempt-first threes + coherent combos
 EDGE_CAP = 0.15                                      # larger apparent edges are reference/model error (winner's curse)

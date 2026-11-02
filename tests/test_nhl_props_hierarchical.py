@@ -267,8 +267,7 @@ def test_pp_points_is_a_live_market_with_labels_and_blend_weights():
     assert dp.STAT_LABEL["pp_points"] == "PP Points" and "pp_points" in dp.ROTATION_MIN_USAGE["nhl"]
     assert dp.BLEND_C_BY_SPORT_STAT["nhl"] == {"sog": 0.30, "saves": 0.15, "blocked_shots": 0.15, "points": 0.12,
                                                "goals": 0.10, "assists": 0.12, "pp_points": 0.10}
-    # NFL: only the stats PR #147's spec lists get their own weight (rec_yds 0.15, anytime_td 0.12); the rest keep BLEND_C
-    assert dp.blend_c("nhl", "sog") == 0.30 and dp.blend_c("nfl", "pass_yds") == dp.BLEND_C
+    assert dp.blend_c("nhl", "sog") == 0.30 and dp.blend_c("nfl", "rec_yds") == dp.BLEND_C
 
 
 def test_every_nhl_market_produces_a_valid_row_and_uses_its_blend_weight():
