@@ -1,0 +1,242 @@
+{
+ "report": {
+  "test_seasons": [
+   2024,
+   2025
+  ],
+  "date_stride": 2,
+  "oracle_absences": false,
+  "stats": {
+   "sog": {
+    "n": 37327,
+    "mean_actual": 1.7582,
+    "mae": {
+     "new": 1.09736,
+     "legacy": 1.09736,
+     "diff": 0.0,
+     "se": 2e-05
+    },
+    "bias": {
+     "new": -0.0072,
+     "legacy": -0.0072
+    },
+    "loglik": {
+     "new": -1.62868,
+     "legacy": -1.62868,
+     "diff": -0.0,
+     "se": 2e-05
+    }
+   },
+   "goals": {
+    "n": 37327,
+    "mean_actual": 0.194,
+    "mae": {
+     "new": 0.29065,
+     "legacy": 0.28915,
+     "diff": 0.0015,
+     "se": 0.0001
+    },
+    "bias": {
+     "new": 0.0067,
+     "legacy": 0.0107
+    },
+    "loglik": {
+     "new": -0.49618,
+     "legacy": -0.51575,
+     "diff": 0.01957,
+     "se": 0.00182
+    }
+   },
+   "assists": {
+    "n": 37327,
+    "mean_actual": 0.3417,
+    "mae": {
+     "new": 0.45376,
+     "legacy": 0.45357,
+     "diff": 0.00018,
+     "se": 0.00013
+    },
+    "bias": {
+     "new": 0.002,
+     "legacy": 0.0023
+    },
+    "loglik": {
+     "new": -0.73914,
+     "legacy": -0.74347,
+     "diff": 0.00433,
+     "se": 0.00025
+    }
+   },
+   "points": {
+    "n": 37327,
+    "mean_actual": 0.5357,
+    "mae": {
+     "new": 0.57272,
+     "legacy": 0.57322,
+     "diff": -0.00051,
+     "se": 0.00023
+    },
+    "bias": {
+     "new": 0.0087,
+     "legacy": 0.0145
+    },
+    "loglik": {
+     "new": -0.92644,
+     "legacy": -0.9325,
+     "diff": 0.00606,
+     "se": 0.00083
+    }
+   },
+   "pp_points": {
+    "n": 37327,
+    "mean_actual": 0.1277,
+    "mae": {
+     "new": 0.20296,
+     "legacy": 0.19843,
+     "diff": 0.00453,
+     "se": 0.0001
+    },
+    "bias": {
+     "new": 0.0003,
+     "legacy": 0.0017
+    },
+    "loglik": {
+     "new": -0.34423,
+     "legacy": -0.35898,
+     "diff": 0.01475,
+     "se": 0.00238
+    }
+   },
+   "saves": {
+    "n": 2848,
+    "mean_actual": 24.4386,
+    "mae": {
+     "new": 5.48347,
+     "legacy": 5.65829,
+     "diff": -0.17482,
+     "se": 0.03192
+    },
+    "bias": {
+     "new": -0.064,
+     "legacy": 0.2274
+    },
+    "loglik": {
+     "new": -3.39246,
+     "legacy": -3.41475,
+     "diff": 0.02228,
+     "se": 0.00434
+    }
+   },
+   "blocked_shots": {
+    "n": 37327,
+    "mean_actual": 0.9375,
+    "mae": {
+     "new": 0.79687,
+     "legacy": 0.79659,
+     "diff": 0.00028,
+     "se": 0.00035
+    },
+    "bias": {
+     "new": -0.0154,
+     "legacy": -0.0172
+    },
+    "loglik": {
+     "new": -1.23089,
+     "legacy": -1.23012,
+     "diff": -0.00077,
+     "se": 0.0003
+    }
+   }
+  }
+ },
+ "oracle_absences": {
+  "test_seasons": [
+   2024,
+   2025
+  ],
+  "date_stride": 2,
+  "oracle_absences": true,
+  "stats": {
+   "sog": {
+    "n": 37327,
+    "mean_actual": 1.7582,
+    "mae": {
+     "new": 1.10082,
+     "legacy": 1.09736,
+     "diff": 0.00345,
+     "se": 0.00036
+    },
+    "bias": {
+     "new": -0.0327,
+     "legacy": -0.0072
+    },
+    "loglik": {
+     "new": -1.6283,
+     "legacy": -1.62868,
+     "diff": 0.00038,
+     "se": 0.00029
+    }
+   },
+   "goals": {
+    "n": 37327,
+    "mean_actual": 0.194,
+    "mae": {
+     "new": 0.29125,
+     "legacy": 0.28915,
+     "diff": 0.0021,
+     "se": 0.0001
+    },
+    "bias": {
+     "new": 0.0057,
+     "legacy": 0.0107
+    },
+    "loglik": {
+     "new": -0.49601,
+     "legacy": -0.51575,
+     "diff": 0.01974,
+     "se": 0.00183
+    }
+   },
+   "assists": {
+    "n": 37327,
+    "mean_actual": 0.3417,
+    "mae": {
+     "new": 0.45589,
+     "legacy": 0.45357,
+     "diff": 0.00232,
+     "se": 0.00016
+    },
+    "bias": {
+     "new": -0.0032,
+     "legacy": 0.0023
+    },
+    "loglik": {
+     "new": -0.73778,
+     "legacy": -0.74347,
+     "diff": 0.0057,
+     "se": 0.00058
+    }
+   },
+   "points": {
+    "n": 37327,
+    "mean_actual": 0.5357,
+    "mae": {
+     "new": 0.57411,
+     "legacy": 0.57322,
+     "diff": 0.00089,
+     "se": 0.00025
+    },
+    "bias": {
+     "new": 0.0025,
+     "legacy": 0.0145
+    },
+    "loglik": {
+     "new": -0.92594,
+     "legacy": -0.9325,
+     "diff": 0.00657,
+     "se": 0.00087
+    }
+   }
+  }
+ }
+}

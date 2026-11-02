@@ -74,6 +74,7 @@ from ev.props import DFS_BOOKS, OFFSHORE_BOOKS, build_consensus, parse_event_pro
 from mlb_core.data import cockpit_form as cf
 from mlb_core.odds.utils import american_to_decimal
 from nfl.props import env_adjust as _ea
+from nhl.props import hierarchical as _nh
 
 log = logging.getLogger("ev.daily_projections")
 _ET = ZoneInfo("America/New_York")
@@ -89,10 +90,11 @@ PROJECT_STATS = {
     "nfl": {"pass_yds": "normal", "pass_tds": "negbin", "pass_completions": "normal", "pass_attempts": "normal",
             "interceptions": "negbin", "rush_yds": "normal", "rush_attempts": "normal", "rec_yds": "normal",
             "receptions": "negbin", "anytime_td": "anytime"},
-    # pp_points is NOT here: the NHL skater master carries power_play_goals but no power-play assists, so a PP-points
-    # projection cannot be built from it (see CONTEXT s21). It is registered on the site as a data gap, not faked.
-    "nhl": {"sog": "negbin", "goals": "negbin", "assists": "negbin", "points": "negbin", "saves": "normal",
-            "blocked_shots": "negbin"},
+    # NHL pp_points = power-play goals + assists. The boxscore has no such column; nhl.data.powerplay derives it from the
+    # play-by-play (exact vs the box's own power_play_goals) and cockpit_form fills it on older rows from the shots masters.
+    # NHL saves is priced by nhl.props.hierarchical.SavesMixture (a two-regime mixture), not by this Normal family.
+    "nhl": {"sog": "negbin", "goals": "negbin", "assists": "negbin", "points": "negbin", "pp_points": "negbin",
+            "saves": "normal", "blocked_shots": "negbin"},
     "nba": {"points": "normal", "rebounds": "negbin", "assists": "negbin", "threes": "negbin", "pra": "normal",
             "pr": "normal", "pa": "normal", "ra": "normal", "steals": "negbin", "blocks": "negbin"},
 }
@@ -101,7 +103,7 @@ STAT_LABEL = {
     "pass_tds": "Pass TDs", "anytime_td": "Anytime TD", "pass_completions": "Completions",
     "pass_attempts": "Pass Attempts", "rush_attempts": "Carries", "interceptions": "Interceptions",
     "sog": "Shots on Goal", "goals": "Goals", "points": "Points",
-    "assists": "Assists", "saves": "Saves", "blocked_shots": "Blocked Shots",
+    "assists": "Assists", "saves": "Saves", "blocked_shots": "Blocked Shots", "pp_points": "PP Points",
     "rebounds": "Rebounds", "threes": "3-Pointers", "pra": "Pts+Reb+Ast", "pr": "Pts+Reb", "pa": "Pts+Ast",
     "ra": "Reb+Ast", "steals": "Steals", "blocks": "Blocks",
 }
@@ -112,6 +114,9 @@ HALFLIFE = {"nfl": 3.0, "nhl": 8.0, "nba": 8.0}      # games
 # seasons after, never used for selection: rec_yds log score +0.027 / +0.032 per row, MAE -0.23 / -0.27 yds;
 # anytime_td log score +0.012, Brier -0.0033). Every other stat keeps the original hand-set values.
 STAT_PARAMS = {
+    # NHL pp_points: a sparse count (0.18 / game for forwards), so a long half-life; chosen on the 2023 season of
+    # scripts/nhl_engine_replay.py (log score best of 8 / 15 / 30 at each prior strength), scored on 2024-25.
+    "nhl": {"pp_points": {"halflife": 30.0}},
     "nfl": {"rec_yds": {"halflife": 7.0, "ewm_weight": 1.0, "opp_k": 200.0},
             "anytime_td": {"halflife": 7.0, "ewm_weight": 0.3, "opp_k": 200.0}},
 }
@@ -133,6 +138,12 @@ MIN_SD_FRAC = 0.15                                   # sd floor as a fraction of
 
 CONFLUENCE_MIN_BOOKS = 3
 BLEND_C = 0.10                                       # model weight (in logit space) of the blended posterior; see blend_p_over
+# Per-sport / per-stat override of BLEND_C. NHL values are the design spec's: sog 0.30 is the blend coefficient the repo's
+# 30,613-prop study measured for the TRAINED SOG research model (c = +0.31, t = +4.9;
+# docs/analysis/bettingpros_model_vs_market_2026-10-15.md), NOT for this empirical engine -- applied here as a prior, and
+# display-only like BLEND_C (it feeds neither the edge, the confluence flag nor the Beezy Score).
+BLEND_C_BY_SPORT_STAT = {"nhl": {"sog": 0.30, "saves": 0.15, "blocked_shots": 0.15, "points": 0.12, "goals": 0.10,
+                                 "assists": 0.12, "pp_points": 0.10}}
 EDGE_CAP = 0.15                                      # larger apparent edges are reference/model error (winner's curse)
 MAX_AGE_MIN = 240.0                                  # banked lines older than this are not live: they are flagged stale
 # The odds bankers run twice a day (17:30 / 22:30 UTC), so between the evening snapshot and the next afternoon one every
@@ -154,7 +165,7 @@ MAX_ROWS = 2400                                      # stored payload cap; rows 
 ROTATION_MIN_USAGE = {"nfl": {"rec_yds": 4.0, "receptions": 4.0, "rush_yds": 8.0, "pass_yds": 15.0,
                               "pass_attempts": 15.0, "pass_completions": 15.0, "rush_attempts": 8.0},
                       "nhl": {"sog": 14.0, "goals": 14.0, "points": 14.0, "assists": 14.0, "saves": 10.0,
-                              "blocked_shots": 14.0},
+                              "blocked_shots": 14.0, "pp_points": 14.0},
                       "nba": {"points": 20.0, "rebounds": 20.0, "assists": 20.0, "threes": 20.0, "pra": 20.0,
                               "pr": 20.0, "pa": 20.0, "ra": 20.0, "steals": 20.0, "blocks": 20.0}}
 ROTATION_STATS = {"nfl": ("rec_yds", "receptions", "rush_yds", "pass_yds", "pass_attempts", "pass_completions",
@@ -297,6 +308,11 @@ class GameLogs:
         self.opp_shrink_k = opp_shrink_k          # None = the per-stat validated value (stat_params)
         self._ctx: dict = {}
         self._env: dict | None = None
+        self._latest: object = _AUTO
+        self._pace: dict = {}
+        self._by_team: dict = {}
+        self._vac: dict = {}
+        self._sv: dict = {}
         self._lock = threading.Lock()
 
     @classmethod
@@ -373,14 +389,103 @@ class GameLogs:
         return str(best)[:10] if best is not None else None
 
     # -- league context -------------------------------------------------------------------------------------
-    def context(self, stat: str) -> StatContext:
+    def _eff_as_of(self, as_of: str | None) -> str | None:
+        """The as-of date that actually has to cut the logs: NHL only, and only when the master holds games on or after it
+        (the live board's games are all in the future, so nothing is cut and the cached whole-master contexts are used)."""
+        if not as_of or self.sport != "nhl":
+            return None
         with self._lock:
-            ctx = self._ctx.get(stat)
+            if self._latest is _AUTO:
+                best = None
+                for tbl in (self.idx.get("skater") or {}, self.idx.get("goalie") or {}):
+                    for rows in tbl.values():
+                        d = rows[-1].get("_sort")
+                        if d is not None and (best is None or str(d) > best):
+                            best = str(d)
+                self._latest = None if best is None else best[:10]
+            latest = self._latest
+        return as_of if latest is not None and as_of <= latest else None
+
+    def context(self, stat: str, as_of: str | None = None) -> StatContext:
+        """League context of `stat`. `as_of` (NHL, YYYY-MM-DD) rebuilds it from games strictly before that date."""
+        as_of = self._eff_as_of(as_of)
+        with self._lock:
+            ctx = self._ctx.get((stat, as_of))
             if ctx is None:
-                ctx = self._ctx[stat] = self._build_context(stat)
+                ctx = self._ctx[(stat, as_of)] = self._build_context(stat, as_of)
             return ctx
 
-    def _build_context(self, stat: str) -> StatContext:
+    def team_pace(self, as_of: str | None = None) -> dict:
+        """NHL {team: {sog_for, sog_against, sa_ewm, n, ...}, '_league': {...}} over each team's trailing games before
+        `as_of` (nhl.props.hierarchical.team_pace); {} without the team box master."""
+        if self.sport != "nhl":
+            return {}
+        as_of = self._eff_as_of(as_of)
+        with self._lock:
+            if as_of not in self._pace:
+                self._pace[as_of] = _nh.team_pace(self.idx.get("team") or {}, as_of,
+                                                  canon=lambda ab: canon_team("nhl", ab))
+            return self._pace[as_of]
+
+    def league_sv(self, as_of: str | None = None) -> float | None:
+        """League save % over every goalie's last 30 appearances before `as_of` that fall within 400 days of it (None below
+        5,000 shots): the prior a goalie's save % is shrunk to. It drifts (.908 in 2021 -> .897 in 2025), so a fixed
+        constant would bias every saves projection by a fraction of a save."""
+        if self.sport != "nhl":
+            return None
+        eff = self._eff_as_of(as_of)
+        with self._lock:
+            if eff not in self._sv:
+                ref = eff or self.latest_date() or ""
+                lo = (datetime.fromisoformat(ref) - timedelta(days=400)).date().isoformat() if ref else ""
+                sv = sa = 0.0
+                for name, rows in (self.idx.get("goalie") or {}).items():
+                    if str(name).startswith("id:"):
+                        continue
+                    for r in _nh.before(rows, eff)[-_nh.SV_WINDOW:]:
+                        d = str(r.get("_date") or "")[:10]
+                        s_, a_ = _nh._num(r.get("saves")), _nh._num(r.get("shots_against"))
+                        if d >= lo and s_ is not None and a_ is not None:
+                            sv, sa = sv + s_, sa + a_
+                self._sv[eff] = sv / sa if sa >= 5000 else None
+            return self._sv[eff]
+
+    def _players_by_team(self, as_of: str | None) -> dict:
+        """{team: [(player_norm, position, last <=20 rows before as_of)]} keyed by each player's latest team as of then."""
+        out = self._by_team.get(as_of)
+        if out is None:
+            out = {}
+            for name, rows in (self.idx.get("skater") or {}).items():
+                if str(name).startswith("id:") or not rows:
+                    continue
+                cut = _nh.before(rows, as_of)[-20:]
+                if not cut:
+                    continue
+                team = canon_team("nhl", cut[-1].get("team_abbr"))
+                if team:
+                    out.setdefault(team, []).append((name, cut[-1].get("position"), cut))
+            self._by_team[as_of] = out
+        return out
+
+    def nhl_vacated(self, team: str | None, as_of: str | None, roster, extra_absent=()) -> dict:
+        """{player_norm: {sog, assists, toi}} handed to this team's replacements tonight (hierarchical.vacated_opportunity);
+        {} without a roster layer (nobody can be called absent) or when nobody top-line is off the roster."""
+        if self.sport != "nhl" or team is None or (roster is None and not extra_absent):
+            return {}
+        eff = self._eff_as_of(as_of)
+        key = (team, eff, id(roster), tuple(sorted(extra_absent)))
+        with self._lock:
+            if key not in self._vac:
+                def on_roster(nm):
+                    if roster is None:                       # explicit absences only: everyone else is presumed active
+                        return True
+                    state, rteam = roster.lookup(nm, team)
+                    return (rteam == team) if state == "on" else (False if state == "off" else None)
+                self._vac[key] = _nh.vacated_opportunity(self._players_by_team(eff).get(team, []), on_roster,
+                                                         extra_absent, eff)
+            return self._vac[key]
+
+    def _build_context(self, stat: str, as_of: str | None = None) -> StatContext:
         table, sdef = self.table_and_def(stat)
         ctx = StatContext()
         if sdef is None or not table:
@@ -393,7 +498,7 @@ class GameLogs:
         for name, rows in table.items():
             if str(name).startswith("id:") or len(rows) < MIN_GAMES:
                 continue
-            h = _hist(rows, sdef)
+            h = _hist(_nh.before(rows, as_of), sdef)
             if len(h) < MIN_GAMES:
                 continue
             cur = h[-1][2]
@@ -471,6 +576,10 @@ def p_over(family: str, mu: float, line: float, ctx: StatContext, sd_mu: float |
     ref = mu if sd_mu is None else sd_mu
     sd = max(ctx.cv * ref, MIN_SD_FRAC * ref, 1e-6)
     return float(1.0 - norm.cdf((line - mu) / sd))
+
+
+def blend_c(sport: str, stat: str) -> float:
+    return BLEND_C_BY_SPORT_STAT.get(sport, {}).get(stat, BLEND_C)
 
 
 def blend_p_over(p_model_over: float | None, p_mkt_over: float | None, c: float = BLEND_C) -> float | None:
@@ -665,7 +774,8 @@ def build_line_rows(sport: str, events: list, logs: GameLogs, now: datetime, ros
                 st["ambiguous_team"] += 1
                 continue                                   # traded / stale roster: do not project against a guess
             opp = None if team is None else (home if team == away else away)
-            row = make_row(sport, stat, qs[0].player, pn, rows, sdef, logs, pt, cons, at_pt, team, opp, gk, start, mins)
+            row = make_row(sport, stat, qs[0].player, pn, rows, sdef, logs, pt, cons, at_pt, team, opp, gk, start, mins,
+                           roster=roster)
             if row is None:
                 st["thin_history"] += 1
                 continue
@@ -675,12 +785,131 @@ def build_line_rows(sport: str, events: list, logs: GameLogs, now: datetime, ros
     return out, st
 
 
+def _starter_rows(rows: list) -> list:
+    """Goalie rows of games he started (the `starter` flag), or every row when the flag is absent from the data."""
+    flagged = [r for r in rows if r.get("starter") is not None and r.get("starter") == r.get("starter")]
+    if not flagged:
+        return rows
+    return [r for r in rows if str(r.get("starter")).strip().lower() in ("true", "1", "1.0")]
+
+
+def nhl_as_of(start) -> str | None:
+    """The game's ET date (YYYY-MM-DD): the NHL engine reads only games strictly before it."""
+    return None if start is None else start.astimezone(_ET).date().isoformat()
+
+
+def project_nhl(stat: str, rows: list, sdef: tuple, logs: GameLogs, team, opp, as_of: str | None, roster=None,
+                pn: str | None = None, absent=()) -> tuple:
+    """The hierarchical NHL estimate for one player-stat (nhl.props.hierarchical) -> (proj, dist, info).
+
+    `proj` has the project_mu shape ({mu, n_games, usage_proj, opp_factor}) with `mu` the full projection (opponent terms
+    included), `dist` is a SavesMixture for goalie saves and None otherwise (the stat's NegBin family prices it), and `info`
+    is a dict of extra row fields. Every input is cut to games strictly before `as_of`, league contexts included.
+    A stat whose extra inputs are missing (a history without goals / sog columns, no team box master) falls back to the
+    generic project_mu estimate for that term, so a thin master never drops a row the old engine would have produced."""
+    rows = _nh.before(rows, as_of)
+    info = {"nhl_model": "hierarchical_v1"}
+
+    def ctx_of(st):
+        return logs.context(st, as_of)
+
+    def generic(st, sd, opp_factor=1.0, halflife=None):
+        hl, w, _ = stat_params("nhl", st)
+        return project_mu(_hist(rows, sd), halflife or hl, opp_factor, w)
+
+    pace = logs.team_pace(as_of)
+    league_sog = (pace.get("_league") or {}).get("sog_for")
+    pos = rows[-1].get("position") if rows else None
+
+    if stat == "saves":
+        h = _hist(rows, sdef)
+        if len(h) < MIN_GAMES:
+            return None, None, info
+        own_sa = _nh.ewm(_nh.col_values(_starter_rows(rows), "shots_against"), stat_params("nhl", stat)[0])
+        t, o = pace.get(team) or {}, pace.get(opp) or {}
+        sa = _nh.expected_shots_against(t.get("sa_ewm"), o.get("sog_for"), own_sa)
+        if sa is None:
+            return generic(stat, sdef, ctx_of(stat).opp_factor.get(opp, 1.0)), None, info
+        sv = _nh.eb_save_pct(rows, prior=logs.league_sv(as_of) or _nh.SV_PRIOR)
+        mu = _nh.START_SHARE * sa * sv
+        info.update(sv_pct_eb=_f(sv, 4), exp_shots_against=_f(sa, 2))
+        proj = {"mu": mu, "n_games": len(h), "usage_proj": sa,
+                "opp_factor": _nh.pace_factor(o.get("sog_for"), league_sog, o.get("n", _nh.PACE_WINDOW))}
+        return proj, _nh.SavesMixture.fit(mu, ctx_of(stat).cv), info
+
+    vac = (logs.nhl_vacated(team, as_of, roster, absent) if (roster is not None or absent) else {}).get(pn)
+    sk = cf.NHL_SKATER_STATS
+    gctx = ctx_of("goals")
+    opp_g = gctx.opp_factor.get(opp, 1.0) if opp else 1.0
+
+    def goals_part():
+        g_pj, s_pj = generic("goals", sk["goals"]), generic("sog", sk["sog"])
+        sh = _nh.shooting_pct_from_rows(rows, pos)
+        if g_pj is None:
+            return None, None
+        if s_pj is None or sh is None:                       # no shots / finishing history: the plain goals estimate
+            return g_pj["mu"] * opp_g, g_pj
+        mu_sog = s_pj["mu"] + (vac["sog"] if vac else 0.0)
+        mu = _nh.goals_mu(g_pj["mu"], mu_sog, sh) * opp_g
+        info.update(sh_pct_eb=_f(sh, 4))
+        return mu, g_pj
+
+    def assists_part():
+        a_pj = generic("assists", sk["assists"], halflife=_nh.HALFLIFE_ASSISTS)
+        if a_pj is None:
+            return None, None
+        return (a_pj["mu"] + (vac["assists"] if vac else 0.0)) * opp_g, a_pj
+
+    if stat == "goals":
+        mu, base = goals_part()
+        if mu is None or base is None:
+            return None, None, info
+        proj = dict(base, mu=mu, opp_factor=opp_g)
+    elif stat == "assists":
+        mu, base = assists_part()
+        if mu is None:
+            return None, None, info
+        proj = dict(base, mu=mu, opp_factor=opp_g)
+    elif stat == "points":
+        mg, bg = goals_part()
+        ma, ba = assists_part()
+        if mg is None or ma is None or bg is None:
+            return generic(stat, sdef, ctx_of(stat).opp_factor.get(opp, 1.0)), None, info
+        info.update(mu_goals=_f(mg, 3), mu_assists=_f(ma, 3))
+        proj = dict(bg, mu=_nh.points_mu(mg, ma), opp_factor=opp_g, usage_proj=ba["usage_proj"])
+    elif stat == "pp_points":
+        h = _hist(rows, sdef)
+        if len(h) < MIN_GAMES:
+            return None, None, info
+        vals = [g[0] for g in h]
+        n = len(vals)
+        hl = stat_params("nhl", stat)[0]
+        n_eff = float(np.sum(0.5 ** ((n - 1 - np.arange(n)) / hl)))
+        mu = _nh.pp_prior_rate(_nh.ewm(vals, hl), n_eff, pos) * ctx_of(stat).opp_factor.get(opp, 1.0)
+        proj = {"mu": mu, "n_games": n, "usage_proj": None, "opp_factor": ctx_of(stat).opp_factor.get(opp, 1.0)}
+    else:                       # sog, blocked_shots: trailing rate x the opponent-allowed factor (see the replay doc on blocks)
+        pj = generic(stat, sdef)
+        if pj is None:
+            return None, None, info
+        f = ctx_of(stat).opp_factor.get(opp, 1.0) if opp else 1.0
+        boost = vac["sog"] if (vac and stat == "sog") else 0.0
+        proj = dict(pj, mu=(pj["mu"] + boost) * f, opp_factor=f)
+    if vac:
+        info["vacated"] = {k: _f(v, 3) for k, v in vac.items()}
+    return proj, None, info
+
+
 def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team, opp, gk, start, mins,
-             has_line: bool = True) -> dict | None:
+             has_line: bool = True, roster=None) -> dict | None:
     family = PROJECT_STATS[sport][stat]
-    ctx = logs.context(stat)
+    as_of = nhl_as_of(start) if sport == "nhl" else None
+    ctx = logs.context(stat, as_of)
     hl, ewm_w, _ = stat_params(sport, stat)
-    proj = project_mu(_hist(rows, sdef), hl, ctx.opp_factor.get(opp, 1.0) if opp else 1.0, ewm_w)
+    dist, extra = None, {}
+    if sport == "nhl":
+        proj, dist, extra = project_nhl(stat, rows, sdef, logs, team, opp, as_of, roster, pn)
+    else:
+        proj = project_mu(_hist(rows, sdef), hl, ctx.opp_factor.get(opp, 1.0) if opp else 1.0, ewm_w)
     if proj is None:
         return None
     mu_raw = proj["mu"]
@@ -694,21 +923,6 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
         if teammate_abs_wt > 0:
             nba_boost = min(1.20, 1.0 + 0.04 * min(teammate_abs_wt, 4.0))
             mu_raw = mu_raw * nba_boost
-
-    # 2. NHL xG shot quality & finishing regression
-    if sport == "nhl" and stat in ("goals", "points"):
-        recent_goals = sum(float(r.get("goals") if isinstance(r, dict) else r[0])
-                           for r in rows[-15:]
-                           if ((isinstance(r, dict) and r.get("goals") is not None)
-                               or (isinstance(r, (list, tuple)) and len(r) > 0 and r[0] is not None)))
-        recent_sog = sum(float((r.get("shots") if r.get("shots") is not None else r.get("sog")) if isinstance(r, dict) else r[1])
-                         for r in rows[-15:]
-                         if ((isinstance(r, dict) and (r.get("shots") is not None or r.get("sog") is not None))
-                             or (isinstance(r, (list, tuple)) and len(r) > 1 and r[1] is not None)))
-        if recent_sog >= 15.0:
-            fin_ratio = (recent_goals + 3.0) / (recent_sog * 0.100 + 3.0)
-            regress = float(np.clip(1.0 / (0.4 * fin_ratio + 0.6), 0.85, 1.15)) if stat == "goals" else float(np.clip(1.0 / (0.6 * fin_ratio + 0.4), 0.90, 1.10))
-            mu_raw = mu_raw * regress
 
     # 3. NFL dynamic game environment + stadium weather
     coef = calibration(sport, stat)
@@ -727,8 +941,12 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
         mult = _ea.multiplier(coef)
 
     mu = mu_raw * mult
-    p_model_over = p_over(family, mu, line, ctx, sd_mu=mu_raw) if line is not None else None
-    p_floor, p_ceil = proj_range(family, mu, ctx, sd_mu=mu_raw)
+    if dist is not None:
+        p_model_over = dist.p_over(line) if line is not None else None
+        p_floor, p_ceil = dist.ppf(0.10), dist.ppf(0.90)
+    else:
+        p_model_over = p_over(family, mu, line, ctx, sd_mu=mu_raw) if line is not None else None
+        p_floor, p_ceil = proj_range(family, mu, ctx, sd_mu=mu_raw)
     form = cf.shape_form(rows, sdef, line)
     p_mkt_over = cons.p_over if cons is not None else None
     n_books = cons.n_books if cons is not None else (len(_real(at_pt)) if at_pt else None)
@@ -747,7 +965,7 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
         "side": side, "proj_mean": _f(mu, 3), "proj_raw": _f(mu_raw, 3), "calib_mult": _f(mult, 4),
         "proj_p10": _f(p_floor, 1), "proj_p90": _f(p_ceil, 1),
         "p_over_model": _f(p_model_over),
-        "p_over_blend": _f(blend_p_over(p_model_over, p_mkt_over)),
+        "p_over_blend": _f(blend_p_over(p_model_over, p_mkt_over, blend_c(sport, stat))),
         "p_model_side": _f(p_model_side), "p_mkt_side": _f(p_mkt_side),
         "l5_hit_rate": form["l5_rate"] if form else None, "l10_hit_rate": form["l10_rate"] if form else None,
         "szn_rate": form["szn_rate"] if form else None, "hit_basis": "over",
@@ -759,7 +977,7 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
         "p_over_market": _f(p_mkt_over), "n_books": n_books,
         "model_edge": _f(ef["model_edge"]), "market_ev": _f(ef["market_ev"]), "confluence": ef["confluence"],
         "edge_capped": ef["edge_capped"], "beezy_score": score, "score_basis": basis,
-        "validated": False, "engine": ENGINE,
+        "validated": False, "engine": ENGINE, **extra,
     }
 
 
@@ -858,7 +1076,7 @@ def rotation_rows(sport: str, logs: GameLogs, games: list, now: datetime, skip: 
             mins = (g["start"] - now).total_seconds() / 60.0
             for _, name, rows, moved in sorted(cands, key=lambda c: -c[0])[:room]:
                 row = make_row(sport, stat, _display_name(rows, name), name, rows, sdef, logs, None, None, [], team, opp,
-                               gk, g["start"], mins, has_line=False)
+                               gk, g["start"], mins, has_line=False, roster=roster)
                 if row is not None:
                     out.append(row)
                     st["rotation_team_changed"] += int(moved)
