@@ -33,7 +33,7 @@ export function BankrollInput({ defaultValue }: { defaultValue: number }) {
 
   return (
     <div>
-      <div className="flex gap-[8px]">
+      <div className="flex gap-2">
         <input
           type="number"
           value={value}
@@ -62,7 +62,7 @@ export function BankrollInput({ defaultValue }: { defaultValue: number }) {
         </button>
       </div>
       {error && (
-        <p className="mono text-[11px] text-[var(--loss)] mt-[6px]">
+        <p className="mono text-[11px] text-[var(--loss)] mt-1.5">
           {error}
         </p>
       )}

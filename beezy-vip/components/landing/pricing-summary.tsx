@@ -14,7 +14,7 @@ export function PricingSummary() {
   return (
     <section className="pt-8">
       <SectionHeader title="Pricing" href="/pricing" link={PRE_LAUNCH ? 'Join the waitlist \u2192' : 'Compare plans \u2192'} />
-      <div className="pricing-grid gap-[10px]">
+      <div className="pricing-grid gap-2.5">
         {TIERS.map(t => (
           <Link key={t.name} href="/pricing" className={cx('block rounded-xl border bg-background-primary-default p-3.5 no-underline shadow-card', t.featured ? 'border-[rgba(87,242,135,0.55)]' : 'border-separator-border')}>
             <div className={cx('mono mb-1.5 text-[10px] tracking-[0.06em]', t.featured ? 'text-[var(--signal)]' : 'text-text-secondary')}>{t.name.toUpperCase()}</div>

@@ -57,10 +57,10 @@ function Chip({ label, active, color, onClick }: {
 
 function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
-    <div className="py-[16px] px-[20px] flex-1 min-w-0">
-      <div className="mono text-[10px] tracking-[0.1em] uppercase text-text-secondary mb-[6px]">{label}</div>
+    <div className="py-4 px-5 flex-1 min-w-0">
+      <div className="mono text-[10px] tracking-[0.1em] uppercase text-text-secondary mb-1.5">{label}</div>
       <div className="mono" style={{ fontSize: '22px', fontWeight: 700, color: color ?? 'var(--color-text-primary)', lineHeight: 1 }}>{value}</div>
-      {sub && <div className="mono text-[10px] text-text-secondary mt-[4px]">{sub}</div>}
+      {sub && <div className="mono text-[10px] text-text-secondary mt-1">{sub}</div>}
     </div>
   )
 }
@@ -73,7 +73,7 @@ const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<
   return (
     <div style={{ background: 'var(--color-background-primary-default)', border: B, padding: '12px 14px', fontSize: '11px', minWidth: '160px' }}>
       <div className="mono" style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.08em', color, marginBottom: '8px', textTransform: 'uppercase' }}>{sys}</div>
-      <div className="text-text-secondary mb-[6px] text-[10px]">{p.game_date}</div>
+      <div className="text-text-secondary mb-1.5 text-[10px]">{p.game_date}</div>
       <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr', rowGap: '3px' }}>
         <span className="text-text-secondary">Model edge</span>
         <span className="mono text-[var(--signal)] font-semibold">{fmt1(p.x)}</span>
@@ -84,7 +84,7 @@ const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<
         <span className="text-text-secondary">Open odds</span>
         <span className="mono text-text-primary">{p.opening_odds > 0 ? `+${p.opening_odds}` : p.opening_odds}</span>
       </div>
-      {p.player && <div className="mono text-[10px] text-text-secondary mt-[6px]">{p.player}</div>}
+      {p.player && <div className="mono text-[10px] text-text-secondary mt-1.5">{p.player}</div>}
     </div>
   )
 }
@@ -182,10 +182,10 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
   const yMax  = yVals.length ? Math.ceil(percentile(ys, 0.99) + 3) : 20
 
   return (
-    <div className="max-w-[1200px] mx-auto py-[40px] px-[20px]">
+    <div className="max-w-[1200px] mx-auto py-10 px-5">
 
       {/* Header */}
-      <div className="flex items-baseline justify-between gap-[12px] flex-wrap mb-[16px]">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap mb-4">
         <h1 title="Each dot is a settled pick: edge at bet time (x) against closing line value (y)." className="text-[20px] font-bold text-text-primary m-0">CLV Tracker</h1>
         <span className="mono text-[12px] text-text-secondary">Edge at bet time vs closing line value &middot; axes show the 1st-99th percentile</span>
       </div>
@@ -193,15 +193,15 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
       {/* Filter bar */}
       <div style={{ border: B, padding: '14px 16px', marginBottom: '16px', display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
         {/* Date range */}
-        <div className="flex gap-[4px] items-center">
-          <span className="mono text-[10px] text-text-secondary mr-[6px] tracking-[0.08em] uppercase">Range</span>
+        <div className="flex gap-1 items-center">
+          <span className="mono text-[10px] text-text-secondary mr-1.5 tracking-[0.08em] uppercase">Range</span>
           {DATE_TABS.map(t => (
             <Chip key={t.days} label={t.label} active={days === t.days} onClick={() => handleDays(t.days)} />
           ))}
         </div>
         {/* Result filter */}
-        <div className="flex gap-[4px] items-center">
-          <span className="mono text-[10px] text-text-secondary mr-[6px] tracking-[0.08em] uppercase">Result</span>
+        <div className="flex gap-1 items-center">
+          <span className="mono text-[10px] text-text-secondary mr-1.5 tracking-[0.08em] uppercase">Result</span>
           {RESULT_TABS.map(r => (
             <Chip key={r} label={r} active={resultFilter === r} onClick={() => setResultFilter(r)} />
           ))}
@@ -210,7 +210,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
       </div>
 
       {/* System chips */}
-      <div className="flex gap-[6px] flex-wrap mb-[16px]">
+      <div className="flex gap-1.5 flex-wrap mb-4">
         {ALL_SYSTEMS.map(sys => (
           <Chip
             key={sys}
@@ -232,7 +232,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
         {filtered.length === 0 ? (
           <div className="h-[420px] flex items-center justify-center">
             <div className="text-center">
-              <div className="mono text-[12px] text-text-secondary mb-[8px]">No CLV data for this filter</div>
+              <div className="mono text-[12px] text-text-secondary mb-2">No CLV data for this filter</div>
               <div className="mono text-[11px] text-text-secondary">CLV is captured as picks approach game time.</div>
             </div>
           </div>
@@ -299,7 +299,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
 
       {/* System legend */}
       {bySystem.length > 0 && (
-        <div className="flex gap-[16px] flex-wrap mb-[16px] pl-[4px]">
+        <div className="flex gap-4 flex-wrap mb-4 pl-1">
           {bySystem.map(({ sys, color }) => (
             <span key={sys} className="flex items-center gap-[5px]">
               <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0 }} />
@@ -352,7 +352,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
         </button>
         {infoOpen && (
           <div style={{ padding: '0 16px 16px', borderTop: B }}>
-            <p className="times text-[12px] text-text-secondary leading-[1.65] mt-[12px] mb-[8px]">
+            <p className="times text-[12px] text-text-secondary leading-[1.65] mt-3 mb-2">
               Closing line value (CLV) measures how much better Beezy&apos;s opening line was vs. the closing price at kickoff. When the model predicts NRFI at -115 and the line closes at -128, the edge was real -- sharp money agreed, moving the line in the same direction.
             </p>
             <p className="times text-[12px] text-text-secondary leading-[1.65]">

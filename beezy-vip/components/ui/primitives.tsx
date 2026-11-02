@@ -8,7 +8,7 @@ const FALLBACK_PILL = { bg: 'color-mix(in oklab, #c9c6cf 10%, var(--color-backgr
 
 export function LiveDot({ label }: { label?: string }) {
   return (
-    <span className="inline-flex items-center gap-[8px]">
+    <span className="inline-flex items-center gap-2">
       <span className="live-dot" />
       {label && (
         <span
@@ -37,9 +37,9 @@ export function SystemBadge({ system }: { system: string }) {
 
 export function StatCard({ label, value, sub, accent = false }: { label: string; value: string; sub?: string; accent?: boolean }) {
   return (
-    <div className="flex flex-col gap-[6px] p-[20px] border border-[color:var(--color-separator-border)] rounded-[var(--radius-lg)] bg-[var(--color-background-primary-default)]">
+    <div className="flex flex-col gap-1.5 p-5 border border-[color:var(--color-separator-border)] rounded-[var(--radius-lg)] bg-[var(--color-background-primary-default)]">
       <span
-        className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary mb-[2px]"
+        className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary mb-0.5"
        
       >
         {label}
@@ -92,7 +92,7 @@ export function PnL({ value, stake, result }: { value: number | null; stake?: nu
 
 export function SectionHeader({ label, sub }: { label: string; sub?: string }) {
   return (
-    <div className="mb-[24px]">
+    <div className="mb-6">
       <h2 className="ui-display text-[24px] text-text-primary">{label}</h2>
       {sub && <p className="times text-[14px] text-text-secondary mt-[7px] leading-[1.5]">{sub}</p>}
     </div>
@@ -114,7 +114,7 @@ export function ScoreBadge({ bet }: { bet: Bet }) {
   const tier  = scoreTier(score)
   const color = TIER_COLOR[tier]
   return (
-    <div title={explainScore(bet)} className="flex flex-col items-center gap-[4px]">
+    <div title={explainScore(bet)} className="flex flex-col items-center gap-1">
       <span className="mono" style={{ fontSize: '22px', fontWeight: 800, color, lineHeight: 1 }}>
         {score}
       </span>

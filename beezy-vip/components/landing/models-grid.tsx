@@ -45,7 +45,7 @@ export async function ModelsGrid() {
   return (
     <section className="pt-8">
       <SectionHeader title="Coverage by league & system" href="/picks" link="Explore all models &rarr;" />
-      <div className="models-grid grid-cols-2 gap-[10px]">
+      <div className="models-grid grid-cols-2 gap-2.5">
         {SPORT_LIST.map(p => (
           <Link key={p.slug} href={`/picks/${p.slug}`} className="block rounded-xl border border-separator-border bg-background-primary-default p-3.5 no-underline shadow-card" style={{ borderLeft: `3px solid ${p.accent}` }}>
             <div className="mb-1.5 flex justify-between gap-2">

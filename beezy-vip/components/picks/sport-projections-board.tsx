@@ -48,7 +48,7 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
   if (rows.length === 0) {
     return (
       <div style={{ ...SURFACE, padding: '28px 20px', textAlign: 'center' }}>
-        <div className="text-text-primary font-semibold mb-[6px]">Nothing to show</div>
+        <div className="text-text-primary font-semibold mb-1.5">Nothing to show</div>
         <div className="text-text-secondary text-[13px] max-w-[62ch] mx-auto leading-[1.55]">
           {emptyBody ?? `No ${pillar.shortName} rows match. The board fills in once a slate and prices are available.`}
         </div>
@@ -83,7 +83,7 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                 <tr className="sys-row" onClick={isMobile ? () => setOpen(isOpen ? null : r.key) : undefined} style={isMobile ? { cursor: 'pointer' } : undefined}>
                   <td className="pb-score" style={TD}>
                     {r.score > 0 ? (
-                      <div className="inline-flex items-center gap-[6px]">
+                      <div className="inline-flex items-center gap-1.5">
                         {isOfficial ? (
                           <span className="ui-heading pb-hide-m" style={{ fontSize: '10px', color: '#57F287', border: '1px solid #57F287', borderRadius: '4px', padding: '1px 5px', background: 'rgba(87,242,135,0.12)' }}>OFFICIAL PLAY</span>
                         ) : isOutlier ? (
@@ -110,7 +110,7 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                   </td>
                   <td className="pb-hide-m" style={TD}>
                     {r.team ? (
-                      <span className="mono inline-flex items-center gap-[6px] text-[var(--color-neutral-300)] text-[12px]">
+                      <span className="mono inline-flex items-center gap-1.5 text-[var(--color-neutral-300)] text-[12px]">
                         <SportLogo sport={r.sport} team={r.team} size={20} />{r.team}
                       </span>
                     ) : r.away && r.home ? (
@@ -128,7 +128,7 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                   {showModel && (
                     <td className="pb-model" style={TD}>
                       <span className="mono text-text-primary font-bold">{num(r.proj)}</span>
-                      {r.pModel != null && <span className="mono pb-hide-m ml-[8px] text-[11.5px] text-[var(--color-neutral-300)]" title="The model's probability for the listed side">{pct(r.pModel)}</span>}
+                      {r.pModel != null && <span className="mono pb-hide-m ml-2 text-[11.5px] text-[var(--color-neutral-300)]" title="The model's probability for the listed side">{pct(r.pModel)}</span>}
                     </td>
                   )}
                   {showFair && (
@@ -160,7 +160,7 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                   <td className="pb-edge" style={TD}>
                     <span className="mono" title="Model probability minus the de-vigged market probability for this side" style={{ color: (r.modelEdge ?? 0) > 0 ? 'var(--signal)' : 'var(--color-text-secondary)' }}>{signed(r.modelEdge)}</span>
                     {r.confluence && <span className="ui-heading pb-hide-m" title="The model and the market price both favor this side" style={{ marginLeft: '8px', fontSize: '10px', color: '#57F287', border: '1px solid rgba(87,242,135,0.35)', borderRadius: '4px', padding: '1px 5px' }}>MODEL + MARKET</span>}
-                    {r.isPick && <span className="ui-heading pb-hide-m ml-[8px] text-[var(--signal)]">PICK</span>}
+                    {r.isPick && <span className="ui-heading pb-hide-m ml-2 text-[var(--signal)]">PICK</span>}
                   </td>
                   {showEv && (
                     <td className="pb-hide-m" style={TD}>
@@ -181,7 +181,7 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
       {rows.length > limit && (
         <button onClick={() => setLimit(limit + PAGE)} className="btn btn-ghost tap-m" style={{ marginTop: '10px' }}>Show {Math.min(PAGE, rows.length - limit)} more</button>
       )}
-      <p className="text-[11.5px] text-text-secondary mt-[10px] leading-[1.55]">
+      <p className="text-[11.5px] text-text-secondary mt-2.5 leading-[1.55]">
         Model edge is the model&rsquo;s probability minus the market&rsquo;s fair probability: where the model disagrees. Price EV is the best
         price against the market&rsquo;s own fair probability: whether a book is actually off-market. A big edge with a negative EV means only the
         model likes the play. Rows with no line are projections only: prices have not posted.
@@ -195,7 +195,7 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
 function DetailRow({ r, span, showResult }: { r: BoardRow; span: number; showResult: boolean }) {
   const fair = fairAmerican(r.pFair)
   const item = (label: string, value: React.ReactNode) => (
-    <div className="flex gap-[6px] min-w-0">
+    <div className="flex gap-1.5 min-w-0">
       <dt className="ui-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)', flex: '0 0 auto' }}>{label}</dt>
       <dd className="mono" style={{ margin: 0, color: 'var(--color-neutral-300)', fontSize: '12px', minWidth: 0 }}>{value}</dd>
     </div>
@@ -215,7 +215,7 @@ function DetailRow({ r, span, showResult }: { r: BoardRow; span: number; showRes
           {showResult && r.result && item('RESULT', r.result.toUpperCase())}
           {r.engine && item('ENGINE', r.engine)}
         </dl>
-        {r.sport !== 'mlb' && <div className="mt-[8px] text-[11px] text-[var(--warn)]">Unvalidated model output. Paper only, not in the public results.</div>}
+        {r.sport !== 'mlb' && <div className="mt-2 text-[11px] text-[var(--warn)]">Unvalidated model output. Paper only, not in the public results.</div>}
       </td>
     </tr>
   )

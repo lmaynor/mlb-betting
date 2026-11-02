@@ -23,7 +23,7 @@ const ROWS: { tool: string; price: string; what: string; href?: string }[] = [
 
 export default function CompareOddsJamAlternativePage() {
   return (
-    <div className="max-w-[860px] mx-auto pt-[32px] px-[20px] pb-[48px]">
+    <div className="max-w-[860px] mx-auto pt-8 px-5 pb-12">
       <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 16px' }}>beezy.fyi vs OddsJam and other sports betting tools</h1>
       <div className="article-body">
         <p>

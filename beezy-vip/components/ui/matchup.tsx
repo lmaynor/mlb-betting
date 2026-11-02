@@ -26,7 +26,7 @@ export function Matchup({
   const hAb = TEAM_ABBREV[home ?? ''] ?? home ?? '?'
 
   return (
-    <span className="inline-flex items-center gap-[6px] min-w-0 whitespace-nowrap">
+    <span className="inline-flex items-center gap-1.5 min-w-0 whitespace-nowrap">
       <TeamToken src={aSrc} ab={aAb} size={size} fontSize={fontSize} color={color} showText={showText} />
       {showText && <span className="mono" style={{ fontSize, color: 'var(--color-text-secondary)' }}>@</span>}
       <TeamToken src={hSrc} ab={hAb} size={size} fontSize={fontSize} color={color} showText={showText} />
@@ -40,7 +40,7 @@ function TeamToken({ src, ab, size, fontSize, color, showText }: {
   src: string | null; ab: string; size: number; fontSize: string; color: string; showText: boolean
 }) {
   return (
-    <span className="inline-flex items-center gap-[4px] shrink-0">
+    <span className="inline-flex items-center gap-1 shrink-0">
       {src && (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={src} width={size} height={size} alt="" style={{ objectFit: 'contain', display: 'block' }} />

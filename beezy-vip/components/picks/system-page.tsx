@@ -66,9 +66,9 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
           <FilterBar sport={sport} fixedMarket showResult={tracked && f.day === 'yesterday'} />
         </>
       )}
-      <div className="gutter-m max-w-[1200px] mx-auto p-[24px]">
-        <div className="flex items-baseline justify-between gap-y-[8px] gap-x-[16px] flex-wrap mb-[12px]">
-          <div className="flex items-baseline gap-[12px] flex-wrap">
+      <div className="gutter-m max-w-[1200px] mx-auto p-6">
+        <div className="flex items-baseline justify-between gap-y-2 gap-x-4 flex-wrap mb-3">
+          <div className="flex items-baseline gap-3 flex-wrap">
             <h1 className="text-[20px] font-bold text-text-primary m-0">{pillar.shortName} {system.name}</h1>
             <span className="ui-heading" style={{ fontSize: '10px', color, border: `1px solid ${color}66`, borderRadius: '6px', padding: '2px 8px' }}>
               {system.market === 'game' ? 'GAME' : 'PROP'} / {system.gap ? 'DATA GAP' : tracked ? (pillar.markets.find(m => m.system === system.key)?.status ?? 'PAPER').toUpperCase() : 'UNVALIDATED'}

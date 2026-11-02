@@ -15,7 +15,7 @@ export default function LoginPage() {
         <h1 className="text-title-2-bold text-text-primary">Sign in</h1>
         {/* The Clerk form only exists when Clerk is on (never under AUTH_DISABLED, which has no ClerkProvider). */}
         {!AUTH_DISABLED && <SignIn routing="hash" signUpUrl="/signup" />}
-        <div className="w-full rounded-xl border border-separator-border bg-background-primary-default px-[18px] py-4 text-center shadow-card">
+        <div className="w-full rounded-xl border border-separator-border bg-background-primary-default px-4.5 py-4 text-center shadow-card">
           <p className="mb-3 text-body-2-regular text-text-secondary">
             {PRE_LAUNCH ? 'Paid plans are not open yet. Picks, +EV alerts and results are free to read; join the Discord for updates.' : 'Need an account? Create one on the sign-up page.'}
           </p>

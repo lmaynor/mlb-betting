@@ -54,7 +54,7 @@ export function HistoryTable({ days }: { days: HistoryDay[] }) {
                 </tr>
                 {isOpen && (
                   <tr>
-                    <td colSpan={5} className="pt-[10px] px-[12px] pb-[14px] border-b border-b-[color:var(--color-separator-border)] bg-[var(--color-background-secondary-default)]">
+                    <td colSpan={5} className="pt-2.5 px-3 pb-3.5 border-b border-b-[color:var(--color-separator-border)] bg-[var(--color-background-secondary-default)]">
                       <TopPicksTable picks={d.picks} showResult />
                     </td>
                   </tr>

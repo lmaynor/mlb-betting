@@ -35,10 +35,10 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
   const roi = total.graded > 0 ? (total.units / total.graded) * 100 : null
 
   return (
-    <div className="max-w-[1200px] mx-auto p-[24px]">
-      <div className="flex items-baseline justify-between gap-y-[8px] gap-x-[16px] flex-wrap mb-[12px]">
+    <div className="max-w-[1200px] mx-auto p-6">
+      <div className="flex items-baseline justify-between gap-y-2 gap-x-4 flex-wrap mb-3">
         <h1 className="text-[20px] font-bold text-text-primary m-0">Picks history</h1>
-        <div role="group" aria-label="Range" className="flex gap-[6px]">
+        <div role="group" aria-label="Range" className="flex gap-1.5">
           {RANGES.map(r => (
             <Link key={r} href={r === 14 ? '/picks/history' : `/picks/history?days=${r}`} aria-current={r === days ? 'true' : undefined}
               className="mono"
@@ -51,7 +51,7 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
         </div>
       </div>
 
-      <div className="mono bg-[var(--color-background-primary-default)] border border-[color:var(--color-separator-border)] rounded-[8px] py-[9px] px-[14px] mb-[14px] text-[12.5px] text-[var(--color-neutral-300)] flex gap-y-[6px] gap-x-[16px] flex-wrap">
+      <div className="mono bg-[var(--color-background-primary-default)] border border-[color:var(--color-separator-border)] rounded-[8px] py-[9px] px-3.5 mb-3.5 text-[12.5px] text-[var(--color-neutral-300)] flex gap-y-1.5 gap-x-4 flex-wrap">
         <span>{history.length} days</span>
         <span>{total.graded} graded</span>
         <span className="text-text-primary">{total.wins}-{total.losses}{total.pushes ? `-${total.pushes}` : ''}</span>
@@ -61,7 +61,7 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
       </div>
 
       {history.length === 0 ? (
-        <div className="bg-[var(--color-background-primary-default)] border border-[color:var(--color-separator-border)] rounded-[8px] py-[36px] px-[20px] text-center text-text-secondary text-[13px]">
+        <div className="bg-[var(--color-background-primary-default)] border border-[color:var(--color-separator-border)] rounded-[8px] py-9 px-5 text-center text-text-secondary text-[13px]">
           No settled cards in this range yet.
         </div>
       ) : (

@@ -338,7 +338,7 @@ export function ResultsClient({
       </div>
 
       {/* One inline metric strip: models and +EV alerts are summarised separately. */}
-      <div className={cx('mono mb-5 flex min-h-[38px] flex-wrap items-center gap-x-[22px] gap-y-1.5 px-3.5 py-2 text-xs text-text-secondary', CARD)}>
+      <div className={cx('mono mb-5 flex min-h-[38px] flex-wrap items-center gap-x-5.5 gap-y-1.5 px-3.5 py-2 text-xs text-text-secondary', CARD)}>
         <span><span className="text-text-tertiary">MODELS</span> {models.bets.toLocaleString()} bets &middot; {models.winRate}% win &middot; <span style={{ color: models.pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{money(models.pnl)}</span> at paper stakes</span>
         <span><span className="text-text-tertiary">+EV ALERTS</span> {ev.bets.toLocaleString()} graded &middot; {ev.winRate}% win &middot; <span style={{ color: ev.pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{money(ev.pnl)}</span> flat $100</span>
       </div>

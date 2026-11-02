@@ -21,7 +21,7 @@ function startLabel(iso: string): string {
 
 function BookTag({ book, size = 16 }: { book: string; size?: number }) {
   return (
-    <span className="inline-flex items-center gap-[6px]">
+    <span className="inline-flex items-center gap-1.5">
       <BookLogo book={book} size={size} />
       <span className="text-[11.5px] text-[var(--color-neutral-300)]">{bookDisplay(book).label}</span>
     </span>
@@ -37,8 +37,8 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
 
   return (
     <div style={{ ...SURFACE_CARD, padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      <div className="flex justify-between items-center gap-[8px] flex-wrap">
-        <div className="flex items-center gap-[8px]">
+      <div className="flex justify-between items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
           <span className="mono" style={{
             fontSize: '11px',
             fontWeight: 700,
@@ -72,13 +72,13 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
           <>
             <div>
               <div className="ui-heading text-text-secondary">MODEL MARGIN</div>
-              <div className="mono text-[13px] font-bold text-text-primary mt-[2px]">
+              <div className="mono text-[13px] font-bold text-text-primary mt-0.5">
                 {expMargin ?? '--'}
               </div>
             </div>
             <div>
               <div className="ui-heading text-text-secondary">MODEL TOTAL</div>
-              <div className="mono text-[13px] font-bold text-text-primary mt-[2px]">
+              <div className="mono text-[13px] font-bold text-text-primary mt-0.5">
                 {game.mu_total != null ? `${game.mu_total.toFixed(1)} pts` : '--'}
               </div>
             </div>
@@ -94,7 +94,7 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
           <>
             <div>
               <div className="ui-heading text-text-secondary">EXPECTED GOALS</div>
-              <div className="mono text-[13px] font-bold text-text-primary mt-[2px]">
+              <div className="mono text-[13px] font-bold text-text-primary mt-0.5">
                 {game.lambda_a != null && game.lambda_h != null
                   ? `${game.away_team} ${game.lambda_a.toFixed(1)} - ${game.home_team} ${game.lambda_h.toFixed(1)}`
                   : '--'}
@@ -102,7 +102,7 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
             </div>
             <div>
               <div className="ui-heading text-text-secondary">MODEL TOTAL</div>
-              <div className="mono text-[13px] font-bold text-text-primary mt-[2px]">
+              <div className="mono text-[13px] font-bold text-text-primary mt-0.5">
                 {game.exp_total != null ? `${game.exp_total.toFixed(2)} goals` : '--'}
               </div>
             </div>
@@ -120,12 +120,12 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
         <table className="w-full border-collapse text-[12px]">
           <thead>
             <tr style={{ borderBottom: `1px solid ${HAIR}`, color: 'var(--color-text-secondary)', fontSize: '10px' }}>
-              <th scope="col" className="text-left py-[6px] px-[8px] font-semibold">MARKET / SIDE</th>
-              <th scope="col" className="text-right py-[6px] px-[8px] font-semibold">LINE</th>
-              <th scope="col" className="text-right py-[6px] px-[8px] font-semibold">MODEL %</th>
-              <th scope="col" className="text-right py-[6px] px-[8px] font-semibold">MKT FAIR</th>
-              <th scope="col" className="text-right py-[6px] px-[8px] font-semibold">MODEL DIFF</th>
-              <th scope="col" className="text-right py-[6px] px-[8px] font-semibold">BEST PRICE</th>
+              <th scope="col" className="text-left py-1.5 px-2 font-semibold">MARKET / SIDE</th>
+              <th scope="col" className="text-right py-1.5 px-2 font-semibold">LINE</th>
+              <th scope="col" className="text-right py-1.5 px-2 font-semibold">MODEL %</th>
+              <th scope="col" className="text-right py-1.5 px-2 font-semibold">MKT FAIR</th>
+              <th scope="col" className="text-right py-1.5 px-2 font-semibold">MODEL DIFF</th>
+              <th scope="col" className="text-right py-1.5 px-2 font-semibold">BEST PRICE</th>
             </tr>
           </thead>
           <tbody>
@@ -135,25 +135,25 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
               const sideLabel = m.side === 'home' ? game.home_team : (m.side === 'away' ? game.away_team : m.side.toUpperCase())
               return (
                 <tr key={`${m.system}-${m.side}-${idx}`} style={{ borderBottom: '1px solid var(--color-border-table)', background: hasEdge ? 'rgba(87,242,135,0.03)' : 'transparent' }}>
-                  <td className="p-[8px] text-text-primary">
+                  <td className="p-2 text-text-primary">
                     <div className="font-semibold">{m.market_label}</div>
                     <div className="mono text-[11px] text-[var(--color-neutral-300)]">{sideLabel}</div>
                   </td>
-                  <td className="mono text-right p-[8px] text-text-primary font-semibold">
+                  <td className="mono text-right p-2 text-text-primary font-semibold">
                     {m.line != null ? (m.line > 0 ? `+${m.line}` : `${m.line}`) : 'ML'}
                   </td>
-                  <td className="mono text-right p-[8px] text-text-primary">
+                  <td className="mono text-right p-2 text-text-primary">
                     {(m.p_model * 100).toFixed(1)}%
                   </td>
-                  <td className="mono text-right p-[8px] text-text-secondary">
+                  <td className="mono text-right p-2 text-text-secondary">
                     {m.p_fair != null ? `${(m.p_fair * 100).toFixed(1)}%` : '--'}
                   </td>
                   <td className="mono" style={{ textAlign: 'right', padding: '8px', fontWeight: 700, color: hasEdge ? GREEN : (m.model_edge != null && m.model_edge < 0 ? '#ff5a4f' : 'var(--color-neutral-300)') }}>
                     {m.model_edge != null ? `${m_edge(m.model_edge)}` : '--'}
                   </td>
-                  <td className="text-right p-[8px]">
+                  <td className="text-right p-2">
                     {m.best_odds != null ? (
-                      <div className="inline-flex items-center gap-[6px] justify-end">
+                      <div className="inline-flex items-center gap-1.5 justify-end">
                         <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: hasEdge ? GREEN : 'var(--color-text-primary)' }}>
                           {formatOdds(m.best_odds)}
                         </span>
@@ -179,15 +179,15 @@ export function GameLinesTable({ rows, limit }: { rows: GameRowView[]; limit: nu
       <table className="odds-table w-full border-collapse">
         <thead>
           <tr style={{ borderBottom: `1px solid ${HAIR}`, background: '#0d0f15' }}>
-            <th scope="col" className="text-left min-w-[70px] py-[10px] px-[12px]">SPORT</th>
-            <th scope="col" className="text-left min-w-[180px] py-[10px] px-[12px]">MATCHUP</th>
-            <th scope="col" className="text-left min-w-[120px] py-[10px] px-[12px]">MARKET</th>
-            <th scope="col" className="text-left min-w-[140px] py-[10px] px-[12px]">SELECTION / LINE</th>
-            <th scope="col" className="text-right min-w-[100px] py-[10px] px-[12px]">MODEL PROB</th>
-            <th scope="col" className="text-right min-w-[100px] py-[10px] px-[12px]">MKT FAIR</th>
-            <th scope="col" className="text-right min-w-[100px] py-[10px] px-[12px]">MODEL DIFF</th>
-            <th scope="col" className="text-right min-w-[100px] py-[10px] px-[12px]">MKT EV</th>
-            <th scope="col" className="text-right min-w-[160px] py-[10px] px-[12px]">BEST ODDS &amp; BOOK</th>
+            <th scope="col" className="text-left min-w-[70px] py-2.5 px-3">SPORT</th>
+            <th scope="col" className="text-left min-w-[180px] py-2.5 px-3">MATCHUP</th>
+            <th scope="col" className="text-left min-w-[120px] py-2.5 px-3">MARKET</th>
+            <th scope="col" className="text-left min-w-[140px] py-2.5 px-3">SELECTION / LINE</th>
+            <th scope="col" className="text-right min-w-[100px] py-2.5 px-3">MODEL PROB</th>
+            <th scope="col" className="text-right min-w-[100px] py-2.5 px-3">MKT FAIR</th>
+            <th scope="col" className="text-right min-w-[100px] py-2.5 px-3">MODEL DIFF</th>
+            <th scope="col" className="text-right min-w-[100px] py-2.5 px-3">MKT EV</th>
+            <th scope="col" className="text-right min-w-[160px] py-2.5 px-3">BEST ODDS &amp; BOOK</th>
           </tr>
         </thead>
         <tbody>
@@ -201,7 +201,7 @@ export function GameLinesTable({ rows, limit }: { rows: GameRowView[]; limit: nu
 
             return (
               <tr key={`${r.game_key}-${r.system}-${r.side}-${idx}`} data-row="odds">
-                <td className="py-[9px] px-[12px]">
+                <td className="py-[9px] px-3">
                   <span className="mono" style={{
                     fontSize: '10.5px',
                     fontWeight: 700,
@@ -214,22 +214,22 @@ export function GameLinesTable({ rows, limit }: { rows: GameRowView[]; limit: nu
                     {r.sport.toUpperCase()}
                   </span>
                 </td>
-                <td className="py-[9px] px-[12px] font-semibold text-text-primary">
+                <td className="py-[9px] px-3 font-semibold text-text-primary">
                   {r.player}
                   <div className="mono text-[10.5px] text-text-secondary font-normal">
                     {startLabel(r.commence)}
                   </div>
                 </td>
-                <td className="py-[9px] px-[12px] text-[var(--color-neutral-300)]">
+                <td className="py-[9px] px-3 text-[var(--color-neutral-300)]">
                   {r.stat_label}
                 </td>
-                <td className="mono py-[9px] px-[12px] font-semibold text-text-primary">
+                <td className="mono py-[9px] px-3 font-semibold text-text-primary">
                   {sideDisplay} {lineDisplay}
                 </td>
-                <td className="mono text-right py-[9px] px-[12px] text-text-primary">
+                <td className="mono text-right py-[9px] px-3 text-text-primary">
                   {(r.p_model_side * 100).toFixed(1)}%
                 </td>
-                <td className="mono text-right py-[9px] px-[12px] text-text-secondary">
+                <td className="mono text-right py-[9px] px-3 text-text-secondary">
                   {r.p_mkt_side != null ? `${(r.p_mkt_side * 100).toFixed(1)}%` : '--'}
                 </td>
                 <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', fontWeight: 700, color: hasEdge ? GREEN : (r.model_edge != null && r.model_edge < 0 ? '#ff5a4f' : 'var(--color-neutral-300)') }}>
@@ -238,9 +238,9 @@ export function GameLinesTable({ rows, limit }: { rows: GameRowView[]; limit: nu
                 <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', color: highlightModelDiff(r.market_ev, r.validated, 0.0000001) ? GREEN : 'var(--color-text-secondary)' }}>
                   {r.market_ev != null ? `${r.market_ev > 0 ? '+' : ''}${(r.market_ev * 100).toFixed(1)}%` : '--'}
                 </td>
-                <td className="text-right py-[9px] px-[12px]">
+                <td className="text-right py-[9px] px-3">
                   {bestOdds != null ? (
-                    <div className="inline-flex items-center gap-[6px] justify-end">
+                    <div className="inline-flex items-center gap-1.5 justify-end">
                       <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: hasEdge ? GREEN : 'var(--color-text-primary)' }}>
                         {formatOdds(bestOdds)}
                       </span>
@@ -293,7 +293,7 @@ export function GameLinesView({
   return (
     <div>
       {isMobile && (
-        <div className="flex justify-between items-center mb-[10px]">
+        <div className="flex justify-between items-center mb-2.5">
           <div style={{ display: 'inline-flex', padding: '2px', background: 'var(--color-background-secondary-default)', border: `1px solid ${HAIR}`, borderRadius: '6px' }}>
             <button
               type="button"

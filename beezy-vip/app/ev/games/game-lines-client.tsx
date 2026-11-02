@@ -28,7 +28,7 @@ export function GameLinesClient({ feeds, sport }: { feeds: Record<string, GamePr
   return (
     <div>
       <GameLinesNotice label={label.label} validated={label.validated} />
-      <div role="group" aria-label="Market" className="flex gap-[6px] flex-wrap mb-[12px]">
+      <div role="group" aria-label="Market" className="flex gap-1.5 flex-wrap mb-3">
         {MARKETS.map(m => (
           <button
             key={m.key}
@@ -46,11 +46,11 @@ export function GameLinesClient({ feeds, sport }: { feeds: Record<string, GamePr
         ))}
       </div>
       {unavailable ? (
-        <div role="status" className="py-[24px] px-[0px] text-[var(--color-neutral-300)] text-[13px]">
+        <div role="status" className="py-6 px-0 text-[var(--color-neutral-300)] text-[13px]">
           The NBA / NHL game-line feed is not published yet. It refreshes with the odds banker; check back shortly.
         </div>
       ) : shown === 0 ? (
-        <div role="status" className="py-[24px] px-[0px] text-[var(--color-neutral-300)] text-[13px]">
+        <div role="status" className="py-6 px-0 text-[var(--color-neutral-300)] text-[13px]">
           No priced games for this selection. Game lines appear once a slate and book prices are posted.
         </div>
       ) : (

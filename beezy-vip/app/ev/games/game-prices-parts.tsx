@@ -45,7 +45,7 @@ export async function copyText(text: string): Promise<boolean> {
 
 export function Select({ id, label, value, onChange, options }: { id: string; label: string; value: string; onChange: (v: string) => void; options: { v: string; l: string }[] }) {
   return (
-    <div className="flex gap-[8px] items-center">
+    <div className="flex gap-2 items-center">
       <label htmlFor={id} className="ui-heading text-text-secondary">{label}</label>
       <select id={id} value={value} onChange={e => onChange(e.target.value)}
         style={{ background: 'var(--color-background-secondary-default)', color: 'var(--color-text-primary)', border: `1px solid ${HAIR}`, borderRadius: '6px', height: '32px', padding: '0 8px', fontSize: '12px', maxWidth: '190px' }}>
@@ -113,7 +113,7 @@ export function BookPicker({ label, books, selected, onChange, presets, note, em
             <button type="button" className="btn btn-ghost" style={small} onClick={() => onChange(emptyMeansAll ? [] : books.map(b => b.key))}>All</button>
             {!emptyMeansAll && <button type="button" className="btn btn-ghost" style={small} onClick={() => onChange([])}>None</button>}
           </div>
-          <div className="grid gap-[2px] max-h-[260px] overflow-y-auto">
+          <div className="grid gap-0.5 max-h-[260px] overflow-y-auto">
             {books.map(b => (
               <label key={b.key} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '3px 6px', fontSize: '12px', color: on.has(b.key) ? 'var(--color-text-primary)' : 'var(--color-neutral-300)', cursor: 'pointer' }}>
                 <input type="checkbox" checked={on.has(b.key)} onChange={() => toggle(b.key)} style={{ cursor: 'pointer', accentColor: 'var(--signal)' }} />
@@ -140,7 +140,7 @@ function BestCell({ s }: { s: GameSidePrice }) {
   if (s.book == null || s.american == null) return <td className="odds-ev"><span className="mono odds-sub">&ndash;</span></td>
   return (
     <td className="odds-ev">
-      <div className="flex items-center gap-[8px]">
+      <div className="flex items-center gap-2">
         <BookLogo book={s.book} size={24} />
         <div>
           <div className="mono text-[13px] font-bold text-text-primary">{formatOdds(s.american)}</div>
@@ -176,7 +176,7 @@ function PriceCell({ r, a, b, offshore, book }: { r: GamePriceRow; a: number | n
 
 function SideLine({ s, children }: { s: GameSidePrice; children: React.ReactNode }) {
   return (
-    <div className="flex items-baseline gap-[6px] whitespace-nowrap">
+    <div className="flex items-baseline gap-1.5 whitespace-nowrap">
       <span className="mono odds-sub inline-block min-w-[58px]">{s.label}</span>
       {children}
     </div>
@@ -248,7 +248,7 @@ export function ArbLine({ r, copied, onCopy }: { r: GamePriceRow; copied: boolea
   const a = r.arb
   if (!a) return null
   return (
-    <div className="flex items-center gap-y-[6px] gap-x-[14px] flex-wrap text-[11.5px]">
+    <div className="flex items-center gap-y-1.5 gap-x-3.5 flex-wrap text-[11.5px]">
       <span className="mono" style={{ fontWeight: 700, color: GREEN }} title={a.feeLeg ? `Gross ${a.arbPct.toFixed(2)}%, net of Kalshi's taker fee ${a.netArbPct.toFixed(2)}%` : 'No fee on either leg'}>
         ARB +{a.netArbPct.toFixed(2)}%{a.feeLeg ? ' NET OF KALSHI FEE' : ''}
       </span>
@@ -276,17 +276,17 @@ export function PriceCard({ r, columns, copied, onCopy }: {
   )
   return (
     <div data-card="game-prices" style={{ ...SURFACE_CARD, padding: '10px 12px', borderLeft: r.arbLive ? `3px solid ${GREEN}` : '1px solid var(--color-separator-border)' }}>
-      <div className="flex justify-between gap-[8px] items-baseline">
+      <div className="flex justify-between gap-2 items-baseline">
         <span className="text-[13.5px] font-bold text-text-primary">{r.matchup}</span>
         <span className="mono text-[11px] text-text-secondary">{startLabel(r.row.commence)}</span>
       </div>
-      <div className="mono text-[11px] text-text-secondary mb-[4px]">{r.row.sport.toUpperCase()} &middot; {r.marketLabel}{r.row.market === 'ml' ? '' : ` ${r.lineLabel}`}</div>
+      <div className="mono text-[11px] text-text-secondary mb-1">{r.row.sport.toUpperCase()} &middot; {r.marketLabel}{r.row.market === 'ml' ? '' : ` ${r.lineLabel}`}</div>
       {side(r.a)}
       {side(r.b)}
       {r.arbLive && <div style={{ paddingTop: '6px', borderTop: `1px solid ${HAIR}` }}><ArbLine r={r} copied={copied} onCopy={onCopy} /></div>}
       <details style={{ marginTop: '6px' }}>
         <summary style={{ fontSize: '11.5px', color: 'var(--link)', cursor: 'pointer' }}>All books</summary>
-        <table className="w-full border-collapse mt-[4px]">
+        <table className="w-full border-collapse mt-1">
           <tbody>
             {columns.filter(c => byBook.has(c.key)).map(c => {
               const q = byBook.get(c.key)!

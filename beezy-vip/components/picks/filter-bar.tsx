@@ -127,7 +127,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
           onClose={() => setMobileOpen(false)}
           title="Filter Picks"
           footer={
-            <div className="flex gap-[8px]">
+            <div className="flex gap-2">
               {active > 0 && (
                 <button
                   type="button"
@@ -149,10 +149,10 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
             </div>
           }
         >
-          <div className="flex flex-col gap-[14px]">
+          <div className="flex flex-col gap-3.5">
             {sport === 'all' ? (
               <div>
-                <div className="ui-heading text-[10px] text-text-secondary mb-[6px] tracking-[0.06em]">SPORT</div>
+                <div className="ui-heading text-[10px] text-text-secondary mb-1.5 tracking-[0.06em]">SPORT</div>
                 <div style={{ display: 'flex', gap: '4px', background: 'var(--color-background-secondary-default)', padding: '3px', borderRadius: '8px', border: B }}>
                   {[{ slug: 'all', shortName: 'ALL' }, ...LIVE_SPORTS].map(s => {
                     const isActive = sportParam === s.slug
@@ -293,7 +293,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
             )}
 
             <div>
-              <div className="ui-heading text-[10px] text-text-secondary mb-[6px] tracking-[0.06em]">SHOW</div>
+              <div className="ui-heading text-[10px] text-text-secondary mb-1.5 tracking-[0.06em]">SHOW</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', background: 'var(--color-background-secondary-default)', padding: '4px', borderRadius: '8px', border: B }}>
                 {[{ value: 'all', label: 'Everything' }, ...SIGNAL_OPTIONS].map(o => {
                   const isActive = signal.toLowerCase() === o.value.toLowerCase()
@@ -325,7 +325,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', background: 'var(--color-background-secondary-default)', padding: '10px', borderRadius: '8px', border: B }}>
               <div className="flex items-center justify-between">
                 <span className="ui-heading text-[10px] text-text-secondary tracking-[0.06em]">BOOK</span>
-                <div className="flex gap-[4px]">
+                <div className="flex gap-1">
                   <button
                     type="button"
                     className="btn btn-ghost"
@@ -423,7 +423,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
 
             {showResult && (
               <div>
-                <div className="ui-heading text-[10px] text-text-secondary mb-[6px] tracking-[0.06em]">RESULT</div>
+                <div className="ui-heading text-[10px] text-text-secondary mb-1.5 tracking-[0.06em]">RESULT</div>
                 <div style={{ display: 'flex', gap: '4px', background: 'var(--color-background-secondary-default)', padding: '3px', borderRadius: '8px', border: B }}>
                   {['all', 'win', 'loss', 'pending'].map(r => {
                     const isActive = result.toLowerCase() === r
@@ -455,7 +455,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
             )}
 
             <div>
-              <div className="ui-heading text-[10px] text-text-secondary mb-[6px] tracking-[0.06em]">SORT BY</div>
+              <div className="ui-heading text-[10px] text-text-secondary mb-1.5 tracking-[0.06em]">SORT BY</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', background: 'var(--color-background-secondary-default)', padding: '4px', borderRadius: '8px', border: B, marginBottom: '6px' }}>
                 {sortOptions.map(o => {
                   const isActive = sort === o.value

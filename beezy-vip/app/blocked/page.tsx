@@ -17,7 +17,7 @@ export default async function BlockedPage({ searchParams }: { searchParams: Prom
   return (
     <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 16px' }}>
       <div className="w-full max-w-[460px]">
-        <div className="mb-[20px]"><BrandWordmark size="md" /></div>
+        <div className="mb-5"><BrandWordmark size="md" /></div>
         <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 12px' }}>Not available{region ? ` in ${region}` : ' in your region'}</h1>
         <p style={{ fontSize: '14px', color: 'var(--color-neutral-300)', lineHeight: 1.6, margin: '0 0 12px' }}>
           Picks and +EV alerts are not offered where local rules restrict them. The free calculators, guides and the public results record remain available.
@@ -25,7 +25,7 @@ export default async function BlockedPage({ searchParams }: { searchParams: Prom
         <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', lineHeight: 1.6, margin: '0 0 16px' }}>
           Think this is a mistake, or on a VPN? Turn it off and reload, or ask in the Discord.
         </p>
-        <div className="flex gap-[16px] flex-wrap text-[13px]">
+        <div className="flex gap-4 flex-wrap text-[13px]">
           <Link href="/tools" style={{ color: 'var(--link)' }}>Calculators</Link>
           <Link href="/learn" style={{ color: 'var(--link)' }}>Guides</Link>
           <Link href="/results" style={{ color: 'var(--link)' }}>Results</Link>

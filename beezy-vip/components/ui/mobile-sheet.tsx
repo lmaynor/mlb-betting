@@ -214,7 +214,7 @@ export function MobileBottomSheet({
         {(title || subtitle) && (
           <div
            
-           className="flex items-center justify-between pt-[8px] pr-[16px] pb-[10px] pl-[16px] border-b border-b-[color:var(--color-separator-border)] shrink-0 gap-[12px]">
+           className="flex items-center justify-between pt-2 pr-4 pb-2.5 pl-4 border-b border-b-[color:var(--color-separator-border)] shrink-0 gap-3">
             <div className="flex-1 min-w-0">
               {title && (
                 <div
@@ -226,7 +226,7 @@ export function MobileBottomSheet({
               {subtitle && (
                 <div
                  
-                 className="text-[11px] text-text-secondary leading-[1.3] mt-[2px]">
+                 className="text-[11px] text-text-secondary leading-[1.3] mt-0.5">
                   {subtitle}
                 </div>
               )}
@@ -260,7 +260,7 @@ export function MobileBottomSheet({
         {footer && (
           <div
            
-           className="py-[10px] px-[16px] border-t border-t-[color:var(--color-separator-border)] bg-[var(--color-background-secondary-default)] shrink-0 box-border">
+           className="py-2.5 px-4 border-t border-t-[color:var(--color-separator-border)] bg-[var(--color-background-secondary-default)] shrink-0 box-border">
             {footer}
           </div>
         )}

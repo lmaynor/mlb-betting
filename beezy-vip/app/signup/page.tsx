@@ -42,8 +42,8 @@ export default async function SignupPage() {
           </p>
 
           {/* Live gate progress */}
-          <div className="rounded-2xl border border-separator-border bg-background-primary-default p-[22px] text-left shadow-md">
-            <p className="ui-heading mb-[18px] tracking-[0.1em] text-text-secondary">
+          <div className="rounded-2xl border border-separator-border bg-background-primary-default p-5.5 text-left shadow-md">
+            <p className="ui-heading mb-4.5 tracking-[0.1em] text-text-secondary">
               200-Bet Gate Progress
             </p>
             {SYSTEMS.map(s => {

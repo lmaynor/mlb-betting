@@ -48,7 +48,7 @@ export async function SlateStrip() {
                 {away} @ {home}
               </div>
               {hasPick && topPick ? (
-                <div className="flex items-center gap-[6px]">
+                <div className="flex items-center gap-1.5">
                   <span className="ui-heading" style={{
                     fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em',
                     padding: '2px 6px', background: `color-mix(in oklab, ${sysColor} 16%, var(--color-background-full))`, color: sysColor,

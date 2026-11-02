@@ -49,14 +49,14 @@ function SportSection({ sport, open, children }: { sport: SportSlug; open: boole
   const n = getSystemsBySport(sport).length
   return (
     <details id={sport} open={open} className="mb-3.5 scroll-mt-[140px] rounded-xl border border-separator-border bg-background-full">
-      <summary className="sport-summary flex cursor-pointer list-none flex-wrap items-baseline gap-x-3.5 gap-y-2.5 px-[18px] py-3.5">
+      <summary className="sport-summary flex cursor-pointer list-none flex-wrap items-baseline gap-x-3.5 gap-y-2.5 px-4.5 py-3.5">
         <span className="sport-chev inline-block text-[11px] text-text-secondary transition-transform duration-[120ms]" aria-hidden="true">&#9656;</span>
         <span className="text-headline-bold" style={{ color: pillar.accent }}>{pillar.shortName}</span>
         <span className="mono text-caption-1-regular text-text-secondary">{n} systems</span>
         <span className="ui-heading rounded-md border px-2 py-0.5" style={{ color: pillar.accent, borderColor: `${pillar.accent}66` }}>{STATUS_LABEL[pillar.status]}</span>
         <span className="min-w-0 flex-[1_1_320px] text-caption-1-regular text-text-secondary">{pillar.name}</span>
       </summary>
-      <div className="px-[18px] pb-[18px] pt-1">{children}</div>
+      <div className="px-4.5 pb-4.5 pt-1">{children}</div>
       <style>{SECTION_CSS}</style>
     </details>
   )
@@ -115,7 +115,7 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
         <Link href="/results" className="text-body-2-semibold text-[var(--link)] no-underline hover:underline">View results &rarr;</Link>
       </div>
 
-      <div className={cx(CARD, 'mono mb-[22px] flex min-h-[38px] flex-wrap items-center gap-x-[22px] gap-y-1.5 px-3.5 py-2 text-caption-1-regular text-text-secondary shadow-card')}>
+      <div className={cx(CARD, 'mono mb-5.5 flex min-h-[38px] flex-wrap items-center gap-x-5.5 gap-y-1.5 px-3.5 py-2 text-caption-1-regular text-text-secondary shadow-card')}>
         <span><span className="text-text-tertiary">MLB</span> XGBoost + count-model sims</span>
         <span><span className="text-text-tertiary">NFL / NHL / NBA</span> empirical projections</span>
         <span><span className="text-text-tertiary">VALIDATION</span> walk-forward, no future data</span>

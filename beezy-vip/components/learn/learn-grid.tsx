@@ -39,7 +39,7 @@ export function LearnGrid({ articles }: { articles: LearnCard[] }) {
 
       <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
         {shown.map(article => (
-          <Link key={article.slug} href={`/learn/${article.slug}`} className="card-hover block rounded-xl border border-separator-border bg-background-primary-default p-[22px] no-underline shadow-card">
+          <Link key={article.slug} href={`/learn/${article.slug}`} className="card-hover block rounded-xl border border-separator-border bg-background-primary-default p-5.5 no-underline shadow-card">
             <div className="ui-heading mb-2.5 tracking-[0.1em] text-text-secondary">
               {article.category} · {article.keyword} · {article.readTime} min read
             </div>

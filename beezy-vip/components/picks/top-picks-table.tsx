@@ -73,10 +73,10 @@ export function TopPicksTable({ picks, showResult = false, startRank = 1 }: { pi
                 <td className={cx(TD, 'whitespace-nowrap text-text-secondary')}>
                   {BASIS_LABEL[p.basis]}
                   {p.tracked && p.unvalidated && (
-                    <span className="ui-heading ml-[8px] text-[10px] text-[#f59e0b] border border-[color:rgba(245,158,11,0.35)] rounded-[4px] py-[1px] px-[5px]" title="The model behind this pick has no tested edge against prices. It is tracked on paper at 1 unit and graded after the game.">UNVALIDATED &middot; PAPER</span>
+                    <span className="ui-heading ml-2 text-[10px] text-[#f59e0b] border border-[color:rgba(245,158,11,0.35)] rounded-[4px] py-[1px] px-[5px]" title="The model behind this pick has no tested edge against prices. It is tracked on paper at 1 unit and graded after the game.">UNVALIDATED &middot; PAPER</span>
                   )}
                   {!p.tracked && (
-                    <span className="ui-heading ml-[8px] text-[10px] text-[#f59e0b] border border-[color:rgba(245,158,11,0.35)] rounded-[4px] py-[1px] px-[5px]" title="Projections come from an empirical estimator on game logs and are not tracked in the public results yet.">SHADOW &middot; CALIBRATING</span>
+                    <span className="ui-heading ml-2 text-[10px] text-[#f59e0b] border border-[color:rgba(245,158,11,0.35)] rounded-[4px] py-[1px] px-[5px]" title="Projections come from an empirical estimator on game logs and are not tracked in the public results yet.">SHADOW &middot; CALIBRATING</span>
                   )}
                 </td>
                 {showResult && (

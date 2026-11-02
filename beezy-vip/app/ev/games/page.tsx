@@ -55,13 +55,13 @@ export default async function GameLinesPage({ searchParams }: { searchParams: Pr
   }
 
   return (
-    <div className="max-w-[1400px] mx-auto pt-[16px] px-[24px] pb-[24px]">
-      <div className="flex items-baseline justify-between gap-y-[8px] gap-x-[16px] flex-wrap mb-[12px]">
+    <div className="max-w-[1400px] mx-auto pt-4 px-6 pb-6">
+      <div className="flex items-baseline justify-between gap-y-2 gap-x-4 flex-wrap mb-3">
         <h1 className="text-[20px] font-bold text-text-primary m-0">Game Lines</h1>
         <GamesNav view={view} sport={sport} />
       </div>
       {body}
-      <p className="text-[12px] text-text-secondary mt-[16px]">
+      <p className="text-[12px] text-text-secondary mt-4">
         Looking for MLB game picks with a graded record? They are under <Link href="/picks/games" style={{ color: 'var(--link)' }}>Picks &rarr; Game Picks</Link>.
       </p>
     </div>

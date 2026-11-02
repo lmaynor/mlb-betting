@@ -87,22 +87,22 @@ export default async function ModelDetailPage({ params }: Props) {
     spec.oosAUC.toFixed(3)
 
   return (
-    <div className="max-w-[1200px] mx-auto py-[40px] px-[24px]">
+    <div className="max-w-[1200px] mx-auto py-10 px-6">
 
       {/* Breadcrumb */}
-      <div className="flex items-center gap-[8px] mb-[24px]">
+      <div className="flex items-center gap-2 mb-6">
         <Link href="/models" className="times" style={{ fontSize: '13px', color: 'var(--link)', textDecoration: 'none' }}>Models</Link>
         <span className="mono text-[11px] text-text-secondary">&middot;</span>
         <SystemBadge system={spec.system} />
       </div>
 
       {/* Header */}
-      <div className="mb-[28px]">
-        <div className="flex items-center gap-[12px] mb-[10px]">
+      <div className="mb-7">
+        <div className="flex items-center gap-3 mb-2.5">
           <h1 className="ui-display text-[30px] text-text-primary">{spec.name}</h1>
           <span className="mono" style={{ fontSize: '11px', color: 'var(--color-neutral-300)', border: B, borderRadius: 'var(--radius-pill)', padding: '3px 10px' }}>{spec.version}</span>
         </div>
-        <p className="text-[13px] text-[var(--color-neutral-300)] leading-[1.65] max-w-[560px] mb-[10px]">{spec.description}</p>
+        <p className="text-[13px] text-[var(--color-neutral-300)] leading-[1.65] max-w-[560px] mb-2.5">{spec.description}</p>
         {spec.learnSlug && (
           <Link href={`/learn/${spec.learnSlug}`} className="times" style={{ fontSize: '13px', color: 'var(--link)', textDecoration: 'none' }}>
             Read the betting guide &rarr;
@@ -116,8 +116,8 @@ export default async function ModelDetailPage({ params }: Props) {
         <StatBlock label="Bets"         value={String(bets)}                                                   sub="Paper mode" />
         <StatBlock label="Win Rate"     value={winRate !== null ? `${winRate.toFixed(1)}%` : '--'}             sub="W / (W+L)" />
         <StatBlock label="ROI"          value={roi !== null ? `${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%` : '--'} accent={roi !== null && roi > 0} sub="Settled bets" />
-        <div className="p-[18px]">
-          <div className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary mb-[6px]">Avg Edge</div>
+        <div className="p-4.5">
+          <div className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary mb-1.5">Avg Edge</div>
           <div className="mono" style={{ fontSize: '20px', fontWeight: 600, lineHeight: 1, marginBottom: '4px', color: avgEdge === null ? 'var(--color-text-secondary)' : avgEdge >= 0 ? 'var(--signal)' : 'var(--loss)' }}>
             {avgEdge !== null ? `${avgEdge >= 0 ? '+' : ''}${avgEdge.toFixed(1)}%` : '--'}
           </div>
@@ -126,11 +126,11 @@ export default async function ModelDetailPage({ params }: Props) {
       </div>
 
       {/* Config + Calibration */}
-      <div className="grid grid-cols-2 gap-[16px] mb-[28px]">
+      <div className="grid grid-cols-2 gap-4 mb-7">
 
         {/* Config */}
         <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--color-background-primary-default)', padding: '20px' }}>
-          <div className="ui-display text-[16px] text-text-primary mb-[16px]">Model configuration</div>
+          <div className="ui-display text-[16px] text-text-primary mb-4">Model configuration</div>
           {[
             { label: 'Algorithm',      value: spec.algorithm ?? 'XGBoost (gradient boosted trees)' },
             { label: 'Training Data',  value: spec.dataRange },
@@ -148,7 +148,7 @@ export default async function ModelDetailPage({ params }: Props) {
 
         {/* Calibration */}
         <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--color-background-primary-default)', padding: '20px' }}>
-          <div className="flex items-baseline gap-[8px] mb-[16px]">
+          <div className="flex items-baseline gap-2 mb-4">
             <span style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: 'var(--color-text-primary)' }}>Calibration</span>
             <span className="mono text-[10px] text-text-secondary">Model prob vs actual hit rate</span>
           </div>
@@ -159,8 +159,8 @@ export default async function ModelDetailPage({ params }: Props) {
               {Object.entries(buckets).sort().map(([bucket, data]) => {
                 const hitRate = data.count > 0 ? data.wins / data.count : 0
                 return (
-                  <div key={bucket} className="mb-[10px]">
-                    <div className="flex justify-between mb-[4px]">
+                  <div key={bucket} className="mb-2.5">
+                    <div className="flex justify-between mb-1">
                       <span className="mono text-[10px] text-text-secondary">{bucket}</span>
                       <span className="mono text-[10px] text-text-secondary">{(hitRate * 100).toFixed(0)}% ({data.wins}/{data.count})</span>
                     </div>
@@ -170,7 +170,7 @@ export default async function ModelDetailPage({ params }: Props) {
                   </div>
                 )
               })}
-              <p className="mono text-[10px] text-text-secondary mt-[10px]">
+              <p className="mono text-[10px] text-text-secondary mt-2.5">
                 Well-calibrated: bar width should match bucket label.
               </p>
             </>
@@ -191,9 +191,9 @@ export default async function ModelDetailPage({ params }: Props) {
         </div>
         {spec.features.map((f, i) => (
           <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 100px', borderBottom: i < spec.features.length - 1 ? B : undefined, alignItems: 'center' }}>
-            <div className="mono text-[11px] font-semibold text-text-primary py-[10px] px-[14px]">{f.name}</div>
-            <div className="text-[11px] text-[var(--color-neutral-300)] py-[10px] px-[14px]">{f.description}</div>
-            <div className="py-[10px] px-[14px]">
+            <div className="mono text-[11px] font-semibold text-text-primary py-2.5 px-3.5">{f.name}</div>
+            <div className="text-[11px] text-[var(--color-neutral-300)] py-2.5 px-3.5">{f.description}</div>
+            <div className="py-2.5 px-3.5">
               <span className="mono" style={{
                 fontSize: '10px', fontWeight: 600, padding: '3px 8px', borderRadius: 'var(--radius-pill)',
                 color: IMPORTANCE[f.importance]?.color ?? 'var(--color-text-secondary)',
@@ -208,7 +208,7 @@ export default async function ModelDetailPage({ params }: Props) {
       {/* Gate progress */}
       <div style={{ border: B, borderRadius: 'var(--radius-lg)', background: 'var(--color-background-primary-default)', padding: '18px 20px', marginBottom: '28px', display: 'flex', alignItems: 'center', gap: '24px' }}>
         <div className="flex-1">
-          <div className="flex justify-between mb-[6px]">
+          <div className="flex justify-between mb-1.5">
             <span className="mono" style={{ fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'var(--color-text-secondary)' }}>200-Bet Gate Progress</span>
             <span className="mono text-[10px] text-text-secondary">{bets}/200</span>
           </div>
@@ -232,16 +232,16 @@ export default async function ModelDetailPage({ params }: Props) {
           <StatBlock label="Total P&L"   value={`${totalPnl >= 0 ? '+' : '-'}$${Math.abs(totalPnl).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} accent={totalPnl > 0} sub="at paper stakes" />
           <StatBlock label="Avg Edge"    value={avgEdge !== null ? `${avgEdge >= 0 ? '+' : ''}${avgEdge.toFixed(1)}%` : '--'} />
           <StatBlock label="Win Rate"    value={winRate !== null ? `${winRate.toFixed(1)}%` : '--'} />
-          <div className="p-[18px]">
-            <div className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary mb-[6px]">Sample Size</div>
-            <div className="mono text-[20px] font-semibold leading-[1] mb-[4px] text-text-primary">{bets}</div>
+          <div className="p-4.5">
+            <div className="ui-heading text-[10px] tracking-[0.1em] text-text-secondary mb-1.5">Sample Size</div>
+            <div className="mono text-[20px] font-semibold leading-[1] mb-1 text-text-primary">{bets}</div>
             <div className="times text-[11px] text-text-secondary">Settled bets</div>
           </div>
         </div>
       )}
 
       {/* Full bet history */}
-      <div className="flex justify-between items-center mb-[14px]">
+      <div className="flex justify-between items-center mb-3.5">
         <h2 className="ui-display text-[20px] text-text-primary">Full settled history</h2>
         <Link href={`/picks/mlb/${spec.slug}`} className="times" style={{ fontSize: '13px', color: 'var(--link)', textDecoration: 'none' }}>
           Today&apos;s Picks &rarr;

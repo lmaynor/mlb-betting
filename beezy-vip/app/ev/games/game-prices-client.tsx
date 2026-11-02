@@ -119,18 +119,18 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
         <span className="mono font-bold text-text-primary">{sportLabel}</span>
         <span className="mono text-[var(--color-neutral-300)]">{visible.length} ROWS</span>
         <span className="mono" style={{ color: 'var(--color-neutral-300)' }} title={active.map(f => f.lines_source).filter(Boolean).join(', ') || undefined}>LINES {ageText(age)} OLD</span>
-        {stale && <span className="mono text-[10.5px] font-bold tracking-[0.04em] text-[#facc15] border border-[color:#facc1555] rounded-[4px] py-[0px] px-[5px]">STALE</span>}
+        {stale && <span className="mono text-[10.5px] font-bold tracking-[0.04em] text-[#facc15] border border-[color:#facc1555] rounded-[4px] py-0 px-[5px]">STALE</span>}
         <span className="text-[var(--color-neutral-300)]">
           <span className="mono text-[10.5px] font-bold tracking-[0.04em] text-[#facc15]">{GAME_PRICES_LABEL}</span> {GAME_PRICES_NOTE}
         </span>
       </div>
 
       {unavailable ? (
-        <div role="status" className="py-[24px] px-[0px] text-[var(--color-neutral-300)] text-[13px]">
+        <div role="status" className="py-6 px-0 text-[var(--color-neutral-300)] text-[13px]">
           Game-line prices are not published yet. NBA and NHL moneyline, spread and total prices refresh with the odds banker; check back shortly.
         </div>
       ) : allRows.length === 0 && locked === 0 ? (
-        <div role="status" className="py-[24px] px-[0px] text-[var(--color-neutral-300)] text-[13px]">
+        <div role="status" className="py-6 px-0 text-[var(--color-neutral-300)] text-[13px]">
           No book has posted game lines for this slate yet. Prices appear as soon as a slate and its lines are posted.
         </div>
       ) : (
@@ -157,11 +157,11 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
           </div>
 
           {visible.length === 0 ? (
-            <div role="status" className="py-[24px] px-[0px] text-[var(--color-neutral-300)] text-[13px]">
+            <div role="status" className="py-6 px-0 text-[var(--color-neutral-300)] text-[13px]">
               No lines match these filters. Lower MIN EV, switch the market or clear the search.
             </div>
           ) : isMobile ? (
-            <div className="grid gap-[8px]">
+            <div className="grid gap-2">
               {visible.slice(0, limit).map(r => <PriceCard key={r.key} r={r} columns={columns} copied={copied === r.key} onCopy={copyHedge} />)}
             </div>
           ) : (
@@ -192,7 +192,7 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
             <button type="button" className="btn btn-ghost" onClick={() => setLimit(l => l + PAGE)} style={{ marginTop: '10px', fontSize: '12px' }}>Show more ({visible.length - limit} left)</button>
           )}
           <LockedNotice locked={locked} shown={allRows.length} what="game-line rows" plan="The game-line price screen is part of All-Access Pro." />
-          <p className="text-[12px] text-text-secondary mt-[12px] leading-[1.5]">
+          <p className="text-[12px] text-text-secondary mt-3 leading-[1.5]">
             Each book cell shows the away side (or over) above the home side (or under); green marks the best bettable price and an outlined price is a leg of an arbitrage. A spread row is
             labelled by the home line (home -3.5 means the away side gets +3.5); different lines of one game are separate rows. Offshore books (*) are shown for comparison and never
             counted as bettable. Fair value de-vigs each reference book two ways and averages them; whole-number lines can push, which this ignores. An arbitrage nets Kalshi&apos;s taker

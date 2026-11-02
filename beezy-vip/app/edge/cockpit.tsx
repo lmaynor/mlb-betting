@@ -236,7 +236,7 @@ export function FormSparkline({ form, under }: { form: CockpitForm; under: boole
           </g>
         )}
       </svg>
-      <div className="flex gap-[14px] flex-wrap mt-[6px] text-[11px] text-[var(--color-neutral-300)]">
+      <div className="flex gap-3.5 flex-wrap mt-1.5 text-[11px] text-[var(--color-neutral-300)]">
         <span><i style={{ display: 'inline-block', width: 9, height: 9, background: GOOD, borderRadius: 2, marginRight: 5 }} />Cleared the {under ? 'under' : 'over'}</span>
         <span><i style={{ display: 'inline-block', width: 9, height: 9, background: BAD, borderRadius: 2, marginRight: 5 }} />Missed</span>
         <span className="text-text-secondary">{cleared} of {games.length} games</span>
@@ -248,7 +248,7 @@ export function FormSparkline({ form, under }: { form: CockpitForm; under: boole
         { label: 'LINE', value: line == null ? '--' : String(line) },
       ]} />
       {szn != null && (
-        <div className="text-[11px] text-text-secondary mt-[8px]">
+        <div className="text-[11px] text-text-secondary mt-2">
           Season hit rate {pct0(szn)} over {form.szn_games} games.
         </div>
       )}
@@ -306,7 +306,7 @@ export function UsageSparkline({ form }: { form: CockpitForm }) {
         { label: 'LAST 3 AVG', value: fmt(recent) },
         { label: 'TREND', value: change == null ? 'steady' : `${change >= 0 ? '+' : ''}${Math.round(change * 100)}%`, color: trendColor },
       ]} />
-      <div className="text-[12px] text-[var(--color-neutral-300)] mt-[8px] leading-[1.5]">
+      <div className="text-[12px] text-[var(--color-neutral-300)] mt-2 leading-[1.5]">
         {label} are <b style={{ color: trendColor }}>{trend}</b>
         {prior != null ? <>: {fmt(recent)} over the last 3 games vs {fmt(prior)} before that.</> : '.'}
       </div>
@@ -345,7 +345,7 @@ export function OddsMatrix({ r }: { r: CockpitRow }) {
             <div key={quote.book} role="row" data-best={best ? 'true' : undefined}
               className={cx('grid min-w-[320px] items-center gap-2 border-b border-border-table px-1 py-2', best ? 'bg-[rgba(87,242,135,0.06)]' : 'transition-colors hover:bg-background-primary-hover')}
               style={{ gridTemplateColumns: cols }}>
-              <span role="cell" className="flex items-center gap-[6px] flex-wrap">
+              <span role="cell" className="flex items-center gap-1.5 flex-wrap">
                 <BookBadge book={quote.book} />
                 {flagged && <span className="ui-heading" style={{ fontSize: '10px', color: SKY }}>TARGET</span>}
               </span>

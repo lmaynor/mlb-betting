@@ -167,7 +167,7 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
         >
           <div
             onClick={e => e.stopPropagation()}
-            className="relative w-full max-w-[440px] rounded-xl border border-separator-border bg-background-primary-default px-[22px] py-5 text-text-primary shadow-xl"
+            className="relative w-full max-w-[440px] rounded-xl border border-separator-border bg-background-primary-default px-5.5 py-5 text-text-primary shadow-xl"
           >
             <div className="mb-2.5 flex items-start justify-between gap-3">
               <div>

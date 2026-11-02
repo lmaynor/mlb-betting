@@ -55,7 +55,7 @@ function Plan({ name, price, period, note, featured, children }: {
   name: string; price: string; period: string; note?: string; featured?: boolean; children: React.ReactNode
 }) {
   return (
-    <div className={cx(CARD, 'flex flex-col px-[18px] pb-5 pt-[18px]', featured && 'border-[rgba(87,242,135,0.55)]')}>
+    <div className={cx(CARD, 'flex flex-col px-4.5 pb-5 pt-4.5', featured && 'border-[rgba(87,242,135,0.55)]')}>
       <div className={cx('ui-heading mb-2.5 text-[11px] tracking-[0.06em]', featured ? 'text-[var(--signal)]' : 'text-text-secondary')}>{name.toUpperCase()}</div>
       <div className="mb-1 flex items-baseline gap-[5px]">
         <span className="mono text-[34px] font-bold leading-none text-text-primary">{price}</span>
@@ -86,7 +86,7 @@ export function PricingSection() {
         </span>
       </div>
 
-      <div className={cx(CARD, 'mb-5 flex flex-wrap items-center justify-between gap-4 border-l-[3px] border-l-[var(--signal)] px-[18px] py-3.5')}>
+      <div className={cx(CARD, 'mb-5 flex flex-wrap items-center justify-between gap-4 border-l-[3px] border-l-[var(--signal)] px-4.5 py-3.5')}>
         <div>
           <div className="flex items-center gap-2">
             <span className="ui-heading text-[11px] tracking-[0.08em] text-[var(--signal)]">EXPLORER TIER</span>

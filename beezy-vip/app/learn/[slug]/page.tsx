@@ -49,14 +49,14 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
   const related = RELATED[article.slug] ?? []
 
   return (
-    <div className="max-w-[780px] mx-auto py-[40px] px-[20px]">
+    <div className="max-w-[780px] mx-auto py-10 px-5">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(articleLd(article)) }} />
       <div style={{ marginBottom: '32px', paddingBottom: '24px', borderBottom: B }}>
-        <div className="mono text-[10px] tracking-[0.1em] uppercase text-text-secondary mb-[10px]">
+        <div className="mono text-[10px] tracking-[0.1em] uppercase text-text-secondary mb-2.5">
           {article.category}
         </div>
         <h1 className="text-[24px] font-bold text-text-primary leading-[1.3]">{article.title}</h1>
-        <p className="mono text-[11px] text-text-secondary mt-[10px]">
+        <p className="mono text-[11px] text-text-secondary mt-2.5">
           Published <time dateTime={article.datePublished}>{article.datePublished}</time>
           {' '}&middot; Last updated <time dateTime={article.dateModified}>{article.dateModified}</time>
         </p>
@@ -67,7 +67,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
       />
       <div style={{ marginTop: '40px', paddingTop: '20px', borderTop: B, display: 'grid', gap: '12px' }}>
         {related.length > 0 && (
-          <div className="flex gap-[16px] flex-wrap text-[13.5px]">
+          <div className="flex gap-4 flex-wrap text-[13.5px]">
             <span className="text-text-secondary">Try it:</span>
             {related.map(r => <Link key={r.href} href={r.href} style={{ color: 'var(--link)' }}>{r.label} &rarr;</Link>)}
           </div>

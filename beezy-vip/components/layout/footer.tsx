@@ -12,7 +12,7 @@ const SOCIAL_BOX = 'button-press-motion inline-flex size-9 items-center justify-
 
 export function Footer() {
   return (
-    <footer className="mt-[72px] border-t border-separator-border bg-background-secondary-default pb-[env(safe-area-inset-bottom)]">
+    <footer className="mt-18 border-t border-separator-border bg-background-secondary-default pb-[env(safe-area-inset-bottom)]">
 
       <div className="mx-auto max-w-[1200px] px-6 py-12">
         <div className="footer-grid mb-10">

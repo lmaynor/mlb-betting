@@ -56,7 +56,7 @@ const ODDS_MIN = [
   { label: '+350+', v: 350 },
   { label: '+500+', v: 500 },
 ]
-const PAGE = 150
+const PAGE = 50            // rows rendered per step; "Show more" adds another PAGE (keeps the DOM small)
 const MIN_REF = 3          // reference books needed behind a fair value on the Standard view
 const LONGSHOT_MIN_REF = 2 // ... on the Alt & Longshots view, where a line is rarely quoted by many books
 const CELL_EDGE = 0.015    // a book cell is tinted when its price beats the row's fair value by this much EV
@@ -664,7 +664,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
         </section>
       ) : (
         <section className="mb-2.5 rounded-xl border border-separator-border bg-background-primary-default shadow-card" aria-label="Filters">
-          <div className="py-[10px] px-[14px] flex gap-y-[10px] gap-x-[18px] flex-wrap items-center">
+          <div className="py-2.5 px-3.5 flex gap-y-2.5 gap-x-4.5 flex-wrap items-center">
             <PillGroup label="Mode">
               {MODES.map(m => {
                 const n = badgeFor(m.key)
@@ -719,7 +719,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
                 note={`Fair value is the equal-weight average of these books' de-vigged lines. None selected uses every book. ${refsNote}`}
                 align="right"
                 header={
-                  <div className="flex gap-[8px] items-center">
+                  <div className="flex gap-2 items-center">
                     <span className="ui-heading text-[10px] text-text-secondary">DEVIG</span>
                     <PillGroup>
                       <Pill active={method === 'proportional'} onClick={() => setMethod('proportional')} title="Remove the vig in proportion to each side's implied probability">PROPORTIONAL</Pill>
@@ -812,7 +812,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
                   </PillGroup>
                 </Field>
                 <Field label="OUTLAY" htmlFor="odds-outlay">
-                  <span className="inline-flex items-center gap-[4px]">
+                  <span className="inline-flex items-center gap-1">
                     <span className="mono text-text-secondary text-[12px]">$</span>
                     <input
                       id="odds-outlay" inputMode="decimal" value={outlayText} onChange={e => setOutlayText(e.target.value.replace(/[^0-9.]/g, ''))}
@@ -845,7 +845,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
                   </PillGroup>
                 </Field>
                 <Field label="OUTLAY" htmlFor="odds-outlay-mid">
-                  <span className="inline-flex items-center gap-[4px]">
+                  <span className="inline-flex items-center gap-1">
                     <span className="mono text-text-secondary text-[12px]">$</span>
                     <input
                       id="odds-outlay-mid" inputMode="decimal" value={outlayText} onChange={e => setOutlayText(e.target.value.replace(/[^0-9.]/g, ''))}
@@ -932,7 +932,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
         title="Terminal Filters"
         subtitle={`${MODES.find(m => m.key === mode)?.label} \u00b7 ${nRows} matching lines`}
         footer={
-          <div className="flex gap-[8px]">
+          <div className="flex gap-2">
             <button
               type="button"
               onClick={() => {
@@ -977,7 +977,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
           </div>
         }
       >
-        <div className="flex flex-col gap-[14px]">
+        <div className="flex flex-col gap-3.5">
           {mode === 'ev' && (
             <>
               <div>
@@ -1258,7 +1258,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
               { label: 'All', keys: [] },
             ]}
             extraHeader={
-              <div className="flex gap-[8px] items-center mb-[4px]">
+              <div className="flex gap-2 items-center mb-1">
                 <span className="ui-heading text-[10px] text-text-secondary">DEVIG METHOD</span>
                 <PillGroup>
                   <Pill active={method === 'proportional'} onClick={() => setMethod('proportional')}>PROPORTIONAL</Pill>
@@ -1332,7 +1332,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
                   <button onClick={() => setRevealMsg(null)} className="btn btn-ghost" style={{ padding: '2px 8px', fontSize: '11px' }}>Dismiss</button>
                 </div>
               )}
-              <div className="grid grid-cols-1 gap-[12px]">
+              <div className="grid grid-cols-1 gap-3">
                 {outliers.slice(0, limit).map((item, idx) => (
                   <OutlierCard
                     key={item.key}
@@ -1503,11 +1503,11 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
             <table className="odds-table w-full border-collapse">
               <thead>
                 <tr style={{ borderBottom: `1px solid ${HAIR}`, background: '#0d0f15' }}>
-                  <th scope="col" className="text-left min-w-[220px] py-[10px] px-[14px]">PLAYER &amp; MATCHUP</th>
-                  <th scope="col" className="text-left min-w-[280px] py-[10px] px-[14px]">SGP LEGS (SAME BOOK)</th>
-                  <th scope="col" className="text-left min-w-[150px] py-[10px] px-[14px]">ASSUMED-CORRELATION FAIR</th>
-                  <th scope="col" className="text-left min-w-[220px] py-[10px] px-[14px]">MODELLED SGP PRICE (NOT QUOTED)</th>
-                  <th scope="col" className="text-right min-w-[170px] py-[10px] px-[14px]">MODEL EV &amp; ACTION</th>
+                  <th scope="col" className="text-left min-w-[220px] py-2.5 px-3.5">PLAYER &amp; MATCHUP</th>
+                  <th scope="col" className="text-left min-w-[280px] py-2.5 px-3.5">SGP LEGS (SAME BOOK)</th>
+                  <th scope="col" className="text-left min-w-[150px] py-2.5 px-3.5">ASSUMED-CORRELATION FAIR</th>
+                  <th scope="col" className="text-left min-w-[220px] py-2.5 px-3.5">MODELLED SGP PRICE (NOT QUOTED)</th>
+                  <th scope="col" className="text-right min-w-[170px] py-2.5 px-3.5">MODEL EV &amp; ACTION</th>
                 </tr>
               </thead>
               <tbody>
@@ -1633,13 +1633,13 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
         </div>
       )}
       {nRows > limit && (
-        <div className="flex justify-center mt-[10px]">
+        <div className="flex justify-center mt-2.5">
           <button className="btn btn-ghost" style={{ padding: '6px 14px', fontSize: '12px' }} onClick={() => setLimit(l => l + PAGE)}>Show {Math.min(PAGE, nRows - limit)} more ({nRows - limit} remaining)</button>
         </div>
       )}
       <LockedNotice locked={locked} shown={allRows.length} what="prop lines" plan="The odds screen is part of All-Access Pro." />
 
-      <p className="times text-text-secondary text-[12px] mt-[24px] max-w-[90ch] leading-[1.6]">
+      <p className="times text-text-secondary text-[12px] mt-6 max-w-[90ch] leading-[1.6]">
         {mode === 'ev' && <>Each cell is a book&apos;s price on the row&apos;s side above its price on the other side; green marks the best bettable price and a tint marks a book
           beating the fair price by 1.5% or more. FV is the fair price from the reference books you pick, averaged with equal weight after each book&apos;s vig is removed;
           a book is never measured against its own line. EV is fair probability times payout minus one at the best price.</>}
@@ -1717,14 +1717,14 @@ function MobileEvRowCard({
             {r.ev == null ? '--' : `${signed(r.ev * 100)}% EV`}
           </span>
           {size && size.dollars > 0 && (
-            <div className="mono text-[10.5px] text-[var(--color-neutral-300)] mt-[2px]">
+            <div className="mono text-[10.5px] text-[var(--color-neutral-300)] mt-0.5">
               Kelly {fmtMoney(size.dollars)}
             </div>
           )}
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-[8px]">
+      <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-[7px]">
           <BookLogo book={r.bestBook} size={22} />
           <div>
@@ -1739,7 +1739,7 @@ function MobileEvRowCard({
         <button
           type="button"
           onClick={onInspect}
-          className="btn btn-ghost py-[5px] px-[10px] text-[11px] font-semibold"
+          className="btn btn-ghost py-[5px] px-2.5 text-[11px] font-semibold"
          
         >
           Compare All Books ({r.row.books.length}) &rarr;
@@ -1830,11 +1830,11 @@ function MobileArbCard({
         <span className="mono" style={{ fontSize: '11px', color: live ? GREEN : SKY, fontWeight: 700 }}>
           {profit >= 0 ? '+' : '-'}{usd(Math.abs(profit))} {live ? 'locked' : 'hold'} on {usd(outlay)}
         </span>
-        <div className="flex gap-[6px]">
+        <div className="flex gap-1.5">
           <button type="button" onClick={() => onCopy(r)} className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '10.5px' }}>
             {copied ? 'Copied!' : 'Copy'}
           </button>
-          <button type="button" onClick={onInspect} className="btn btn-ghost py-[4px] px-[8px] text-[10.5px]">
+          <button type="button" onClick={onInspect} className="btn btn-ghost py-1 px-2 text-[10.5px]">
             Books &rarr;
           </button>
         </div>
@@ -1922,11 +1922,11 @@ function MobileMiddleCard({
         <div className="mono text-[10.5px] text-text-secondary">
           Miss: {signed(r.missPct)}% &middot; Hit: {signed(r.hitPct)}%
         </div>
-        <div className="flex gap-[6px]">
+        <div className="flex gap-1.5">
           <button type="button" onClick={() => onCopy(r)} className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: '10.5px' }}>
             {copied ? 'Copied!' : 'Copy'}
           </button>
-          <button type="button" onClick={onInspect} className="btn btn-ghost py-[4px] px-[8px] text-[10.5px]">
+          <button type="button" onClick={onInspect} className="btn btn-ghost py-1 px-2 text-[10.5px]">
             Books &rarr;
           </button>
         </div>
@@ -1982,7 +1982,7 @@ function MobileLongshotCard({
             {actionEv != null ? `${signed(actionEv)}% EV` : '--'}
           </span>
           {actionBook && (
-            <div className="text-[10.5px] text-[var(--color-neutral-300)] mt-[2px]">
+            <div className="text-[10.5px] text-[var(--color-neutral-300)] mt-0.5">
               @ {bookDisplay(actionBook).label}
             </div>
           )}
@@ -1993,7 +1993,7 @@ function MobileLongshotCard({
         <button
           type="button"
           onClick={onInspect}
-          className="btn btn-ghost py-[5px] px-[10px] text-[11px] font-semibold"
+          className="btn btn-ghost py-[5px] px-2.5 text-[11px] font-semibold"
          
         >
           Compare All Books ({r.row.books.length}) &rarr;
@@ -2037,7 +2037,7 @@ function MobileSgpCard({ r }: { r: SgpProxyRow }) {
           <div className="text-[13.5px] font-bold text-text-primary overflow-hidden text-ellipsis whitespace-nowrap">
             {r.player}
           </div>
-          <div className="flex items-center gap-[6px] flex-wrap mt-[3px]">
+          <div className="flex items-center gap-1.5 flex-wrap mt-[3px]">
             <SgpBadges r={r} />
           </div>
           <div className="mono text-[11px] text-text-secondary mt-[3px]">
@@ -2046,7 +2046,7 @@ function MobileSgpCard({ r }: { r: SgpProxyRow }) {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-[6px]">
+      <div className="flex flex-wrap gap-1.5">
         {r.legs.map((leg, idx) => (
           <span
             key={idx}
@@ -2136,12 +2136,12 @@ function MobileCompareSheet({
       subtitle={subtitle}
       maxHeight="85vh"
     >
-      <div className="flex flex-col gap-[14px]">
+      <div className="flex flex-col gap-3.5">
         {item.type === 'ev' && (
           <div className="grid grid-cols-2 gap-2">
             <div style={{ padding: '8px 10px', background: 'var(--color-background-secondary-default)', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
               <div className="mono text-[10px] text-text-secondary uppercase">Consensus Fair</div>
-              <div className="mono text-[14px] font-bold text-text-primary mt-[2px]">
+              <div className="mono text-[14px] font-bold text-text-primary mt-0.5">
                 {item.row.fairAmerican != null ? (item.row.fairAmerican > 0 ? `+${item.row.fairAmerican}` : `${item.row.fairAmerican}`) : '--'}
               </div>
               <div className="mono mt-0.5 text-[10.5px] text-text-secondary">
@@ -2162,10 +2162,10 @@ function MobileCompareSheet({
         )}
 
         <div>
-          <div className="ui-heading text-[10px] text-text-secondary mb-[8px] tracking-[0.06em]">
+          <div className="ui-heading text-[10px] text-text-secondary mb-2 tracking-[0.06em]">
             ALL REPORTING BOOKS ({row.books.length})
           </div>
-          <div className="flex flex-col gap-[6px]">
+          <div className="flex flex-col gap-1.5">
             {columns.map(c => {
               const q = byBook.get(c.key)
               if (!q || (q.over == null && q.under == null)) return null
@@ -2188,12 +2188,12 @@ function MobileCompareSheet({
                     <div>
                       <div className="text-[12px] font-semibold text-text-primary">
                         {bookDisplay(c.key).label}
-                        {c.offshore && <span className="text-[10px] text-text-secondary ml-[4px]">(offshore)</span>}
+                        {c.offshore && <span className="text-[10px] text-text-secondary ml-1">(offshore)</span>}
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-[12px]">
+                  <div className="flex items-center gap-3">
                     <div className="text-right">
                       <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: isBest && item.type === 'ev' && item.row.side === 'OVER' ? GREEN : 'var(--color-text-primary)' }}>
                         O {q.over != null ? formatOdds(q.over) : '--'}
@@ -2229,18 +2229,21 @@ type CellState = 'best' | 'arb' | undefined
 function PriceCell({ top, bottom, topState, bottomState, tint, best }: {
   top: number | null; bottom: number | null; topState?: CellState; bottomState?: CellState; tint?: boolean; best?: boolean
 }) {
-  const style = (state: CellState, main: boolean): React.CSSProperties => ({
-    display: 'inline-block', lineHeight: 1.3, padding: '0 4px', borderRadius: '3px',
-    fontSize: main ? '12.5px' : '10.5px', fontWeight: state ? 800 : main ? 600 : 400,
-    color: state ? GREEN : main ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-    outline: state === 'arb' ? `1px solid ${GREEN}` : 'none', outlineOffset: '1px',
-  })
+  // Two inline-block prices split by a newline (white-space: pre-line) instead of a div per line: three elements per cell, not five.
+  const price = (state: CellState, main: boolean) => cx(
+    'mono inline-block rounded-[3px] px-1 outline-offset-1',
+    main ? 'text-[12.5px]' : 'text-[10.5px]',
+    'leading-[1.3]',
+    state ? 'font-extrabold text-[#57F287]' : main ? 'font-semibold text-text-primary' : 'font-normal text-text-secondary',
+    state === 'arb' ? 'outline outline-1 outline-[#57F287]' : 'outline-none',
+  )
   return (
-    <td className="odds-cell" data-best={best ? 'true' : undefined} data-edge={tint ? 'true' : undefined} style={{ borderLeft: `1px solid ${HAIR}` }}>
+    <td className={cx('odds-cell', top != null || bottom != null ? 'whitespace-pre-line' : undefined)} data-best={best ? 'true' : undefined} data-edge={tint ? 'true' : undefined} style={{ borderLeft: `1px solid ${HAIR}` }}>
       {top == null && bottom == null ? <span className="mono odds-sub">&ndash;</span> : (
         <>
-          <div><span className="mono" style={style(topState, true)}>{top == null ? '\u2013' : formatOdds(top)}</span></div>
-          <div><span className="mono" style={style(bottomState, false)}>{bottom == null ? '\u2013' : formatOdds(bottom)}</span></div>
+          <span className={price(topState, true)}>{top == null ? '\u2013' : formatOdds(top)}</span>
+          {'\n'}
+          <span className={price(bottomState, false)}>{bottom == null ? '\u2013' : formatOdds(bottom)}</span>
         </>
       )}
     </td>
@@ -2321,7 +2324,7 @@ function EvRow({ r, columns, bankroll }: { r: ScreenRow; columns: { key: string;
       </td>
       <td className="text-right">
         <div className="mono" style={{ fontSize: '12px', color: size && size.dollars > 0 ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>{size && size.dollars > 0 ? fmtMoney(size.dollars) : '--'}</div>
-        <div className="mt-[2px]"><TierPill alt={r.row.is_alt === true} modalPoint={r.row.modal_point} /></div>
+        <div className="mt-0.5"><TierPill alt={r.row.is_alt === true} modalPoint={r.row.modal_point} /></div>
       </td>
       {columns.map(c => {
         const q = byBook.get(c.key)
@@ -2337,7 +2340,7 @@ function EvRow({ r, columns, bankroll }: { r: ScreenRow; columns: { key: string;
 
 function BookTag({ book, size = 16 }: { book: string; size?: number }) {
   return (
-    <span className="inline-flex items-center gap-[6px]">
+    <span className="inline-flex items-center gap-1.5">
       <BookLogo book={book} size={size} />
       <span className="text-[11.5px] text-[var(--color-neutral-300)]">{bookDisplay(book).label}</span>
     </span>
@@ -2367,14 +2370,14 @@ function ArbTableRow({ r, columns, outlay, copied, onCopy }: {
           <span className="mono text-[11.5px] font-bold text-text-primary min-w-[84px]">OVER {formatOdds(a.bestOverAm)}</span>
           <BookTag book={a.bestOverBook} />
         </div>
-        <div className="flex items-center gap-[8px] mt-[3px]">
+        <div className="flex items-center gap-2 mt-[3px]">
           <span className="mono text-[11.5px] font-bold text-text-primary min-w-[84px]">UNDER {formatOdds(a.bestUnderAm)}</span>
           <BookTag book={a.bestUnderBook} />
         </div>
       </td>
       <td className="odds-ev">
         <div className="mono text-[12px] text-text-primary">{usd(a.stakeOverPer100 * k)} Over / {usd(a.stakeUnderPer100 * k)} Under</div>
-        <div className="flex items-center gap-[8px] mt-[2px]">
+        <div className="flex items-center gap-2 mt-0.5">
           <span className="mono odds-sub" style={{ color: live ? GREEN : SKY }}>{profit >= 0 ? '+' : '-'}{usd(Math.abs(profit))} {live ? 'locked' : 'at this hold'}</span>
           <button className="btn btn-ghost" onClick={() => onCopy(r)} style={{ padding: '1px 8px', fontSize: '10.5px' }}>{copied ? 'Copied' : 'Copy hedge'}</button>
         </div>
@@ -2414,14 +2417,14 @@ function MiddleTableRow({ r, columns, outlay, copied, onCopy }: {
           <span className="mono text-[11.5px] font-bold text-text-primary min-w-[104px]">OVER {r.low.line} {formatOdds(r.overAm)}</span>
           <BookTag book={r.overBook} />
         </div>
-        <div className="flex items-center gap-[8px] mt-[3px]">
+        <div className="flex items-center gap-2 mt-[3px]">
           <span className="mono text-[11.5px] font-bold text-text-primary min-w-[104px]">UNDER {r.high.line} {formatOdds(r.underAm)}</span>
           <BookTag book={r.underBook} />
         </div>
       </td>
       <td className="odds-ev">
         <div className="mono text-[12px] text-text-primary">{usd(r.stakeOverPer100 * k)} Over / {usd(r.stakeUnderPer100 * k)} Under</div>
-        <div className="flex items-center gap-[8px] mt-[2px]">
+        <div className="flex items-center gap-2 mt-0.5">
           <span className="mono odds-sub" title="The chance the window must hit for the middle to break even; the estimate comes from the reference books' fair price at each line">
             BREAK-EVEN {(r.breakevenProb * 100).toFixed(1)}%{r.midProb != null ? ` \u00b7 P(WINDOW) ${(r.midProb * 100).toFixed(1)}%` : ''}
           </span>
@@ -2468,7 +2471,7 @@ function LongshotTableRow({ r, columns }: { r: LongshotRow; columns: { key: stri
         ) : (
           <>
             <div className="mono text-[13px] font-bold text-text-primary">{fairText(m.fairOverProb)} / {fairText(m.fairUnderProb)}</div>
-            <div className="mono odds-sub flex gap-[6px] items-center">
+            <div className="mono odds-sub flex gap-1.5 items-center">
               {m.fairSource === 'curve' ? (
                 <span title={`Implied from player's main line (${r.row.modal_point ?? 'main'}) across reference books`}
                   style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em', padding: '0 5px', borderRadius: '4px', border: `1px solid ${VIOLET}66`, color: VIOLET }}>EST. FAIR</span>
@@ -2486,7 +2489,7 @@ function LongshotTableRow({ r, columns }: { r: LongshotRow; columns: { key: stri
             <div className="mono" style={{ fontSize: '12.5px', fontWeight: 700, color }}>
               {over ? `SNIPE OVER ${formatOdds(am)}` : `FADE ${underText(book, am)}`}
             </div>
-            <div className="flex items-center gap-[6px] mt-[2px]">
+            <div className="flex items-center gap-1.5 mt-0.5">
               <BookLogo book={book} size={16} />
               <span className="mono odds-sub inline">{bookDisplay(book).label}{evOf == null ? '' : ` \u00b7 ${signed(evOf)}% EV`}</span>
             </div>
@@ -2531,7 +2534,7 @@ function OutlierCard({
   return (
     <div style={{ ...SURFACE_CARD, padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {/* Row 1: Matchup & Dislocation Pill */}
-      <div className="flex justify-between items-center gap-[8px] flex-wrap">
+      <div className="flex justify-between items-center gap-2 flex-wrap">
         <div className="flex items-center gap-1.5">
           <span className="mono" style={{ fontSize: '10.5px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: 'var(--color-background-tertiary-default)', color: 'var(--color-neutral-400)', border: `1px solid ${HAIR}` }}>
             {sport.toUpperCase()}
@@ -2546,17 +2549,17 @@ function OutlierCard({
       </div>
 
       {/* Row 2: Player, Prop Line & Giant Outlier Price */}
-      <div className="flex justify-between items-center gap-[12px]">
+      <div className="flex justify-between items-center gap-3">
         <div className="flex items-center gap-2.5">
           <span className="shrink-0 w-[36px] h-[36px] inline-flex">
             <PlayerHeadshot sport={sport as HeadshotSport} id={item.row.headshot_id} name={item.row.player} size={36} />
           </span>
           <div>
             <div className="text-[15px] font-bold text-text-primary leading-[1.25]">{item.row.player}</div>
-            <div className="mono text-[12px] text-[var(--color-neutral-400)] flex items-center gap-[6px] mt-[3px]">
+            <div className="mono text-[12px] text-[var(--color-neutral-400)] flex items-center gap-1.5 mt-[3px]">
               <span>{item.side === 'OVER' ? 'O' : 'U'} {item.row.line} {STAT_LABEL[item.row.stat] ?? item.row.stat}</span>
               {item.row.is_alt === true && (
-                <span className="text-[10px] font-bold tracking-[0.04em] py-[0px] px-[4px] rounded-[3px] border border-[color:var(--color-border-button-hover)] text-[var(--color-neutral-400)]">[ALT]</span>
+                <span className="text-[10px] font-bold tracking-[0.04em] py-0 px-1 rounded-[3px] border border-[color:var(--color-border-button-hover)] text-[var(--color-neutral-400)]">[ALT]</span>
               )}
             </div>
           </div>
@@ -2587,7 +2590,7 @@ function OutlierCard({
             <div className="flex items-center gap-2">
               <BookLogo book={item.outlierBook} size={22} />
               <span className="text-[12.5px] font-semibold text-text-primary">{bookDisplay(item.outlierBook).label}</span>
-              <span className="mono text-[11px] text-text-secondary ml-[4px]">Implied: {(item.outlierImplied * 100).toFixed(1)}%</span>
+              <span className="mono text-[11px] text-text-secondary ml-1">Implied: {(item.outlierImplied * 100).toFixed(1)}%</span>
             </div>
             <span className="mono" style={{ fontSize: '10.5px', color: GREEN, fontWeight: 700, letterSpacing: '0.04em' }}>BEST PRICE</span>
           </>
@@ -2595,7 +2598,7 @@ function OutlierCard({
       </div>
 
       {/* Row 4: Horizontal Price Comparison Bar Chart */}
-      <div className="flex flex-col gap-[8px] pt-[6px] border-t border-t-[color:var(--color-border-table)]">
+      <div className="flex flex-col gap-2 pt-1.5 border-t border-t-[color:var(--color-border-table)]">
         {/* Outlier Book Row */}
         <div className="flex items-center gap-2.5">
           <div className="w-[32px] flex justify-center shrink-0">
@@ -2625,11 +2628,11 @@ function OutlierCard({
         ))}
 
         {/* Footer Summary Line */}
-        <div className="flex justify-between items-center mt-[4px] text-[11px] text-text-secondary">
+        <div className="flex justify-between items-center mt-1 text-[11px] text-text-secondary">
           <div>
             <span>Market avg &middot; {item.nPeers} books</span>
             {item.fairAmerican != null && (
-              <span className="ml-[6px]">&middot; Fair: {item.fairAmerican > 0 ? `+${item.fairAmerican}` : `${item.fairAmerican}`}</span>
+              <span className="ml-1.5">&middot; Fair: {item.fairAmerican > 0 ? `+${item.fairAmerican}` : `${item.fairAmerican}`}</span>
             )}
           </div>
           <div className="mono text-[#d1d5db] font-semibold">
@@ -2706,12 +2709,12 @@ function OutlierTableRow({
 function SgpTableRow({ r }: { r: SgpProxyRow }) {
   return (
     <tr style={{ borderBottom: `1px solid ${HAIR}` }}>
-      <td className="py-[10px] px-[14px] min-w-[220px]">
+      <td className="py-2.5 px-3.5 min-w-[220px]">
         <div className="flex items-center gap-2.5">
           <PlayerHeadshot id={r.headshot_id} name={r.player} sport={r.sport as HeadshotSport} size={36} />
           <div>
             <div className="font-semibold text-text-primary text-[13px]">{r.player}</div>
-            <div className="flex items-center gap-[6px] flex-wrap mt-[3px]">
+            <div className="flex items-center gap-1.5 flex-wrap mt-[3px]">
               <SgpBadges r={r} />
             </div>
             <div className="mono text-[11px] text-text-secondary mt-[3px]">
@@ -2720,9 +2723,9 @@ function SgpTableRow({ r }: { r: SgpProxyRow }) {
           </div>
         </div>
       </td>
-      <td className="py-[10px] px-[14px]">
-        <div className="flex flex-col gap-[4px]">
-          <div className="flex items-center gap-[6px] flex-wrap">
+      <td className="py-2.5 px-3.5">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-1.5 flex-wrap">
             {r.legs.map((leg, idx) => (
               <span
                 key={idx}
@@ -2741,11 +2744,11 @@ function SgpTableRow({ r }: { r: SgpProxyRow }) {
           </div>
         </div>
       </td>
-      <td className="py-[10px] px-[14px]">
+      <td className="py-2.5 px-3.5">
         <div className="mono text-[13px] font-semibold text-text-primary">
           {formatOdds(r.fairJointAm)}
         </div>
-        <div className="flex items-center gap-[4px] mt-[2px]">
+        <div className="flex items-center gap-1 mt-0.5">
           <span className="mono text-[11px] text-text-secondary">
             {(r.fairJointProb * 100).toFixed(1)}% model
           </span>
@@ -2758,8 +2761,8 @@ function SgpTableRow({ r }: { r: SgpProxyRow }) {
           </span>
         </div>
       </td>
-      <td className="py-[10px] px-[14px]">
-        <div className="flex items-center gap-[6px] flex-wrap">
+      <td className="py-2.5 px-3.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <BookLogo book={r.book} size={22} />
           <span className="mono text-[13px] font-bold text-text-primary">
             Modelled: {formatOdds(r.estSgpAm)}
@@ -2774,8 +2777,8 @@ function SgpTableRow({ r }: { r: SgpProxyRow }) {
           </div>
         )}
       </td>
-      <td className="py-[10px] px-[14px] text-right">
-        <div className="flex items-center justify-end gap-[10px]">
+      <td className="py-2.5 px-3.5 text-right">
+        <div className="flex items-center justify-end gap-2.5">
           <span className="mono" style={{ fontSize: '12px', fontWeight: 700, padding: '3px 8px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.04)', color: 'var(--color-neutral-300)', border: `1px solid ${HAIR}` }}>
             {sgpEvText(r)}
           </span>
@@ -2887,7 +2890,7 @@ function BookPicker({ label, books, selected, onChange, presets, note, emptyMean
             {!emptyMeansAll && !hasAllPreset && <button type="button" className="btn btn-ghost" style={{ padding: '3px 8px', fontSize: '11px' }} onClick={() => onChange(books.map(b => b.key))}>All</button>}
             {!hasNonePreset && <button type="button" className="btn btn-ghost" style={{ padding: '3px 8px', fontSize: '11px' }} onClick={() => onChange([])}>None</button>}
           </div>
-          <div className="grid gap-[2px] max-h-[280px] overflow-y-auto">
+          <div className="grid gap-0.5 max-h-[280px] overflow-y-auto">
             {books.map(b => {
               const meta = bookDisplay(b.key)
               const isOnly = on.has(b.key) && on.size === 1
@@ -2908,7 +2911,7 @@ function BookPicker({ label, books, selected, onChange, presets, note, emptyMean
                     <input type="checkbox" checked={on.has(b.key)} onChange={() => toggle(b.key)} style={{ cursor: 'pointer', accentColor: 'var(--signal)' }} />
                     <span className="min-w-[24px] inline-flex justify-center"><BookLogo book={b.key} size={22} /></span>
                     <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{meta.label}{b.offshore ? ' (offshore)' : ''}</span>
-                    <span className="mono text-[10.5px] text-text-secondary mr-[2px]">{b.n}</span>
+                    <span className="mono text-[10.5px] text-text-secondary mr-0.5">{b.n}</span>
                   </label>
                   <button
                     type="button"
@@ -3003,7 +3006,7 @@ function MobileBookChecklist({
         <>
           {extraHeader}
 
-          <div className="flex gap-[6px] flex-wrap items-center">
+          <div className="flex gap-1.5 flex-wrap items-center">
             {presets.map(p => (
               <button
                 key={p.label}
@@ -3091,7 +3094,7 @@ function MobileBookChecklist({
                     <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: checked ? 600 : 400 }}>
                       {meta.label}{b.offshore ? ' (offshore)' : ''}
                     </span>
-                    <span className="mono text-[11px] text-text-secondary mr-[6px]">
+                    <span className="mono text-[11px] text-text-secondary mr-1.5">
                       {b.n}
                     </span>
                   </label>

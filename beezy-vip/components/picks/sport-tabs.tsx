@@ -19,12 +19,12 @@ export function SportTabs({ sport, active }: { sport: SportSlug; active: SportVi
   ]
   return (
     <nav aria-label={`${pillar.shortName} views`} style={{ borderBottom: '1px solid var(--color-separator-border)', background: 'var(--color-background-secondary-default)' }}>
-      <div className="gutter-m max-w-[1200px] mx-auto py-[0px] px-[24px] flex items-center justify-between gap-y-[4px] gap-x-[16px] flex-wrap">
-        <div className="flex items-baseline gap-[10px] py-[10px] px-[0px]">
+      <div className="gutter-m max-w-[1200px] mx-auto py-0 px-6 flex items-center justify-between gap-y-1 gap-x-4 flex-wrap">
+        <div className="flex items-baseline gap-2.5 py-2.5 px-0">
           <span style={{ fontSize: '13px', fontWeight: 700, color: pillar.accent }}>{pillar.shortName}</span>
           <span className="mono text-[11.5px] text-text-secondary">&middot; {n} Systems</span>
         </div>
-        <div className="flex gap-[2px]">
+        <div className="flex gap-0.5">
           {tabs.map(t => (
             <Link key={t.id} href={t.href} aria-current={active === t.id ? 'page' : undefined} className="tap-m"
               style={{ display: 'inline-flex', fontSize: '12px', fontWeight: 600, letterSpacing: '0.04em', padding: '10px 12px', textDecoration: 'none',

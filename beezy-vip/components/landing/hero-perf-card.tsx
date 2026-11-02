@@ -10,7 +10,7 @@ export function HeroPerfCard({ headline, curve }: { headline: EvHeadline | null;
   const positive = (roi ?? 0) >= 0
   const tone = positive ? '#57f287' : '#ef4444'
   return (
-    <div className="flex flex-col gap-4 bg-background-secondary-default px-[22px] py-6">
+    <div className="flex flex-col gap-4 bg-background-secondary-default px-5.5 py-6">
       <div className="flex items-start justify-between gap-2.5">
         <div>
           <div className="ui-heading mb-2 text-text-secondary">PUBLIC LEDGER GROWTH (1/4 KELLY)</div>

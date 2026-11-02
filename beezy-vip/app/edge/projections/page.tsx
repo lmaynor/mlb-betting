@@ -42,14 +42,14 @@ export default async function EdgeProjectionsPage({ searchParams }: Props) {
 
   return (
     <main>
-      <header className="max-w-[1200px] mx-auto pt-[20px] px-[24px] pb-[14px]">
-        <div className="flex items-baseline justify-between gap-[12px] flex-wrap">
+      <header className="max-w-[1200px] mx-auto pt-5 px-6 pb-3.5">
+        <div className="flex items-baseline justify-between gap-3 flex-wrap">
           <h1 className="text-[20px] font-bold text-text-primary m-0 tracking-[-0.01em]">Prop Research</h1>
           <span className="mono text-[12px] text-text-secondary">{rows.length} {rows.length === 1 ? 'projection' : 'projections'}{filtered ? ' after filters' : ''}</span>
         </div>
-        <div className="flex gap-[12px] flex-wrap items-center mt-[14px]">
+        <div className="flex gap-3 flex-wrap items-center mt-3.5">
           <ResearchTabs active="projections" />
-          <nav aria-label="League" className="inline-flex gap-[2px] p-[3px] bg-[var(--color-background-secondary-default)] border border-[color:var(--color-separator-border)] rounded-[8px]">
+          <nav aria-label="League" className="inline-flex gap-0.5 p-[3px] bg-[var(--color-background-secondary-default)] border border-[color:var(--color-separator-border)] rounded-[8px]">
             {LIVE_SPORTS.map(p => (
               <Link key={p.slug} href={`/edge/projections?league=${p.slug}`} aria-current={p.slug === league ? 'page' : undefined}
                 style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.05em', padding: '7px 13px', borderRadius: '6px', textDecoration: 'none', whiteSpace: 'nowrap',
@@ -65,7 +65,7 @@ export default async function EdgeProjectionsPage({ searchParams }: Props) {
       </AlignedBar>
       <GamesStrip games={games} selected={f.game} today={siteDateKey()} total={board.rows.length} />
       <FilterBar sport={league} kind={league === 'mlb' ? 'player' : undefined} />
-      <div className="max-w-[1200px] mx-auto p-[24px]">
+      <div className="max-w-[1200px] mx-auto p-6">
         <SportProjectionsBoard sport={league} rows={rows} status={board.status} statusWarn={board.statusWarn}
           emptyBody={board.rows.length === 0 ? board.emptyBody : 'No rows match these filters. Clear a filter, or pick another game.'} />
         <LockedNotice locked={board.locked} shown={rows.length} what={`${pillar.shortName} projections`} plan={`The full board is on the ${pillar.shortName} Pass or All-Access Pro.`} />

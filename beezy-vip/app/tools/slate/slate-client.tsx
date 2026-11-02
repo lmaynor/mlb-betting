@@ -88,8 +88,8 @@ function PickDetail({ pick }: { pick: SlatePick }) {
     <div style={{ padding: '14px 16px', borderTop: B, background: 'var(--color-background-secondary-default)' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap', marginBottom: notes.length ? '10px' : 0 }}>
         <div>
-          <div className="text-[12px] text-text-primary font-semibold mb-[4px]">{label}</div>
-          <div className="flex gap-[12px] items-center">
+          <div className="text-[12px] text-text-primary font-semibold mb-1">{label}</div>
+          <div className="flex gap-3 items-center">
             <span className="mono text-[11px] text-text-secondary">
               {fmtOdds(pick.odds)}
             </span>
@@ -104,9 +104,9 @@ function PickDetail({ pick }: { pick: SlatePick }) {
         <ResultPill result={pick.result} />
       </div>
       {notes.length > 0 && (
-        <div className="flex flex-wrap gap-[6px]">
+        <div className="flex flex-wrap gap-1.5">
           {notes.map((n, i) => (
-            <span key={i} className="mono text-[10px] text-text-secondary bg-[var(--color-background-primary-default)] py-[3px] px-[8px] border border-[color:var(--color-separator-border)]">
+            <span key={i} className="mono text-[10px] text-text-secondary bg-[var(--color-background-primary-default)] py-[3px] px-2 border border-[color:var(--color-separator-border)]">
               {n}
             </span>
           ))}
@@ -138,7 +138,7 @@ function GameRow({ game }: { game: SlateGame }) {
         {/* Left: game info */}
         <div>
           {/* Teams + time */}
-          <div className="flex items-baseline gap-[10px] mb-[4px]">
+          <div className="flex items-baseline gap-2.5 mb-1">
             <span className="text-[14px] font-semibold text-text-primary">
               {game.away_team} @ {game.home_team}
             </span>
@@ -147,7 +147,7 @@ function GameRow({ game }: { game: SlateGame }) {
             )}
           </div>
           {/* Starters */}
-          <div className="mono text-[11px] text-text-secondary mb-[8px]">
+          <div className="mono text-[11px] text-text-secondary mb-2">
             {game.away_pitcher
               ? <>{game.away_pitcher} <span className="text-text-secondary">vs</span> {game.home_pitcher ?? 'TBA'}</>
               : <span className="text-text-secondary">Starters TBA</span>
@@ -155,7 +155,7 @@ function GameRow({ game }: { game: SlateGame }) {
           </div>
           {/* Pick pills */}
           {hasPicks ? (
-            <div className="flex gap-[6px] flex-wrap">
+            <div className="flex gap-1.5 flex-wrap">
               {game.picks.map((pick, i) => (
                 <SystemPill key={i} system={pick.system} edgePct={pick.edge_pct} />
               ))}
@@ -211,15 +211,15 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
   const totalPicks = slateData.total_picks
 
   return (
-    <div className="max-w-[1200px] mx-auto py-[24px] px-[20px]">
+    <div className="max-w-[1200px] mx-auto py-6 px-5">
 
       {/* Header */}
-      <div className="mb-[24px] flex justify-between items-start flex-wrap gap-[12px]">
-        <div className="flex items-baseline gap-[14px] flex-wrap">
+      <div className="mb-6 flex justify-between items-start flex-wrap gap-3">
+        <div className="flex items-baseline gap-3.5 flex-wrap">
           <h1 className="text-[20px] font-bold text-text-primary m-0">Today&apos;s Slate</h1>
           <span className="mono text-[12px] text-text-secondary">{dateLabel} &middot; {slateData.total_games} games &middot; {totalPicks} active {totalPicks === 1 ? 'pick' : 'picks'}</span>
         </div>
-        <div className="flex items-center gap-[12px]">
+        <div className="flex items-center gap-3">
           {slateData.as_of && (
             <span className="mono text-[10px] text-text-secondary">
               Updated {new Date(slateData.as_of).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' })} CT
@@ -237,7 +237,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
 
       {/* Filter bar */}
       <div style={{ border: B, padding: '12px 16px', marginBottom: '16px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-        <label className="flex items-center gap-[8px] cursor-pointer">
+        <label className="flex items-center gap-2 cursor-pointer">
           <span
             onClick={() => setPicksOnly(o => !o)}
             style={{
@@ -260,8 +260,8 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
 
         <div  className="w-[0.5px] bg-[var(--color-separator-border)] h-[20px] shrink-0"/>
 
-        <div className="flex gap-[4px] flex-wrap items-center">
-          <span className="mono text-[10px] text-text-secondary mr-[4px] tracking-[0.08em] uppercase">System</span>
+        <div className="flex gap-1 flex-wrap items-center">
+          <span className="mono text-[10px] text-text-secondary mr-1 tracking-[0.08em] uppercase">System</span>
           <Chip label="All" active={systemFilter === null} onClick={() => setSystemFilter(null)} />
           {ALL_FILTER_SYSTEMS.map(sys => (
             <Chip
@@ -278,7 +278,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
       {/* Games list */}
       {filtered.length === 0 ? (
         <div style={{ border: B, padding: '60px 20px', textAlign: 'center' }}>
-          <div className="mono text-[12px] text-text-secondary mb-[8px]">
+          <div className="mono text-[12px] text-text-secondary mb-2">
             {slateData.total_games === 0 ? 'No games scheduled today.' : 'No games match the current filter.'}
           </div>
           {slateData.total_games === 0 && (
@@ -305,7 +305,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
       )}
 
       {/* Footer note */}
-      <div className="mt-[16px]">
+      <div className="mt-4">
         <p className="mono text-[11px] text-text-secondary leading-[1.6]">
           Model picks only, shown after the ~11:00 AM CT run. +EV scanner plays are in the <a href="/ev" className="text-[var(--link)]">Odds Terminal</a>.
           Refreshes every 5 minutes.

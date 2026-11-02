@@ -70,7 +70,7 @@ export async function RecentPicksTable() {
                         </span>
                         <div className="min-w-0">
                           <div className="text-body-2-bold text-text-primary">{b.player ?? pickText(b)}</div>
-                          {b.player && <div className="text-caption-1-regular text-text-secondary">{pickText(b)}{isWinterSport(b.sport) && <span className="ui-heading ml-[8px] text-[#f59e0b]" title="Paper-tracked model output with no tested edge">{b.sport!.toUpperCase()} UNVALIDATED</span>}</div>}
+                          {b.player && <div className="text-caption-1-regular text-text-secondary">{pickText(b)}{isWinterSport(b.sport) && <span className="ui-heading ml-2 text-[#f59e0b]" title="Paper-tracked model output with no tested edge">{b.sport!.toUpperCase()} UNVALIDATED</span>}</div>}
                         </div>
                       </div>
                     </td>

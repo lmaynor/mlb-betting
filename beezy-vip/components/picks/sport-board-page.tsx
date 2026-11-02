@@ -77,7 +77,7 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
       <AlignedBar style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap' }}>
         <DayToggle today={today} yesterday={board.yesterday} days={board.days} selected={board.date} pinDates={!tracked} />
         {tracked && view === 'picks' && (
-          <nav aria-label="Pick type" className="flex gap-[14px] text-[12.5px]">
+          <nav aria-label="Pick type" className="flex gap-3.5 text-[12.5px]">
             <Link href="/picks/mlb" aria-current={kind !== 'game' ? 'page' : undefined} style={{ color: kind !== 'game' ? 'var(--color-text-primary)' : 'var(--link)', fontWeight: kind !== 'game' ? 600 : 400, textDecoration: 'none' }}>Player picks</Link>
             <Link href="/picks/games" aria-current={kind === 'game' ? 'page' : undefined} style={{ color: kind === 'game' ? 'var(--color-text-primary)' : 'var(--link)', fontWeight: kind === 'game' ? 600 : 400, textDecoration: 'none' }}>Game picks</Link>
           </nav>
@@ -85,20 +85,20 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
       </AlignedBar>
       <GamesStrip games={games} selected={f.game} today={today} total={base.length} />
       <FilterBar sport={sport} kind={kind} showResult={tracked && f.day === 'yesterday'} />
-      <div className="gutter-m max-w-[1200px] mx-auto p-[24px]">
-        <div className="mb-[14px] flex items-baseline justify-between gap-[12px] flex-wrap">
-          <div className="flex items-baseline gap-[12px] flex-wrap">
+      <div className="gutter-m max-w-[1200px] mx-auto p-6">
+        <div className="mb-3.5 flex items-baseline justify-between gap-3 flex-wrap">
+          <div className="flex items-baseline gap-3 flex-wrap">
             <h1 className="text-[20px] font-bold text-text-primary m-0">{kind === 'game' ? `${pillar.shortName} game picks` : copy.h1(pillar.shortName)}</h1>
             <span className="ui-heading" title={pillar.description} style={{ fontSize: '10px', color: pillar.accent, border: `1px solid ${pillar.accent}66`, borderRadius: '6px', padding: '2px 8px' }}>{STATUS_LABEL[pillar.status]}</span>
             {!tracked && (
-              <span className="ui-heading text-[10px] text-[var(--warn)] border border-[color:rgba(245,158,11,0.45)] rounded-[6px] py-[2px] px-[8px]" title="NFL, NHL and NBA projections are model output with no tested edge against prices. They are not tracked in the public results."
+              <span className="ui-heading text-[10px] text-[var(--warn)] border border-[color:rgba(245,158,11,0.45)] rounded-[6px] py-0.5 px-2" title="NFL, NHL and NBA projections are model output with no tested edge against prices. They are not tracked in the public results."
                >UNVALIDATED</span>
             )}
           </div>
           <span className="mono text-[12px] text-text-secondary">{rows.length} {rows.length === 1 ? 'row' : 'rows'}{filtered ? ' after filters' : ''} &middot; {copy.sub}</span>
         </div>
         {view === 'picks' && (
-          <div className="flex items-center gap-[6px] mb-[14px] flex-wrap">
+          <div className="flex items-center gap-1.5 mb-3.5 flex-wrap">
             <span className="mono text-[11px] text-text-secondary tracking-[0.06em]">TIER:</span>
             {[
               { id: 'all', label: 'All Actionable' },

@@ -33,8 +33,8 @@ export function gamesHref(view: GamesView, sport: GameSport): string {
 /** The page toolbar's right side: the PRICES | MODEL switch and the sport links. Both are plain links so each state is shareable. */
 export function GamesNav({ view, sport }: { view: GamesView; sport: GameSport }) {
   return (
-    <div className="flex items-center gap-y-[8px] gap-x-[16px] flex-wrap">
-      <nav aria-label="Game lines view" className="inline-flex gap-[2px] p-[3px] bg-[var(--color-background-secondary-default)] border border-[color:var(--color-separator-border)] rounded-[8px]">
+    <div className="flex items-center gap-y-2 gap-x-4 flex-wrap">
+      <nav aria-label="Game lines view" className="inline-flex gap-0.5 p-[3px] bg-[var(--color-background-secondary-default)] border border-[color:var(--color-separator-border)] rounded-[8px]">
         {VIEW_TABS.map(t => (
           <Link
             key={t.key}
@@ -50,7 +50,7 @@ export function GamesNav({ view, sport }: { view: GamesView; sport: GameSport })
           >{t.label}</Link>
         ))}
       </nav>
-      <nav aria-label="Game lines sport" className="flex gap-[14px] text-[12.5px]">
+      <nav aria-label="Game lines sport" className="flex gap-3.5 text-[12.5px]">
         {SPORT_TABS.map(t => (
           <Link
             key={t.key}

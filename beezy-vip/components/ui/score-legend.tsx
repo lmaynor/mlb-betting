@@ -5,11 +5,11 @@ export function ScoreLegend() {
   return (
     <details style={{ marginTop: '14px', border: '1px solid var(--color-separator-border)', borderRadius: '8px', background: 'var(--color-background-primary-default)', padding: '10px 14px' }}>
       <summary style={{ cursor: 'pointer', fontSize: '12.5px', fontWeight: 600, color: 'var(--color-neutral-300)' }}>How the Beezy Score works</summary>
-      <div className="text-[12.5px] text-[var(--color-neutral-300)] leading-[1.65] mt-[10px] grid gap-[8px]">
+      <div className="text-[12.5px] text-[var(--color-neutral-300)] leading-[1.65] mt-2.5 grid gap-2">
         <p className="m-0">
           A 0-100 strength score for one flagged price. It is not a win probability. Hover a score to see its parts.
         </p>
-        <ul className="m-0 pl-[18px]">
+        <ul className="m-0 pl-4.5">
           <li><strong>Edge, up to {SCORE_WEIGHTS.edge}:</strong> 4 points per 1% of edge at the flagged price.</li>
           <li><strong>Consensus, up to {SCORE_WEIGHTS.consensus}:</strong> how many other books back the fair price (3 books is 0, 12 or more is the max). Model bets have no books count and get a neutral 10.</li>
           <li><strong>Hit probability, up to {SCORE_WEIGHTS.hit}:</strong> longshots are penalised (15% to win is 0, 50% or better is the max).</li>
