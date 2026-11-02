@@ -210,6 +210,26 @@ measured pairwise lift, plus the capped buffer). Whether other makers undercut o
 offline; fill rate is the open question. "14-legs are -EV for retail" rests on 3 distinct combos so far. A leg count above 8 or so with
 only 2-3 legs priced gives a loose bound, so expect those quotes to be uncompetitive until the NBA prop mapper's coverage improves.
 
+## Point-in-time replay of REAL combos (2026-11-01; `ev/kalshi_rfq_replay.py`, `scripts/kalshi_rfq_replay.py`)
+Kalshi's public `/markets?mve_filter=only&status=settled` lists every settled combo with legs, last price, volume and result (no key). A combo
+market is created when its RFQ is accepted, so `created_time` ~ trade time. The replay prices each combo with the latest banked NFL sweep
+cycle (`EVSweep/nfl_props/{day}/cycle_*.csv`, keyed by Kalshi ticker) stamped BEFORE that time (no look-ahead, max age 40 min), once with a
+permissive "measure" config and once with the daemon's quote config.
+```
+python scripts/kalshi_rfq_replay.py pull   --start 2026-10-16 --end 2026-11-01 --out combos.jsonl     # public API, capped sample per window
+GCS_BUCKET=<data bucket> python scripts/kalshi_rfq_replay.py replay --combos combos.jsonl --csv out.csv
+```
+Full pull (all 102 four-hour windows 10-16 to 11-02, every window truncated at 8,000 scanned markets, so a SAMPLE): 169,186 traded all-sports combos,
+but only ~20k had any leg ever banked and 6,009 had a snapshot in time. Of those 1,703 had >= 1 priced leg and just **19 were fully priced**.
+* Fully priced (n=19): mean yes price 0.225 vs mean p_true 0.192, i.e. +3.2c ex-ante edge, but the realized yes rate was 36.8% and laying at the
+  traded price lost 15c per contract. n=19, naive se ~10c: no conclusion either way.
+* Bounded (1,684 combos with 1+ dropped legs): p_true is an UPPER bound (mean 0.458) so `yes_price - p_true` is meaningless as an edge. The
+  realized lay P&L at the traded price was -2.1c per contract (naive se 0.7c): these combos hit 13.3% against a mean price of 11.7%. That is
+  a warning against "retail overpays" on this subset, but it is clustered on two game days (10-18, 10-25) and selected on having a banked leg.
+* Would-quote: 357 of 6,009; would-fill (our no_bid >= traded NO price): 9, mean -35c (n=9, noise).
+Read: the data to JOIN exists only for NFL props, and coverage (not edge) is the binding limit. The replay is built and tested; the
+verdict needs fully priced volume (NFL game lines, NBA/NHL per-book props, TD/anytime legs) which the banks do not hold.
+
 ## Production recorder runbook (NOT yet done)
 Why: only real retail combo flow can answer whether combos are priced richly enough to lay after fees. Cost: a read-only key,
 2 secrets, 1 Cloud Run Job, 1 scheduler; ParlayAPI game pulls capped at 120 credits/day (`KALSHI_RFQ_GAME_BUDGET`).
