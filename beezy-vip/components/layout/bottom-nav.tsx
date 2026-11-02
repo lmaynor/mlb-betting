@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Home, Trophy, Wrench, Zap, ListChecks } from 'lucide-react'
+import { cx } from '@/utils/cx'
 
 // Five questions, five tabs (lib/ia.ts). Home is also the logo in the top bar.
 const TABS = [
@@ -18,22 +19,7 @@ export function BottomNav() {
 
   return (
     <nav
-      className="mobile-only"
-      style={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        zIndex: 60,
-        justifyContent: 'space-around',
-        alignItems: 'stretch',
-        height: 'calc(60px + env(safe-area-inset-bottom))',
-        paddingBottom: 'env(safe-area-inset-bottom)',
-        background: 'color-mix(in oklab, var(--color-background-primary-default) 92%, transparent)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        borderTop: '1px solid var(--color-separator-border)',
-      }}
+      className="mobile-only fixed inset-x-0 bottom-0 z-[60] h-[calc(60px+env(safe-area-inset-bottom))] items-stretch justify-around border-t border-separator-border bg-[color-mix(in_oklab,var(--color-background-primary-default)_92%,transparent)] pb-[env(safe-area-inset-bottom)] backdrop-blur-[12px]"
     >
       {TABS.map(tab => {
         const active = tab.href === '/' ? pathname === '/' : tab.prefixes.some(p => pathname === p || pathname.startsWith(p + '/'))
@@ -42,30 +28,13 @@ export function BottomNav() {
           <Link
             key={tab.href}
             href={tab.href}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '4px',
-              textDecoration: 'none',
-              flex: 1,
-              padding: '8px 0',
-              color,
-            }}
+            className="flex flex-1 flex-col items-center justify-center gap-1 py-2 no-underline"
+            style={{ color }}
           >
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              width: '36px', height: '26px', borderRadius: 'var(--radius-pill)',
-              background: active ? 'var(--win-wash)' : 'transparent',
-              transition: 'background var(--dur) var(--ease-out)',
-            }}>
+            <span className={cx('inline-flex h-[26px] w-9 items-center justify-center rounded-full transition-colors', active ? 'bg-[var(--win-wash)]' : 'bg-transparent')}>
               <tab.Icon size={18} strokeWidth={active ? 2.3 : 1.9} color={color} />
             </span>
-            <span
-              className="dell-heading"
-              style={{ fontSize: '10px', letterSpacing: '0.03em' }}
-            >
+            <span className="dell-heading tracking-[0.03em]">
               {tab.label}
             </span>
           </Link>

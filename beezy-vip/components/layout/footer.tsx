@@ -8,30 +8,26 @@ import { X_URL } from '@/lib/links'
 import { SITE_CONFIG } from '@/lib/site-config'
 import { InstallAppButton } from '@/components/layout/install-app-button'
 
-const socialBox: React.CSSProperties = {
-  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-  width: '36px', height: '36px', border: '1px solid var(--color-separator-border)',
-  borderRadius: 'var(--radius)', textDecoration: 'none', background: 'var(--color-background-primary-default)',
-}
+const SOCIAL_BOX = 'button-press-motion inline-flex size-9 items-center justify-center rounded-2lg border border-separator-border bg-background-primary-default no-underline hover:bg-background-primary-hover'
 
 export function Footer() {
   return (
-    <footer style={{ borderTop: '1px solid var(--color-separator-border)', background: 'var(--color-background-secondary-default)', marginTop: '72px', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+    <footer className="mt-[72px] border-t border-separator-border bg-background-secondary-default pb-[env(safe-area-inset-bottom)]">
 
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '48px 24px' }}>
-        <div className="footer-grid" style={{ marginBottom: '40px' }}>
+      <div className="mx-auto max-w-[1200px] px-6 py-12">
+        <div className="footer-grid mb-10">
           <div>
-            <div style={{ marginBottom: '12px' }}>
+            <div className="mb-3">
               <BrandWordmark size="sm" showDomain />
             </div>
-            <p className="times" style={{ fontSize: '14px', color: 'var(--color-text-secondary)', lineHeight: 1.65, marginBottom: '16px', maxWidth: '34ch' }}>
+            <p className="times mb-4 max-w-[34ch] text-body-regular text-text-secondary">
               Model picks and a live +EV scanner, with every result public.
             </p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" style={{ ...socialBox, color: '#8b92f0' }} aria-label="Join Discord">
+            <div className="flex items-center gap-2.5">
+              <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" className={`${SOCIAL_BOX} text-[#8b92f0]`} aria-label="Join Discord">
                 <DiscordMark size={18} color="currentColor" />
               </a>
-              <a href={X_URL} target="_blank" rel="noopener noreferrer" style={{ ...socialBox, color: 'var(--color-neutral-300)' }} aria-label="Follow Beezy.FYI on X">
+              <a href={X_URL} target="_blank" rel="noopener noreferrer" className={`${SOCIAL_BOX} text-text-secondary`} aria-label="Follow Beezy.FYI on X">
                 <XMark size={15} color="currentColor" />
               </a>
               <InstallAppButton />
@@ -45,18 +41,14 @@ export function Footer() {
             { title: 'Legal',   links: [['Terms of Service','/legal/terms'],['Privacy Policy','/legal/privacy'],['Responsible Gambling','/legal/responsible-gambling'],['Refund Policy','/legal/refunds'],['Support',`mailto:${SITE_CONFIG.supportEmail}`],[SITE_CONFIG.xHandle,SITE_CONFIG.xUrl]] },
           ].map(col => (
             <div key={col.title}>
-              <div
-                className="dell-heading"
-                style={{ fontSize: '11px', letterSpacing: '0.1em', color: 'var(--color-text-secondary)', marginBottom: '14px' }}
-              >
+              <div className="dell-heading mb-3.5 text-[11px] tracking-[0.1em] text-text-secondary">
                 {col.title}
               </div>
               {col.links.map(([label, href]) => (
                 <Link
                   key={href}
                   href={href}
-                  className="times"
-                  style={{ display: 'block', fontSize: '13.5px', color: 'var(--color-neutral-300)', textDecoration: 'none', marginBottom: '9px', transition: 'color var(--dur) var(--ease-out)' }}
+                  className="times mb-[9px] block text-body-2-regular text-text-secondary no-underline transition-colors hover:text-text-primary"
                 >
                   {label}
                 </Link>
@@ -65,9 +57,9 @@ export function Footer() {
           ))}
         </div>
 
-        <div style={{ borderTop: '1px solid var(--color-separator-border)', paddingTop: '20px' }}>
-          <p className="times" style={{ fontSize: '11px', color: '#7d8596', marginBottom: '6px', lineHeight: 1.55 }}>{SITE_CONFIG.riskDisclaimer} Plans and results are paper-tracked and hypothetical; no real money is wagered through beezy.fyi.</p>
-          <p className="times" style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '14px' }}>
+        <div className="border-t border-separator-border pt-5">
+          <p className="times mb-1.5 text-caption-2-regular text-text-secondary">{SITE_CONFIG.riskDisclaimer} Plans and results are paper-tracked and hypothetical; no real money is wagered through beezy.fyi.</p>
+          <p className="times mt-3.5 text-caption-1-regular text-text-secondary">
             &copy; <span suppressHydrationWarning>{new Date().getFullYear()}</span> beezy.fyi. Independent quantitative sports analytics.
           </p>
         </div>
