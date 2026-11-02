@@ -3507,7 +3507,8 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
   LAID only (`yes_bid=0`, padded `no_bid`); fair values are NFL props only (the only mapped Kalshi prop tickers). Wire
   format came from docs.kalshi.com, not the original spec -- see docs/analysis/kalshi_rfq_combo_lay_2026-10-25.md for
   the deviations and the demo-exchange verification list (`accepted_side` semantics first).
-  **GCP recorder (2026-10-25):** Cloud Run Job `mlb-kalshi-rfq-recorder` (`deploy/setup_kalshi_rfq_recorder.sh`), read-only production,
+  **GCP recorder (2026-10-25; as of 2026-11-01 only the DEMO job `mlb-kalshi-rfq-recorder-demo` exists in GCP -- the production job, its
+  `-daily` scheduler and the `kalshi-prod-*` secrets are NOT provisioned; runbook in the analysis doc):** Cloud Run Job `mlb-kalshi-rfq-recorder` (`deploy/setup_kalshi_rfq_recorder.sh`), read-only production,
   daily 10:00 UTC scheduler, tape -> `Kalshi/rfq_tape/production/{day}/*.jsonl`, creds from Secret Manager (`kalshi-prod-api-key-id`,
   `kalshi-prod-private-key`). Fails loud if the stream never connects (Kalshi CDN may block Cloud Run egress -- unverified).
   **Props/spreads/totals (2026-10-26):** `ev/kalshi_props.parse_prop_ticker` + `ev/kalshi_rfq_props.PropFairIndex` resolve NFL/NBA/NHL player-prop legs
