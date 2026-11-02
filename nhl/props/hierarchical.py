@@ -58,6 +58,18 @@ HOOK_MEAN, HOOK_SD = 13.8, 7.3          # saves of such a starter (pulled, injur
 
 # Power-play points per game of rotation-level skaters (average TOI >= 14), measured on 2022-2023.
 PP_PRIOR = {"F": 0.180, "D": 0.077}
+# Opposing-goalie term for skater scoring (nhl.game.goalie_model, shrunk GSAx/60 of the goalie the opponent is expected to start,
+# centred on the league's expected starters). 0.0 = off. A factor of 1 - beta * gsax / GA_60, clipped.
+GOALIE_BETA = 0.0
+GOALIE_GA60 = 2.95
+GOALIE_CLIP = (0.85, 1.15)
+# Shooter-quality prior for the goals link: the position prior is scaled by the shooter's own expected-goals-per-shot-on-goal
+# relative to his position's average (xG shrunk toward 1 with XG_PRIOR_SHOTS shots). Off by default (needs per-shot xG).
+XG_PRIOR = False
+XG_PRIOR_SHOTS = 150.0
+XG_WINDOW = 120                          # games behind a shooter's xG per shot
+XGPS_MEAN = {"F": 0.095, "D": 0.060}     # league xG per shot on goal by position group (set from the replay doc)
+
 PP_PRIOR_K = 6.0                        # games of evidence behind the PP prior (chosen on 2023: log score best of 6 / 12 / 24 / 48)
 
 
@@ -108,7 +120,8 @@ def eb_shooting_pct(goals: float, sog: float, position, k: float = SH_PRIOR_K) -
 
 
 def shooting_pct_from_rows(rows: list, position=None) -> float | None:
-    """EB shooting % over the last SH_WINDOW rows that carry both goals and sog; None when none do."""
+    """EB shooting % over the last SH_WINDOW rows that carry both goals and sog; None when none do. With XG_PRIOR on and xG
+    columns present the position prior is scaled by the shooter's xG-per-shot ratio (xg_scaled_prior)."""
     g = s = 0.0
     n = 0
     for r in rows[-SH_WINDOW:]:
@@ -118,7 +131,43 @@ def shooting_pct_from_rows(rows: list, position=None) -> float | None:
         g, s, n = g + gv, s + sv, n + 1
     if n == 0:
         return None
-    return eb_shooting_pct(g, s, position if position is not None else rows[-1].get("position"))
+    pos = position if position is not None else rows[-1].get("position")
+    scale = xg_scaled_prior(rows, pos) if XG_PRIOR else None
+    if scale is None:
+        return eb_shooting_pct(g, s, pos)
+    return eb_shooting_pct_scaled(g, s, pos, scale)
+
+
+def goalie_factor(gsax_60: float | None, beta: float | None = None) -> float:
+    """Scoring multiplier from the opposing starter's centred shrunk GSAx/60 (goals saved above average per 60): a goalie
+    worth +0.3 goals / 60 trims a skater's scoring by beta * 0.3 / 2.95. 1.0 when off, unknown or beta is 0."""
+    b = GOALIE_BETA if beta is None else beta
+    if gsax_60 is None or not b:
+        return 1.0
+    return float(min(max(1.0 - b * gsax_60 / GOALIE_GA60, GOALIE_CLIP[0]), GOALIE_CLIP[1]))
+
+
+def xg_scaled_prior(rows: list, position, k: float | None = None):
+    """The shooter's own position-prior scale: (xG per shot on goal, shrunk to the position mean) / the position mean, over his
+    last XG_WINDOW games that carry `ixg_sog` and `sog_pop`. None without any (the caller keeps the flat position prior)."""
+    xg = n = 0.0
+    seen = 0
+    for r in rows[-XG_WINDOW:]:
+        a, b = _num(r.get("ixg_sog")), _num(r.get("sog_pop"))
+        if a is None or b is None:
+            continue
+        xg, n, seen = xg + a, n + b, seen + 1
+    if not seen:
+        return None
+    mean = XGPS_MEAN[pos_group(position)]
+    kk = XG_PRIOR_SHOTS if k is None else k
+    return shrink(xg / n, n, mean, kk) / mean if n > 0 else 1.0
+
+
+def eb_shooting_pct_scaled(goals: float, sog: float, position, scale: float = 1.0, k: float = SH_PRIOR_K) -> float:
+    """eb_shooting_pct with the position prior multiplied by `scale` (the shooter's xG-per-shot ratio)."""
+    prior = SH_PRIOR[pos_group(position)] * scale
+    return (goals + k * prior) / (sog + k)
 
 
 def goals_mu(trailing_goals: float, mu_sog: float, sh_eb: float, w: float = GOALS_EWM_WEIGHT) -> float:

@@ -4306,6 +4306,9 @@ are PAUSED by the user's decision, so the alerts sweep idles until banking is re
   (log score up on goals/assists/points/pp_points/saves; SOG and blocks unchanged: the spec's blocks pace factor lost and was reverted). The skater master was BACKFILLED 2026-11-01
   (`python -m nhl.data.powerplay`, 279,191 rows from 2021, backup under `NHL/backups/`); deploy the image next; beezy-vip still lists pp_points as
   `Data gap` (`lib/sports.ts`, `lib/prop-model-specs.ts`, 3 pinned tests): flip AFTER the backend serves pp_points rows.
+  Market check (2026-11-01, `docs/analysis/nhl_engine_vs_market_2026-11-01.md`, `scripts/nhl_engine_vs_market.py`): beats the old engine on every market but
+  adds no information beyond the market on goals/assists/points (c <= 0.06); saves c +0.48 but regime-dependent. Opposing-goalie factor and shooter-xG prior
+  were tested and left OFF (`H.GOALIE_BETA`, `H.XG_PRIOR`).
 
 ---
 

@@ -387,6 +387,8 @@ class GameLogs:
         self._by_team: dict = {}
         self._vac: dict = {}
         self._sv: dict = {}
+        self._tracker = None
+        self._opp_g: dict = {}
         self._lock = threading.Lock()
 
     @classmethod
@@ -618,6 +620,55 @@ class GameLogs:
                             sv, sa = sv + s_, sa + a_
                 self._sv[eff] = sv / sa if sa >= 5000 else None
             return self._sv[eff]
+
+    def goalie_tracker(self):
+        """nhl.game.goalie_model.GoalieTracker over every goalie appearance in the master, recorded in GLOBAL date order (the
+        tracker's team start lists assume it). Every query below passes `before_date`, so it is as-of safe."""
+        with self._lock:
+            if self._tracker is None:
+                from nhl.game.goalie_model import GoalieTracker
+                tr = GoalieTracker()
+                rows = [r for name, rs in (self.idx.get("goalie") or {}).items() if not str(name).startswith("id:")
+                        for r in rs]
+                rows.sort(key=lambda r: str(r.get("_date") or ""))
+                for r in rows:
+                    toi, sa, ga = (_nh._num(r.get(k)) for k in ("toi_sec", "shots_against", "goals_against"))
+                    if toi is None or sa is None or ga is None or toi <= 0:
+                        continue
+                    tr.record_start(str(r.get("player_id")), str(r.get("name")), str(r.get("team_abbr")),
+                                    str(r.get("_date"))[:10], str(r.get("game_id")), toi / 60.0, sa, ga)
+                self._tracker = tr
+            return self._tracker
+
+    def opp_goalie_gsax(self, team: str | None, as_of: str | None) -> float | None:
+        """Shrunk GSAx/60 (goals saved above the league's expected starters, per 60) of the goalie `team` is expected to start
+        on `as_of`: GoalieTracker.project_team_goalie (recent-starts share, back-to-back backup inference), centred on the
+        mean over every team so a league-wide save % drift is not read as a goalie effect. None when unknown."""
+        if self.sport != "nhl" or team is None or not as_of:
+            return None
+        tr = self.goalie_tracker()
+        key = (team, as_of)
+        with self._lock:
+            if key in self._opp_g:
+                return self._opp_g[key]
+        mean = self._gsax_center(as_of, tr)
+        t = tr.team_starts and tr.project_team_goalie(team, as_of)
+        val = None if not t or t.starter_id is None else float(t.projected_gsax_60) - mean
+        with self._lock:
+            self._opp_g[key] = val
+        return val
+
+    def _gsax_center(self, as_of: str, tr) -> float:
+        key = ("_center", as_of)
+        with self._lock:
+            if key in self._opp_g:
+                return self._opp_g[key]
+        vals = [tr.project_team_goalie(t, as_of) for t in tr.team_starts]
+        vals = [v.projected_gsax_60 for v in vals if v.starter_id is not None]
+        c = float(np.mean(vals)) if vals else 0.0
+        with self._lock:
+            self._opp_g[key] = c
+        return c
 
     def _players_by_team(self, as_of: str | None) -> dict:
         """{team: [(player_norm, position, last <=20 rows before as_of)]} keyed by each player's latest team as of then."""
@@ -1173,6 +1224,11 @@ def project_nhl(stat: str, rows: list, sdef: tuple, logs: GameLogs, team, opp, a
     sk = cf.NHL_SKATER_STATS
     gctx = ctx_of("goals")
     opp_g = gctx.opp_factor.get(opp, 1.0) if opp else 1.0
+    if _nh.GOALIE_BETA and opp:
+        gf = _nh.goalie_factor(logs.opp_goalie_gsax(opp, as_of))
+        opp_g *= gf
+        if gf != 1.0:
+            info["opp_goalie_factor"] = _f(gf, 4)
 
     def goals_part():
         g_pj, s_pj = generic("goals", sk["goals"]), generic("sog", sk["sog"])
