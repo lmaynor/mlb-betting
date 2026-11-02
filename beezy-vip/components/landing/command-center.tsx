@@ -1,6 +1,8 @@
 import { apiGetEvFeed, apiGetTodayPicks } from '@/lib/betting-api'
 import { siteDateKey } from '@/lib/dates'
 import type { Bet, EvBookOutlierRow, EvMlbRow } from '@/lib/types'
+import { hasHeadshots, type HeadshotSport } from '@/lib/sport-assets'
+import { playerIdByName } from '@/lib/sport-assets.server'
 import { CommandCenterClient } from './command-center-client'
 
 function evToBet(r: EvMlbRow): Bet {
@@ -49,5 +51,14 @@ export async function CommandCenter() {
   const evNfl = (feed?.nfl?.book_outliers ?? []).map(outlierToBet)
   const evNba = (feed?.nba?.rows ?? []).map(outlierToBet)
   const evNhl = (feed?.nhl?.rows ?? []).map(outlierToBet)
-  return <CommandCenterClient bets={[...picks.filter(p => p.result == null), ...evMlb, ...evNfl, ...evNba, ...evNhl]} />
+  const bets = [...picks.filter(p => p.result == null), ...evMlb, ...evNfl, ...evNba, ...evNhl]
+  // Name -> id needs the server-only player maps, so resolve here; the client table only renders.
+  const headshots: Record<number, { sport: HeadshotSport; id: number | string | null }> = {}
+  for (const b of bets) {
+    if (!b.player) continue
+    const lower = b.sport?.toLowerCase() ?? 'mlb'
+    const sport = (hasHeadshots(lower) ? lower : 'mlb') as HeadshotSport
+    headshots[b.id] = { sport, id: playerIdByName(sport, b.player, sport === 'nfl' ? b.home_team ?? b.away_team : null) }
+  }
+  return <CommandCenterClient bets={bets} headshots={headshots} />
 }

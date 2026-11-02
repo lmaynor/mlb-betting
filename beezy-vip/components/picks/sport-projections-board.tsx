@@ -95,7 +95,7 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                   </td>
                   <td className="pb-player" style={TD}>
                     <span className="inline-flex items-center gap-2" style={{ maxWidth: '100%' }}>
-                      {r.headshotId != null && hasHeadshots(r.sport) && <span className="pb-hide-m inline-flex"><PlayerHeadshot sport={r.sport} id={r.headshotId} name={r.player} size={36} /></span>}
+                      {hasHeadshots(r.sport) && <span className="pb-hide-m inline-flex"><PlayerHeadshot sport={r.sport} id={r.headshotId} name={r.player} size={36} /></span>}
                       <span className="min-w-0">
                         {isMobile ? (
                           <button type="button" className="pb-name text-text-primary bg-transparent bg-none border-0 text-left cursor-pointer block" aria-expanded={isOpen} title={r.player}

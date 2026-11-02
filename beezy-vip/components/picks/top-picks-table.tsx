@@ -5,6 +5,8 @@ import { bookDisplay } from '@/lib/tokens'
 import { cx } from '@/utils/cx'
 import { formatOdds } from '@/lib/odds'
 import { sportHref } from '@/lib/ia'
+import { PlayerHeadshot } from '@/components/ui/sport-assets'
+import { hasHeadshots } from '@/lib/sport-assets'
 import { isOfficialCardPlay, isEvOutlier, type PickBasis, type TopPick } from '@/lib/top-picks'
 
 const TH = 'ui-heading sticky top-0 whitespace-nowrap border-b border-separator-border bg-background-secondary-default px-2.5 py-2.5 text-left text-text-secondary'
@@ -47,8 +49,13 @@ export function TopPicksTable({ picks, showResult = false, startRank = 1 }: { pi
                   <Link href={sportHref(p.sport)} className="ui-heading no-underline" style={{ color: pillar.accent }}>{pillar.shortName}</Link>
                 </td>
                 <td className={cx(TD, 'min-w-[170px]')}>
-                  <div className="font-semibold text-text-primary">{p.who}</div>
-                  {p.what && <div className="mt-0.5 text-caption-1-regular text-text-secondary">{p.what}</div>}
+                  <div className="flex items-center gap-2.5">
+                    {p.isPlayer && hasHeadshots(p.sport) && <PlayerHeadshot sport={p.sport} id={p.headshotId} name={p.who} size={36} />}
+                    <div className="min-w-0">
+                      <div className="font-semibold text-text-primary">{p.who}</div>
+                      {p.what && <div className="mt-0.5 text-caption-1-regular text-text-secondary">{p.what}</div>}
+                    </div>
+                  </div>
                 </td>
                 <td className={cx(TD, 'whitespace-nowrap')}>
                   {p.odds == null ? <span className="text-text-secondary">--</span> : (

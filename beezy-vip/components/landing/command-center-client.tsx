@@ -10,11 +10,13 @@ import { formatOdds } from '@/lib/odds'
 import { SystemBadge } from '@/components/ui/primitives'
 import { collapseBooks } from '@/lib/dedupe'
 import { isWinterSport, readableNotes } from '@/lib/bet-notes'
+import { PlayerHeadshot } from '@/components/ui/sport-assets'
+import type { HeadshotSport } from '@/lib/sport-assets'
 
 const TH = 'sticky top-0 border-b border-separator-border bg-background-secondary-default px-3 py-2 text-left text-micro font-semibold uppercase tracking-caps text-text-secondary'
 const TD = 'border-b border-border-table px-3 py-2.5 align-middle'
 
-export function CommandCenterClient({ bets }: { bets: Bet[] }) {
+export function CommandCenterClient({ bets, headshots }: { bets: Bet[]; headshots: Record<number, { sport: HeadshotSport; id: number | string | null }> }) {
   const [open, setOpen] = useState<number | null>(null)
   const top = useMemo(() => collapseBooks([...bets].sort((a, b) => beezyscore(b) - beezyscore(a))).slice(0, 6), [bets])
 
@@ -53,6 +55,7 @@ export function CommandCenterClient({ bets }: { bets: Bet[] }) {
                       <td className={TD}>
                         <div className="flex items-center gap-2">
                           <SystemBadge system={b.system} />
+                          {headshots[b.id] && <PlayerHeadshot sport={headshots[b.id].sport} id={headshots[b.id].id} name={b.player ?? undefined} size={32} />}
                           <span className="text-body-2-bold text-text-primary">{pickLabel(b)}</span>
                         </div>
                       </td>

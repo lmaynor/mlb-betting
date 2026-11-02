@@ -1,6 +1,7 @@
 'use client'
 
 import { BookLogo } from '@/components/ui/book-logo'
+import { Matchup } from '@/components/ui/sport-assets'
 import { formatOdds } from '@/lib/odds'
 import { bookDisplay, SURFACE_CARD } from '@/lib/tokens'
 import {
@@ -48,7 +49,7 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
             {sport.toUpperCase()}
           </span>
           <span className="text-[15px] font-bold text-text-primary">
-            {game.away_team} @ {game.home_team}
+            <Matchup sport={sport} away={game.away_team} home={game.home_team} size={22} />
           </span>
         </div>
         <div className="mono text-mini text-text-secondary">

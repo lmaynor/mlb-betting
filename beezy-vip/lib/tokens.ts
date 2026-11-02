@@ -475,10 +475,15 @@ export const BOOK_META: Record<string, BookMeta> = {
   underdog:   bookMeta('Underdog',    'UND',  '#facc15'),
   parx:       bookMeta('Parx',        'PAR',  '#53d337'),
   pointsbet:  bookMeta('PointsBet',   'PTB',  '#ff5a4f'),
+  ballybet:   bookMeta('Bally Bet',   'BAL',  '#e60000'),
+  bet105:     bookMeta('Bet105',      '105',  '#3b82f6'),
+  rebet:      bookMeta('ReBet',       'RBT',  '#ff7a3d'),
+  betway:     bookMeta('Betway',      'BWY',  '#00d95f'),
+  polymarket: bookMeta('Polymarket',  'POLY', '#2e5cff', true),
 }
 
 /** Backend-only skins: PartyCasino is a BetMGM skin and SugarHouse a BetRivers clone (same prices). The UI shows the parent book. */
-const BOOK_SKINS: Record<string, string> = { partycasino: 'betmgm', 'party casino': 'betmgm', sugarhouse: 'betrivers' }
+const BOOK_SKINS: Record<string, string> = { partycasino: 'betmgm', 'party casino': 'betmgm', sugarhouse: 'betrivers', polymarket_us: 'polymarket', 'polymarket us': 'polymarket', 'bally bet': 'ballybet' }
 export function canonBook(book: string | null | undefined): string {
   const key = (book ?? '').toLowerCase()
   return BOOK_SKINS[key] ?? key

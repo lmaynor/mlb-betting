@@ -28,6 +28,10 @@ export interface TopPick {
   game: string
   /** the player's own team code (projection rows only); disambiguates headshots for shared names */
   team?: string | null
+  /** a player prop pick (not a game pick): the table shows an avatar for these */
+  isPlayer?: boolean
+  /** resolved server-side by withHeadshotIds(); null = no photo, render the silhouette */
+  headshotId?: number | string | null
   odds: number | null
   book: string | null
   /** fraction (0.08), not percent */
@@ -73,6 +77,7 @@ export function fromBet(bet: Bet): TopPick {
     sport,
     who,
     what,
+    isPlayer: !!bet.player,
     game: away && home ? `${away} @ ${home}` : '',
     odds: bet.odds,
     book: bet.book,
@@ -109,6 +114,7 @@ export function fromProjection(r: SportProjectionRow): TopPick | null {
     who: r.player,
     what: `${over ? 'Over' : 'Under'} ${r.line} ${r.stat_label || propStatLabel(r.stat)}`,
     team: r.team ?? null,
+    isPlayer: true,
     game: r.team && r.opp ? `${r.team} v ${r.opp}` : (r.game_key.split(':')[2] ?? '').replace('@', ' @ '),
     odds,
     book: over ? r.best_over_book : r.best_under_book,

@@ -17,7 +17,7 @@ import nhlMap from '@/public/headshots/nhl_player_map.json'
 import nbaMap from '@/public/headshots/nba_player_map.json'
 import mlbMap from '@/public/headshots/player_map.json'
 import nflMap from '@/public/headshots/nfl_player_map.json'
-import { headshotUrlById, playerSlug, teamCode, type AssetSport, type HeadshotSport } from './sport-assets'
+import { hasHeadshots, headshotUrlById, playerSlug, teamCode, type AssetSport, type HeadshotSport } from './sport-assets'
 
 const MAPS: Record<HeadshotSport, Record<string, number | string>> = {
   nfl: nflMap as Record<string, string>,
@@ -54,4 +54,9 @@ export function playerIdByName(sport: HeadshotSport, name: string | null | undef
 
 export function headshotUrlByName(sport: HeadshotSport, name: string | null | undefined, team?: string | null): string | null {
   return headshotUrlById(sport, playerIdByName(sport, name, team))
+}
+
+/** Attach `headshotId` to every player pick (`isPlayer`). Game picks are left without one, so tables render no avatar for them. */
+export function withHeadshotIds<T extends { sport: string; who: string; team?: string | null; isPlayer?: boolean; headshotId?: number | string | null }>(picks: T[]): T[] {
+  return picks.map(p => (p.isPlayer && hasHeadshots(p.sport) ? { ...p, headshotId: playerIdByName(p.sport, p.who, p.team) } : p))
 }
