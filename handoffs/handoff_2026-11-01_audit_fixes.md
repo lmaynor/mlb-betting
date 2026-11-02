@@ -58,3 +58,12 @@ Full pytest, `tsc --noEmit`, full jest (one 9,000-row timing test in `odds-scree
   (still the only source of bovada-style offshore books and the engines' game odds).
 - Needs: rebuild the image (all four tags), canary + promote the service, then the next `bb-live-*` run writes the new file and the next `daily-projections` run (:25/:55)
   rebuilds the boards. The frontend needed no change (row shape identical; the Pro/free cut and paging already handle more rows).
+
+### Deployed 2026-11-02 (backend, branch tip 2b7de56, PR #144 unmerged, CI green)
+- Image `sha256:aab13e37...` tagged onto all four repos (`ALLOW_NON_MAIN=1`); service revision `mlb-betting-00351-nan` at 100% after a 0% canary (previous good: `-00349-xev`).
+  The canary answered 401 without the site key, so the API was not exercised on it; instead `gcloud meta list-files-for-upload` confirmed every `*/data/__init__.py` ships,
+  `daily-projections` ran clean on the new image, and after promotion real `api.beezy.fyi/api/public/projections` traffic returned 200 with no 5xx.
+- `bb-live-nba` / `bb-live-nhl` run by hand: `Odds/bestbook_live/{sport}/game_lines_latest.json` written (NBA 652 KB, NHL 54 KB). `daily-projections` re-run: NBA board
+  580 rows / 15 games / 18 books (ml 15, spread 290, total 275, 43 rows per game, 310 KB), NHL 75 rows / 4 games / 19 books, `lines_source` =
+  `oddsaccum_game_lines+bestbook`, `as_of` 1-3 min old, `flipped_quotes_dropped` 0.
+- NOT verified: the authenticated `/api/public/games/odds` response, the Vercel page (PR #144 has no frontend change; the page deploys with the main branch).
