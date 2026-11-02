@@ -407,7 +407,8 @@ def test_saves_mixture_keeps_the_mean_and_total_spread_and_fattens_the_left_tail
     assert d.mean == pytest.approx(mu, abs=1e-9)
     xs = np.linspace(-5, 70, 4001)
     pdf = np.gradient([d.cdf(x) for x in xs], xs)
-    var = float(np.trapezoid(pdf * (xs - mu) ** 2, xs))
+    y = pdf * (xs - mu) ** 2
+    var = float(np.sum((y[1:] + y[:-1]) / 2.0 * np.diff(xs)))          # trapezoid rule (np.trapezoid needs numpy 2)
     assert math.sqrt(var) == pytest.approx(cv * mu, rel=0.02)
     from scipy.stats import norm
     sd = cv * mu
