@@ -72,7 +72,7 @@ function MobileCardsView({ odds }: { odds: OddsScreen }) {
   const { mode, limit, copied, revealed, revealMsg, setRevealMsg, bankroll, setMobileView, setInspectItem, handleReveal, screen, outliers, arbs, middles, longshots, sgpProxies, nRows, meta, outlay, copyHedge, copyMiddle, fullAccess } = odds
   return (
     <div>
-      <MobileViewBar active="cards" nRows={nRows} onChange={setMobileView} trailing={<span className="mono text-[11px] text-text-secondary">{meta.age != null ? ageLabel(meta.age) : ''}</span>} />
+      <MobileViewBar active="cards" nRows={nRows} onChange={setMobileView} trailing={<span className="mono text-mini text-text-secondary">{meta.age != null ? ageLabel(meta.age) : ''}</span>} />
 
       {mode === 'outliers' ? (
         <div>
