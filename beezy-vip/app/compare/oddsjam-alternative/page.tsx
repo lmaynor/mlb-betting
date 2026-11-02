@@ -68,7 +68,7 @@ export default function CompareOddsJamAlternativePage() {
           Pikkit and Betstamp track bets, ROI and closing line value, and Betstamp also offers a pro odds screen. beezy.fyi differs
           by publishing its own projections and a public ledger of every flagged play.
         </p>
-        <p>Prices and descriptions reflect each vendor's public pages as of October 2026 and may have changed. <a href="/pricing">beezy.fyi pricing</a>.</p>
+        <p>Prices and descriptions reflect each vendor&apos;s public pages as of October 2026 and may have changed. <a href="/pricing">beezy.fyi pricing</a>.</p>
       </div>
     </div>
   )

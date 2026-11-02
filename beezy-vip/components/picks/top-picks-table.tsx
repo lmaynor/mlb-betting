@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import { SPORT_PILLARS } from '@/lib/sports'
-import { scoreTier, TIER_META } from '@/lib/beezy-score'
 import { bookDisplay } from '@/lib/tokens'
 import { cx } from '@/utils/cx'
 import { formatOdds } from '@/lib/odds'

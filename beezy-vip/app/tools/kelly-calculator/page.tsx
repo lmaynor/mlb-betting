@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { ToolHeader } from '@/components/ui/tool-header'
 import { useBankroll } from '@/lib/use-bankroll'
-import { kellyStake, formatOdds, americanToImpliedProb, formatProb } from '@/lib/odds'
+import { kellyStake, americanToImpliedProb, formatProb } from '@/lib/odds'
 
 const B = '1px solid var(--color-separator-border)'
 const B_INNER = '1px solid var(--color-separator-border)'

@@ -97,8 +97,8 @@ function rememberIds(rows: CockpitRow[], ids: Map<string, number | string>) {
 /** Holds the cockpit feed, refreshes it every minute while the tab is visible, and keeps MLB headshot ids: those are
  * resolved server-side from the roster map, so a client refresh would otherwise drop them. */
 export function useCockpitFeed(initial: CockpitFeed | null) {
-  const ids = useRef<Map<string, number | string>>(new Map())
-  const [feed, setFeed] = useState<CockpitFeed | null>(() => { rememberIds(initial?.rows ?? [], ids.current); return initial })
+  const [ids] = useState(() => new Map<string, number | string>())
+  const [feed, setFeed] = useState<CockpitFeed | null>(() => { rememberIds(initial?.rows ?? [], ids); return initial })
   const [updated, setUpdated] = useState<number>(() => Date.now())
   const [loading, setLoading] = useState(false)
 
@@ -106,11 +106,11 @@ export function useCockpitFeed(initial: CockpitFeed | null) {
     setLoading(true)
     try {
       const f = await apiGetEdgeCockpit({ limit: 60 })
-      rememberIds(f.rows, ids.current)
-      setFeed({ ...f, rows: f.rows.map(r => (r.player_id == null && r.player ? { ...r, player_id: ids.current.get(`${r.sport}|${foldName(r.player)}`) ?? null } : r)) })
+      rememberIds(f.rows, ids)
+      setFeed({ ...f, rows: f.rows.map(r => (r.player_id == null && r.player ? { ...r, player_id: ids.get(`${r.sport}|${foldName(r.player)}`) ?? null } : r)) })
       setUpdated(Date.now())
     } catch { /* keep showing the last good feed */ } finally { setLoading(false) }
-  }, [])
+  }, [ids])
 
   useEffect(() => {
     const id = setInterval(() => { if (document.visibilityState === 'visible') refresh() }, 60_000)

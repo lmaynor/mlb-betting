@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { beezyscore, explainScore, scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
+import { beezyscore, explainScore, scoreTier, TIER_COLOR } from '@/lib/beezy-score'
 import { B, SYSTEM_PILL, pickLabel, systemLabel, resolveEvUnderlying, bookText } from '@/lib/tokens'
 import { americanToImpliedProb } from '@/lib/odds'
 import { isWinterSport, readableNotes } from '@/lib/bet-notes'

@@ -2,7 +2,8 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
+import { useMounted } from '@/lib/use-mounted'
 import { useSearchParams } from 'next/navigation'
 import { SystemBadge, ResultPill, PnL } from '@/components/ui/primitives'
 import { formatOdds } from '@/lib/odds'
@@ -260,8 +261,7 @@ export function ResultsClient({
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [page,    setPage]    = useState(0)
   const [onePerProp, setOnePerProp] = useState(true)
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
+  const mounted = useMounted()
 
   const PAGE_SIZE = 30
 

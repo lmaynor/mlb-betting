@@ -9,7 +9,7 @@ import { cx } from '@/utils/cx'
 import { formatOdds } from '@/lib/odds'
 import { SystemBadge } from '@/components/ui/primitives'
 import { collapseBooks } from '@/lib/dedupe'
-import { isWinterSport, readableNotes } from '@/lib/bet-notes'
+import { readableNotes } from '@/lib/bet-notes'
 import { PlayerHeadshot } from '@/components/ui/sport-assets'
 import type { HeadshotSport } from '@/lib/sport-assets'
 
