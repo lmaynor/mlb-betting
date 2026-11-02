@@ -8,6 +8,7 @@ import type { EdgeAlert, PlayerStatus, SeasonStats } from '@/lib/betting-api'
 import { SYSTEM_COLOR, SYSTEM_PILL, systemLabel, teamAbbrev, teamLogoSrc, bookText } from '@/lib/tokens'
 import { Cockpit, COCKPIT_SPORTS, useCockpitFeed, type CockpitSport } from './cockpit'
 import { MobileBottomSheet, useIsMobile } from '@/components/ui/mobile-sheet'
+import { cx } from '@/utils/cx'
 
 export interface EdgePick extends Bet {
   headshotUrl: string | null
@@ -965,28 +966,30 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
             <span className="edge-live-dot" /> UPDATED HOURLY <span className="edge-updated-time">{updated}</span>
           </span>
         </div>
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center', marginTop: '16px' }}>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
           <ResearchTabs active="cockpit" />
-          {feed != null && <div role="tablist" aria-label="Sport" style={{ display: 'inline-flex', gap: '2px', padding: '3px', background: '#090a0f', border: '1px solid #1e2230', borderRadius: '8px', maxWidth: '100%', overflowX: 'auto' }}>
+          {feed != null && <div role="tablist" aria-label="Sport" className="inline-flex max-w-full gap-0.5 overflow-x-auto rounded-lg border border-separator-border bg-background-secondary-default p-[3px]">
             {COCKPIT_SPORTS.map(k => {
               const n = k === 'all' ? feed?.rows.length : feed?.sports?.[k]?.count
               const active = sport === k
               return (
                 <button key={k} role="tab" aria-selected={active} onClick={() => setSport(k)}
-                  style={{ fontFamily: 'var(--font-text), sans-serif', fontSize: '12px', fontWeight: 700, letterSpacing: '0.05em', padding: '7px 13px', borderRadius: '6px', cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '7px', color: active ? '#ffffff' : 'var(--silver)', background: active ? '#1b1f2b' : 'transparent', border: `1px solid ${active ? '#3a4156' : 'transparent'}`, boxShadow: active ? 'inset 0 1px 0 rgba(255,255,255,0.06)' : 'none' }}>
+                  className={cx('button-press-motion inline-flex cursor-pointer items-center gap-[7px] whitespace-nowrap rounded-md border px-[13px] py-[7px] text-caption-1-bold tracking-[0.05em]',
+                    active ? 'border-border-button-hover bg-background-tertiary-default text-text-primary' : 'border-transparent bg-transparent text-text-secondary hover:bg-background-primary-hover')}>
                   {SPORT_TAB_LABEL[k]}
-                  {n != null && <span className="mono" style={{ fontSize: '10px', color: active ? '#d1d5db' : 'var(--fog)' }}>{n}</span>}
+                  {n != null && <span className={cx('mono text-[10px]', active ? 'text-text-secondary' : 'text-text-tertiary')}>{n}</span>}
                 </button>
               )
             })}
           </div>}
           {sport === 'mlb' && feed != null && (
-            <div role="group" aria-label="MLB view" style={{ display: 'inline-flex', gap: '2px', padding: '3px', background: '#090a0f', border: '1px solid #1e2230', borderRadius: '8px' }}>
+            <div role="group" aria-label="MLB view" className="inline-flex gap-0.5 rounded-lg border border-separator-border bg-background-secondary-default p-[3px]">
               {([['cockpit', 'PROP COCKPIT'], ['board', 'MODEL BOARD']] as [View, string][]).map(([k, label]) => {
                 const active = view === k
                 return (
                   <button key={k} onClick={() => setView(k)} aria-pressed={active}
-                    style={{ fontFamily: 'var(--font-text), sans-serif', fontSize: '11.5px', fontWeight: 600, letterSpacing: '0.03em', padding: '6px 11px', borderRadius: '6px', cursor: 'pointer', whiteSpace: 'nowrap', color: active ? '#ffffff' : 'var(--silver)', background: active ? '#1b1f2b' : 'transparent', border: `1px solid ${active ? '#3a4156' : 'transparent'}`, boxShadow: active ? 'inset 0 1px 0 rgba(255,255,255,0.06)' : 'none' }}>
+                    className={cx('button-press-motion cursor-pointer whitespace-nowrap rounded-md border px-[11px] py-1.5 text-caption-1-semibold tracking-[0.03em]',
+                      active ? 'border-border-button-hover bg-background-tertiary-default text-text-primary' : 'border-transparent bg-transparent text-text-secondary hover:bg-background-primary-hover')}>
                     {label}
                   </button>
                 )
