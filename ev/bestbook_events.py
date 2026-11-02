@@ -23,6 +23,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from ev.bettingpros_events import PARLAY_KEY
+from ev import bestbook_game_lines as bgl
 from mlb_core.odds import bestbook as bb
 
 log = logging.getLogger("ev.bestbook_events")
@@ -30,6 +31,7 @@ log = logging.getLogger("ev.bestbook_events")
 _ET = ZoneInfo("America/New_York")
 SPORTS = ("nfl", "nhl", "nba")
 OUT_KEY = "Odds/bestbook_live/{sport}/latest.json"
+GAME_LINES_KEY = "Odds/bestbook_live/{sport}/game_lines_latest.json"   # full-game ML / spread / total ladders (ev.bestbook_game_lines)
 
 DEFAULT_DAYS = {"nfl": 7, "nhl": 3, "nba": 7}    # ET calendar days INCLUDING today (today .. today + days - 1)
 MAX_CONSECUTIVE_FETCH_FAILURES = 3
@@ -196,9 +198,11 @@ def build_events_from_snapshots(
     snapshots,
     now: datetime,
     canon=None,
+    game_lines: list | None = None,
 ) -> tuple[list[dict], dict]:
     """Pure transform: converts slate games and snapshots into ParlayAPI-shaped event dicts.
-    Returns (events, counts).
+    Returns (events, counts). When `game_lines` is a list, each game's full-game ML / spread / total ladders (ev.bestbook_game_lines)
+    are appended to it as {bb_key, away_team, home_team, commence_time, quotes}, read from the SAME snapshot (no extra request).
 
     `snapshots` is a {game_key: snapshot} dict OR a callable game_key -> snapshot. The crawler passes a callable so each game's
     multi-MB snapshot is fetched only for games that pass the started / unknown-team filters, turned into its event, and
@@ -214,6 +218,8 @@ def build_events_from_snapshots(
         "events_unknown_team": 0,
         "events_no_quotes": 0,
         "events_priced": 0,
+        "game_lines_games": 0,
+        "game_lines_quotes": 0,
         "quotes": 0,
         "books": set(),
     }
@@ -251,6 +257,14 @@ def build_events_from_snapshots(
         if not rows:
             counts["events_no_quotes"] += 1
             continue
+
+        if game_lines is not None and start is not None:
+            gl_quotes = bgl.prune_single_book(bgl.game_line_quotes(rows))
+            if gl_quotes:
+                game_lines.append({"bb_key": game_key, "away_team": away, "home_team": home,
+                                   "commence_time": start.astimezone(timezone.utc).isoformat(), "quotes": gl_quotes})
+                counts["game_lines_games"] += 1
+                counts["game_lines_quotes"] += len(gl_quotes)
 
         # Group rows by (player_norm, stat) to detect main line vs alternates
         player_stat_rows: dict[tuple[str, str], list[dict]] = {}
@@ -418,7 +432,8 @@ def crawl_sport(
         state["consecutive_fail"] = 0
         return snap
 
-    events, counts = build_events_from_snapshots(sp, target_games, fetch_one, now)
+    game_lines: list[dict] = []
+    events, counts = build_events_from_snapshots(sp, target_games, fetch_one, now, game_lines=game_lines)
     counts["events_upcoming"] = len(sport_games)
     counts["events_fetch_failed"] = state["failed"]
 
@@ -427,6 +442,7 @@ def crawl_sport(
         "fetched_at": datetime.now(timezone.utc).isoformat(),
         "window": {"days": max_days},
         "events": events,
+        "game_lines": game_lines,
         "counts": counts,
         "seconds": round(time.monotonic() - t0, 1),
     }
@@ -435,7 +451,7 @@ def crawl_sport(
 def publishable(result: dict) -> tuple[bool, str]:
     """Check if the crawl produced valid data worthy of replacing latest.json."""
     c = result.get("counts", {})
-    if c.get("events_priced", 0) > 0:
+    if c.get("events_priced", 0) > 0 or c.get("game_lines_games", 0) > 0:
         return True, "priced"
     if c.get("events_upcoming", 0) == 0:
         return True, "no upcoming games"
@@ -445,8 +461,17 @@ def publishable(result: dict) -> tuple[bool, str]:
 def write_latest(result: dict, key: str | None = None) -> str:
     from mlb_core import storage
 
+    default_path = key is None
     key = key or OUT_KEY.format(sport=result["sport"])
-    storage.write_bytes(json.dumps(result, default=str).encode(), key)
+    props = {k: v for k, v in result.items() if k != "game_lines"}      # the props reader never parses the ladders
+    storage.write_bytes(json.dumps(props, default=str).encode(), key)
+    games = result.get("game_lines") or []
+    if default_path and games:                                          # an empty crawl keeps the previous good file
+        c = result.get("counts") or {}
+        storage.write_bytes(json.dumps({
+            "sport": result["sport"], "fetched_at": result["fetched_at"], "window": result.get("window"), "games": games,
+            "counts": {"games": c.get("game_lines_games", len(games)), "quotes": c.get("game_lines_quotes")},
+        }, default=str).encode(), GAME_LINES_KEY.format(sport=result["sport"]))
     return key
 
 
@@ -482,3 +507,29 @@ def read_latest(sport: str, now: datetime, max_age_min: float) -> tuple[list | N
     if not events:
         return None, {**meta, "reason": "BestBook live file has no priced games"}
     return events, meta
+
+
+def read_latest_game_lines(sport: str, now: datetime, max_age_min: float) -> tuple[list | None, dict]:
+    """Read the BestBook game-line ladders of one sport -> (games, meta); games is None (with meta['reason']) when the file is
+    missing, has no fetched_at, is older than max_age_min, or holds no games."""
+    from mlb_core import storage
+
+    try:
+        obj = json.loads(storage.read_bytes(GAME_LINES_KEY.format(sport=sport)))
+    except Exception as exc:  # noqa: BLE001
+        return None, {"reason": f"no BestBook game-lines file yet ({type(exc).__name__})"}
+    try:
+        ts = datetime.fromisoformat(str(obj["fetched_at"]).replace("Z", "+00:00"))
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+    except (KeyError, ValueError):
+        return None, {"reason": "BestBook game-lines file has no fetched_at"}
+    age = (now - ts).total_seconds() / 60.0
+    games = obj.get("games") or []
+    meta = {"age_min": round(age, 1), "fetched_at": ts.isoformat(), "games": len(games),
+            "quotes": (obj.get("counts") or {}).get("quotes")}
+    if age > max_age_min:
+        return None, {**meta, "reason": f"BestBook game-lines file is {age:.0f} min old (> {max_age_min:.0f})"}
+    if not games:
+        return None, {**meta, "reason": "BestBook game-lines file has no games"}
+    return games, meta

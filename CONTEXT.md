@@ -4358,6 +4358,16 @@ Catch-up for 20 commits (6835c26..2408d6a) that had no CONTEXT entry, plus the a
   `stale` = lines older than 270 min (the banker runs ~6x/day). Frontend: `lib/game-odds.ts` adapts rows to the terminal's two-way math (`buildScreenRows`,
   `computeRowArb`, Kalshi fee), `app/ev/games/game-prices-client.tsx` (best price, leave-self-out fair >= 3 reference books, EV, 1/4 Kelly, arb with Copy hedge, per-book
   columns, mobile cards), proxy `/api/games/odds` and `limitGameOdds` (free viewers see the best-covered preview). Prices are market data, labelled UNVALIDATED like the
-  terminal. Not built: middles between different lines; the feed may carry only main lines (alternate_* keys accepted if present, unverified against real payloads).
+  terminal. Not built: middles between different lines.
+  **Second source: BestBook ladders (2026-11-01, owner decision to wire it after the probe).** The ParlayAPI feed was MAIN LINES ONLY (verified on banked data) and its
+  snapshots run 6x/day (a 300-min daytime gap > the 270-min stale cutoff), so the board now also unions the BestBook crawl's full-game ladders: `ev/bestbook_game_lines.py`
+  turns the 'lines' rows of each game snapshot (the SAME multi-MB stream the props crawl already fetches, no extra request) into per-book two-way quotes (17-18 venues,
+  ~10 NHL / ~90 NBA rungs a game), `bb-live-*` stores them in `Odds/bestbook_live/{sport}/game_lines_latest.json` (own file; props `latest.json` is unchanged), and
+  `game_odds_board.run` unions them (`_put`): per (row, book) the FRESHER snapshot replaces the whole older quote (never a mix of two snapshots' a/b), a book only one
+  source has is added, either source alone builds a board, `as_of` = the newest source, `lines_source` = `oddsaccum_game_lines+bestbook`. The board rebuilds at :25/:55 and
+  the crawl is hourly at :20, so a live board is <= ~40 min old. Rows keep the `LADDER_MAX_ROWS` (21) nearest the modal line per (game, market) (moneyline uncapped);
+  one-venue rungs are dropped at crawl time; exchange sides at <3c / >97c are placeholders and dropped; DFS venues skipped; the flip guard and rogue filter run on the union.
+  Validated live against ParlayAPI on the same (row, book) pairs: 51 NBA pairs 28 identical / 23 within 5%, 35 NHL pairs 29 identical / 5 within 5% / 1 within 20%,
+  zero >= 20%, no flipped sides. Row semantics: `docs/solutions/integration-issues/bestbook-game-line-row-semantics.md`.
 - **Test hygiene rule:** never put test detection (`PYTEST_CURRENT_TEST`) in production code; isolate with fixtures (`tests/conftest.py`).
 
