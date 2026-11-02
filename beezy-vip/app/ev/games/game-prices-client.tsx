@@ -161,7 +161,7 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
               No lines match these filters. Lower MIN EV, switch the market or clear the search.
             </div>
           ) : isMobile ? (
-            <div style={{ display: 'grid', gap: '8px' }}>
+            <div className="grid gap-[8px]">
               {visible.slice(0, limit).map(r => <PriceCard key={r.key} r={r} columns={columns} copied={copied === r.key} onCopy={copyHedge} />)}
             </div>
           ) : (

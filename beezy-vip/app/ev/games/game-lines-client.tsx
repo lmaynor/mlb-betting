@@ -28,7 +28,7 @@ export function GameLinesClient({ feeds, sport }: { feeds: Record<string, GamePr
   return (
     <div>
       <GameLinesNotice label={label.label} validated={label.validated} />
-      <div role="group" aria-label="Market" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
+      <div role="group" aria-label="Market" className="flex gap-[6px] flex-wrap mb-[12px]">
         {MARKETS.map(m => (
           <button
             key={m.key}

@@ -45,7 +45,7 @@ export async function copyText(text: string): Promise<boolean> {
 
 export function Select({ id, label, value, onChange, options }: { id: string; label: string; value: string; onChange: (v: string) => void; options: { v: string; l: string }[] }) {
   return (
-    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+    <div className="flex gap-[8px] items-center">
       <label htmlFor={id} className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>{label}</label>
       <select id={id} value={value} onChange={e => onChange(e.target.value)}
         style={{ background: 'var(--color-background-secondary-default)', color: 'var(--color-text-primary)', border: `1px solid ${HAIR}`, borderRadius: '6px', height: '32px', padding: '0 8px', fontSize: '12px', maxWidth: '190px' }}>
@@ -104,11 +104,11 @@ export function BookPicker({ label, books, selected, onChange, presets, note, em
   const toggle = (k: string) => onChange(on.has(k) ? selected.filter(x => x !== k) : [...selected, k])
   const small = { padding: '3px 8px', fontSize: '11px' } as const
   return (
-    <div ref={box} style={{ position: 'relative' }}>
+    <div ref={box} className="relative">
       <button type="button" onClick={() => setOpen(v => !v)} aria-expanded={open} className="btn btn-ghost" style={{ padding: '5px 11px', fontSize: '11.5px', height: '32px' }}>{label}</button>
       {open && (
         <div role="group" aria-label={label} style={{ position: 'absolute', zIndex: 30, top: '36px', left: 0, width: '270px', ...SURFACE_CARD, padding: '10px', display: 'grid', gap: '8px' }}>
-          <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+          <div className="flex gap-[5px] flex-wrap">
             {presets.map(p => <button key={p.label} type="button" className="btn btn-ghost" style={small} onClick={() => onChange(p.keys)}>{p.label}</button>)}
             <button type="button" className="btn btn-ghost" style={small} onClick={() => onChange(emptyMeansAll ? [] : books.map(b => b.key))}>All</button>
             {!emptyMeansAll && <button type="button" className="btn btn-ghost" style={small} onClick={() => onChange([])}>None</button>}
@@ -118,12 +118,12 @@ export function BookPicker({ label, books, selected, onChange, presets, note, em
               <label key={b.key} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '3px 6px', fontSize: '12px', color: on.has(b.key) ? 'var(--color-text-primary)' : 'var(--color-neutral-300)', cursor: 'pointer' }}>
                 <input type="checkbox" checked={on.has(b.key)} onChange={() => toggle(b.key)} style={{ cursor: 'pointer', accentColor: 'var(--signal)' }} />
                 <BookLogo book={b.key} size={20} />
-                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bookDisplay(b.key).label}{b.offshore ? ' (offshore)' : ''}</span>
-                <span className="mono" style={{ fontSize: '10.5px', color: 'var(--color-text-secondary)' }}>{b.n}</span>
+                <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{bookDisplay(b.key).label}{b.offshore ? ' (offshore)' : ''}</span>
+                <span className="mono text-[10.5px] text-text-secondary">{b.n}</span>
               </label>
             ))}
           </div>
-          <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>{note}</span>
+          <span className="text-[11px] text-text-secondary leading-[1.45]">{note}</span>
         </div>
       )}
     </div>
@@ -140,10 +140,10 @@ function BestCell({ s }: { s: GameSidePrice }) {
   if (s.book == null || s.american == null) return <td className="odds-ev"><span className="mono odds-sub">&ndash;</span></td>
   return (
     <td className="odds-ev">
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div className="flex items-center gap-[8px]">
         <BookLogo book={s.book} size={24} />
         <div>
-          <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{formatOdds(s.american)}</div>
+          <div className="mono text-[13px] font-bold text-text-primary">{formatOdds(s.american)}</div>
           <div className="mono odds-sub" title={`${s.label} at ${bookDisplay(s.book).label}`}>{s.label} &middot; {bookDisplay(s.book).short}</div>
         </div>
       </div>
@@ -176,7 +176,7 @@ function PriceCell({ r, a, b, offshore, book }: { r: GamePriceRow; a: number | n
 
 function SideLine({ s, children }: { s: GameSidePrice; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', whiteSpace: 'nowrap' }}>
+    <div className="flex items-baseline gap-[6px] whitespace-nowrap">
       <span className="mono odds-sub" style={{ display: 'inline-block', minWidth: '58px' }}>{s.label}</span>
       {children}
     </div>
@@ -196,7 +196,7 @@ export function PriceTableRow({ r, columns, bankroll, copied, onCopy }: {
     <>
       <tr data-row="game-prices" data-arb={r.arbLive ? 'true' : undefined}>
         <td className="odds-prop" style={r.arbLive ? { borderLeft: `3px solid ${GREEN}` } : undefined}>
-          <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-text-primary)', lineHeight: 1.3 }}>{r.matchup}</div>
+          <div className="text-[13px] font-semibold text-text-primary leading-[1.3]">{r.matchup}</div>
           <div className="mono odds-sub">
             {r.row.sport.toUpperCase()} &middot; {startLabel(r.row.commence)} &middot; {r.marketLabel === 'Moneyline' ? 'ML' : r.lineLabel}
           </div>
@@ -206,7 +206,7 @@ export function PriceTableRow({ r, columns, bankroll, copied, onCopy }: {
         <td className="odds-ev">
           {noFair ? (
             <>
-              <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-secondary)' }}>--</div>
+              <div className="mono text-[13px] font-bold text-text-secondary">--</div>
               <div className="mono odds-sub" title="Fewer than 3 reference books priced this line both ways; a fair value needs 3">{Math.max(r.a.nRef, r.b.nRef)} of 3 bk</div>
             </>
           ) : (
@@ -217,7 +217,7 @@ export function PriceTableRow({ r, columns, bankroll, copied, onCopy }: {
           )}
         </td>
         <td className="odds-ev">
-          {noFair ? <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-secondary)' }}>--</div> : (
+          {noFair ? <div className="mono text-[13px] font-bold text-text-secondary">--</div> : (
             <>
               <SideLine s={r.a}><span className="mono" style={{ fontSize: '12.5px', fontWeight: 700, color: evColor(r.a) }}>{r.a.ev == null ? '--' : signedPct(r.a.ev)}</span></SideLine>
               <SideLine s={r.b}><span className="mono" style={{ fontSize: '12.5px', fontWeight: 700, color: evColor(r.b) }}>{r.b.ev == null ? '--' : signedPct(r.b.ev)}</span></SideLine>
@@ -252,8 +252,8 @@ export function ArbLine({ r, copied, onCopy }: { r: GamePriceRow; copied: boolea
       <span className="mono" style={{ fontWeight: 700, color: GREEN }} title={a.feeLeg ? `Gross ${a.arbPct.toFixed(2)}%, net of Kalshi's taker fee ${a.netArbPct.toFixed(2)}%` : 'No fee on either leg'}>
         ARB +{a.netArbPct.toFixed(2)}%{a.feeLeg ? ' NET OF KALSHI FEE' : ''}
       </span>
-      <span className="mono" style={{ color: 'var(--color-text-primary)' }}>{r.a.label} {formatOdds(a.bestOverAm)} {bookDisplay(a.bestOverBook).label} {usd(a.stakeOverPer100)}</span>
-      <span className="mono" style={{ color: 'var(--color-text-primary)' }}>{r.b.label} {formatOdds(a.bestUnderAm)} {bookDisplay(a.bestUnderBook).label} {usd(a.stakeUnderPer100)}</span>
+      <span className="mono text-text-primary">{r.a.label} {formatOdds(a.bestOverAm)} {bookDisplay(a.bestOverBook).label} {usd(a.stakeOverPer100)}</span>
+      <span className="mono text-text-primary">{r.b.label} {formatOdds(a.bestUnderAm)} {bookDisplay(a.bestUnderBook).label} {usd(a.stakeUnderPer100)}</span>
       <span className="mono" style={{ color: GREEN }}>+{usd(a.guaranteedProfitPer100)} locked on $100</span>
       <button type="button" className="btn btn-ghost" onClick={() => onCopy(r)} style={{ padding: '1px 8px', fontSize: '10.5px' }}>{copied ? 'Copied' : 'Copy hedge'}</button>
     </div>
@@ -267,20 +267,20 @@ export function PriceCard({ r, columns, copied, onCopy }: {
   const byBook = new Map(r.row.books.map(b => [b.book, b]))
   const side = (s: GameSidePrice) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 0', borderTop: `1px solid ${HAIR}` }}>
-      {s.book ? <BookLogo book={s.book} size={22} /> : <span style={{ width: 22 }} />}
-      <span style={{ flex: 1, fontSize: '12.5px', color: 'var(--color-text-primary)', fontWeight: 600 }}>{s.label}</span>
-      <span className="mono" style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{s.american == null ? '--' : formatOdds(s.american)}</span>
-      <span className="mono" style={{ fontSize: '11px', color: 'var(--color-text-secondary)', minWidth: '48px', textAlign: 'right' }}>{pctText(s.pFair)}</span>
+      {s.book ? <BookLogo book={s.book} size={22} /> : <span  className="w-[22px]"/>}
+      <span className="flex-1 text-[12.5px] text-text-primary font-semibold">{s.label}</span>
+      <span className="mono text-[13px] font-bold text-text-primary">{s.american == null ? '--' : formatOdds(s.american)}</span>
+      <span className="mono text-[11px] text-text-secondary min-w-[48px] text-right">{pctText(s.pFair)}</span>
       <span className="mono" style={{ fontSize: '12px', fontWeight: 700, minWidth: '52px', textAlign: 'right', color: s.ev != null && s.ev > 0 ? GREEN : 'var(--color-text-secondary)' }}>{s.ev == null ? '--' : signedPct(s.ev)}</span>
     </div>
   )
   return (
     <div data-card="game-prices" style={{ ...SURFACE_CARD, padding: '10px 12px', borderLeft: r.arbLive ? `3px solid ${GREEN}` : '1px solid #1e2230' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'baseline' }}>
-        <span style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{r.matchup}</span>
-        <span className="mono" style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>{startLabel(r.row.commence)}</span>
+      <div className="flex justify-between gap-[8px] items-baseline">
+        <span className="text-[13.5px] font-bold text-text-primary">{r.matchup}</span>
+        <span className="mono text-[11px] text-text-secondary">{startLabel(r.row.commence)}</span>
       </div>
-      <div className="mono" style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>{r.row.sport.toUpperCase()} &middot; {r.marketLabel}{r.row.market === 'ml' ? '' : ` ${r.lineLabel}`}</div>
+      <div className="mono text-[11px] text-text-secondary mb-[4px]">{r.row.sport.toUpperCase()} &middot; {r.marketLabel}{r.row.market === 'ml' ? '' : ` ${r.lineLabel}`}</div>
       {side(r.a)}
       {side(r.b)}
       {r.arbLive && <div style={{ paddingTop: '6px', borderTop: `1px solid ${HAIR}` }}><ArbLine r={r} copied={copied} onCopy={onCopy} /></div>}

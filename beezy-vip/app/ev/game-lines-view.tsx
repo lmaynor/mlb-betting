@@ -21,9 +21,9 @@ function startLabel(iso: string): string {
 
 function BookTag({ book, size = 16 }: { book: string; size?: number }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+    <span className="inline-flex items-center gap-[6px]">
       <BookLogo book={book} size={size} />
-      <span style={{ fontSize: '11.5px', color: 'var(--color-neutral-300)' }}>{bookDisplay(book).label}</span>
+      <span className="text-[11.5px] text-[var(--color-neutral-300)]">{bookDisplay(book).label}</span>
     </span>
   )
 }
@@ -37,8 +37,8 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
 
   return (
     <div style={{ ...SURFACE_CARD, padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div className="flex justify-between items-center gap-[8px] flex-wrap">
+        <div className="flex items-center gap-[8px]">
           <span className="mono" style={{
             fontSize: '11px',
             fontWeight: 700,
@@ -50,11 +50,11 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
           }}>
             {sport.toUpperCase()}
           </span>
-          <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+          <span className="text-[15px] font-bold text-text-primary">
             {game.away_team} @ {game.home_team}
           </span>
         </div>
-        <div className="mono" style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
+        <div className="mono text-[11px] text-text-secondary">
           {game.game_date}
         </div>
       </div>
@@ -116,7 +116,7 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
         )}
       </div>
 
-      <div style={{ overflowX: 'auto' }}>
+      <div className="overflow-x-auto">
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
           <thead>
             <tr style={{ borderBottom: `1px solid ${HAIR}`, color: 'var(--color-text-secondary)', fontSize: '10px' }}>
@@ -136,8 +136,8 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
               return (
                 <tr key={`${m.system}-${m.side}-${idx}`} style={{ borderBottom: '1px solid var(--color-border-table)', background: hasEdge ? 'rgba(87,242,135,0.03)' : 'transparent' }}>
                   <td style={{ padding: '8px', color: '#f3f4f6' }}>
-                    <div style={{ fontWeight: 600 }}>{m.market_label}</div>
-                    <div className="mono" style={{ fontSize: '11px', color: 'var(--color-neutral-300)' }}>{sideLabel}</div>
+                    <div className="font-semibold">{m.market_label}</div>
+                    <div className="mono text-[11px] text-[var(--color-neutral-300)]">{sideLabel}</div>
                   </td>
                   <td className="mono" style={{ textAlign: 'right', padding: '8px', color: '#f3f4f6', fontWeight: 600 }}>
                     {m.line != null ? (m.line > 0 ? `+${m.line}` : `${m.line}`) : 'ML'}
@@ -153,14 +153,14 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
                   </td>
                   <td style={{ textAlign: 'right', padding: '8px' }}>
                     {m.best_odds != null ? (
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
+                      <div className="inline-flex items-center gap-[6px] justify-end">
                         <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: hasEdge ? GREEN : 'var(--color-text-primary)' }}>
                           {formatOdds(m.best_odds)}
                         </span>
                         {m.best_book && <BookTag book={m.best_book} size={15} />}
                       </div>
                     ) : (
-                      <span className="mono" style={{ color: 'var(--color-text-secondary)' }}>--</span>
+                      <span className="mono text-text-secondary">--</span>
                     )}
                   </td>
                 </tr>
@@ -240,7 +240,7 @@ export function GameLinesTable({ rows, limit }: { rows: GameRowView[]; limit: nu
                 </td>
                 <td style={{ textAlign: 'right', padding: '9px 12px' }}>
                   {bestOdds != null ? (
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
+                    <div className="inline-flex items-center gap-[6px] justify-end">
                       <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: hasEdge ? GREEN : 'var(--color-text-primary)' }}>
                         {formatOdds(bestOdds)}
                       </span>
@@ -268,7 +268,7 @@ export function GameLinesNotice({ label, validated }: { label: string; validated
   return (
     <div role="note" style={{ ...SURFACE_CARD, padding: '8px 12px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px 12px', flexWrap: 'wrap', borderLeft: `3px solid ${validated ? GREEN : '#facc15'}` }}>
       <span className="mono" data-testid="game-lines-label" style={{ fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.04em', color: validated ? GREEN : '#facc15' }}>{label.toUpperCase()}</span>
-      <span style={{ fontSize: '12px', color: 'var(--color-neutral-300)' }}>
+      <span className="text-[12px] text-[var(--color-neutral-300)]">
         MODEL DIFF is the model&apos;s probability minus the market&apos;s fair probability. It is not an edge until a backtest supports it.
       </span>
     </div>
@@ -293,7 +293,7 @@ export function GameLinesView({
   return (
     <div>
       {isMobile && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+        <div className="flex justify-between items-center mb-[10px]">
           <div style={{ display: 'inline-flex', padding: '2px', background: 'var(--color-background-secondary-default)', border: `1px solid ${HAIR}`, borderRadius: '6px' }}>
             <button
               type="button"
