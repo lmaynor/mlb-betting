@@ -71,6 +71,7 @@ def game_env_table(schedules: pd.DataFrame) -> pd.DataFrame:
             "game_id": s["game_id"], "season": s["season"], "week": s["week"], "gameday": s["gameday"].astype(str),
             "team": s[f"{side}_team"].map(canon), "opp": s[f"{other}_team"].map(canon),
             "team_spread": spread, "implied_total": total / 2.0 + spread / 2.0,
+            "home_team": s["home_team"].map(canon),
         }
         if has_roof:
             d["roof"] = s["roof"]
