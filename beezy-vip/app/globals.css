@@ -274,10 +274,10 @@ th {
 /* ── Card components ────────────────────────────────────────────── */
 /* Same surface spec as SURFACE_CARD in lib/tokens.ts. */
 .ribbon-card-wrap {
-  border: 1px solid var(--basalt);
-  border-radius: 8px;
-  background: var(--graphite);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--color-separator-border);
+  border-radius: 12px;
+  background: var(--color-background-primary-default);
+  box-shadow: var(--shadow-card);
   overflow: hidden;
 }
 .ribbon-title {

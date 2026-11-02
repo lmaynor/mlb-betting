@@ -8,7 +8,7 @@ import {
   type GamePricedGameView, type GameRowView,
 } from '@/lib/game-lines'
 
-const HAIR = '#1e2230'
+const HAIR = 'var(--color-separator-border)'
 const GREEN = '#57F287'
 const SKY = '#38bdf8'
 
@@ -23,7 +23,7 @@ function BookTag({ book, size = 16 }: { book: string; size?: number }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
       <BookLogo book={book} size={size} />
-      <span style={{ fontSize: '11.5px', color: 'var(--silver)' }}>{bookDisplay(book).label}</span>
+      <span style={{ fontSize: '11.5px', color: 'var(--color-neutral-300)' }}>{bookDisplay(book).label}</span>
     </span>
   )
 }
@@ -50,11 +50,11 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
           }}>
             {sport.toUpperCase()}
           </span>
-          <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--chalk)' }}>
+          <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-text-primary)' }}>
             {game.away_team} @ {game.home_team}
           </span>
         </div>
-        <div className="mono" style={{ fontSize: '11px', color: 'var(--fog)' }}>
+        <div className="mono" style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
           {game.game_date}
         </div>
       </div>
@@ -64,26 +64,26 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
         gridTemplateColumns: 'repeat(3, 1fr)',
         gap: '8px',
         padding: '10px 12px',
-        background: '#090a0f',
+        background: 'var(--color-background-secondary-default)',
         borderRadius: '6px',
         border: `1px solid ${HAIR}`,
       }}>
         {isNba && (
           <>
             <div>
-              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>MODEL MARGIN</div>
+              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>MODEL MARGIN</div>
               <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginTop: '2px' }}>
                 {expMargin ?? '--'}
               </div>
             </div>
             <div>
-              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>MODEL TOTAL</div>
+              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>MODEL TOTAL</div>
               <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginTop: '2px' }}>
                 {game.mu_total != null ? `${game.mu_total.toFixed(1)} pts` : '--'}
               </div>
             </div>
             <div>
-              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>EXPECTED PACE</div>
+              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>EXPECTED PACE</div>
               <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: SKY, marginTop: '2px' }}>
                 {game.exp_pace != null ? `${game.exp_pace.toFixed(1)} poss` : '--'}
               </div>
@@ -93,7 +93,7 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
         {isNhl && (
           <>
             <div>
-              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>EXPECTED GOALS</div>
+              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>EXPECTED GOALS</div>
               <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginTop: '2px' }}>
                 {game.lambda_a != null && game.lambda_h != null
                   ? `${game.away_team} ${game.lambda_a.toFixed(1)} - ${game.home_team} ${game.lambda_h.toFixed(1)}`
@@ -101,13 +101,13 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
               </div>
             </div>
             <div>
-              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>MODEL TOTAL</div>
+              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>MODEL TOTAL</div>
               <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginTop: '2px' }}>
                 {game.exp_total != null ? `${game.exp_total.toFixed(2)} goals` : '--'}
               </div>
             </div>
             <div>
-              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--fog)' }}>DISPERSION</div>
+              <div className="dell-heading" style={{ fontSize: '10px', color: 'var(--color-text-secondary)' }}>DISPERSION</div>
               <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: SKY, marginTop: '2px' }}>
                 {game.sigma_total != null ? `\u03c3 ${game.sigma_total.toFixed(1)}` : '--'}
               </div>
@@ -119,7 +119,7 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
           <thead>
-            <tr style={{ borderBottom: `1px solid ${HAIR}`, color: 'var(--fog)', fontSize: '10px' }}>
+            <tr style={{ borderBottom: `1px solid ${HAIR}`, color: 'var(--color-text-secondary)', fontSize: '10px' }}>
               <th scope="col" style={{ textAlign: 'left', padding: '6px 8px', fontWeight: 600 }}>MARKET / SIDE</th>
               <th scope="col" style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600 }}>LINE</th>
               <th scope="col" style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600 }}>MODEL %</th>
@@ -134,10 +134,10 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
               const hasEdge = highlightModelDiff(m.model_edge, game.validated)
               const sideLabel = m.side === 'home' ? game.home_team : (m.side === 'away' ? game.away_team : m.side.toUpperCase())
               return (
-                <tr key={`${m.system}-${m.side}-${idx}`} style={{ borderBottom: '1px solid #151822', background: hasEdge ? 'rgba(87,242,135,0.03)' : 'transparent' }}>
+                <tr key={`${m.system}-${m.side}-${idx}`} style={{ borderBottom: '1px solid var(--color-border-table)', background: hasEdge ? 'rgba(87,242,135,0.03)' : 'transparent' }}>
                   <td style={{ padding: '8px', color: '#f3f4f6' }}>
                     <div style={{ fontWeight: 600 }}>{m.market_label}</div>
-                    <div className="mono" style={{ fontSize: '11px', color: 'var(--silver)' }}>{sideLabel}</div>
+                    <div className="mono" style={{ fontSize: '11px', color: 'var(--color-neutral-300)' }}>{sideLabel}</div>
                   </td>
                   <td className="mono" style={{ textAlign: 'right', padding: '8px', color: '#f3f4f6', fontWeight: 600 }}>
                     {m.line != null ? (m.line > 0 ? `+${m.line}` : `${m.line}`) : 'ML'}
@@ -145,22 +145,22 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
                   <td className="mono" style={{ textAlign: 'right', padding: '8px', color: '#f3f4f6' }}>
                     {(m.p_model * 100).toFixed(1)}%
                   </td>
-                  <td className="mono" style={{ textAlign: 'right', padding: '8px', color: 'var(--fog)' }}>
+                  <td className="mono" style={{ textAlign: 'right', padding: '8px', color: 'var(--color-text-secondary)' }}>
                     {m.p_fair != null ? `${(m.p_fair * 100).toFixed(1)}%` : '--'}
                   </td>
-                  <td className="mono" style={{ textAlign: 'right', padding: '8px', fontWeight: 700, color: hasEdge ? GREEN : (m.model_edge != null && m.model_edge < 0 ? '#ff5a4f' : 'var(--silver)') }}>
+                  <td className="mono" style={{ textAlign: 'right', padding: '8px', fontWeight: 700, color: hasEdge ? GREEN : (m.model_edge != null && m.model_edge < 0 ? '#ff5a4f' : 'var(--color-neutral-300)') }}>
                     {m.model_edge != null ? `${m_edge(m.model_edge)}` : '--'}
                   </td>
                   <td style={{ textAlign: 'right', padding: '8px' }}>
                     {m.best_odds != null ? (
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
-                        <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: hasEdge ? GREEN : 'var(--chalk)' }}>
+                        <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: hasEdge ? GREEN : 'var(--color-text-primary)' }}>
                           {formatOdds(m.best_odds)}
                         </span>
                         {m.best_book && <BookTag book={m.best_book} size={15} />}
                       </div>
                     ) : (
-                      <span className="mono" style={{ color: 'var(--fog)' }}>--</span>
+                      <span className="mono" style={{ color: 'var(--color-text-secondary)' }}>--</span>
                     )}
                   </td>
                 </tr>
@@ -214,13 +214,13 @@ export function GameLinesTable({ rows, limit }: { rows: GameRowView[]; limit: nu
                     {r.sport.toUpperCase()}
                   </span>
                 </td>
-                <td style={{ padding: '9px 12px', fontWeight: 600, color: 'var(--chalk)' }}>
+                <td style={{ padding: '9px 12px', fontWeight: 600, color: 'var(--color-text-primary)' }}>
                   {r.player}
                   <div className="mono" style={{ fontSize: '10.5px', color: '#7d8596', fontWeight: 400 }}>
                     {startLabel(r.commence)}
                   </div>
                 </td>
-                <td style={{ padding: '9px 12px', color: 'var(--silver)' }}>
+                <td style={{ padding: '9px 12px', color: 'var(--color-neutral-300)' }}>
                   {r.stat_label}
                 </td>
                 <td className="mono" style={{ padding: '9px 12px', fontWeight: 600, color: '#f3f4f6' }}>
@@ -232,7 +232,7 @@ export function GameLinesTable({ rows, limit }: { rows: GameRowView[]; limit: nu
                 <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', color: '#7d8596' }}>
                   {r.p_mkt_side != null ? `${(r.p_mkt_side * 100).toFixed(1)}%` : '--'}
                 </td>
-                <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', fontWeight: 700, color: hasEdge ? GREEN : (r.model_edge != null && r.model_edge < 0 ? '#ff5a4f' : 'var(--silver)') }}>
+                <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', fontWeight: 700, color: hasEdge ? GREEN : (r.model_edge != null && r.model_edge < 0 ? '#ff5a4f' : 'var(--color-neutral-300)') }}>
                   {r.model_edge != null ? `${m_edge(r.model_edge)}` : '--'}
                 </td>
                 <td className="mono" style={{ textAlign: 'right', padding: '9px 12px', color: highlightModelDiff(r.market_ev, r.validated, 0.0000001) ? GREEN : '#7d8596' }}>
@@ -241,7 +241,7 @@ export function GameLinesTable({ rows, limit }: { rows: GameRowView[]; limit: nu
                 <td style={{ textAlign: 'right', padding: '9px 12px' }}>
                   {bestOdds != null ? (
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
-                      <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: hasEdge ? GREEN : 'var(--chalk)' }}>
+                      <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: hasEdge ? GREEN : 'var(--color-text-primary)' }}>
                         {formatOdds(bestOdds)}
                       </span>
                       {bestBook && <BookTag book={bestBook} size={15} />}
@@ -268,7 +268,7 @@ export function GameLinesNotice({ label, validated }: { label: string; validated
   return (
     <div role="note" style={{ ...SURFACE_CARD, padding: '8px 12px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px 12px', flexWrap: 'wrap', borderLeft: `3px solid ${validated ? GREEN : '#facc15'}` }}>
       <span className="mono" data-testid="game-lines-label" style={{ fontSize: '10.5px', fontWeight: 700, letterSpacing: '0.04em', color: validated ? GREEN : '#facc15' }}>{label.toUpperCase()}</span>
-      <span style={{ fontSize: '12px', color: 'var(--silver)' }}>
+      <span style={{ fontSize: '12px', color: 'var(--color-neutral-300)' }}>
         MODEL DIFF is the model&apos;s probability minus the market&apos;s fair probability. It is not an edge until a backtest supports it.
       </span>
     </div>
@@ -294,7 +294,7 @@ export function GameLinesView({
     <div>
       {isMobile && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-          <div style={{ display: 'inline-flex', padding: '2px', background: '#090a0f', border: `1px solid ${HAIR}`, borderRadius: '6px' }}>
+          <div style={{ display: 'inline-flex', padding: '2px', background: 'var(--color-background-secondary-default)', border: `1px solid ${HAIR}`, borderRadius: '6px' }}>
             <button
               type="button"
               onClick={() => onSwitchView('cards')}
@@ -306,8 +306,8 @@ export function GameLinesView({
                 borderRadius: '4px',
                 border: 0,
                 cursor: 'pointer',
-                background: view === 'cards' ? '#1b1f2b' : 'transparent',
-                color: view === 'cards' ? '#ffffff' : 'var(--fog)',
+                background: view === 'cards' ? 'var(--color-background-tertiary-default)' : 'transparent',
+                color: view === 'cards' ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
               }}
             >
               Game Cards ({pricedGames.length})
@@ -323,8 +323,8 @@ export function GameLinesView({
                 borderRadius: '4px',
                 border: 0,
                 cursor: 'pointer',
-                background: view === 'table' ? '#1b1f2b' : 'transparent',
-                color: view === 'table' ? '#ffffff' : 'var(--fog)',
+                background: view === 'table' ? 'var(--color-background-tertiary-default)' : 'transparent',
+                color: view === 'table' ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
               }}
             >
               Data Matrix ({rows.length})

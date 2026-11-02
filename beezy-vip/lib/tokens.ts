@@ -18,10 +18,10 @@ export const B_INNER = '1px solid #151822'
 // ONE surface spec for the whole app (no-slop rule 3): solid graphite, 1px hairline, 8px radius, at most a 1px shadow.
 // Inline styles stay the house style, so these are shared objects to spread, not classes. Do not re-declare them locally.
 export const SURFACE_CARD = {
-  background: '#11131a',
-  border: '1px solid #1e2230',
-  borderRadius: '8px',
-  boxShadow: '0 1px 2px rgba(0,0,0,0.45)',
+  background: 'var(--color-background-primary-default)',
+  border: '1px solid var(--color-separator-border)',
+  borderRadius: '12px',
+  boxShadow: 'var(--shadow-card)',
 } as const
 
 // One step up: nested panels, popovers, detail sheets.
