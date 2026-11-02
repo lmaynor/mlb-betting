@@ -1,4 +1,4 @@
-export const dynamic = 'force-dynamic'
+export const revalidate = 60
 
 import { apiGetPicks as getPicks, apiGetStats, apiGetAnalyticsDeepDive } from '@/lib/betting-api'
 import { ResultsClient } from './results-client'
