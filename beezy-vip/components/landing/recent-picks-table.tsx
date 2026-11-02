@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { apiGetRecentSettled } from '@/lib/betting-api'
 import { isWinterSport } from '@/lib/bet-notes'
-import { SYSTEM_PILL, SURFACE_CARD, pickLabel, systemLabel } from '@/lib/tokens'
+import { SYSTEM_PILL, pickLabel, systemLabel } from '@/lib/tokens'
+import { cx } from '@/utils/cx'
 import { formatOdds } from '@/lib/odds'
 import { collapseBooks } from '@/lib/dedupe'
 import { BookLogo } from '@/components/ui/book-logo'
@@ -11,8 +12,8 @@ import { playerIdByName } from '@/lib/sport-assets.server'
 import { SectionHeader } from './section-header'
 import type { Bet } from '@/lib/types'
 
-const TH: React.CSSProperties = { position: 'sticky', top: 0, background: '#0d0f16', fontSize: '10px', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#7d8596', fontWeight: 600, padding: '8px 12px', textAlign: 'left', borderBottom: '1px solid var(--color-separator-border)' }
-const TD: React.CSSProperties = { padding: '10px 12px', borderBottom: '1px solid var(--color-border-table)', verticalAlign: 'middle' }
+const TH = 'sticky top-0 border-b border-separator-border bg-background-secondary-default px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-text-secondary'
+const TD = 'border-b border-border-table px-3 py-2.5 align-middle'
 
 function units(profit: number | null, stake: number | null) {
   if (profit == null) return '--'
@@ -38,20 +39,20 @@ export async function RecentPicksTable() {
   } catch { rows = [] }
 
   return (
-    <section style={{ paddingTop: '32px' }}>
+    <section className="pt-8">
       <SectionHeader title="Recent graded plays" href="/results" link="View full ledger &rarr;" />
-      <div style={{ ...SURFACE_CARD, overflow: 'hidden' }}>
+      <div className="overflow-hidden rounded-xl border border-separator-border bg-background-primary-default shadow-card">
         {rows.length === 0 ? (
-          <div style={{ padding: '20px 16px', textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: '13px' }}>
+          <div className="px-4 py-5 text-center text-body-2-regular text-text-secondary">
             No settled bets yet. Check back after today&apos;s games.
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <table className="w-full border-collapse">
             <thead>
               <tr>
-                <th style={TH}>Play</th>
-                <th style={TH}>Book &amp; price</th>
-                <th style={{ ...TH, textAlign: 'right' }}>Result</th>
+                <th className={TH}>Play</th>
+                <th className={TH}>Book &amp; price</th>
+                <th className={cx(TH, 'text-right')}>Result</th>
               </tr>
             </thead>
             <tbody>
@@ -61,27 +62,27 @@ export async function RecentPicksTable() {
                 const sp: HeadshotSport = b.sport && hasHeadshots(b.sport.toLowerCase()) ? (b.sport.toLowerCase() as HeadshotSport) : 'mlb'
                 return (
                   <tr key={b.id}>
-                    <td style={{ ...TD, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span className="dell-heading" style={{ flexShrink: 0, fontSize: '10px', fontWeight: 600, padding: '2px 6px', borderRadius: '6px', background: pill.bg, color: pill.color, border: pill.border }}>{systemLabel(b.system, true)}</span>
-                        <span style={{ flexShrink: 0, width: 30, height: 30, display: 'inline-flex' }}>
+                    <td className={cx(TD, 'min-w-0')}>
+                      <div className="flex items-center gap-2">
+                        <span className="dell-heading shrink-0 rounded-md px-1.5 py-0.5 font-semibold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{systemLabel(b.system, true)}</span>
+                        <span className="inline-flex size-[30px] shrink-0">
                           {b.player && <PlayerHeadshot sport={sp} id={playerIdByName(sp, b.player)} name={b.player} size={30} />}
                         </span>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)' }}>{b.player ?? pickText(b)}</div>
-                          {b.player && <div style={{ fontSize: '12px', color: '#9ca3af' }}>{pickText(b)}{isWinterSport(b.sport) && <span className="dell-heading" title="Paper-tracked model output with no tested edge" style={{ marginLeft: '8px', fontSize: '10px', color: '#f59e0b' }}>{b.sport!.toUpperCase()} UNVALIDATED</span>}</div>}
+                        <div className="min-w-0">
+                          <div className="text-body-2-bold text-text-primary">{b.player ?? pickText(b)}</div>
+                          {b.player && <div className="text-caption-1-regular text-text-secondary">{pickText(b)}{isWinterSport(b.sport) && <span className="dell-heading" title="Paper-tracked model output with no tested edge" style={{ marginLeft: '8px', fontSize: '10px', color: '#f59e0b' }}>{b.sport!.toUpperCase()} UNVALIDATED</span>}</div>}
                         </div>
                       </div>
                     </td>
-                    <td className="mono" style={{ ...TD, fontSize: '12px', color: 'var(--color-text-primary)', whiteSpace: 'nowrap' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                    <td className={cx('mono whitespace-nowrap text-caption-1-regular text-text-primary', TD)}>
+                      <span className="inline-flex items-center gap-2">
                         {b.book ? <BookLogo book={b.book} size={22} /> : null}
                         {formatOdds(b.odds)}
                       </span>
                     </td>
-                    <td style={{ ...TD, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      <span className="mono" style={{ fontSize: '10px', fontWeight: 700, color: res.color, marginRight: '8px' }}>{res.label}</span>
-                      <span className="mono" style={{ fontSize: '13px', fontWeight: 700, color: (b.profit ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>{units(b.profit, b.stake)}</span>
+                    <td className={cx(TD, 'whitespace-nowrap text-right')}>
+                      <span className="mono mr-2 text-[10px] font-bold" style={{ color: res.color }}>{res.label}</span>
+                      <span className="mono text-body-2-bold" style={{ color: (b.profit ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>{units(b.profit, b.stake)}</span>
                     </td>
                   </tr>
                 )
@@ -90,7 +91,7 @@ export async function RecentPicksTable() {
           </table>
         )}
       </div>
-      <div style={{ marginTop: '8px' }}><Link href="/results" style={{ fontSize: '12px', color: 'var(--link)' }}>All results by sport &rarr;</Link></div>
+      <div className="mt-2"><Link href="/results" className="text-caption-1-regular text-[var(--link)]">All results by sport &rarr;</Link></div>
     </section>
   )
 }

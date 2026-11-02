@@ -1,5 +1,3 @@
-import { SURFACE_CARD } from '@/lib/tokens'
-
 const STEPS = [
   { num: '01', title: 'Two ways to find a play', desc: 'The scanner checks books, Kalshi and Novig every 15 minutes against de-vigged consensus. Models score props each morning.' },
   { num: '02', title: 'Plays publish as found', desc: 'Scanner plays post to the Odds Terminal all day. The model card publishes after the ~11:00 AM CT run.' },
@@ -9,15 +7,15 @@ const STEPS = [
 
 export function HowItWorks() {
   return (
-    <section style={{ paddingTop: '32px' }}>
-      <h2 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--color-text-primary)', margin: '0 0 12px' }}>How it works</h2>
-      <div className="steps-grid" style={{ ...SURFACE_CARD, gap: 0, overflow: 'hidden' }}>
+    <section className="pt-8">
+      <h2 className="mb-3 text-headline-bold text-text-primary">How it works</h2>
+      <div className="steps-grid overflow-hidden rounded-xl border border-separator-border bg-background-primary-default shadow-card" style={{ gap: 0 }}>
         {STEPS.map((s, i) => (
-          <div key={s.num} style={{ display: 'flex', gap: '10px', padding: '12px 14px', borderLeft: i === 0 ? 'none' : '1px solid var(--color-border-table)', borderTop: 'none' }}>
-            <span className="mono" style={{ flexShrink: 0, width: '24px', height: '24px', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: 'var(--signal)', border: '1px solid rgba(87,242,135,0.35)' }}>{s.num}</span>
+          <div key={s.num} className={i === 0 ? 'flex gap-2.5 px-3.5 py-3' : 'flex gap-2.5 border-l border-border-table px-3.5 py-3'}>
+            <span className="mono flex size-6 shrink-0 items-center justify-center rounded-md border border-[rgba(87,242,135,0.35)] text-[10px] font-bold text-[var(--signal)]">{s.num}</span>
             <div>
-              <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary)', marginBottom: '2px' }}>{s.title}</div>
-              <div style={{ fontSize: '12px', lineHeight: 1.45, color: '#9ca3af' }}>{s.desc}</div>
+              <div className="mb-0.5 text-body-2-bold text-text-primary">{s.title}</div>
+              <div className="text-caption-1-regular text-text-secondary">{s.desc}</div>
             </div>
           </div>
         ))}
