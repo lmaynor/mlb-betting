@@ -37,6 +37,14 @@ OUT_KEY = "EVSweep/nhl_props/trained_latest.json"
 FIRST_SEASON = 2021
 
 
+def _peak_mb() -> float:
+    """Peak resident set of this process in MB (ru_maxrss is KB on Linux, bytes on macOS)."""
+    import resource
+    import sys
+    r = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return r / (1024.0 * 1024.0) if sys.platform == "darwin" else r / 1024.0
+
+
 def xg_tables(shots: pd.DataFrame) -> dict:
     r = XB.build(shots)
     return {"skater": r["skater_game"], "goalie": r["goalie_game"], "team": r["team_game"]}
@@ -97,6 +105,7 @@ def _load_inputs(seasons, data_dir: str | None = None) -> tuple:
 
 
 def cmd_train(a) -> int:
+    t0 = datetime.now(timezone.utc)
     seasons = [int(s) for s in a.seasons.split(",")] if a.seasons else range(FIRST_SEASON, datetime.now().year + 1)
     masters, shots = _load_inputs(seasons, a.data_dir)
     xg = xg_tables(shots)
@@ -121,6 +130,7 @@ def cmd_train(a) -> int:
         log.info("published %s/%s and latest.json", T.PREFIX, v)
     else:
         log.info("not published to storage (pass --write)")
+    log.info("RESOURCES train: %.0f s, peak RSS %.0f MB", (datetime.now(timezone.utc) - t0).total_seconds(), _peak_mb())
     return 0
 
 
@@ -134,6 +144,9 @@ def cmd_score(a) -> int:
     xg = xg_tables(shots)
     upcoming = schedule_upcoming(now, a.hours)
     log.info("%d upcoming games in %.0f h", len(upcoming), a.hours)
+    if not upcoming:
+        log.info("no games in the window: nothing scored, the last predictions file is left as it is")
+        return 0
     payload = score(now, bundle, masters, xg, upcoming, off_roster_ids(masters, now))
     log.info("%d predictions (version %s)", payload["count"], payload["version"])
     if a.no_write:
@@ -141,6 +154,7 @@ def cmd_score(a) -> int:
     else:
         storage.write_bytes(json.dumps(payload).encode(), OUT_KEY)
         log.info("wrote %s", OUT_KEY)
+    log.info("RESOURCES score: %.0f s, peak RSS %.0f MB", (datetime.now(timezone.utc) - now).total_seconds(), _peak_mb())
     return 0
 
 
