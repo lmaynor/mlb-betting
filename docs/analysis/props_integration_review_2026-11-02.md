@@ -94,9 +94,9 @@ shows the desktop filter bar (SSR), `/ev/games` prints a raw engine id, `LIVE_EN
   succeeded; NHL rotation rows rose 379 -> 503 (`pp_points` projection-only rows).
 - `props-model-picks` Cloud Run Job + scheduler `props-model-picks-1` (`40 * * * *` UTC). First live pass: 159 `PROPS` bets logged (NBA 113, NHL 45, NFL 1), 1 official NBA pick posted to Discord; a second
   pass logged 0 and posted nothing (idempotent). Heartbeat `ModelPicks/last_run.json` is written. Evidence is the job log + heartbeat; the `bets` table itself was not queried from here.
-**Still NOT done:** no CLV exists yet (closing lines are captured only after games start); the Vercel frontend has no production deploy (preview only, local 375x812 render); prod `mlb-betting:latest` not retagged
-(the recap's `model picks` fields and the `monitor_ops` heartbeat check need it; until then the recap's `props (unvalidated)` field counts PROPS bets together with `EV` alerts; it changes every MLB job's
-next run, so it is a separate owner decision); PR #158 unmerged. **No engine has been shown profitable** (Section 5): the live tracker is the way to find out, and CLV, not ROI, is the go/no-go.
+**Still NOT done:** no CLV exists yet (closing lines are captured only after games start); the Vercel frontend has no production deploy (preview only, local 375x812 render); the Cloud Run **service** was not redeployed (jobs only); PR #158 unmerged.
+**Prod `mlb-betting:latest` retagged** (owner approved) from `sha256:aab13e37b453e7961a8138010db146956da3b875ef11573eb7a214e90825f110` (built 2026-11-01 22:37 CT, pre-#155/#156) to `sha256:60b6da41...`; every MLB job picks it up on its
+next run, so the recap's `model picks` fields and the `monitor_ops` heartbeat check are now active. Rollback: `gcloud container images add-tag gcr.io/concrete-crow-445205-m4/mlb-betting@sha256:aab13e37... gcr.io/concrete-crow-445205-m4/mlb-betting:latest`. The image lacks #156 (NHL trained models, default off). **No engine has been shown profitable** (Section 5): the live tracker is the way to find out, and CLV, not ROI, is the go/no-go.
 
 ## 9. Questions a reviewer should push on
 - Is the forward audit's replay faithful to what the job will log, given it uses last-state rather than first-sighting rows? (It cannot reproduce the 30-minute gate.)
