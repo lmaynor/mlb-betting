@@ -295,3 +295,12 @@ def test_audit_calls_a_missing_sport_snapshot_no_snapshot_not_unknown_series():
     a = rp.audit_legs([{"created_time": iso(T0 + 60), "legs": [["KXNFLRECYDS-26OCT25BUFKC-BUFJSMITH12-50", "yes"],
                                                                   ["KXNBAPTS-26OCT25TORMIN-MINAEDWARDS5-25", "yes"]]}], rp.CompositeStore([nba]))
     assert a["KXNFLRECYDS"] == {"NO_SNAPSHOT": 1} and a["KXNBAPTS"] == {"HIT_exact": 1}
+
+
+def test_leg_records_export_priced_legs_beside_price_and_result():
+    s = rp.SnapshotStore([snap(T0, row("A1", "G1@H1", p=0.4), row("B2", "G1@H1", p=0.6))])
+    rec = rp.leg_records(combo(["A1", "B2", "ZZ9"], iso(T0 + 60), y=0.30, result="yes"), s)
+    assert [l["ticker"] for l in rec["legs"]] == ["A1", "B2"] and rec["n_legs"] == 3                 # the unpriced leg is dropped, not guessed
+    assert rec["yes_price"] == 0.30 and rec["yes_won"] is True
+    assert {l["game_key"] for l in rec["legs"]} == {"nfl:2026-10-25:G1@H1"} and rec["legs"][0]["p_yes"] == pytest.approx(0.4)
+    assert rp.leg_records(combo(["ZZ9"], iso(T0 + 60)), s) is None

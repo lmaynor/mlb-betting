@@ -15,8 +15,8 @@ from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ev.kalshi_rfq_replay import (  # noqa: E402
-    CompositeStore, SnapshotStore, audit_legs, fetch_cycle_frames, load_combos, pull_combos, raw_prop_snapshots, replay_one,
-    store_from_raw, summarize,
+    CompositeStore, SnapshotStore, audit_legs, fetch_cycle_frames, leg_records, load_combos, pull_combos, raw_prop_snapshots,
+    replay_one, store_from_raw, summarize,
 )
 
 
@@ -47,6 +47,14 @@ def main(argv=None) -> int:
     au.add_argument("--max-age-min", type=float, default=120.0)
     au.add_argument("--top", type=int, default=30)
     au.add_argument("--days", default=None)
+    lg = sub.add_parser("legs", help="export each combo's priced legs (fair p per leg at creation) as jsonl, for the correlation studies")
+    lg.add_argument("--combos", required=True)
+    lg.add_argument("--out", required=True)
+    lg.add_argument("--no-raw", action="store_true")
+    lg.add_argument("--cache-dir", default=None)
+    lg.add_argument("--max-age-min", type=float, default=120.0)
+    lg.add_argument("--days", default=None)
+    lg.add_argument("--min-priced", type=int, default=2, help="keep combos with at least this many priced legs")
     a = ap.parse_args(argv)
 
     if a.cmd == "pull":
@@ -72,6 +80,18 @@ def main(argv=None) -> int:
                          "to the data bucket, or point MLB_BASE_DATA at a local copy")
     print(f"combos with volume+result: {len(combos)} | windows {len(windows)} (truncated {sum(w['truncated'] for w in windows)}) | "
           f"snapshots {len(store)} over {len(days)} day folders | tickers banked {len(store.tickers)}", file=sys.stderr)
+    if a.cmd == "legs":
+        n = 0
+        with open(a.out, "w") as fh:
+            for c in combos:
+                if not store.may_price(c["legs"]):
+                    continue
+                rec = leg_records(c, store, max_age)
+                if rec and len(rec["legs"]) >= a.min_priced:
+                    fh.write(json.dumps(rec) + "\n")
+                    n += 1
+        print(f"wrote {n} combos with >= {a.min_priced} priced legs to {a.out}", file=sys.stderr)
+        return 0
     if a.cmd == "audit":
         res = audit_legs(combos, store, max_age)
         tot = {f: sum(c.values()) for f, c in res.items()}

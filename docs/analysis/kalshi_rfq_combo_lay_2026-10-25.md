@@ -253,17 +253,42 @@ window truncated at 8,000 scanned markets, so a SAMPLE):
   SAME-GAME combos (n=2,321) hit 6.8% against a 20.4% price (+12.7c), and 10-23 / 10-27 alone are 1,548 combos that almost never hit (a few games each). The
   retail-overpay signal is an SGP signal resting on a handful of games, not a broad one.
 * Bounded (n=20,966): +3.4c (CI [-3.8c, +7.6c], 17 days). By leg count: 2-3 legs +7.4c, 4-7 +3.9c, 8-15 +1.7c, 16+ -1.0c.
-* **Our p_true is not usable as a price.** On fully priced combos it is 25.7% against 9.4% realized (same-game: 26.3% vs 6.8%): the copula (rho 0.15, capped buffer)
-  is far too conservative for same-game props, and quintile calibration shows the same overstatement at every level (top quintile 46% predicted vs 20% realized).
+* (Superseded, see "Correlations and calibration" below: the combo-level `p_true` 25.7% vs 9.4% realized is mostly a few games. 10-23 / 10-27 alone are
+  1,548 combos riding one or two games that did not hit. The 8,881-leg calibration is the reliable check.)
 * **Would-fill (n=249, 10 days): -21c per contract** (naive se 3c; 61% same-game). Where our bid reaches the price that traded, the combos traded at a mean yes
   price of 0.55 against our p_true of 0.21 and hit 47%: the market was right and we were not. Adverse selection by construction: our quote only fills where we
   disagree with the market most.
-Verdict: the join is now good enough to say something, and what it says is not "quote more". Retail combos do look overpriced on average (the lay-at-market result
-is positive and mostly same-game), but our fair value is badly calibrated on exactly the combos where we would win the quote. The existing empirical-rho work
-(`research/sgp-empirical-rho`, docs/analysis/sgp_empirical_rho_2026-10-19.md) covers MLB pairs only (K/outs/hits/TB x game total, same-player K x outs): it
-gives NO estimate for the NFL / NBA / NHL same-game pairs that dominate real combos (QB pass yds x WR rec yds, rush yds x spread, points x rebounds ...), whose
-rho the pricer still takes from the unvalidated spec table or the 0.15 default. Next step is the same method on NFL / NBA / NHL leg outcomes (the settled leg
-markets are public), re-tested on held-out games, before any quoting beyond the demo exchange.
+## Correlations and calibration (2026-11-02; `scripts/kalshi_sgp_rho.py`, tests/test_kalshi_sgp_rho.py)
+Data: `kalshi_rfq_replay.py legs` exports each combo's priced legs (fair P(YES) at creation); settled leg results come from the public API (8,881 of 9,014 legs).
+**1. Market-implied rho (what the platform charges).** 785 two-leg combos with both legs priced (612 same-game). Cross-game 2-leg combos trade at a median 1.016x the
+product of the legs, so the platform adds essentially no markup over multiplying the leg prices. Same-game, DIFFERENT players: priced near independence
+(rec yds x rec yds lift 1.02, rec yds x receptions 1.07, rec yds x rush yds 1.03, pass yds x rec yds 1.09; implied rho ~0.0-0.1; all NFL receiving, NBA is too thin).
+SAME player (rec yds x receptions) lift 1.53. The pooled implied rho is 0.108 (0.081 margin-adjusted) against our 0.15 default.
+**2. Realized rho (what happens).** Gaussian-copula MLE on every pair of priced legs inside a game (YES/YES), game-clustered bootstrap (40 reps):
+| pair | pairs / games | lift | rho [95% CI] | old table |
+|---|---|---|---|---|
+| NBA points x rebounds (diff players) | 13,732 / 68 | 1.34 | 0.16 [0.10, 0.25] | 0.15 |
+| NBA points x threes | 12,291 / 73 | 1.40 | 0.18 [0.10, 0.30] | 0.15 |
+| NBA assists x threes | 5,170 / 66 | 1.46 | 0.28 [0.20, 0.40] | 0.15 |
+| NBA assists x rebounds | 5,930 / 64 | 1.37 | 0.20 [0.10, 0.30] | 0.15 |
+| NBA points x points (diff players) | 15,282 / 96 | 1.21 | 0.14 [0.05, 0.25] | 0.15 |
+| NFL pass yds x rec yds | 7,907 / 42 | 1.13 | 0.26 [0.15, 0.35] | 0.38 |
+| NFL rec yds x rec yds | 6,430 / 41 | 1.10 | 0.04 [-0.05, 0.15] | 0.15 |
+| NFL rec yds x rush yds | 10,359 / 42 | 1.07 | 0.00 [-0.05, 0.10] | 0.15 |
+| NFL rush yds x rush yds | 3,325 / 41 | 0.89 | -0.14 [-0.25, -0.05] | 0.15 |
+| NFL pass yds x rush yds | 5,715 / 42 | 0.98 | -0.14 [-0.25, 0.05] | -0.15 |
+| SAME player: NFL rec yds x receptions | 1,946 / 41 | 1.40 | 0.76 [0.60, 0.85] | (rejected) |
+| SAME player: NBA points x threes | 1,740 / 68 | 1.58 | 0.70 [0.60, 0.80] | (rejected) |
+NBA different-player rho is a stable 0.14-0.28 (our flat 0.15 was about right, assists/threes pairs higher); NFL receiving-corps pairs are ~0 (our 0.15 and the spec's 0.38
+were too high). `SGP_CORR_TABLE` now holds these point estimates (different players only; pairs with CIs wider than ~0.3, NHL and pass TDs x pass yds, stay on the default).
+**3. Marginals are NOT overstated.** Single-leg calibration (our fair P(YES) vs the settled outcome, n=8,881): NFL realized runs +2 to +5 points ABOVE our p in the mid bins;
+NBA +9 to +13 points above p for p in 0.35-0.80; NHL +9 to +21 (n=306). Not understood: retail picking legs on information beyond the consensus, or a bias in the
+consensus. It means p_true errs low for the joint, not high.
+**4. Same-player combos.** The pricer rejects them (REJ_SGP_SAME_PLAYER, 5,640 in the replay). The market charges lift 1.53 where the realized lift is 1.40 (rho 0.76): a
+possible lay edge, but one cell with a few dozen games; not modelled.
+Verdict: the join is good enough to measure correlations and they are now measured for NFL and NBA. What is NOT established: that retail overpays. The lay-at-market
+result (+10.9c) is mostly same-game combos from a few games (CI [-1.6c, +17.7c]), and the would-fill set loses 21c. Do not quote beyond the demo exchange until a
+held-out set of games confirms a positive lay result with the new table.
 
 ## Production recorder runbook (NOT yet done)
 Why: only real retail combo flow can answer whether combos are priced richly enough to lay after fees. Cost: a read-only key,

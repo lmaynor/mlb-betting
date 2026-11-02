@@ -408,6 +408,27 @@ def replay_one(combo: dict, store: SnapshotStore, max_age: float = MAX_SNAPSHOT_
     return grade(rec)
 
 
+def leg_records(combo: dict, store, max_age: float = MAX_SNAPSHOT_AGE_SEC) -> dict | None:
+    """The priced legs of one combo as of its creation (fair P(YES) of each leg, side, stat, game, player) beside the combo's traded
+    price and result. Input to the correlation studies (market-implied rho from the price, realized rho from outcomes)."""
+    t = epoch(combo["created_time"])
+    book = store.book_at(t, max_age)
+    y = float(combo.get("last_price_dollars") or 0.0)
+    if book is None or combo.get("result") not in ("yes", "no") or not (0.0 < y < 1.0):
+        return None
+    legs = []
+    for tk, side in combo["legs"]:
+        fv = book.get(tk, t)
+        if fv is not None:
+            legs.append({"ticker": tk, "side": side, "stat": fv.stat, "game_key": fv.game_key, "player": fv.player_norm,
+                         "p_yes": round(float(fv.p_true_yes), 5), "n_books": fv.n_books, "disp": round(float(fv.disp), 4),
+                         "pooled": bool(fv.pooled)})
+    if not legs:
+        return None
+    return {"ticker": combo["ticker"], "created": combo["created_time"], "day": combo["close_time"][:10], "n_legs": len(combo["legs"]),
+            "yes_price": y, "yes_won": combo["result"] == "yes", "volume": float(combo.get("volume_fp") or 0.0), "legs": legs}
+
+
 def fee(no_price: float) -> float:
     return taker_fee(no_price, 100, 1.0) / 100.0
 

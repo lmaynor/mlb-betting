@@ -1240,3 +1240,14 @@ def test_a_14_leg_64_contract_rfq_fits_the_scaffolding_defaults_but_not_the_old_
     legs = [{"game_key": "g", "player_norm": "p"}]
     assert RFQRiskGate(TIGHT, RFQLedger(":memory:"), "shadow").check_quote(64.18 * 0.9, legs) == (False, "REJ_RISK_SIZE")
     assert RFQRiskGate(RFQConfig(), RFQLedger(":memory:"), "shadow").check_quote(64.18 * 0.9, legs) == (True, "")
+
+
+def test_sgp_corr_table_holds_empirical_different_player_estimates():
+    from ev.kalshi_rfq_pricer import SGP_CORR_TABLE, PricerConfig, _pair_rho
+    assert SGP_CORR_TABLE[frozenset(("pass_yds", "rec_yds"))] == 0.26                    # the spec's 0.38 was too high (realized 0.26)
+    assert SGP_CORR_TABLE[frozenset(("assists", "threes"))] == 0.28 and SGP_CORR_TABLE[frozenset(("rec_yds",))] == 0.04
+    assert all(1 <= len(k) <= 2 and -0.5 <= v <= 0.9 for k, v in SGP_CORR_TABLE.items())
+    a, b = mk_leg("A", stat="rec_yds"), mk_leg("B", stat="rec_yds", player="p2")
+    assert _pair_rho(a, 1, b, 1, PricerConfig()) == pytest.approx(0.04)                    # same-stat pair uses the one-element key
+    assert _pair_rho(a, 1, mk_leg("C", stat="unmapped_stat", player="p3"), 1, PricerConfig()) == PricerConfig().sgp_default_rho
+    assert _pair_rho(mk_leg("D", stat="rush_yds"), 1, mk_leg("E", stat="pass_yds", player="p4"), 1, PricerConfig()) == 0.0   # negative clamped
