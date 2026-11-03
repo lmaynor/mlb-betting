@@ -38,8 +38,8 @@ from mlb_core.alerts.discord_routes import canonical_book
 log = logging.getLogger("ev.game_odds_board")
 _ET = ZoneInfo("America/New_York")
 
-SPORTS = ("nba", "nhl")
-PARLAY_KEY = {"nba": "basketball_nba", "nhl": "icehockey_nhl"}
+SPORTS = ("nba", "nhl", "nfl")
+PARLAY_KEY = {"nba": "basketball_nba", "nhl": "icehockey_nhl", "nfl": "americanfootball_nfl"}
 OUT_KEY = "EVSweep/{sport}_games/odds_board_latest.json"
 LINES_SOURCE = "oddsaccum_game_lines"
 BESTBOOK_SOURCE = "bestbook"
@@ -68,6 +68,9 @@ def _resolver(sport: str):
     if sport == "nhl":
         from nhl.config import team_abbrev
         return team_abbrev
+    if sport == "nfl":
+        from nfl.game.run_daily import nfl_team_code
+        return nfl_team_code
     raise ValueError(f"unknown game odds sport {sport!r}; expected one of {SPORTS}")
 
 
