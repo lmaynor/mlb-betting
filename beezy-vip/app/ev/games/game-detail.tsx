@@ -22,7 +22,7 @@ const MARKET_TABS: { key: GameMarket; label: string }[] = [
   { key: 'total', label: 'Total' },
 ]
 
-function Seg<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { v: T; l: string }[]; onChange: (v: T) => void }) {
+export function Seg<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { v: T; l: string }[]; onChange: (v: T) => void }) {
   return (
     <div role="group" aria-label={label} className="inline-flex gap-0.5 p-[3px] bg-background-secondary-default border border-separator-border rounded-control">
       {options.map(o => (

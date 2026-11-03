@@ -33,17 +33,27 @@ beforeEach(() => {
 })
 
 describe('/ev/games view and sport routing (server-side)', () => {
-  it('defaults to the GAMES board: fetches both odds feeds and both model feeds', async () => {
+  it('defaults to the BOARD: both odds feeds, no model feeds, one row per game', async () => {
     render(await page({}))
     expect(oddsMock.mock.calls.map(c => c[0]).sort()).toEqual(['nba', 'nhl'])
-    expect(projMock.mock.calls.map(c => c[0]).sort()).toEqual(['nba', 'nhl'])
-    expect(screen.getByTestId('game-board-strip')).toBeInTheDocument()
-    expect(screen.getAllByTestId('game-card').length).toBeGreaterThan(0)
-    expect(screen.getByRole('link', { name: 'GAMES' })).toHaveAttribute('aria-current', 'page')
+    expect(projMock).not.toHaveBeenCalled()
+    expect(screen.getByTestId('best-board')).toBeInTheDocument()
+    expect(screen.getAllByTestId('board-row').length).toBeGreaterThan(0)
+    expect(screen.getByRole('link', { name: 'BOARD' })).toHaveAttribute('aria-current', 'page')
   })
-  it('the retired MODEL view lands on the games board', async () => {
+  it('ANALYSIS is the full read: both model feeds and the card strip with its deep-dive', async () => {
+    render(await page({ view: 'analysis' }))
+    expect(projMock.mock.calls.map(c => c[0]).sort()).toEqual(['nba', 'nhl'])
+    expect(screen.getAllByTestId('game-card').length).toBeGreaterThan(0)
+    expect(screen.getByRole('link', { name: 'ANALYSIS' })).toHaveAttribute('aria-current', 'page')
+  })
+  it('an old ?game= link with no view still opens the analysis', async () => {
+    render(await page({ game: 'nba:g' }))
+    expect(screen.getAllByTestId('game-card').length).toBeGreaterThan(0)
+  })
+  it('the retired MODEL view lands on the board', async () => {
     render(await page({ view: 'model', sport: 'nhl' }))
-    expect(screen.getByTestId('game-board-strip')).toBeInTheDocument()
+    expect(screen.getByTestId('best-board')).toBeInTheDocument()
   })
   it('an unreachable feed degrades to the unavailable state', async () => {
     oddsMock.mockRejectedValue(new Error('down'))

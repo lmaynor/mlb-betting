@@ -3,36 +3,24 @@
 import { useEffect, useMemo, useState } from 'react'
 import { LockedNotice } from '@/components/picks/locked-notice'
 import { SportLogo } from '@/components/ui/sport-assets'
-import { apiGetGameOddsBoard, apiGetGameProjections } from '@/lib/betting-api'
 import { BOARD_SORTS, buildGameBoard, sortBoard, sportsWithGames, type BoardSort, type GameBoardEntry } from '@/lib/game-board'
-import type { GameProjectionsFeed } from '@/lib/game-lines'
 import {
   ageText, feedRows, gameBookColumns, gameOddsUnavailable, GAME_MIN_REF, GAME_PRICES_LABEL, GAME_PRICES_NOTE, SHARP_BOOKS, signedLine, startLabel,
   type GameOddsFeed,
 } from '@/lib/game-odds'
 import type { DevigMethod } from '@/lib/odds-screen'
+import { useGameFeeds, type GameBoardFeeds } from './use-game-feeds'
 import { useBankroll } from '@/lib/use-bankroll'
 import { useMyBooks } from '@/lib/use-my-books'
-import { hasMovement, moveForSide, type MoveSummary } from '@/lib/line-move'
+import { moveForSide } from '@/lib/line-move'
+import { primaryMove } from '@/lib/game-shop'
 import { GameDetail } from './game-detail'
 import { Sparkline } from './sparkline'
 import { BookPicker, GREEN, HAIR, Pill, PillGroup, SKY, Select, Toggle } from './game-prices-parts'
 
 type LogoSport = Parameters<typeof SportLogo>[0]['sport']
 
-// The banker rewrites the boards every 30 minutes, so a faster poll only re-downloads identical data.
-const POLL_MS = 3 * 60_000
-
-export interface GameBoardFeeds { odds: Record<string, GameOddsFeed | null>; proj: Record<string, GameProjectionsFeed | null> }
-
-/** The one movement a card shows: the spread's (else the total's, else the moneyline's), from the side the card names. */
-function cardMove(g: GameBoardEntry): { m: MoveSummary; market: 'spread' | 'total' | 'ml'; side: 'a' | 'b' } | null {
-  for (const [market, side] of [['spread', 'b'], ['total', 'a'], ['ml', 'b']] as const) {
-    const m = g.move[market]
-    if (hasMovement(m)) return { m, market, side }
-  }
-  return null
-}
+export type { GameBoardFeeds }
 
 function evChip(g: GameBoardEntry): { text: string; color: string } | null {
   if (g.bestEv == null || g.bestEv <= 0.005) return null
@@ -62,7 +50,7 @@ function GameCard({ g, on, onPick }: { g: GameBoardEntry; on: boolean; onPick: (
         {sp ? `${g.home} ${signedLine(sp.row.line ?? 0)}` : 'No spread'}{to ? ` · ${to.row.line}` : ''}
       </span>
       {(() => {
-        const mv = cardMove(g)
+        const mv = primaryMove(g)
         if (!mv) return null
         const f = moveForSide(mv.m, mv.side)
         const pts = f.pDelta == null ? null : Math.abs(f.pDelta * 100)
@@ -91,8 +79,7 @@ function GameCard({ g, on, onPick }: { g: GameBoardEntry; on: boolean; onPick: (
  * lib/game-board.ts. UNVALIDATED market data and model estimates.
  */
 export function GameBoard({ feeds: initial, initialGame, initialSport }: { feeds: GameBoardFeeds; initialGame?: string; initialSport?: string }) {
-  const [odds, setOdds] = useState(initial.odds)
-  const [proj, setProj] = useState(initial.proj)
+  const { odds, proj, feedSports } = useGameFeeds(initial)
   const [sport, setSport] = useState(initialSport ?? 'all')
   const [sort, setSort] = useState<BoardSort>('time')
   const [picked, setPicked] = useState<string | null>(initialGame ?? null)
@@ -101,28 +88,6 @@ export function GameBoard({ feeds: initial, initialGame, initialSport }: { feeds
   const [exchanges, setExchanges] = useState(true)
   const [bankroll] = useBankroll(1000)
   const myBooks = useMyBooks()
-
-  const feedSports = useMemo(() => Object.keys(odds).filter(s => odds[s]), [odds])
-
-  useEffect(() => {
-    const id = setInterval(async () => {
-      if (document.visibilityState !== 'visible') return
-      const next = await Promise.all(feedSports.map(async s => [s, await apiGetGameOddsBoard(s, { limit: 3000 }).catch(() => null), await apiGetGameProjections(s).catch(() => null)] as const))
-      setOdds(prev => {
-        const out = { ...prev }
-        let changed = false
-        for (const [s, o] of next) if (o && Array.isArray(o.rows) && prev[s]?.as_of !== o.as_of) { out[s] = { ...o, locked: prev[s]?.locked }; changed = true }
-        return changed ? out : prev
-      })
-      setProj(prev => {
-        const out = { ...prev }
-        let changed = false
-        for (const [s, , p] of next) if (p && prev[s]?.as_of !== p.as_of) { out[s] = p; changed = true }
-        return changed ? out : prev
-      })
-    }, POLL_MS)
-    return () => clearInterval(id)
-  }, [feedSports])
 
   const offshore = useMemo(() => new Set(feedSports.flatMap(s => odds[s]?.offshore_books ?? [])), [feedSports, odds])
   const bettable = useMemo(() => (myBooks.enabled ? new Set(myBooks.books) : null), [myBooks.enabled, myBooks.books])
