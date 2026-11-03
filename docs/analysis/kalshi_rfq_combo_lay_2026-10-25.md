@@ -112,8 +112,9 @@ The demo flow is ~78% NBA player props plus game winners/spreads/totals, so the 
   `kalshi_player_codes` / `match_player_code` (first initial + surname letters; hyphens vanish; Kalshi DROPS non-ASCII letters,
   Nygard -> NYGRD; exactly one match or None), `register_series`.
 * **Series verified against the public API 2026-10-26** (the spec's guesses for NHL/NBA were mostly wrong): NFL `PASSYDS RSHYDS RECYDS
-  REC PASSTDS PASSINT PASSATT TD`; NBA `PTS REB AST 3PT PRA STL BLK`; NHL `GOAL PTS AST SAVE`. They do NOT exist: `KXNHLSOG/SHOTS/BLK`,
-  `KXNBAPR/PA/RA`, `KXNFLANYTD`. `KXNFLTD` maps only the 1+ rung (anytime TD has no two-sided book market, so it stays unpriced).
+  REC PASSTDS PASSINT PASSATT TD`; NBA `PTS REB AST 3PT PRA STL BLK`; NHL `GOAL PTS AST SAVE`. Not found: `KXNHLSOG/SHOTS/BLK`,
+  `KXNBADD/TD`. Re-probed 2026-11-02: `KXNBAPR` and `KXNFLANYTD` DO return series metadata but, like `KXNBAPA/RA`, had zero open markets (so
+  nothing to map yet; re-check before adding). `KXNFLTD` maps only the 1+ rung (anytime TD has no two-sided book market, so it stays unpriced).
 * `ev/kalshi_rfq_props.py`: `PropFairIndex` built from `ev.daily_projections.load_events` (ParlayAPI bank + BettingPros live; ZERO credits).
   Exact rung with >= 2 two-sided books -> their de-vigged median; otherwise `ev.odds_board.fit_curve` over the player's rungs
   (pooled=True; interpolates, extrapolates at most the anchors' own span; flat curve never extrapolates); a single-book rung comes back
@@ -209,6 +210,24 @@ Caveats: dropping unpriced legs is a sound upper bound only if the PRICED legs a
 measured pairwise lift, plus the capped buffer). Whether other makers undercut our no_bid (0.86-0.93 against a fair ~0.995+) is unknowable
 offline; fill rate is the open question. "14-legs are -EV for retail" rests on 3 distinct combos so far. A leg count above 8 or so with
 only 2-3 legs priced gives a loose bound, so expect those quotes to be uncompetitive until the NBA prop mapper's coverage improves.
+
+## Game legs from the banked feeds (2026-11-03; `ev/kalshi_game_banked.py`, UNVALIDATED)
+Why: `fetch_game_rows` pulled a live ParlayAPI slate (1 credit per market per sport; the 120/day budget stretches the cadence to ~1.8 h, far
+beyond the 1500 s staleness gate, so live game rows were stale most of the time) and with no `PARLAY_API_KEY` every game / spread / total leg
+was unmapped. The same lines are already banked for free: BestBook ladders (`Odds/bestbook_live/{nfl,nba,nhl}/game_lines_latest.json`, hourly,
+~16 venues, ~90 spread and ~90 total rungs per NFL / NBA game) and, for NBA / NHL, the banked ParlayAPI snapshot (`nba.game.odds_feed`).
+* Order per sport: BestBook (<= 180 min old) -> banked ParlayAPI (NBA / NHL only; NFL game lines are not banked) -> the live pull, which now
+  runs ONLY for a sport the free feeds could not serve. `--game-source live` (or `KALSHI_RFQ_GAME_SOURCE=live`) restores the old behaviour;
+  `--banked-reload-sec` (300) is how often the free feeds are re-read. No new env is needed on the recorder job.
+* Rows go through the SAME `slate_rows` as the live path (leave-Kalshi-out, DFS excluded, Kambi folded, NHL totals disabled, rung
+  interpolation); BestBook quotes are converted to the slate shape first. `updated_ts` is the feed's own timestamp (BestBook `fetched_at`),
+  never the read time, and started games are dropped.
+* Measured on the 2026-11-03 03:50 UTC files against Kalshi's OPEN markets: NFL game / spread / total 75% / 75% / 76% of open markets priced
+  (24 / 306 / 228); NHL game 22 of 98, spread 44 of 108 (the rest are games outside BestBook's window); NBA 0 (all of that night's games had
+  started and the next slate was not posted). 12 NFL games -> 24 ML + 755 spread + 674 total rows. This is coverage, not edge.
+* **Open limit: staleness.** BestBook refreshes hourly and the pricer rejects a leg older than `max_staleness_sec` (1500 s), so a banked row
+  is usable for roughly the first 25 of every 60 minutes unless that gate is widened for game lines. The gate was NOT changed (it is a risk
+  gate; the owner sets it). Sanity: JAC at BAL comes out 0.79 to win and a coin flip at JAC -8.5, internally consistent.
 
 ## Point-in-time replay of REAL combos (2026-11-01; `ev/kalshi_rfq_replay.py`, `scripts/kalshi_rfq_replay.py`)
 Kalshi's public `/markets?mve_filter=only&status=settled` lists every settled combo with legs, last price, volume and result (no key). A combo
