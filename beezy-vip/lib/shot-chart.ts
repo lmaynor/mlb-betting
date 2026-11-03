@@ -120,3 +120,41 @@ export function courtPaths(): { boundary: string; paint: string; ftCircle: strin
     rim: `M${P(-0.75, HOOP_Y)}${arc(0.75, -0.75, HOOP_Y, 0.75, HOOP_Y, 0, 0)}${arc(0.75, 0.75, HOOP_Y, -0.75, HOOP_Y, 0, 0)}`,
   }
 }
+
+// -- shot quality ---------------------------------------------------------------------------------------------------------
+/**
+ * Expected FG% from where the player shoots: each attempt is priced at the league's FG% in its hex cell, so it answers "how good
+ * are his looks" and `actual - expected` answers "how well does he finish them". Only cells the league also shot from (>= 10
+ * attempts) count, on both sides, so the two numbers describe the same shots.
+ */
+export function shotQuality(cells: ShotHexCell[]): { att: number; actual: number; expected: number; making: number } | null {
+  let att = 0, made = 0, exp = 0
+  for (const [, , a, m, la, lm] of cells) {
+    if (!la) continue
+    att += a; made += m; exp += a * (lm / la)
+  }
+  if (att < 30) return null
+  return { att, actual: made / att, expected: exp / att, making: (made / att - exp / att) * 100 }
+}
+
+export interface DistanceRow { from: number; to: number | null; att: number; made: number; lAtt: number; lMade: number }
+
+/** 1-ft bins -> `width`-ft rows (the last row is "to the end"), 0..30 ft plus a 30+ tail. */
+export function distanceRows(player: [number, number][], league: [number, number][], width = 3, limit = 30): DistanceRow[] {
+  const rows: DistanceRow[] = []
+  for (let from = 0; from < limit; from += width) {
+    const r: DistanceRow = { from, to: from + width, att: 0, made: 0, lAtt: 0, lMade: 0 }
+    for (let i = from; i < from + width && i < player.length; i++) {
+      r.att += player[i][0]; r.made += player[i][1]
+      r.lAtt += league[i]?.[0] ?? 0; r.lMade += league[i]?.[1] ?? 0
+    }
+    rows.push(r)
+  }
+  const tail: DistanceRow = { from: limit, to: null, att: 0, made: 0, lAtt: 0, lMade: 0 }
+  for (let i = limit; i < player.length; i++) {
+    tail.att += player[i][0]; tail.made += player[i][1]
+    tail.lAtt += league[i]?.[0] ?? 0; tail.lMade += league[i]?.[1] ?? 0
+  }
+  if (tail.att || tail.lAtt) rows.push(tail)
+  return rows
+}

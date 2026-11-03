@@ -448,6 +448,8 @@ export interface ShotChartOk {
   grid: [number, number, number][]
   zones: ShotZoneRow[]
   groups: ShotGroupRow[]
+  /** [fga, fgm] per 1-ft bin of distance from the hoop, 0..34 (the last bin holds anything farther) */
+  dist: { player: [number, number][]; league: [number, number][] }
   games: ShotGameRow[]
   venue: { home: ShotVenue; away: ShotVenue }
   opponent: { team: string; fga: number; fg3a: number; zones: { key: string; fga: number; fgm: number }[]; lfga: number; lfg3a: number; n_teams: number } | null

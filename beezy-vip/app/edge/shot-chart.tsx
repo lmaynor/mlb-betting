@@ -16,8 +16,8 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { apiGetShotChart } from '@/lib/betting-api'
 import type { CockpitRow, ShotChartOk, ShotChartResult, ShotGameRow } from '@/lib/types'
 import {
-  DIFF_COLORS, DIFF_LABELS, LINE, MAKE, MISS, VIEW_H, VIEW_W, courtPaths, diffColor, diffPoints, hexMarks, hexPoints, pct1,
-  shotPaths, signed1, SIZE_FRACTION, sx, sy,
+  DIFF_COLORS, DIFF_LABELS, LINE, MAKE, MISS, VIEW_H, VIEW_W, courtPaths, diffColor, diffPoints, distanceRows, hexMarks, hexPoints, pct1,
+  shotPaths, shotQuality, signed1, SIZE_FRACTION, sx, sy,
 } from '@/lib/shot-chart'
 
 type View = 'shots' | 'hex' | 'zones'
@@ -299,9 +299,63 @@ function MetricStrip({ data }: { data: ShotChartOk }) {
     ['League 3P', pct1(l.fg3m, l.fg3a)],
     ['Games', String(data.n_games)],
   ]
+  const q = shotQuality(data.hexes)
   return (
     <div className="mono flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-lg border border-separator-border bg-background-secondary-default px-3 py-2 text-body-2-regular" aria-label="Season shooting summary">
       {items.map(([k, v]) => <span key={k}><span className="text-text-secondary">{k} </span><b className="text-text-primary">{v}</b></span>)}
+      {q && (
+        <span title="Expected FG% prices each attempt at the league's FG% from that spot; shot-making is actual minus expected, in points">
+          <span className="text-text-secondary">Expected </span><b className="text-text-primary">{(q.expected * 100).toFixed(1)}%</b>
+          <span className="text-text-secondary"> shot-making </span><b style={{ color: diffColor(q.making) }}>{signed1(q.making)}</b>
+        </span>
+      )}
+    </div>
+  )
+}
+
+/** FG% by distance from the hoop, player vs league, with the player's attempt share as the bars behind it. */
+export function DistanceChart({ data }: { data: ShotChartOk }) {
+  const rows = useMemo(() => distanceRows(data.dist.player, data.dist.league), [data.dist])
+  const W = 360, H = 150, padL = 30, padR = 8, padT = 12, padB = 26
+  const n = rows.length
+  const bw = (W - padL - padR) / n
+  const maxShare = Math.max(0.05, ...rows.map(r => r.att / Math.max(data.fga, 1)))
+  const share = (r: { att: number }) => r.att / Math.max(data.fga, 1)
+  const y = (v: number) => H - padB - v * (H - padT - padB)               // v in 0..1
+  const cx = (i: number) => padL + bw * i + bw / 2
+  const player = rows.map((r, i) => (r.att >= 8 ? { i, v: r.made / r.att } : null))
+  const path = (pts: ({ i: number; v: number } | null)[]) => {
+    let d = '', pen = false
+    for (const p of pts) { if (!p) { pen = false; continue } d += `${pen ? 'L' : 'M'}${cx(p.i).toFixed(1)} ${y(p.v).toFixed(1)}`; pen = true }
+    return d
+  }
+  const league = rows.map((r, i) => (r.lAtt ? { i, v: r.lMade / r.lAtt } : null))
+  const label = (r: { from: number; to: number | null }) => (r.to == null ? `${r.from}+` : String(r.from))
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" style={{ width: '100%', height: 'auto', display: 'block' }}
+        aria-label={`Field-goal percentage by distance from the hoop for ${data.player} against the league`}>
+        {[0, 0.25, 0.5, 0.75].map(t => (
+          <g key={t}>
+            <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="#1e2230" strokeWidth="1" />
+            <text x={padL - 4} y={y(t) + 3} textAnchor="end" fill={MUTED} style={{ fontSize: '10px', fontFamily: 'monospace' }}>{Math.round(t * 100)}</text>
+          </g>
+        ))}
+        {rows.map((r, i) => {
+          const h = (share(r) / maxShare) * (H - padT - padB) * 0.55
+          return <rect key={i} x={padL + bw * i + bw * 0.18} y={H - padB - h} width={bw * 0.64} height={Math.max(h, 0)} fill="#2a3042" />
+        })}
+        <path d={path(league)} fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeDasharray="4 3" strokeLinejoin="round" />
+        <path d={path(player)} fill="none" stroke={MAKE} strokeWidth="2" strokeLinejoin="round" />
+        {player.map(p => p && <circle key={p.i} cx={cx(p.i)} cy={y(p.v)} r="2.8" fill={MAKE} />)}
+        {rows.map((r, i) => <text key={i} x={cx(i)} y={H - 10} textAnchor="middle" fill={MUTED} style={{ fontSize: '10px', fontFamily: 'monospace' }}>{label(r)}</text>)}
+      </svg>
+      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-mini text-text-secondary">
+        <span><i style={{ display: 'inline-block', width: 12, height: 2, background: MAKE, marginRight: 5, verticalAlign: 'middle' }} />{data.player.split(' ').slice(-1)[0]} FG%</span>
+        <span><i style={{ display: 'inline-block', width: 12, height: 0, borderTop: '2px dashed #9ca3af', marginRight: 5, verticalAlign: 'middle' }} />League FG%</span>
+        <span><i style={{ display: 'inline-block', width: 9, height: 9, background: '#2a3042', marginRight: 5 }} />Share of his attempts</span>
+        <span>Axis: feet from the hoop, in 3-ft bins; points need 8+ attempts</span>
+      </div>
     </div>
   )
 }
@@ -310,7 +364,9 @@ export function ShotChartBody({ data, onSeason }: { data: ShotChartOk; onSeason?
   const [view, setView] = useState<View>('hex')
   const [focus, setFocus] = useState('')
   useEffect(() => setFocus(''), [view, data.season])
-  const stale = Date.now() - new Date(`${data.last_game}T12:00:00Z`).getTime() > 120 * 86_400_000
+  const newest = data.seasons[0]
+  const newer = newest != null && newest > data.season ? newest : null
+  const stale = !newer && Date.now() - new Date(`${data.last_game}T12:00:00Z`).getTime() > 120 * 86_400_000
   return (
     <div className="grid gap-3">
       <MetricStrip data={data} />
@@ -346,12 +402,18 @@ export function ShotChartBody({ data, onSeason }: { data: ShotChartOk; onSeason?
       <div role="status" aria-live="polite" className="mono min-h-[32px] text-mini leading-[1.5] text-text-secondary">
         {focus || (view === 'shots' ? `${data.fga} attempts, ${data.label} regular season.` : 'Tap a cell for its numbers. Differences are shrunk toward the league rate (5 pseudo-attempts).')}
       </div>
+      {newer && (
+        <div role="note" className="rounded-lg border border-separator-border bg-background-secondary-default px-3 py-2 text-compact leading-[1.5] text-neutral-300">
+          Showing {data.label}, the player&apos;s latest season with a full sample. {`${newer}-${String(newer + 1).slice(-2)}`} is in progress (pick it in the season menu): too few attempts so far for a stable map.
+        </div>
+      )}
       {stale && (
         <div role="note" className="rounded-lg border border-separator-border bg-background-secondary-default px-3 py-2 text-compact leading-[1.5] text-neutral-300">
           Shot data ends {monthDay(data.last_game)}: this is {data.label}, not the current season. Shots from games since are not loaded yet.
         </div>
       )}
 
+      <Section title="By distance"><DistanceChart data={data} /></Section>
       <Section title="Zones" sub={`${data.label} \u00b7 league = all players`}><ZoneTable data={data} /></Section>
       <Section title="Shot types"><GroupTable data={data} /></Section>
       {data.opponent && <Section title="Opponent defence"><OpponentTable data={data} /></Section>}

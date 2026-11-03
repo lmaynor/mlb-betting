@@ -85,3 +85,13 @@ _SEASON = re.compile(r"^(\d{4})-(\d{2})$")
 
 def season_label(start_year: int) -> str:
     return f"{start_year}-{str(start_year + 1)[-2:]}"
+
+
+DIST_BINS = 35                 # 1-ft bins from the hoop: 0..34 (anything farther is folded into the last bin)
+
+
+def dist_bin(x, y):
+    """Feet from the hoop -> bin index 0..DIST_BINS-1 (works on scalars and numpy arrays)."""
+    import numpy as np
+    d = np.hypot(np.asarray(x, dtype=float) - HOOP[0], np.asarray(y, dtype=float) - HOOP[1])
+    return np.minimum(np.floor(d), DIST_BINS - 1).astype(int)

@@ -19,14 +19,14 @@ import pandas as pd
 from mlb_core import storage as _st
 from mlb_core.data.player_names import norm_name
 from nba.shots.build import league_key, shots_key
-from nba.shots.court import HEX_R, SHOT_GROUPS
+from nba.shots.court import DIST_BINS, HEX_R, SHOT_GROUPS, dist_bin
 from nba.teams import team_code
 
 logger = logging.getLogger(__name__)
 
 TTL_SEC = 1800
 FAIL_TTL_SEC = 60
-MIN_FGA = 50               # a season thinner than this is not charted as "the" season for a player
+DEFAULT_MIN_FGA = 200      # the season charted when none is asked for: the newest with at least this many attempts (an explicit season has no floor)
 RECENT_GAMES = 15
 FIRST_YEAR = 2015          # how far back `seasons` offers
 
@@ -116,6 +116,14 @@ def _group_rows(g: pd.DataFrame, league: dict) -> list:
     return rows
 
 
+def _dist(g: pd.DataFrame, league: dict) -> dict:
+    """FGA / FGM by feet from the hoop (1-ft bins) for the player and the league: the shooting-by-distance curve."""
+    db = dist_bin(g["x"].to_numpy(), g["y"].to_numpy())
+    made = g["made"].to_numpy()
+    player = [[int((db == i).sum()), int(made[db == i].sum())] for i in range(DIST_BINS)]
+    return {"player": player, "league": league.get("dist") or [[0, 0]] * DIST_BINS}
+
+
 def _games(g: pd.DataFrame) -> list:
     """Per-game shooting for the last RECENT_GAMES games: the volume trend behind points / threes props."""
     out = []
@@ -153,7 +161,7 @@ def _opponent(league: dict, opp: str | None):
 
 def shot_chart(player: str | None, season: int | None = None, opp: str | None = None) -> dict:
     """-> {"status": "ok"|"no_data"|"no_player", ...}. `season` is a start year (2024 = 2024-25); default: the player's newest
-    built season with >= MIN_FGA attempts."""
+    built season with >= DEFAULT_MIN_FGA attempts (early in a season that is last season, and the season picker offers the partial one)."""
     seasons = available_seasons()
     if not seasons:
         return {"status": "no_data", "reason": "no shot artifacts built", "seasons": []}
@@ -167,7 +175,7 @@ def shot_chart(player: str | None, season: int | None = None, opp: str | None = 
         if df is None or league is None:
             continue
         g = _pick_player(df, nn)
-        if len(g) < MIN_FGA and season is None:
+        if len(g) < DEFAULT_MIN_FGA and season is None:
             continue
         if not len(g):
             continue
@@ -182,7 +190,7 @@ def shot_chart(player: str | None, season: int | None = None, opp: str | None = 
             "fg3m": int((g["three"] & g["made"]).sum()), "n_games": int(g["game_id"].nunique()),
             "league": {"fga": league["fga"], "fgm": league["fgm"], "fg3a": league["fg3a"], "fg3m": league["fg3m"]},
             "shots": shots, "hexes": _hex_cells(g, league), "grid": [[q, r, z] for q, r, _a, _m, z in league["hexes"]], "zones": _zone_rows(g, league),
-            "groups": _group_rows(g, league), "games": _games(g), "venue": _venue(g),
+            "groups": _group_rows(g, league), "dist": _dist(g, league), "games": _games(g), "venue": _venue(g),
             "opponent": _opponent(league, opp),
         }
     return {"status": "no_player", "seasons": seasons}

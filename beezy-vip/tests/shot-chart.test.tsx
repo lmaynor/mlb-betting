@@ -10,7 +10,7 @@ const apiGetShotChart = jest.fn()
 jest.mock('@/lib/betting-api', () => ({ apiGetShotChart: (...a: unknown[]) => apiGetShotChart(...a), apiGetEdgeCockpit: jest.fn(() => new Promise(() => {})) }))
 
 import {
-  DIFF_BREAKS, DIFF_COLORS, courtPaths, diffBin, diffColor, diffPoints, hexCenter, hexMarks, hexPoints, shotPaths, shrunkRate, sizeBins, sx, sy,
+  DIFF_BREAKS, DIFF_COLORS, courtPaths, diffBin, diffColor, diffPoints, distanceRows, hexCenter, hexMarks, hexPoints, shotPaths, shotQuality, shrunkRate, sizeBins, sx, sy,
 } from '../lib/shot-chart'
 import { opponentOf, ShotChartBody, ShotChartPanel, VolumeBars } from '../app/edge/shot-chart'
 
@@ -72,6 +72,25 @@ describe('shot chart maths', () => {
   })
 })
 
+describe('shot quality', () => {
+  it('prices each attempt at the league rate of its cell and reports shot-making as the gap', () => {
+    const q = shotQuality([[0, 0, 40, 28, 1000, 600], [1, 0, 60, 24, 1000, 400]])!
+    expect(q.att).toBe(100)
+    expect(q.expected).toBeCloseTo(0.48, 6)                                      // (40*.6 + 60*.4) / 100
+    expect(q.actual).toBeCloseTo(0.52, 6)
+    expect(q.making).toBeCloseTo(4, 6)
+    expect(shotQuality([[0, 0, 10, 5, 1000, 500]])).toBeNull()                    // under 30 attempts: not reported
+    expect(shotQuality([[0, 0, 40, 20, 0, 0]])).toBeNull()                        // cells with no league baseline are skipped
+  })
+  it('folds 1-ft bins into 3-ft rows with a 30+ tail', () => {
+    const player: [number, number][] = Array.from({ length: 35 }, (_, i) => [i < 3 ? 10 : 1, i < 3 ? 6 : 0])
+    const rows = distanceRows(player, player.map(() => [100, 40] as [number, number]))
+    expect(rows).toHaveLength(11)
+    expect(rows[0]).toMatchObject({ from: 0, to: 3, att: 30, made: 18, lAtt: 300, lMade: 120 })
+    expect(rows[10]).toMatchObject({ from: 30, to: null, att: 5 })
+  })
+})
+
 describe('opponentOf', () => {
   it('reads the opponent from either side of the matchup', () => {
     expect(opponentOf('NYK @ BOS', 'NYK')).toBe('BOS')
@@ -94,6 +113,7 @@ const ok = (over: Partial<ShotChartOk> = {}): ShotChartOk => ({
   league: { fga: 200000, fgm: 94000, fg3a: 75000, fg3m: 27000 },
   shots: [[0, 60, 1], [100, 150, 0], [-220, 70, 3], [180, 250, 2]], hexes: hexCells, grid: [[0, 0, 0], [1, 0, 1], [0, 1, 2], [2, 0, -1]],
   zones,
+  dist: { player: Array.from({ length: 35 }, (_, i) => [i < 6 ? 30 : i < 30 ? 4 : 0, i < 6 ? 20 : i < 30 ? 2 : 0]) as [number, number][], league: Array.from({ length: 35 }, (_, i) => [1000, i < 6 ? 640 : 400]) as [number, number][] },
   groups: [{ group: 'Layup', fga: 100, fgm: 70, lfga: 40000, lfgm: 24000 }, { group: 'Jump shot', fga: 120, fgm: 50, lfga: 68000, lfgm: 25600 }],
   games: Array.from({ length: 6 }, (_, i) => ({ date: `2025-04-0${i + 1}`, opp: 'BOS', home: i % 2 === 0, fga: 18 + i, fgm: 9, fg3a: 6 + (i % 3), fg3m: 2 })),
   venue: { home: { games: 34, fga: 606, fgm: 289, fg3a: 202, fg3m: 75 }, away: { games: 31, fga: 594, fgm: 296, fg3a: 195, fg3m: 77 } },
@@ -118,6 +138,8 @@ describe('ShotChartBody', () => {
     expect(within(zonesTable).queryByText('Mid-range centre')).not.toBeInTheDocument()   // 0 attempts: not listed
     expect(screen.getByRole('table', { name: /BOS defence/ })).toBeInTheDocument()
     expect(screen.getByRole('table', { name: 'Shooting at home and away' })).toBeInTheDocument()
+    expect(screen.getByLabelText(/Field-goal percentage by distance/)).toBeInTheDocument()
+    expect(strip).toHaveTextContent('Expected')
     expect(screen.getByText(/Shot data ends Apr 13, 2025/)).toBeInTheDocument()  // far in the past: stated, not hidden
   })
 
@@ -139,6 +161,12 @@ describe('ShotChartBody', () => {
     render(<ShotChartBody data={ok()} onSeason={onSeason} />)
     fireEvent.change(screen.getByLabelText('Season'), { target: { value: '2023' } })
     expect(onSeason).toHaveBeenCalledWith(2023)
+  })
+
+  it('says which newer season exists when the chart shows an earlier one, and does not call it a data gap', () => {
+    render(<ShotChartBody data={ok({ season: 2025, label: '2025-26', seasons: [2026, 2025, 2024] })} onSeason={() => {}} />)
+    expect(screen.getByText(/2026-27 is in progress/)).toBeInTheDocument()
+    expect(screen.queryByText(/Shot data ends/)).not.toBeInTheDocument()
   })
 
   it('omits the opponent section when there is no opponent', () => {

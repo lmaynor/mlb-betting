@@ -12,8 +12,8 @@ date: 2026-11-03
 | Source | Shot x/y | In our bucket | Terms |
 |---|---|---|---|
 | `nba_api` / stats.nba.com `ShotChartDetail` | yes | no | README: data is subject to the NBA.com Terms of Use; stats.nba.com does not answer many cloud IPs (GCP included). NOT used. |
-| ESPN play-by-play via the hoopR / sportsdataverse release `espn_nba_pbp/play_by_play_{season}.parquet` | yes, every FGA (full-court feet, x in -47..47, y in -25..25, hoop about (41, 0): ESPN's own "N-foot" text matches to 0.4 ft MAE) | no (`nba/data/hoopr.py` defines `pbp` as an "extra" dataset that was never backfilled) | repo is MIT, rows are ESPN's undocumented-API data, no licence from ESPN. Same risk class as the ESPN box scores the site already serves. NOT wired up: the 2026-27 top-up is the open follow-up. |
-| `NBA_2004_2025_Shots.csv` (user-supplied 2026-11-03) | yes | no (built artifacts only, once someone uploads them) | Column layout, NBA game ids and zone names are the stats.nba.com `ShotChartDetail` lineage, so the NBA.com terms question applies. The owner chose to use it. |
+| ESPN play-by-play via the hoopR / sportsdataverse release `espn_nba_pbp/play_by_play_{season}.parquet` | yes, every FGA (full-court feet, x in -47..47, y in -25..25, hoop about (41, 0): ESPN's own "N-foot" text matches to 0.4 ft MAE) | raw file no (`nba/data/hoopr.py` defines `pbp` as an "extra" dataset that was never backfilled); built artifacts for 2025-26 and 2026-27 yes | repo is MIT, rows are ESPN's undocumented-API data, no licence from ESPN. Same risk class as the ESPN box scores the site already serves. Used for 2025-26 / 2026-27 via `nba/shots/espn.py`. |
+| `NBA_2004_2025_Shots.csv` (user-supplied 2026-11-03) | yes | built artifacts only (uploaded 2026-11-03 with the owner's OK) | Column layout, NBA game ids and zone names are the stats.nba.com `ShotChartDetail` lineage, so the NBA.com terms question applies. The owner chose to use it. |
 | SportsBlaze / BettingPros | no | yes | n/a |
 | Licensed feed (Sportradar, Second Spectrum / Genius, Stats Perform, BigDataBall) | yes | no | the clean route; needs a contract |
 
@@ -34,9 +34,27 @@ Facts about the file, verified on the real data:
 - Tricodes match `nba/teams.py` (PHX, NOP, UTA, GSW, ...); the endpoint folds ESPN abbreviations (NY, GS, SA, UTAH, WSH) with `team_code`.
   TEAM_ID -> tricode is the tricode present in every one of the team's games, so a test frame needs three teams.
 
+## 2025-26 and 2026-27: the ESPN adapter (`nba/shots/espn.py`)
+
+The supplied file stops in April 2025, so the two newer seasons come from the ESPN play-by-play (hoopR release, same risk class as the box
+scores already served). `python -m nba.shots.build --espn-parquet play_by_play_2027.parquet --espn-season 2027` (season = the year it ENDS).
+ESPN has no zone labels, so zones come from `nba/shots/zone_grid.json` (majority zone per 0.5 ft cell of the supplied file, 98.9%
+agreement on a held-out season, restricted area exact at 4.0 ft). Calibrated and cross-checked on 2024-25, which both sources cover:
+- hoop at ESPN x = 41.75; canonical y = 47 - x after folding both baskets; negative canonical x = shooter's right (right-corner-three counts
+  per player correlate 0.91 with the file's, 0.72 mirrored);
+- per-player FGA correlation 0.998 over 266 players (median ESPN/file 0.979; Brunson 1,182 vs 1,200);
+- league FG% 46.0% vs 46.8%, 3P% 36.2% vs 36.2%, zone FG% within 0.1-1.8 points, but ESPN has ~10% fewer restricted-area attempts and ~20%
+  more centre mid-range ones (ESPN's coordinates are rounded to 0.25 ft and the rim cut-off sits on a rounding edge). Every season carries
+  its OWN league baseline, so player-vs-league comparisons stay internal to a season; compare zone shares across the 2024/2025 boundary
+  with that offset in mind.
+- Regular season only (playoffs and play-in dropped to match the file), free throws dropped, ~0.5% of plays dropped for no shooter name.
+
+Uploaded 2026-11-03 to `gs://concrete-crow-445205-m4-mlb-data/NBA/shots/` (16 objects, 10.5 MB): 2019-2024 from the supplied file, 2025-26
+(complete) and 2026-27 (through 2026-11-02) from ESPN. **The live season goes stale:** nothing rebuilds `shots_2026`/`league_2026` until a
+job runs the ESPN command nightly (not provisioned; needs the pbp file fetched first, `python -m nba.data.hoopr --datasets pbp`).
+
 ## What is still open
-- Upload the built artifacts (`NBA/shots/`) and deploy the service BEFORE the frontend: until both happen `/api/public/edge/shotchart`
-  answers `status: no_data` and the panel says shot data is unavailable.
-- Current-season shots: needs the ESPN pbp mirror (`python -m nba.data.hoopr --datasets pbp`) plus a second adapter into the same
-  canonical frame (hoop (41, 0) -> (0, 5.25); fold x < 0 by negating both axes), or a licensed feed.
-- Decide the NBA.com-terms question for the supplied file before the artifacts go to the production bucket.
+- Deploy the service BEFORE the frontend (the artifacts are already in the bucket): until the service rev carries `/api/public/edge/shotchart`
+  the panel says shot data is unavailable.
+- Nightly rebuild of the live season (see above).
+- The NBA.com-terms question for the 2019-2024 seasons (supplied file) stays with the owner; the ESPN seasons carry ESPN's no-licence risk.

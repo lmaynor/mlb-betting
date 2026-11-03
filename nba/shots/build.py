@@ -1,6 +1,7 @@
 """Build the per-season shot artifacts the /edge shot chart serves.
 
     python -m nba.shots.build --csv NBA_2004_2025_Shots.csv --seasons 2022 2023 2024 [--dry-run]
+    python -m nba.shots.build --espn-parquet play_by_play_2027.parquet --espn-season 2027      # the live 2026-27 season
 
 Writes (through `mlb_core.storage`, i.e. GCS when MLB_GCS_BUCKET is set, else MLB_BASE_DATA):
     NBA/shots/shots_{start_year}.parquet   one row per field-goal attempt, canonical frame (see court.py)
@@ -23,7 +24,7 @@ import pandas as pd
 
 from mlb_core import storage as _st
 from mlb_core.data.player_names import norm_name
-from nba.shots.court import HALF_Y, HEX_R, HOOP, ZONE_KEYS, ZONE_LABELS, hex_of, season_label, shot_group
+from nba.shots.court import DIST_BINS, HALF_Y, HEX_R, HOOP, ZONE_KEYS, ZONE_LABELS, dist_bin, hex_of, season_label, shot_group
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +112,8 @@ def league_artifact(df: pd.DataFrame, year: int, source: str) -> dict:
     mode = z.groupby(["hex_q", "hex_r"])["zone"].agg(lambda s: int(s.mode().iloc[0]))
     hexes = [[int(q), int(r), int(row.fga), int(row.fgm), int(mode.get((q, r), -1))] for (q, r), row in hx.iterrows()]
     groups = {k: [int(len(g)), int(g["made"].sum())] for k, g in df.groupby("group")}
+    db = dist_bin(df["x"].to_numpy(), df["y"].to_numpy())
+    dist = [[int((db == i).sum()), int(df["made"].to_numpy()[db == i].sum())] for i in range(DIST_BINS)]
     defense = {}
     for team, g in z.groupby("opp"):          # `opp` is the DEFENDING team for these shooters
         arr = [[0, 0] for _ in ZONE_KEYS]
@@ -122,7 +125,7 @@ def league_artifact(df: pd.DataFrame, year: int, source: str) -> dict:
         "n_shots": int(len(df)), "fga": int(len(df)), "fgm": int(df["made"].sum()), "fg3a": int(df["three"].sum()),
         "fg3m": int((df["three"] & df["made"]).sum()), "n_games": int(df["game_id"].nunique()),
         "last_game": str(df["date"].max()), "hex_r": HEX_R, "hoop": list(HOOP),
-        "zones": zones, "hexes": hexes, "groups": groups, "defense": defense,
+        "zones": zones, "hexes": hexes, "groups": groups, "dist": dist, "defense": defense,
     }
 
 
@@ -138,6 +141,19 @@ def read_csv_seasons(path: str, years: list[int], chunksize: int = 500_000) -> p
     return pd.concat(parts, ignore_index=True)
 
 
+def write_season(df: pd.DataFrame, year: int, source: str, dry_run: bool = False) -> dict:
+    """One season's canonical frame -> `NBA/shots/shots_{year}.parquet` + `league_{year}.json` (nothing written on dry_run)."""
+    art = league_artifact(df, year, source)
+    buf = io.BytesIO()
+    df.to_parquet(buf, index=False, compression="zstd")
+    info = {"rows": len(df), "parquet_bytes": buf.tell(), "json_bytes": len(json.dumps(art)), "fg_pct": _pct(art["fgm"], art["fga"]),
+            "last_game": art["last_game"], "n_games": art["n_games"]}
+    if not dry_run:
+        _st.write_bytes(buf.getvalue(), shots_key(year))
+        _st.write_bytes(json.dumps(art, separators=(",", ":")).encode(), league_key(year))
+    return info
+
+
 def build(csv_path: str, years: list[int], source: str, dry_run: bool = False) -> dict:
     raw = read_csv_seasons(csv_path, years)
     out = {}
@@ -146,26 +162,41 @@ def build(csv_path: str, years: list[int], source: str, dry_run: bool = False) -
         if part.empty:
             logger.warning("season %s: no rows", y)
             continue
-        df = normalize_csv_frame(part)
-        art = league_artifact(df, y, source)
-        buf = io.BytesIO()
-        df.to_parquet(buf, index=False, compression="zstd")
-        out[y] = {"rows": len(df), "parquet_bytes": buf.tell(), "json_bytes": len(json.dumps(art)), "fg_pct": _pct(art["fgm"], art["fga"])}
-        if not dry_run:
-            _st.write_bytes(buf.getvalue(), shots_key(y))
-            _st.write_bytes(json.dumps(art, separators=(",", ":")).encode(), league_key(y))
+        out[y] = write_season(normalize_csv_frame(part), y, source, dry_run)
     return out
+
+
+def build_espn(parquet_path: str, release_season: int, dry_run: bool = False) -> dict:
+    """One hoopR `play_by_play_{release_season}.parquet` (release_season = the year the season ENDS) -> artifacts for START year
+    release_season - 1. Re-run it as the live season's file grows."""
+    from nba.shots.espn import normalize_espn_frame
+    df = normalize_espn_frame(pd.read_parquet(parquet_path), release_season)
+    year = release_season - 1
+    return {year: write_season(df, year, f"ESPN play-by-play via sportsdataverse/hoopR (play_by_play_{release_season}.parquet)", dry_run)}
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--csv", required=True)
-    ap.add_argument("--seasons", nargs="+", type=int, required=True, help="season START years, e.g. 2024 = 2024-25")
+    ap.add_argument("--csv", help="the 24-column NBA shot file")
+    ap.add_argument("--seasons", nargs="+", type=int, help="with --csv: season START years, e.g. 2024 = 2024-25")
+    ap.add_argument("--espn-parquet", help="a hoopR play_by_play_{N}.parquet")
+    ap.add_argument("--espn-season", type=int, help="with --espn-parquet: N, the year the season ENDS (2027 = 2026-27)")
     ap.add_argument("--source", default="NBA_2004_2025_Shots.csv (user-supplied; stats.nba.com ShotChartDetail lineage)")
     ap.add_argument("--dry-run", action="store_true", help="compute and size the artifacts, write nothing")
     a = ap.parse_args()
     logging.basicConfig(level=logging.INFO)
-    print(json.dumps(build(a.csv, a.seasons, a.source, a.dry_run), indent=2))
+    out = {}
+    if a.csv:
+        if not a.seasons:
+            ap.error("--csv needs --seasons")
+        out.update(build(a.csv, a.seasons, a.source, a.dry_run))
+    if a.espn_parquet:
+        if not a.espn_season:
+            ap.error("--espn-parquet needs --espn-season")
+        out.update(build_espn(a.espn_parquet, a.espn_season, a.dry_run))
+    if not out:
+        ap.error("give --csv/--seasons and/or --espn-parquet/--espn-season")
+    print(json.dumps(out, indent=2))
 
 
 if __name__ == "__main__":
