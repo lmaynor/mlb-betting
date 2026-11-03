@@ -235,3 +235,23 @@ describe('rungEdgeRange: where every book sits against the market fair price', (
     expect(rungEdgeRange(buildLadderRung(row({ books: [] }), 'b', { pMarket: 0.4 }))).toBeNull()
   })
 })
+
+import { EDGE_CAP, edgePos, edgeScale } from '../lib/game-ladder'
+
+describe('books-vs-fair track', () => {
+  it('fair is the centre, a better price is further right, and a worse one further left', () => {
+    expect(edgePos(0, 0.05)).toBe(0.5)
+    expect(edgePos(0.03, 0.05)).toBeGreaterThan(0.5)
+    expect(edgePos(-0.03, 0.05)).toBeLessThan(0.5)
+    expect(edgePos(0.04, 0.05)).toBeGreaterThan(edgePos(0.02, 0.05))
+  })
+  it('clips to the track so a stale quote cannot leave it', () => {
+    expect(edgePos(0.5, 0.05)).toBe(1)
+    expect(edgePos(-0.5, 0.05)).toBe(0)
+  })
+  it('the scale follows the data but never under 3% or over the cap', () => {
+    expect(edgeScale([0.001, -0.002])).toBe(0.03)
+    expect(edgeScale([0.05, -0.02])).toBe(0.05)
+    expect(edgeScale([0.4])).toBe(EDGE_CAP)
+  })
+})

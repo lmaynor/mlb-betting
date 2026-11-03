@@ -204,6 +204,26 @@ describe('the book matrix: right = better price', () => {
     expect(x('pinnacle')).toBeGreaterThan(x('kalshi'))
     expect(x('kalshi')).toBeGreaterThan(x('novig'))
   })
+  it('every row shares one grid, and the fair and model lines are drawn once down the whole list (they used to float per row)', () => {
+    render(<GameBoard feeds={feeds()} />)
+    const m = screen.getByTestId('book-matrix')
+    const rows = within(m).getAllByTestId('matrix-row')
+    expect(new Set(rows.map(r => r.className)).size).toBe(1)
+    expect(rows[0].className).toMatch(/grid-cols-\[var\(--ml\)_minmax\(0,1fr\)_var\(--mr\)\]/)
+    expect(within(m).getAllByTestId('matrix-fair-line')).toHaveLength(1)
+    expect(within(m).getAllByTestId('matrix-model-line')).toHaveLength(1)
+  })
+  it('a book that beats fair has a green bar right of the line; one that does not has a grey bar to its left', () => {
+    const rows = [mk(GK, 'DET', 'FLA', T1, 'spread', -1.5, [...['draftkings', 'fanduel', 'betmgm', 'novig', 'kalshi'].map(k => q(k, -110, -110)), q('caesars', -125, 105)])]
+    render(<GameBoard feeds={{ odds: { nhl: oddsFeed('nhl', rows) }, proj: {} }} />)
+    const matrix = within(screen.getByTestId('book-matrix'))
+    const row = (book: string) => matrix.getAllByTestId('matrix-row').find(r => r.getAttribute('data-book') === book)!
+    const bar = (book: string) => within(row(book)).getByTestId('matrix-bar') as HTMLElement
+    expect(Number(row('caesars').getAttribute('data-x'))).toBeGreaterThan(0.5)
+    expect(bar('caesars').style.background).toBe('rgb(87, 242, 135)')
+    expect(Number(row('draftkings').getAttribute('data-x'))).toBeLessThanOrEqual(0.5)
+    expect(bar('draftkings').style.background).not.toBe('rgb(87, 242, 135)')
+  })
   it('labels the market and model fair markers and shows both sides of every quote', () => {
     render(<GameBoard feeds={feeds()} />)
     const m = screen.getByTestId('book-matrix')

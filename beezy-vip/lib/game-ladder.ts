@@ -207,3 +207,16 @@ export function rungEdgeRange(rung: LadderRung): { lo: number; hi: number; best:
   const evs = rung.dots.map(d => rung.pMarket! * d.decimal - 1)
   return { lo: Math.min(...evs), hi: Math.max(...evs), best: rung.evMarket }
 }
+
+/** The most EV the edge charts show either side of the fair price: past it a bar is clipped with an arrow, so one stale quote cannot flatten the rest. */
+export const EDGE_CAP = 0.12
+
+/** Half-width (as EV) of the books-vs-fair axis for one rung: the biggest |EV| on it, never under 3% and never over EDGE_CAP. */
+export function edgeScale(evs: readonly number[]): number {
+  return Math.min(EDGE_CAP, Math.max(0.03, ...evs.map(Math.abs)))
+}
+
+/** Position 0..1 along a books-vs-fair track: 0.5 is the fair price, further right is a better price, clamped to the track. */
+export function edgePos(ev: number, scale: number): number {
+  return 0.5 + Math.max(-1, Math.min(1, ev / scale)) * 0.5
+}

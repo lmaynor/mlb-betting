@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { rungEdgeRange, type LadderRung } from '@/lib/game-ladder'
+import { EDGE_CAP, rungEdgeRange, type LadderRung } from '@/lib/game-ladder'
 import { GREEN, SKY } from './game-prices-parts'
 
 export interface ChartRung { line: number | null; label: string; rung: LadderRung }
@@ -14,8 +14,6 @@ const EDGE_H = 116
 const LABEL_H = 46
 const PAD = { l: 44, r: 8, t: 10 }
 const H = PAD.t + PROB_H + GAP + EDGE_H + LABEL_H
-/** The edge panel never zooms past this, so one stale quote cannot flatten every other bar. A clipped bar gets an arrow. */
-const EDGE_CAP = 0.12
 
 /** The width of an element in px, kept current with a ResizeObserver (a fixed fallback where there is none, e.g. jsdom). */
 function useWidth(fallback = 640): [React.RefObject<HTMLDivElement | null>, number] {
