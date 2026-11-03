@@ -1169,6 +1169,35 @@ def public_edge_cockpit():
         return jsonify({"error": str(exc)}), 500
 
 
+@app.route("/api/public/edge/shotchart", methods=["GET", "OPTIONS"])
+def public_edge_shotchart():
+    """/edge NBA shot chart: one player's season of shot locations vs the league (nba/shots). Read from the built
+    `NBA/shots/` artifacts; `status` is "no_data" / "no_player" (HTTP 200) when they are absent or the player never
+    shot enough, so the page can say so."""
+    if request.method == "OPTIONS":
+        return "", 204, _cors_headers()
+    err = _auth_required(request)
+    if err:
+        return err
+    try:
+        from nba.shots.charts import shot_chart
+        if (request.args.get("sport") or "nba").lower() != "nba":
+            return jsonify({"error": "shot charts are NBA only"}), 400
+        season = request.args.get("season")
+        data = shot_chart(
+            request.args.get("player"),
+            season=int(season) if season and season.isdigit() else None,
+            opp=(request.args.get("opp") or "").upper() or None,
+        )
+        resp = jsonify(data)
+        resp.headers.update(_cors_headers())
+        resp.headers["Cache-Control"] = "public, max-age=300"
+        return resp
+    except Exception as exc:
+        logger.exception("public_edge_shotchart failed")
+        return jsonify({"error": str(exc)}), 500
+
+
 @app.route("/api/public/projections", methods=["GET", "OPTIONS"])
 def public_projections():
     """Daily NFL / NHL / NBA projection board (ev/daily_projections.py): model projection + market lines + edge +

@@ -2,7 +2,7 @@
 // Replaces direct Cloud SQL access for all bets-table queries.
 // The Cloud Run service handles auth and Cloud SQL via its own binding.
 
-import type { Bet, SystemStats, CLVDataPoint, TodaySlate, EvFeed, AnalyticsDeepDive, CockpitFeed, SportProjections } from '@/lib/types'
+import type { Bet, SystemStats, CLVDataPoint, TodaySlate, EvFeed, AnalyticsDeepDive, CockpitFeed, SportProjections, ShotChartResult } from '@/lib/types'
 import type { GameProjectionsFeed } from '@/lib/game-lines'
 import type { GameOddsFeed } from '@/lib/game-odds'
 import { siteDateKey } from '@/lib/dates'
@@ -325,6 +325,14 @@ export async function apiGetEdgeCockpit(params?: { sport?: string; minEv?: numbe
   if (params?.limit)         sp.set('limit', String(params.limit))
   const qs = sp.toString() ? `?${sp.toString()}` : ''
   return apiFetch<CockpitFeed>(`/api/public/edge/cockpit${qs}`, 60, `/api/edge-cockpit${qs}`)
+}
+
+/** /edge NBA shot chart for one player (browser -> /api/shot-chart proxy, which applies the cockpit access policy). */
+export async function apiGetShotChart(params: { player: string; season?: number; opp?: string | null }): Promise<ShotChartResult> {
+  const sp = new URLSearchParams({ sport: 'nba', player: params.player })
+  if (params.season != null)   sp.set('season', String(params.season))
+  if (params.opp)              sp.set('opp', params.opp)
+  return apiFetch<ShotChartResult>(`/api/public/edge/shotchart?${sp.toString()}`, 300, `/api/shot-chart?${sp.toString()}`)
 }
 
 export async function apiGetAnalyticsDeepDive(

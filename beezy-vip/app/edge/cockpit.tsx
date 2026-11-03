@@ -24,6 +24,7 @@ import { LIVE_SPORTS, propStatLabel, SPORT_PILLARS } from '@/lib/sports'
 import { headshotUrlById } from '@/lib/sport-assets'
 import { HeadshotFallback } from '@/components/ui/sport-assets'
 import { isOffshore, onshoreQuotes } from '@/lib/offshore'
+import { ShotChartPanel } from './shot-chart'
 
 export type CockpitSport = 'all' | 'mlb' | 'nfl' | 'nhl' | 'nba'
 export const COCKPIT_SPORTS: CockpitSport[] = ['all', ...LIVE_SPORTS.map(p => p.slug)]
@@ -398,6 +399,12 @@ function Inspector({ r, renderMlbExtras, onClose }: { r: CockpitRow; renderMlbEx
       <Panel title={`L${form?.n_games ?? 10} GAME LOG VS LINE`} sub={form ? `${propStatLabel(r.stat)} \u00b7 ${under ? 'Under' : 'Over'} ${form.line ?? ''}` : undefined}>
         {form && form.games.length ? <FormSparkline form={form} under={under} /> : <NoData>No game log is available for this player and stat yet. The line and price above are still live.</NoData>}
       </Panel>
+
+      {r.sport === 'nba' && (
+        <Panel title="SHOT CHART" sub="vs league">
+          <ShotChartPanel row={r} />
+        </Panel>
+      )}
 
       <Panel title={r.sport === 'mlb' ? 'CONTACT QUALITY AND BATTED BALLS' : 'OPPORTUNITY AND VOLUME TREND'} sub={r.sport === 'mlb' ? 'Statcast' : form?.usage_label ?? undefined}>
         {r.sport === 'mlb'

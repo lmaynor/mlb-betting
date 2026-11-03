@@ -417,3 +417,39 @@ export interface CockpitFeed {
   /** rows withheld by the access policy (lib/access-feeds.ts); absent when nothing was cut */
   locked?: number
 }
+
+// -- /edge NBA shot chart (GET /api/public/edge/shotchart; nba/shots/charts.py) -------------------------------------------
+/** A shot is [x * 10, y * 10, flags] in the court frame of nba/shots/court.py (feet from the centre line / the baseline); bit 0 = made, bit 1 = three. */
+export type ShotTuple = [number, number, number]
+
+export interface ShotZoneRow { key: string; label: string; cx: number; cy: number; fga: number; fgm: number; lfga: number; lfgm: number }
+export interface ShotGroupRow { group: string; fga: number; fgm: number; lfga: number; lfgm: number }
+/** [q, r, player fga, player fgm, league fga, league fgm] for one hex cell (axial coordinates, pointy-top, circumradius `hex_r`). */
+export type ShotHexCell = [number, number, number, number, number, number]
+export interface ShotGameRow { date: string; opp: string; home: boolean; fga: number; fgm: number; fg3a: number; fg3m: number }
+export interface ShotVenue { games: number; fga: number; fgm: number; fg3a: number; fg3m: number }
+
+export interface ShotChartOk {
+  status: 'ok'
+  player: string
+  team: string
+  season: number
+  label: string
+  seasons: number[]
+  source: string
+  last_game: string
+  hoop: [number, number]
+  hex_r: number
+  fga: number; fgm: number; fg3a: number; fg3m: number; n_games: number
+  league: { fga: number; fgm: number; fg3a: number; fg3m: number }
+  shots: ShotTuple[]
+  hexes: ShotHexCell[]
+  /** every league cell [q, r, zone index], so the zone view can tint the whole court */
+  grid: [number, number, number][]
+  zones: ShotZoneRow[]
+  groups: ShotGroupRow[]
+  games: ShotGameRow[]
+  venue: { home: ShotVenue; away: ShotVenue }
+  opponent: { team: string; fga: number; fg3a: number; zones: { key: string; fga: number; fgm: number }[]; lfga: number; lfg3a: number; n_teams: number } | null
+}
+export type ShotChartResult = ShotChartOk | { status: 'no_data' | 'no_player'; seasons?: number[]; reason?: string } | { status: 'locked' }
