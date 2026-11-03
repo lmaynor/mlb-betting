@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { GamePricesClient } from '@/app/ev/games/game-prices-client'
-import { GamesNav, gamesHref } from '@/app/ev/games/games-nav'
+import { GamesNav, gamesHref, parseGamesView } from '@/app/ev/games/games-nav'
 import type { GameOddsFeed, GameOddsRow } from '@/lib/game-odds'
 
 let mobile = false
@@ -127,22 +127,32 @@ describe('GamePricesClient (the /ev/games PRICES view)', () => {
   })
 })
 
-describe('the PRICES | MODEL switch', () => {
-  it('builds shareable hrefs: prices and all are the defaults and stay out of the URL', () => {
-    expect(gamesHref('prices', 'all')).toBe('/ev/games')
-    expect(gamesHref('model', 'all')).toBe('/ev/games?view=model')
-    expect(gamesHref('prices', 'nba')).toBe('/ev/games?sport=nba')
-    expect(gamesHref('model', 'nhl')).toBe('/ev/games?view=model&sport=nhl')
+describe('the GAMES | TABLE switch', () => {
+  it('builds shareable hrefs: games and all are the defaults and stay out of the URL', () => {
+    expect(gamesHref('games', 'all')).toBe('/ev/games')
+    expect(gamesHref('table', 'all')).toBe('/ev/games?view=table')
+    expect(gamesHref('games', 'nba')).toBe('/ev/games?sport=nba')
+    expect(gamesHref('table', 'nhl')).toBe('/ev/games?view=table&sport=nhl')
   })
-  it('the view links keep the sport and the sport links keep the view', () => {
-    render(<GamesNav view="model" sport="nba" />)
+  it('old links still land somewhere sensible: prices opens the table, model the games board', () => {
+    expect(parseGamesView('prices')).toBe('table')
+    expect(parseGamesView('table')).toBe('table')
+    expect(parseGamesView('model')).toBe('games')
+    expect(parseGamesView(undefined)).toBe('games')
+  })
+  it('on the table the view links keep the sport and the sport links keep the view', () => {
+    render(<GamesNav view="table" sport="nba" />)
     const view = within(screen.getByRole('navigation', { name: 'Game lines view' }))
-    expect(view.getByRole('link', { name: 'PRICES' })).toHaveAttribute('href', '/ev/games?sport=nba')
-    expect(view.getByRole('link', { name: 'MODEL' })).toHaveAttribute('href', '/ev/games?view=model&sport=nba')
-    expect(view.getByRole('link', { name: 'MODEL' })).toHaveAttribute('aria-current', 'page')
+    expect(view.getByRole('link', { name: 'GAMES' })).toHaveAttribute('href', '/ev/games?sport=nba')
+    expect(view.getByRole('link', { name: 'TABLE' })).toHaveAttribute('href', '/ev/games?view=table&sport=nba')
+    expect(view.getByRole('link', { name: 'TABLE' })).toHaveAttribute('aria-current', 'page')
     const sports = within(screen.getByRole('navigation', { name: 'Game lines sport' }))
-    expect(sports.getByRole('link', { name: 'NBA + NHL' })).toHaveAttribute('href', '/ev/games?view=model')
-    expect(sports.getByRole('link', { name: 'NHL' })).toHaveAttribute('href', '/ev/games?view=model&sport=nhl')
+    expect(sports.getByRole('link', { name: 'All sports' })).toHaveAttribute('href', '/ev/games?view=table')
+    expect(sports.getByRole('link', { name: 'NHL' })).toHaveAttribute('href', '/ev/games?view=table&sport=nhl')
     expect(sports.getByRole('link', { name: 'NBA' })).toHaveAttribute('aria-current', 'page')
+  })
+  it('the games board has its own sport pills, so the page header carries no sport links', () => {
+    render(<GamesNav view="games" sport="all" />)
+    expect(screen.queryByRole('navigation', { name: 'Game lines sport' })).toBeNull()
   })
 })

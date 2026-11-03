@@ -36,8 +36,17 @@ export interface GamePricedGame {
   lambda_h?: number
   lambda_a?: number
   exp_total?: number
+  /** the model's probability for EVERY alternate rung, not only the main line (backend `ladder`; absent on an older feed) */
+  ladder?: GameModelLadder
   // Common markets list
   markets: GamePricedMarket[]
+}
+
+/** Model probabilities per rung. `line` of a spread is the HOME line; `push` is the probability mass exactly on a whole-number line. */
+export interface GameModelLadder {
+  ml?: { p_home: number; p_away: number }
+  spread?: { line: number; p_home: number; p_away: number; push?: number }[]
+  total?: { line: number; p_over: number; p_under: number; push?: number }[]
 }
 
 export interface GameMetadata {
@@ -45,6 +54,24 @@ export interface GameMetadata {
   away: string
   home: string
   start: string
+  /** model drivers the pipeline already computes; every one is optional and shown only when present */
+  lambda_h?: number | null
+  lambda_a?: number | null
+  exp_total?: number | null
+  home_goalie?: string | null
+  away_goalie?: string | null
+  is_b2b_road?: boolean | null
+  mu_margin?: number | null
+  mu_total?: number | null
+  exp_pace?: number | null
+  /** NBA schedule and injury drivers (days of rest, back-to-back flags, scoring the injured players would have produced) */
+  rest_home?: number | null
+  rest_away?: number | null
+  b2b_home?: boolean | null
+  b2b_away?: boolean | null
+  home_points_lost?: number | null
+  away_points_lost?: number | null
+  injury_margin_delta?: number | null
 }
 
 export interface GameProjectionRow {

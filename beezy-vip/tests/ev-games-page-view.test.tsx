@@ -33,29 +33,33 @@ beforeEach(() => {
 })
 
 describe('/ev/games view and sport routing (server-side)', () => {
-  it('defaults to PRICES: fetches both odds feeds, no projections', async () => {
+  it('defaults to the GAMES board: fetches both odds feeds and both model feeds', async () => {
     render(await page({}))
     expect(oddsMock.mock.calls.map(c => c[0]).sort()).toEqual(['nba', 'nhl'])
-    expect(projMock).not.toHaveBeenCalled()
-    expect(screen.getByTestId('game-prices-strip')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'PRICES' })).toHaveAttribute('aria-current', 'page')
+    expect(projMock.mock.calls.map(c => c[0]).sort()).toEqual(['nba', 'nhl'])
+    expect(screen.getByTestId('game-board-strip')).toBeInTheDocument()
+    expect(screen.getAllByTestId('game-card').length).toBeGreaterThan(0)
+    expect(screen.getByRole('link', { name: 'GAMES' })).toHaveAttribute('aria-current', 'page')
   })
-  it('?sport narrows the fetch, and an unreachable feed degrades to the unavailable state', async () => {
+  it('the retired MODEL view lands on the games board', async () => {
+    render(await page({ view: 'model', sport: 'nhl' }))
+    expect(screen.getByTestId('game-board-strip')).toBeInTheDocument()
+  })
+  it('an unreachable feed degrades to the unavailable state', async () => {
     oddsMock.mockRejectedValue(new Error('down'))
-    render(await page({ sport: 'nba' }))
-    expect(oddsMock.mock.calls.map(c => c[0])).toEqual(['nba'])
+    render(await page({}))
     expect(screen.getByRole('status').textContent).toMatch(/Game-line prices are not published yet/)
   })
-  it('?view=model keeps the existing projection view and does not fetch the price feeds', async () => {
-    render(await page({ view: 'model', sport: 'nhl' }))
-    expect(projMock.mock.calls.map(c => c[0])).toEqual(['nhl'])
-    expect(oddsMock).not.toHaveBeenCalled()
-    expect(screen.getByRole('link', { name: 'MODEL' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByTestId('game-lines-label').textContent).toMatch(/UNVALIDATED/i)
+  it('TABLE keeps the all-rows screen and ?sport narrows its fetch', async () => {
+    render(await page({ view: 'table', sport: 'nba' }))
+    expect(oddsMock.mock.calls.map(c => c[0])).toEqual(['nba'])
+    expect(projMock).not.toHaveBeenCalled()
+    expect(screen.getByTestId('game-prices-strip')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'TABLE' })).toHaveAttribute('aria-current', 'page')
   })
   it('cuts the price feed on the server for a free viewer before it reaches the client', async () => {
     getViewerMock.mockResolvedValue({ tier: 'public', sport: null })
-    render(await page({ sport: 'nba' }))
+    render(await page({ view: 'table', sport: 'nba' }))
     expect(screen.getByTestId('game-prices-strip').textContent).toMatch(/5 ROWS/)
     expect(screen.getByRole('note').textContent).toMatch(/3/)
   })

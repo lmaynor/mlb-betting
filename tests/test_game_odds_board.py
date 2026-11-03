@@ -297,3 +297,44 @@ def test_flip_guard_needs_four_two_sided_books():
     b = gob.build_game_board("nhl", [event(A, H, [bm("bet365", h2h(A, H, -180, 150)), bm("fanduel", h2h(A, H, -182, 150)),
                                                   bm("betmgm", h2h(A, H, 150, -185))])], NOW)
     assert {x["book"]: x for x in b["rows"][0]["books"]}["betmgm"]["a"] == 150          # only 3 books: not enough to call it
+
+
+# ---- junk offshore books are dropped at the source; pinnacle stays as the sharp reference (2026-11-02) --------------
+def test_junk_offshore_books_dropped_pinnacle_kept_in_game_board():
+    A, H = "Boston Celtics", "Miami Heat"
+    junk = ("bovada", "betonline", "mybookie", "betus", "matchbook", "betfair")
+    ev = event(A, H, [
+        bm("fanduel", h2h(A, H, -250, 210), spreads(A, H, 6.5, -110, -110), totals(220.5, -110, -110)),
+        bm("draftkings", h2h(A, H, -255, 215), spreads(A, H, 6.5, -108, -112), totals(220.5, -110, -110)),
+        bm("pinnacle", h2h(A, H, -260, 220), spreads(A, H, 6.5, -102, -118), totals(220.5, -108, -108)),
+        *[bm(j, h2h(A, H, -250, 210), spreads(A, H, 6.5, -110, -110), totals(220.5, -110, -110)) for j in junk],
+    ])
+    b = gob.build_game_board("nba", [ev], NOW)
+    assert b["status"] == "live"
+    assert b["books"] == ["draftkings", "fanduel", "pinnacle"] and b["offshore_books"] == ["pinnacle"]
+    for r in b["rows"]:
+        assert not {x["book"] for x in r["books"]} & set(junk)
+        assert "pinnacle" in {x["book"] for x in r["books"]}
+
+
+def test_game_row_with_only_junk_plus_one_real_book_is_dropped():
+    A, H = "Boston Celtics", "Miami Heat"
+    ev = event(A, H, [
+        bm("fanduel", h2h(A, H, -250, 210), spreads(A, H, 6.5, -110, -110)),
+        bm("bovada", h2h(A, H, -250, 210), spreads(A, H, 6.5, -110, -110), totals(224.5, -110, -110)),
+        bm("betonline", h2h(A, H, -250, 210), spreads(A, H, 6.5, -110, -110), totals(224.5, -110, -110)),
+    ])
+    b = gob.build_game_board("nba", [ev], NOW)
+    assert b["rows"] == [] and b["status"] == "awaiting_lines"      # ml/spread are single-book once junk is gone; 224.5 was junk-only
+    assert b["offshore_books"] == [] and b["books"] == []
+
+
+def test_junk_offshore_dropped_from_bestbook_ladder_quotes():
+    bb = [{"commence_time": START, "away_team": "Boston Celtics", "home_team": "Miami Heat", "quotes": [
+        {"book": "bovada", "market": "spread", "line": 9.5, "a": -110, "b": -110},
+        {"book": "betonline", "market": "spread", "line": 9.5, "a": -110, "b": -110},
+        {"book": "pinnacle", "market": "spread", "line": 9.5, "a": -105, "b": -115},
+        {"book": "fanduel", "market": "spread", "line": 9.5, "a": -110, "b": -110}]}]
+    b = gob.build_game_board("nba", [], NOW, bb_games=bb, bb_meta={"fetched_at": "2026-11-02T17:55:00+00:00"})
+    assert [r["line"] for r in b["rows"]] == [9.5]
+    assert {x["book"] for x in b["rows"][0]["books"]} == {"fanduel", "pinnacle"} and b["offshore_books"] == ["pinnacle"]

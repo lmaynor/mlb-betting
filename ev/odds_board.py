@@ -29,7 +29,7 @@ import math
 from datetime import datetime, timezone
 from statistics import median
 
-from ev.props import DFS_BOOKS, OFFSHORE_BOOKS, POOL_SD_FRAC, parse_event_props, shift_p_over
+from ev.props import DFS_BOOKS, JUNK_OFFSHORE_BOOKS, OFFSHORE_BOOKS, POOL_SD_FRAC, parse_event_props, shift_p_over
 from mlb_core.odds.utils import american_to_decimal, american_to_implied_prob, devig_two_way
 
 log = logging.getLogger("ev.odds_board")
@@ -225,8 +225,8 @@ def build_board(sport: str, events: list | None, now: datetime, meta: dict | Non
         gk = game_key_of(sport, start, away, home)
         quotes, _ = parse_event_props(ev, sport)
         for q in quotes:
-            if q.book in DFS_BOOKS or (q.over is None and q.under is None):
-                continue
+            if q.book in DFS_BOOKS or q.book in JUNK_OFFSHORE_BOOKS or (q.over is None and q.under is None):
+                continue    # DFS apps and junk offshore books never enter a row (pinnacle stays as a reference)
             key = f"{gk}|{q.player_norm}|{q.stat}|{q.point}"
             row = rows.get(key)
             if row is None:

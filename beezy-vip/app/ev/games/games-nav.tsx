@@ -1,36 +1,37 @@
 import Link from 'next/link'
 
-export type GamesView = 'prices' | 'model'
+export type GamesView = 'games' | 'table'
 export type GameSport = 'all' | 'nba' | 'nhl'
 
 export const SPORT_TABS: { key: GameSport; label: string }[] = [
-  { key: 'all', label: 'NBA + NHL' },
+  { key: 'all', label: 'All sports' },
   { key: 'nba', label: 'NBA' },
   { key: 'nhl', label: 'NHL' },
 ]
 const VIEW_TABS: { key: GamesView; label: string; title: string }[] = [
-  { key: 'prices', label: 'PRICES', title: 'Every book\'s moneyline, spread and total side by side, with best price, fair value and arbitrage' },
-  { key: 'model', label: 'MODEL', title: 'The model\'s projection against the market' },
+  { key: 'games', label: 'GAMES', title: 'Every game as a card: open one for our projection, every line and every book side by side' },
+  { key: 'table', label: 'TABLE', title: 'Every game, market and line in one table, with a column per book' },
 ]
 
+/** `table` (and the old `prices` links) open the all-rows table; everything else, including the retired `model` view, is the games board. */
 export function parseGamesView(v: string | undefined): GamesView {
-  return v === 'model' ? 'model' : 'prices'
+  return v === 'table' || v === 'prices' ? 'table' : 'games'
 }
 
 export function parseGameSport(v: string | undefined): GameSport {
   return v === 'nba' || v === 'nhl' ? v : 'all'
 }
 
-/** A shareable /ev/games URL: the view and the sport live in the query string, never in client state. PRICES and ALL are the defaults and stay out of it. */
+/** A shareable /ev/games URL: the view and the sport live in the query string, never in client state. GAMES and ALL are the defaults and stay out of it. */
 export function gamesHref(view: GamesView, sport: GameSport): string {
   const sp = new URLSearchParams()
-  if (view === 'model') sp.set('view', 'model')
+  if (view === 'table') sp.set('view', 'table')
   if (sport !== 'all') sp.set('sport', sport)
   const qs = sp.toString()
   return qs ? `/ev/games?${qs}` : '/ev/games'
 }
 
-/** The page toolbar's right side: the PRICES | MODEL switch and the sport links. Both are plain links so each state is shareable. */
+/** The page toolbar's right side: the GAMES | TABLE switch and, on the table, the sport links (the games board has its own sport pills). Plain links, so each state is shareable. */
 export function GamesNav({ view, sport }: { view: GamesView; sport: GameSport }) {
   return (
     <div className="flex items-center gap-y-2 gap-x-4 flex-wrap">
@@ -51,7 +52,7 @@ export function GamesNav({ view, sport }: { view: GamesView; sport: GameSport })
           >{t.label}</Link>
         ))}
       </nav>
-      <nav aria-label="Game lines sport" className="flex gap-3.5 text-[12.5px]">
+      {view === 'table' && <nav aria-label="Game lines sport" className="flex gap-3.5 text-[12.5px]">
         {SPORT_TABS.map(t => (
           <Link className="no-underline"
             key={t.key}
@@ -60,7 +61,7 @@ export function GamesNav({ view, sport }: { view: GamesView; sport: GameSport })
             style={{ color: sport === t.key ? 'var(--color-text-primary)' : 'var(--link)', fontWeight: sport === t.key ? 600 : 400 }}
           >{t.label}</Link>
         ))}
-      </nav>
+      </nav>}
     </div>
   )
 }

@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { AlignedBar } from '@/components/picks/aligned-bar'
 import { BOOK_CHIPS, bookParam, SIGNAL_OPTIONS, SORT_OPTIONS } from '@/lib/picks-filters'
 import { getSystemsBySport, kindOfSystem, type PickKind } from '@/lib/pick-systems'
-import { LIVE_SPORTS, type SportSlug } from '@/lib/sports'
+import { sportsInSeason, type SportSlug } from '@/lib/sports'
 import { SYSTEM_LABEL_SHORT } from '@/lib/tokens'
 import { useMyBooks } from '@/lib/use-my-books'
 import { MobileBottomSheet, useIsMobile } from '@/components/ui/mobile-sheet'
@@ -147,7 +147,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
               <div>
                 <div className="ui-heading text-micro text-text-secondary mb-1.5 tracking-head">SPORT</div>
                 <div className="flex gap-1 bg-background-secondary-default p-[3px]" style={{ borderRadius: '8px', border: B }}>
-                  {[{ slug: 'all', shortName: 'ALL' }, ...LIVE_SPORTS].map(s => {
+                  {[{ slug: 'all', shortName: 'ALL' }, ...sportsInSeason()].map(s => {
                     const isActive = sportParam === s.slug
                     return (
                       <button className="flex-1 min-h-9 cursor-pointer"
@@ -488,7 +488,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
         <label style={LABEL}>SPORT
           <select aria-label="Sport" value={sportParam} onChange={e => set('sport', e.target.value, 'all')} style={{ ...CONTROL, ...SELECT }}>
             <option value="all">All sports</option>
-            {LIVE_SPORTS.map(p => <option key={p.slug} value={p.slug}>{p.shortName}</option>)}
+            {sportsInSeason().map(p => <option key={p.slug} value={p.slug}>{p.shortName}</option>)}
           </select>
         </label>
       ) : !fixedMarket && (

@@ -32,7 +32,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
 from ev.odds_board import ROGUE_MIN_BOOKS, ROGUE_RATIO, _safe_decimal
-from ev.props import DFS_BOOKS, OFFSHORE_BOOKS
+from ev.props import DFS_BOOKS, JUNK_OFFSHORE_BOOKS, OFFSHORE_BOOKS
 from mlb_core.alerts.discord_routes import canonical_book
 
 log = logging.getLogger("ev.game_odds_board")
@@ -239,7 +239,7 @@ def build_game_board(sport: str, events: Optional[list], now: datetime, meta: Op
             if not isinstance(bm, dict):
                 continue
             book = canonical_book(str(bm.get("key") or bm.get("name") or "")).strip()
-            if not book or book in DFS_BOOKS:
+            if not book or book in DFS_BOOKS or book in JUNK_OFFSHORE_BOOKS:   # junk offshore dropped; pinnacle kept as reference
                 continue
             for mk in bm.get("markets") or []:
                 if not isinstance(mk, dict) or mk.get("key") not in _MARKET_OF:
@@ -273,7 +273,7 @@ def build_game_board(sport: str, events: Optional[list], now: datetime, meta: Op
             try:
                 book = canonical_book(str(q.get("book") or "")).strip()
                 market = q.get("market")
-                if not book or book in DFS_BOOKS or market not in MARKETS:
+                if not book or book in DFS_BOOKS or book in JUNK_OFFSHORE_BOOKS or market not in MARKETS:
                     continue
                 a_p, b_p = _price(q.get("a")), _price(q.get("b"))
                 line = None if market == "ml" else _num(q.get("line"))

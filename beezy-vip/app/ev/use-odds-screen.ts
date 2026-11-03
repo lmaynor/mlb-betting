@@ -5,7 +5,7 @@ import { bookDisplay, canonBook } from '@/lib/tokens'
 import { formatOdds } from '@/lib/odds'
 import { useBankroll } from '@/lib/use-bankroll'
 import { useMyBooks } from '@/lib/use-my-books'
-import { type SportSlug } from '@/lib/sports'
+import { sportsWithRows, type SportSlug } from '@/lib/sports'
 import { PRE_LAUNCH } from '@/lib/launch'
 import { useIsMobile } from '@/components/ui/mobile-sheet'
 import { buildArbRows, buildLongshotRows, buildScreenRows, computeMiddles, computeOutliers, computeSgpProxies, STAT_LABEL, type ArbRow, type BoardRow, type DevigMethod, type LongshotRow, type LongshotSubfilter, type MiddleResult, type OddsBoard, type OddsScreenMode, type ScreenRow, type SideFilter } from '@/lib/odds-screen'
@@ -192,6 +192,7 @@ export function useOddsScreen({ initial, initialLocked, fullAccess }: { initial:
     return () => clearInterval(id)
   }, [refresh])
 
+  const sportOptions = useMemo(() => sportsWithRows(boards), [boards])
   const active = useMemo(() => SPORT_KEYS.filter(s => (sport === 'all' || sport === s) && boards[s]), [boards, sport])
   const allRows = useMemo<BoardRow[]>(() => active.flatMap(s => boards[s]!.rows), [active, boards])
   const offshore = useMemo(() => new Set(active.flatMap(s => boards[s]!.offshore_books)), [active, boards])
@@ -415,7 +416,7 @@ export function useOddsScreen({ initial, initialLocked, fullAccess }: { initial:
       : { title: 'Nothing clears these filters', body: 'Set MIN EV to All to see every line, widen the devig books, or clear the prop and game filters. A +EV row needs at least three devig books pricing the line both ways.' }
   const refsNote = mode === 'longshots' ? 'Two books behind a fair value (the curve stands in below that).' : 'Needs 3 books behind a row.'
 
-  return { isMobile, meta, nRows, loading, refresh, mode, limit, setLimit, locked, allRows, columns, inspectItem, setInspectItem, stat, setStat, game, setGame, side, setSide, lines, setLines, minEv, setMinEv, sgpArch, setSgpArch, sgpMinEv, setSgpMinEv, sgpBook, setSgpBook, setQ, method, setMethod, refs, setRefs, setShown, sort, setSort, arbView, setArbView, exchanges, setExchanges, outlayText, setOutlayText, midCost, setMidCost, midGap, setMidGap, midPosEv, setMidPosEv, longSub, setLongSub, oddsMin, setOddsMin, useCurve, setUseCurve, outlierGap, setOutlierGap, outlierReqEv, setOutlierReqEv, outlierOddsBand, setOutlierOddsBand, outlierMinBooks, setOutlierMinBooks, outlierView, setOutlierView, myBooks, mobileFiltersOpen, setMobileFiltersOpen, bookList, defaultShown, shownSet, statOptions, games, refsNote, sport, setSport, q, activeFilterCount, switchMode, badgeFor, copied, revealed, revealMsg, setRevealMsg, bankroll, setMobileView, handleReveal, screen, outliers, arbs, middles, longshots, sgpProxies, outlay, copyHedge, copyMiddle, fullAccess, refWeight, refSet, sgpExtreme, setSgpExtreme, mobileView, sgpExtremeCount, unpublished, emptyBody }
+  return { isMobile, meta, nRows, loading, refresh, mode, limit, setLimit, locked, allRows, columns, inspectItem, setInspectItem, stat, setStat, game, setGame, side, setSide, lines, setLines, minEv, setMinEv, sgpArch, setSgpArch, sgpMinEv, setSgpMinEv, sgpBook, setSgpBook, setQ, method, setMethod, refs, setRefs, setShown, sort, setSort, arbView, setArbView, exchanges, setExchanges, outlayText, setOutlayText, midCost, setMidCost, midGap, setMidGap, midPosEv, setMidPosEv, longSub, setLongSub, oddsMin, setOddsMin, useCurve, setUseCurve, outlierGap, setOutlierGap, outlierReqEv, setOutlierReqEv, outlierOddsBand, setOutlierOddsBand, outlierMinBooks, setOutlierMinBooks, outlierView, setOutlierView, myBooks, mobileFiltersOpen, setMobileFiltersOpen, bookList, defaultShown, shownSet, statOptions, games, refsNote, sport, setSport, sportOptions, q, activeFilterCount, switchMode, badgeFor, copied, revealed, revealMsg, setRevealMsg, bankroll, setMobileView, handleReveal, screen, outliers, arbs, middles, longshots, sgpProxies, outlay, copyHedge, copyMiddle, fullAccess, refWeight, refSet, sgpExtreme, setSgpExtreme, mobileView, sgpExtremeCount, unpublished, emptyBody }
 }
 
 export type OddsScreen = ReturnType<typeof useOddsScreen>

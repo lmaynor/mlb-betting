@@ -4,14 +4,15 @@
  *
  *   Scanner  what is mispriced right now?     /ev (Odds Terminal: every book's player-prop price) + /ev/games (NBA / NHL game lines:
  *            model estimate vs the books, UNVALIDATED) + /edge (prop research view)
- *   Picks    what does the model say today?   /picks (top 10 PLAYER picks, all sports) + /picks/games (MLB tracked game picks) +
+ *   Picks    what does the model say today?   /picks (top 10 PLAYER picks, all sports) + /picks/games (game picks: the graded MLB card while it is in season, plus the NBA / NHL model's side per game, unvalidated) +
  *            /picks/history + /cheat-sheet. Picks is the tracked, graded record; unvalidated estimates live in the Scanner.
  *   Results  what happened, and is it real?   /results (ledger)      + /analytics tabs + /models (methodology)
  *   Tools    calculators and dashboards       /tools/*
  *   Home     proof, nothing else
  *
- * Sport ribbon (under the nav): ALL SPORTS = /picks, then one item per LIVE pillar in lib/sports.ts, each at /picks/[sport]:
- * the same page hierarchy for every sport (picks board, /projections, /[system]). /sports/[sport] redirects to /picks/[sport].
+ * There is no global sport ribbon: it linked away from the page it sat on. A page that needs a sport filter has its own pills, built
+ * from the sports that actually have games (lib/sports.ts sportsInSeason / sportsWithRows). Every sport still lives at /picks/[sport]
+ * (picks board, /projections, /[system]); /sports/[sport] redirects there.
  */
 import type { SportSlug } from '@/lib/sports'
 

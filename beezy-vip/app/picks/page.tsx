@@ -8,7 +8,7 @@ import { ScoreLegend } from '@/components/ui/score-legend'
 import { siteDateKey, formatDateKey } from '@/lib/dates'
 import { sportHref } from '@/lib/ia'
 import { activeFilterCount, parsePickFilters } from '@/lib/picks-filters'
-import { LIVE_SPORTS } from '@/lib/sports'
+import { sportsInSeason } from '@/lib/sports'
 import { filterTopPicks, isOfficialCardPlay, isEvOutlier } from '@/lib/top-picks'
 import { loadTopPlayerPicks } from '@/lib/top-picks-data'
 import { cx } from '@/utils/cx'
@@ -89,7 +89,7 @@ export default async function TopPicksPage({ searchParams }: { searchParams: Pro
 
         <div className="mx-0.5 mt-3 flex flex-wrap items-baseline gap-x-5 gap-y-2 text-body-2-regular">
           <span className="text-text-secondary">Full boards</span>
-          {LIVE_SPORTS.map(p => (
+          {sportsInSeason().map(p => (
             <Link key={p.slug} href={sportHref(p.slug)} className="text-accent-400 hover:underline">{p.shortName} &rarr;</Link>
           ))}
           <Link href="/picks/games" className="text-accent-400 hover:underline">Game picks &rarr;</Link>

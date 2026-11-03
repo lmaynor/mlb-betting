@@ -1,5 +1,4 @@
 import { bookDisplay } from '@/lib/tokens'
-import { LIVE_SPORTS } from '@/lib/sports'
 import { HorizontalPillStrip } from '@/components/ui/mobile-sheet'
 import { STAT_LABEL, type SideFilter } from '@/lib/odds-screen'
 import { SportFilter, SortKey, HAIR, GREEN, SHARP_PRESET, MIN_EV, ODDS_MIN, PAGE, MID_COST, MID_GAP, OUTLIER_GAP_OPTIONS, OUTLIER_ODDS_OPTIONS, OUTLIER_MIN_BOOKS, MODES, SGP_ARCHETYPE_OPTIONS, SGP_MIN_EV_OPTIONS } from './odds-constants'
@@ -8,7 +7,7 @@ import { Field, Select, Pill, PillGroup, BookPicker } from './odds-controls'
 import { OddsScreen } from './use-odds-screen'
 
 export function MobileFilterBar({ odds }: { odds: OddsScreen }) {
-  const { mode, sport, setSport, setStat, setGame, q, setQ, setLimit, setMobileFiltersOpen, activeFilterCount, switchMode, badgeFor } = odds
+  const { mode, sport, setSport, sportOptions, setStat, setGame, q, setQ, setLimit, setMobileFiltersOpen, activeFilterCount, switchMode, badgeFor } = odds
   return (
     <section className="mb-2.5 rounded-xl border border-separator-border bg-background-primary-default shadow-card" aria-label="Filters">
       <HorizontalPillStrip padding="8px 10px" gap="6px">
@@ -26,7 +25,7 @@ export function MobileFilterBar({ odds }: { odds: OddsScreen }) {
 
       <div style={{ padding: '8px 10px', borderTop: `1px solid ${HAIR}`, display: 'flex', gap: '8px', alignItems: 'center' }}>
         <HorizontalPillStrip gap="4px" padding="0" style={{ width: 'auto', flexShrink: 0 }}>
-          {(['all', ...LIVE_SPORTS.map(p => p.slug)] as SportFilter[]).map(s => {
+          {(['all', ...sportOptions] as SportFilter[]).map(s => {
             const selected = sport === s
             return (
               <button
@@ -111,7 +110,7 @@ export function MobileFilterBar({ odds }: { odds: OddsScreen }) {
 }
 
 export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
-  const { mode, sport, setSport, stat, setStat, game, setGame, side, setSide, lines, setLines, minEv, setMinEv, sgpArch, setSgpArch, sgpMinEv, setSgpMinEv, sgpBook, setSgpBook, q, setQ, method, setMethod, refs, setRefs, setShown, sort, setSort, setLimit, arbView, setArbView, exchanges, setExchanges, outlayText, setOutlayText, midCost, setMidCost, midGap, setMidGap, midPosEv, setMidPosEv, longSub, setLongSub, oddsMin, setOddsMin, useCurve, setUseCurve, outlierGap, setOutlierGap, outlierReqEv, setOutlierReqEv, outlierOddsBand, setOutlierOddsBand, outlierMinBooks, setOutlierMinBooks, outlierView, setOutlierView, myBooks, switchMode, bookList, defaultShown, shownSet, columns, statOptions, games, badgeFor, refsNote } = odds
+  const { mode, sport, setSport, sportOptions, stat, setStat, game, setGame, side, setSide, lines, setLines, minEv, setMinEv, sgpArch, setSgpArch, sgpMinEv, setSgpMinEv, sgpBook, setSgpBook, q, setQ, method, setMethod, refs, setRefs, setShown, sort, setSort, setLimit, arbView, setArbView, exchanges, setExchanges, outlayText, setOutlayText, midCost, setMidCost, midGap, setMidGap, midPosEv, setMidPosEv, longSub, setLongSub, oddsMin, setOddsMin, useCurve, setUseCurve, outlierGap, setOutlierGap, outlierReqEv, setOutlierReqEv, outlierOddsBand, setOutlierOddsBand, outlierMinBooks, setOutlierMinBooks, outlierView, setOutlierView, myBooks, switchMode, bookList, defaultShown, shownSet, columns, statOptions, games, badgeFor, refsNote } = odds
   return (
     <section className="mb-2.5 rounded-xl border border-separator-border bg-background-primary-default shadow-card" aria-label="Filters">
       <div className="py-2.5 px-3.5 flex gap-y-2.5 gap-x-4.5 flex-wrap items-center">
@@ -129,7 +128,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
         </PillGroup>
           <Field label="SPORT">
             <PillGroup>
-              {(['all', ...LIVE_SPORTS.map(p => p.slug)] as SportFilter[]).map(s => (
+              {(['all', ...sportOptions] as SportFilter[]).map(s => (
                 <Pill key={s} active={sport === s} onClick={() => { setSport(s); setStat('all'); setGame('all'); setLimit(PAGE) }}>{s.toUpperCase()}</Pill>
               ))}
             </PillGroup>

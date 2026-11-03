@@ -6,8 +6,7 @@ import { useUser, UserButton, SignInButton } from '@clerk/nextjs'
 import { BrandWordmark } from '@/components/ui/brand-mark'
 import { DiscordMark } from '@/components/ui/discord-mark'
 import { XMark } from '@/components/ui/x-mark'
-import { LIVE_SPORTS } from '@/lib/sports'
-import { NAV, navActive, sportActive, sportHref } from '@/lib/ia'
+import { NAV, navActive } from '@/lib/ia'
 
 import { DISCORD_URL, X_URL } from '@/lib/links'
 import { cx } from '@/utils/cx'
@@ -126,36 +125,6 @@ function NavShell({ isSignedIn, userButton, signIn }: {
           </div>
         </div>
       </nav>
-
-      {/* TIER 2 -- multi-sport context bar */}
-      <div className="overflow-x-auto border-b border-separator-border bg-background-primary-default">
-        <div className="sport-ribbon mx-auto flex h-10 max-w-[1280px] items-center gap-1 whitespace-nowrap px-6">
-          <SportLink href={sportHref('all')} label="ALL SPORTS" active={sportActive(pathname, 'all')} />
-          {LIVE_SPORTS.map(p => (
-            <SportLink
-              key={p.slug}
-              href={sportHref(p.slug)}
-              label={p.shortName}
-              active={sportActive(pathname, p.slug)}
-              accent={p.accent}
-            />
-          ))}
-        </div>
-      </div>
     </header>
-  )
-}
-
-function SportLink({ href, label, active, accent }: { href: string; label: string; active: boolean; accent?: string }) {
-  const color = active ? (accent ?? 'var(--color-text-primary)') : undefined
-  return (
-    <Link
-      href={href}
-      className={cx('sport-ribbon-link inline-flex items-center gap-[7px] rounded-md border px-2.5 py-[5px] text-caption-1-semibold tracking-[0.05em] no-underline transition-colors',
-        active ? 'border-border-button-default bg-background-tertiary-default' : 'border-transparent bg-transparent text-text-secondary hover:text-text-primary')}
-      style={color ? { color } : undefined}
-    >
-      {label}
-    </Link>
   )
 }
