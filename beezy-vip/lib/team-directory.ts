@@ -74,6 +74,7 @@ function table(sport: SearchSport): { abbr: string; terms: string[] }[] {
   const mk = (t: Team) => ({ abbr: t.abbr, terms: [t.abbr, t.name, ...(t.alias ?? [])] })
   if (sport === 'nfl') return NFL.map(mk)
   if (sport === 'mlb') return MLB.map(mk)
+  if (sport === 'soccer') return [] // no generated team table for soccer yet; search falls back to player names
   return JSON_TEAMS[sport].map(t => ({ abbr: t.abbr, terms: [t.abbr, t.name, ...t.alias, ...(NICKNAMES[sport][t.abbr] ?? [])] }))
 }
 

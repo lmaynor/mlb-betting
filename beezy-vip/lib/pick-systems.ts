@@ -5,7 +5,7 @@ import type { Bet } from '@/lib/types'
 /** Player picks (a named player's stat) and game picks (a team or game outcome) are separate products and separate access. */
 export type PickKind = 'player' | 'game'
 
-const GAME_SYSTEMS = new Set(['NRFI', '1I', '1IOU', 'F3', 'F5', 'F1H', 'F7', 'GAME', 'NBA_ML', 'NBA_SPREAD', 'NBA_TOTAL', 'NHL_ML', 'NHL_SPREAD', 'NHL_TOTAL'])
+const GAME_SYSTEMS = new Set(['NRFI', '1I', '1IOU', 'F3', 'F5', 'F1H', 'F7', 'GAME', 'NBA_ML', 'NBA_SPREAD', 'NBA_TOTAL', 'NHL_ML', 'NHL_SPREAD', 'NHL_TOTAL', 'SOCCER_1X2', 'SOCCER_TOTAL', 'SOCCER_BTTS', 'SOCCER_DC', 'SOCCER_DNB'])
 
 export function kindOfSystem(system: string): PickKind {
   return GAME_SYSTEMS.has(system.toUpperCase()) ? 'game' : 'player'
@@ -259,7 +259,60 @@ const NHL_GAME_SYSTEMS: PickSystem[] = [
   }),
 ]
 
-export const PICK_SYSTEMS: PickSystem[] = [...MLB_SYSTEMS, ...NFL_SYSTEMS, ...NHL_GAME_SYSTEMS, ...NHL_SYSTEMS, ...NBA_GAME_SYSTEMS, ...NBA_SYSTEMS]
+const SOCCER_GAME_SYSTEMS: PickSystem[] = [
+  game('soccer', {
+    key: 'SOCCER_1X2',
+    slug: '1x2',
+    name: 'Soccer 1X2 Match Result',
+    shortName: '1X2',
+    statKey: 'match_result',
+    family: 'Dixon-Coles bivariate Poisson (11x11 scoreline matrix)',
+    features: ['Attack / defense ratings fit on Understat match xG (understat_shot_v1)', 'ClubElo anchor prior and sanity guard', 'Three-way power de-vig for the market reference'],
+    description: 'Home / draw / away probabilities summed from the Dixon-Coles scoreline matrix. The draw is a priced outcome, not a rounding error: three-way de-vig, never a two-way split.',
+  }),
+  game('soccer', {
+    key: 'SOCCER_TOTAL',
+    slug: 'totals',
+    name: 'Soccer Match Totals',
+    shortName: 'Totals',
+    statKey: 'total_goals',
+    family: 'Dixon-Coles bivariate Poisson (11x11 scoreline matrix)',
+    features: ['Goal totals summed from the same scoreline matrix as 1X2', 'Whole-goal lines (2.0 / 3.0) carry an explicit push probability', 'Ratings fit on the xG + goals composite observation'],
+    description: 'Over / under on the 1.5 to 4.5 ladder, priced off the total-goals distribution of the one scoreline matrix, so totals can never contradict the 1X2 price.',
+  }),
+  game('soccer', {
+    key: 'SOCCER_BTTS',
+    slug: 'btts',
+    name: 'Both Teams To Score',
+    shortName: 'BTTS',
+    statKey: 'btts',
+    family: 'Dixon-Coles bivariate Poisson (11x11 scoreline matrix)',
+    features: ['P(both score) summed from the scoreline matrix interior', 'Low-score correlation (rho) fit on actual 0-0 / 1-0 / 0-1 / 1-1 results'],
+    description: 'Both teams to score, yes or no, from the same matrix: the interior mass where both clubs score at least once.',
+  }),
+  game('soccer', {
+    key: 'SOCCER_DC',
+    slug: 'double-chance',
+    name: 'Soccer Double Chance',
+    shortName: 'Double Chance',
+    statKey: 'double_chance',
+    family: 'Dixon-Coles bivariate Poisson (11x11 scoreline matrix)',
+    features: ['1X / X2 / 12 are exact sums of the 1X2 probabilities', 'No separate model: derived, so it cannot drift from the match result price'],
+    description: 'Double chance (home or draw, away or draw, either team) derived directly from the 1X2 probabilities.',
+  }),
+  game('soccer', {
+    key: 'SOCCER_DNB',
+    slug: 'draw-no-bet',
+    name: 'Soccer Draw No Bet',
+    shortName: 'Draw No Bet',
+    statKey: 'draw_no_bet',
+    family: 'Dixon-Coles bivariate Poisson (11x11 scoreline matrix)',
+    features: ['Two-way conditional on a decisive result: p_home / (p_home + p_away)', 'The draw mass is refunded, not priced'],
+    description: 'Draw no bet: the moneyline with the draw refunded, the two-way conditional of the three-way price.',
+  }),
+]
+
+export const PICK_SYSTEMS: PickSystem[] = [...MLB_SYSTEMS, ...NFL_SYSTEMS, ...NHL_GAME_SYSTEMS, ...NHL_SYSTEMS, ...NBA_GAME_SYSTEMS, ...NBA_SYSTEMS, ...SOCCER_GAME_SYSTEMS]
 
 export const PICK_SYSTEM_BY_KEY: Record<string, PickSystem> = Object.fromEntries(PICK_SYSTEMS.map(system => [system.key, system]))
 

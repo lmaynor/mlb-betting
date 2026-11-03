@@ -61,7 +61,7 @@ describe('registry integrity', () => {
       const slugs = PICK_SYSTEMS.filter(s => s.sport === sport).map(s => s.slug)
       expect(new Set(slugs).size).toBe(slugs.length)
     }
-    expect(Object.fromEntries(SPORT_SLUGS.map(s => [s, getSystemsBySport(s).length]))).toEqual({ mlb: 10, nfl: 10, nhl: 7, nba: 10 })
+    expect(Object.fromEntries(SPORT_SLUGS.map(s => [s, getSystemsBySport(s).length]))).toEqual({ mlb: 10, nfl: 10, nhl: 7, nba: 10, soccer: 5 })
   })
 
   it('slugs that repeat across sports resolve to the right sport', () => {

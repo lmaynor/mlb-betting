@@ -24,6 +24,7 @@ const MAPS: Record<HeadshotSport, Record<string, number | string>> = {
   nhl: nhlMap as Record<string, number>,
   nba: nbaMap as Record<string, number>,
   mlb: mlbMap as Record<string, number>,
+  soccer: {}, // no headshot source wired for soccer yet
 }
 
 /** accent-preserving slug (hyphen -> underscore, strip everything but letters/digits/_): what the MLB map keys use. */
@@ -38,6 +39,7 @@ function slugAsciiLegacy(name: string): string {
 
 export function playerIdByName(sport: HeadshotSport, name: string | null | undefined, team?: string | null): number | string | null {
   if (!name) return null
+  if (!hasHeadshots(sport)) return null
   const map = MAPS[sport]
   if (sport === 'mlb') {
     for (const k of [slugAccented(name), slugAsciiLegacy(name), playerSlug(name)]) {

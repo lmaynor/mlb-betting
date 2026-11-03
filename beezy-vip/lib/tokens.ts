@@ -105,6 +105,8 @@ export const SYSTEM_COLOR: Record<string, string> = {
   NHL_SOG: '#38bdf8', NHL_GOALS: '#22d3ee', NHL_ASSISTS: '#60a5fa', NHL_POINTS: '#7dd3fc', NHL_PP_POINTS: '#67e8f9',
   NHL_SAVES: '#2dd4bf', NHL_BLOCKS: '#8fb3d9',
   NHL_ML: '#38bdf8', NHL_SPREAD: '#818cf8', NHL_TOTAL: '#22d3ee',
+  // Soccer game markets (one green family: EPL / UCL match markets off the Dixon-Coles matrix)
+  SOCCER_1X2: '#22c55e', SOCCER_TOTAL: '#86efac', SOCCER_BTTS: '#34d399', SOCCER_DC: '#a3e635', SOCCER_DNB: '#65a30d',
   NBA_PTS: '#818cf8', NBA_REB: '#a78bfa', NBA_AST: '#c4b5fd', NBA_3PM: '#e879f9', NBA_PRA: '#6366f1',
   NBA_PR: '#8b5cf6', NBA_PA: '#a855f7', NBA_RA: '#c084fc', NBA_STL: '#f0abfc', NBA_BLK: '#7c83e8',
   NBA_ML: '#fb923c', NBA_SPREAD: '#f59e0b', NBA_TOTAL: '#38bdf8',
@@ -165,6 +167,7 @@ export const SYSTEM_LABEL: Record<string, string> = {
   NBA_PTS: 'Points', NBA_REB: 'Rebounds', NBA_AST: 'Assists', NBA_3PM: '3-Pointers', NBA_PRA: 'Pts+Reb+Ast',
   NBA_PR: 'Pts+Reb', NBA_PA: 'Pts+Ast', NBA_RA: 'Reb+Ast', NBA_STL: 'Steals', NBA_BLK: 'Blocks',
   NBA_ML: 'Moneyline', NBA_SPREAD: 'Spread', NBA_TOTAL: 'Game Total',
+  SOCCER_1X2: '1X2 Match Result', SOCCER_TOTAL: 'Match Totals', SOCCER_BTTS: 'Both Teams To Score', SOCCER_DC: 'Double Chance', SOCCER_DNB: 'Draw No Bet',
 }
 
 // Tighter variant for narrow table cells / chips.
@@ -179,6 +182,7 @@ export const SYSTEM_LABEL_SHORT: Record<string, string> = {
   NHL_SAVES: 'SAVES', NHL_BLOCKS: 'BLOCKS', NHL_ML: 'ML', NHL_SPREAD: 'PUCK LINE', NHL_TOTAL: 'TOTAL',
   NBA_PTS: 'PTS', NBA_REB: 'REB', NBA_AST: 'AST', NBA_3PM: '3PM', NBA_PRA: 'PRA', NBA_PR: 'PR', NBA_PA: 'PA', NBA_RA: 'RA',
   NBA_STL: 'STL', NBA_BLK: 'BLK', NBA_ML: 'ML', NBA_SPREAD: 'SPREAD', NBA_TOTAL: 'TOTAL',
+  SOCCER_1X2: '1X2', SOCCER_TOTAL: 'TOTALS', SOCCER_BTTS: 'BTTS', SOCCER_DC: 'DC', SOCCER_DNB: 'DNB',
 }
 
 export function systemLabel(sys: string | null | undefined, short = false): string {

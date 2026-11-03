@@ -1,12 +1,13 @@
 import Link from 'next/link'
 
 export type GamesView = 'prices' | 'model'
-export type GameSport = 'all' | 'nba' | 'nhl'
+export type GameSport = 'all' | 'nba' | 'nhl' | 'soccer'
 
 export const SPORT_TABS: { key: GameSport; label: string }[] = [
   { key: 'all', label: 'NBA + NHL' },
   { key: 'nba', label: 'NBA' },
   { key: 'nhl', label: 'NHL' },
+  { key: 'soccer', label: 'SOCCER (EPL / UCL)' },
 ]
 const VIEW_TABS: { key: GamesView; label: string; title: string }[] = [
   { key: 'prices', label: 'PRICES', title: 'Every book\'s moneyline, spread and total side by side, with best price, fair value and arbitrage' },
@@ -18,7 +19,7 @@ export function parseGamesView(v: string | undefined): GamesView {
 }
 
 export function parseGameSport(v: string | undefined): GameSport {
-  return v === 'nba' || v === 'nhl' ? v : 'all'
+  return v === 'nba' || v === 'nhl' || v === 'soccer' ? v : 'all'
 }
 
 /** A shareable /ev/games URL: the view and the sport live in the query string, never in client state. PRICES and ALL are the defaults and stay out of it. */

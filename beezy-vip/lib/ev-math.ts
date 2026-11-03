@@ -64,3 +64,49 @@ export function fmtMoney(x: number | null | undefined, signed = false): string {
 }
 
 export { americanToImpliedProb }
+
+export type DevigThreeWayMethod = 'proportional' | 'power' | 'shin'
+
+function shinFairThree(probs: [number, number, number], z: number): [number, number, number] {
+  const s = probs[0] + probs[1] + probs[2]
+  return probs.map(p => (Math.sqrt(z * z + 4 * (1 - z) * p * p / s) - z) / (2 * (1 - z))) as [number, number, number]
+}
+
+/**
+ * Remove vig from a THREE-way market (soccer 1X2: home / draw / away). Twin of mlb_core.odds.utils.devig_three_way
+ * (same algorithms, same iteration counts, results agree to 1e-6): "proportional" splits the overround by price,
+ * "power" (default) solves p_i^k summing to 1 so more of the overround lands on the draw / longshot legs, "shin"
+ * solves the Shin insider fraction z in [0, 0.4). Inputs are vig-inclusive implied probabilities in (0, 1) with
+ * sum >= 1; anything else returns null (fail closed: the caller shows prices only, never a fabricated fair value).
+ */
+export function devigThreeWay(
+  pHome: number, pDraw: number, pAway: number, method: DevigThreeWayMethod = 'power',
+): [number, number, number] | null {
+  const probs: [number, number, number] = [pHome, pDraw, pAway]
+  if (probs.some(p => !isFinite(p) || p <= 0 || p >= 1)) return null
+  const s = pHome + pDraw + pAway
+  if (s < 1 - 1e-12) return null
+  const proportional = (): [number, number, number] => [pHome / s, pDraw / s, pAway / s]
+  if (s <= 1 + 1e-12 || method === 'proportional') return proportional()
+  let raw: [number, number, number]
+  if (method === 'power') {
+    let lo = 0.5, hi = 5.0
+    for (let i = 0; i < 20; i++) {
+      const mid = (lo + hi) / 2
+      if (probs.reduce((acc, p) => acc + Math.pow(p, mid), 0) > 1) lo = mid; else hi = mid
+    }
+    const k = (lo + hi) / 2
+    raw = probs.map(p => Math.pow(p, k)) as [number, number, number]
+  } else {
+    if (shinFairThree(probs, 0.4).reduce((a, b) => a + b, 0) > 1) return proportional()
+    let lo = 0, hi = 0.4
+    for (let i = 0; i < 60; i++) {
+      const mid = (lo + hi) / 2
+      if (shinFairThree(probs, mid).reduce((a, b) => a + b, 0) > 1) lo = mid; else hi = mid
+    }
+    raw = shinFairThree(probs, (lo + hi) / 2)
+  }
+  const tot = raw[0] + raw[1] + raw[2]
+  if (!(tot > 0) || !isFinite(tot)) return proportional()
+  return [raw[0] / tot, raw[1] / tot, raw[2] / tot]
+}

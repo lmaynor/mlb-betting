@@ -38,14 +38,16 @@ from mlb_core.alerts.discord_routes import canonical_book
 log = logging.getLogger("ev.game_odds_board")
 _ET = ZoneInfo("America/New_York")
 
-SPORTS = ("nba", "nhl", "nfl")
-PARLAY_KEY = {"nba": "basketball_nba", "nhl": "icehockey_nhl", "nfl": "americanfootball_nfl"}
+SPORTS = ("nba", "nhl", "nfl", "soccer")
+PARLAY_KEY = {"nba": "basketball_nba", "nhl": "icehockey_nhl", "nfl": "americanfootball_nfl", "soccer": "soccer_epl"}
+# Soccer is banked per league; run("soccer") unions both league snapshots into the one soccer board.
+SOCCER_PARLAY_KEYS = ("soccer_epl", "soccer_uefa_champs_league")
 OUT_KEY = "EVSweep/{sport}_games/odds_board_latest.json"
 LINES_SOURCE = "oddsaccum_game_lines"
 BESTBOOK_SOURCE = "bestbook"
 BESTBOOK_MAX_AGE_MIN = 180.0        # the bb-live-* crawl is hourly: three missed runs and its ladders are not live
 LADDER_MAX_ROWS = 21                # per (game, market): the rungs nearest the modal line; the ladders run to 100 rungs a game
-MARKETS = ("ml", "spread", "total")
+MARKETS = ("ml", "spread", "total", "btts")
 MIN_BOOKS = 2                       # a one-book line is not a comparison
 # The game-lines banker runs ~6x a day (daytime gaps up to 4 h) and a snapshot older than odds_feed.MAX_AGE_MIN (360) is refused
 # outright, so 'stale' means older than the longest normal daytime gap (4 h) plus margin, not the props board's 90 minutes.
@@ -56,7 +58,7 @@ STALE_MINUTES = 270
 FLIP_DEVIATION = 0.15
 FLIP_MIN_BOOKS = 4
 # ParlayAPI market key -> board market. The alternate_* keys are accepted in case the feed carries them (unverified).
-_MARKET_OF = {"h2h": "ml", "spreads": "spread", "totals": "total",
+_MARKET_OF = {"h2h": "ml", "spreads": "spread", "totals": "total", "btts": "btts",
               "alternate_spreads": "spread", "alternate_totals": "total"}
 
 
@@ -71,6 +73,9 @@ def _resolver(sport: str):
     if sport == "nfl":
         from nfl.game.run_daily import nfl_team_code
         return nfl_team_code
+    if sport == "soccer":
+        from soccer.data.reep_register import resolve_club
+        return lambda name: resolve_club(name, provider="parlayapi") or resolve_club(name)
     raise ValueError(f"unknown game odds sport {sport!r}; expected one of {SPORTS}")
 
 
@@ -91,10 +96,25 @@ def _num(x: Any) -> Optional[float]:
     return round(v, 2) if v == v and abs(v) != float("inf") else None
 
 
-def _parse_market(mk_key: str, outcomes: list, h_code: str, a_code: str, code_of) -> Optional[Tuple[Optional[float], Optional[int], Optional[int]]]:
-    """One bookmaker market -> (line, a_price, b_price) or None when nothing usable. a = away / over, b = home / under."""
+def _parse_market(mk_key: str, outcomes: list, h_code: str, a_code: str, code_of, three_way: bool = False
+                  ) -> Optional[Tuple[Optional[float], Optional[int], Optional[int], Optional[int]]]:
+    """One bookmaker market -> (line, a_price, b_price, draw_price) or None when nothing usable.
+    a = away / over / BTTS-yes, b = home / under / BTTS-no. draw_price is set only for a three-way h2h
+    (soccer 1X2) when `three_way` is on; it is None everywhere else."""
     kind = _MARKET_OF[mk_key]
-    a_p = b_p = None
+    a_p = b_p = d_p = None
+    if kind == "btts":
+        for o in outcomes:
+            if not isinstance(o, dict):
+                continue
+            side = str(o.get("name", "")).strip().lower()
+            if side == "yes":
+                a_p = _price(o.get("price"))
+            elif side == "no":
+                b_p = _price(o.get("price"))
+        if a_p is None and b_p is None:
+            return None
+        return None, a_p, b_p, None
     if kind == "total":
         points = []
         for o in outcomes:
@@ -112,10 +132,13 @@ def _parse_market(mk_key: str, outcomes: list, h_code: str, a_code: str, code_of
                 points.append(pt)
         if not points or len(set(points)) != 1 or (a_p is None and b_p is None):
             return None
-        return points[0], a_p, b_p
+        return points[0], a_p, b_p, None
     home_pt = away_pt = None
     for o in outcomes:
         if not isinstance(o, dict):
+            continue
+        if three_way and kind == "ml" and str(o.get("name", "")).strip().lower() in ("draw", "tie"):
+            d_p = _price(o.get("price"))
             continue
         code = code_of(str(o.get("name")))
         if code == h_code:
@@ -125,13 +148,13 @@ def _parse_market(mk_key: str, outcomes: list, h_code: str, a_code: str, code_of
     if a_p is None and b_p is None:
         return None
     if kind == "ml":
-        return None, a_p, b_p
+        return None, a_p, b_p, d_p
     if home_pt is not None and away_pt is not None and abs(home_pt + away_pt) > 1e-6:
         return None                                              # sides disagree on the number: malformed
     line = home_pt if home_pt is not None else (-away_pt if away_pt is not None else None)
     if line is None:
         return None
-    return line, a_p, b_p
+    return line, a_p, b_p, None
 
 
 def _game_key(sport: str, start: datetime, away: str, home: str) -> str:
@@ -169,12 +192,13 @@ def _drop_flipped_books(sport: str, row: dict) -> int:
 
 
 def _put(rows: Dict[str, dict], sport: str, gk: str, away: str, home: str, start: datetime, market: str, line: Optional[float],
-         book: str, a_p: Optional[int], b_p: Optional[int], src: str, wins: bool) -> bool:
+         book: str, a_p: Optional[int], b_p: Optional[int], src: str, wins: bool, d_p: Optional[int] = None) -> bool:
     """Add one book's two-way quote to its (game, market, line) row. Returns True when the quote was stored.
 
     Two quotes for the same book from the SAME source fold (gaps filled: a clone onto its twin, a repeated market). From a
     DIFFERENT source, the fresher feed (`wins`) replaces the whole older quote, so a row never mixes an a-price and a b-price of
-    different snapshots; the older feed only supplies a book the fresher one lacks."""
+    different snapshots; the older feed only supplies a book the fresher one lacks. `d_p` is the draw price of a
+    three-way (soccer 1X2) quote; it folds and replaces together with the a/b pair and is None for two-way sports."""
     key = f"{gk}|{market}|{_fmt_line(line)}"
     row = rows.get(key)
     if row is None:
@@ -182,16 +206,18 @@ def _put(rows: Dict[str, dict], sport: str, gk: str, away: str, home: str, start
                            "commence": start.astimezone(timezone.utc).isoformat(), "market": market, "line": line, "books": {}}
     old = row["books"].get(book)
     if old is None:
-        row["books"][book] = {"book": book, "a": a_p, "b": b_p, "_src": src}
+        row["books"][book] = {"book": book, "a": a_p, "b": b_p, "d": d_p, "_src": src}
         return True
     if old["_src"] == src:
         if old["a"] is None:
             old["a"] = a_p
         if old["b"] is None:
             old["b"] = b_p
+        if old.get("d") is None:
+            old["d"] = d_p
         return True
     if wins and sum(p is not None for p in (a_p, b_p)) >= sum(p is not None for p in (old["a"], old["b"])):
-        old.update(a=a_p, b=b_p, _src=src)
+        old.update(a=a_p, b=b_p, d=d_p, _src=src)
         return True
     return False
 
@@ -248,14 +274,16 @@ def build_game_board(sport: str, events: Optional[list], now: datetime, meta: Op
                 if not isinstance(mk, dict) or mk.get("key") not in _MARKET_OF:
                     continue
                 try:
-                    parsed = _parse_market(mk["key"], mk.get("outcomes") or [], home, away, code_of)
+                    parsed = _parse_market(mk["key"], mk.get("outcomes") or [], home, away, code_of,
+                                           three_way=(sport == "soccer"))
                 except Exception:                                                       # noqa: BLE001
                     log.debug("game_odds_board %s: skipped malformed %s market of %s", sport, mk.get("key"), book)
                     continue
                 if parsed is None:
                     continue
-                line, a_p, b_p = parsed
-                _put(rows, sport, gk, away, home, start, _MARKET_OF[mk["key"]], line, book, a_p, b_p, LINES_SOURCE, pa_wins)
+                line, a_p, b_p, d_p = parsed
+                _put(rows, sport, gk, away, home, start, _MARKET_OF[mk["key"]], line, book, a_p, b_p,
+                     LINES_SOURCE, pa_wins, d_p=d_p)
 
     for g in bb_games or []:
         if not isinstance(g, dict):
@@ -308,7 +336,12 @@ def build_game_board(sport: str, events: Optional[list], now: datetime, meta: Op
 
     kept: List[dict] = []
     for row in rows.values():
-        books = sorted(({"book": b["book"], "a": b["a"], "b": b["b"]} for b in row["books"].values()
+        def _book_out(b: dict) -> dict:
+            out = {"book": b["book"], "a": b["a"], "b": b["b"]}
+            if sport == "soccer":
+                out["draw"] = b.get("d")     # the third leg of a 1X2 quote (None on total / btts rows)
+            return out
+        books = sorted((_book_out(b) for b in row["books"].values()
                         if b["a"] is not None or b["b"] is not None), key=lambda b: b["book"])
         if len(books) >= MIN_BOOKS:
             kept.append({**row, "books": books})
@@ -316,7 +349,7 @@ def build_game_board(sport: str, events: Optional[list], now: datetime, meta: Op
     # modal line per (game, market): the line most books quote (ties: nearest pick'em / lowest total)
     modal: Dict[tuple, float] = {}
     for r in kept:
-        if r["market"] == "ml":
+        if r["market"] in ("ml", "btts"):
             continue
         gm = (r["game_key"], r["market"])
         cand = (-len(r["books"]), abs(r["line"]) if r["market"] == "spread" else r["line"], r["line"])
@@ -324,7 +357,7 @@ def build_game_board(sport: str, events: Optional[list], now: datetime, meta: Op
             modal[gm] = (cand, r["line"])
     mkt_order = {m: i for i, m in enumerate(MARKETS)}
     kept.sort(key=lambda r: (r["commence"], r["game_key"], mkt_order[r["market"]],
-                             0.0 if r["market"] == "ml" else abs(r["line"] - modal[(r["game_key"], r["market"])][1]),
+                             0.0 if r["market"] in ("ml", "btts") else abs(r["line"] - modal[(r["game_key"], r["market"])][1]),
                              r["line"] if r["line"] is not None else 0.0))
 
     # the ladders reach 100 rungs a game: keep the LADDER_MAX_ROWS rows nearest the modal line (the sort above is by that distance)
@@ -380,7 +413,20 @@ def run(sport: str, now: Optional[datetime] = None, write: bool = True) -> dict:
     if sport not in SPORTS:
         raise ValueError(f"unknown game odds sport {sport!r}; expected one of {SPORTS}")
     now = now or datetime.now(timezone.utc)
-    events, meta = odds_feed.read_banked_game_lines(PARLAY_KEY[sport], now)
+    if sport == "soccer":
+        # two banked league snapshots (EPL + UCL) union into the one soccer board; meta comes from the first
+        # snapshot that carried events (either league alone is enough to build the board).
+        events, meta = [], {}
+        for key in SOCCER_PARLAY_KEYS:
+            ev_i, meta_i = odds_feed.read_banked_game_lines(key, now)
+            if ev_i:
+                events.extend(ev_i)
+                if not meta:
+                    meta = {**meta_i, "banked_events": len(events)}
+            elif not meta:
+                meta = meta_i
+    else:
+        events, meta = odds_feed.read_banked_game_lines(PARLAY_KEY[sport], now)
     try:
         from ev import bestbook_events
         bb_games, bb_meta = bestbook_events.read_latest_game_lines(sport, now, BESTBOOK_MAX_AGE_MIN)

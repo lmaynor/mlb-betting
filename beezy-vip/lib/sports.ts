@@ -6,7 +6,7 @@
  */
 /** Every sport slug, in ribbon order. SportSlug and the SPORT_PILLARS record are derived from it, so a slug added here
  * fails to compile until it has a pillar -- and tests/sport-onboarding.test.ts fails until its systems are wired. */
-export const SPORT_SLUGS = ['mlb', 'nfl', 'nhl', 'nba'] as const
+export const SPORT_SLUGS = ['mlb', 'nfl', 'nhl', 'nba', 'soccer'] as const
 export type SportSlug = (typeof SPORT_SLUGS)[number]
 
 export type SportStatus = 'live' | 'shadow' | 'data_only' | 'planned'
@@ -138,6 +138,26 @@ export const SPORT_PILLARS: Record<SportSlug, SportPillar> = {
       { key: 'pp_points', label: 'Power Play Points O/U', kind: 'prop', status: 'Active', system: 'NHL_PP_POINTS' },
       { key: 'saves', label: 'Goalie Saves O/U', kind: 'prop', status: 'Active', system: 'NHL_SAVES' },
       { key: 'blocked_shots', label: 'Blocked Shots O/U', kind: 'prop', status: 'Active', system: 'NHL_BLOCKS' },
+    ],
+  },
+  soccer: {
+    slug: 'soccer',
+    name: 'Soccer (EPL & Champions League)',
+    shortName: 'SOCCER',
+    seasonBadge: 'DIXON-COLES xG MATRIX + 3-WAY +EV SCANNER',
+    status: 'live',
+    board: 'projection',
+    accent: '#22c55e',
+    accentBg: 'rgba(34, 197, 94, 0.12)',
+    description:
+      'Premier League and Champions League match markets priced from one Dixon-Coles scoreline matrix: team attack and defense ratings fit on Understat match xG, anchored to ClubElo. Three-way 1X2 (home / draw / away) de-vigged with the power method, beside sportsbook prices and Kalshi home / tie / away contracts. Unvalidated: the walk-forward backtest against Pinnacle closing lines has not cleared the promotion bar.',
+    primarySource: 'Understat xG + football-data.co.uk + ClubElo + ParlayAPI books + Kalshi',
+    markets: [
+      { key: '1x2', label: '1X2 Match Result (Home / Draw / Away)', kind: 'game', status: 'Active', system: 'SOCCER_1X2' },
+      { key: 'total_goals', label: 'Match Totals (O/U 2.5 & Alts)', kind: 'game', status: 'Active', system: 'SOCCER_TOTAL' },
+      { key: 'btts', label: 'Both Teams To Score (BTTS)', kind: 'game', status: 'Active', system: 'SOCCER_BTTS' },
+      { key: 'double_chance', label: 'Double Chance', kind: 'game', status: 'Active', system: 'SOCCER_DC' },
+      { key: 'draw_no_bet', label: 'Draw No Bet', kind: 'game', status: 'Active', system: 'SOCCER_DNB' },
     ],
   },
 }

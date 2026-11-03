@@ -145,8 +145,8 @@ export function highlightModelDiff(diff: number | null | undefined, validated: b
 // Query validation for the /api/games/projections proxy: nothing but known, well-formed values is forwarded upstream.
 // ---------------------------------------------------------------------------------------------------------------------
 
-export const GAME_FEED_SPORTS = ['nfl', 'nhl', 'nba'] as const
-export const GAME_FEED_MARKETS = ['spread', 'total', 'ml', 'moneyline'] as const
+export const GAME_FEED_SPORTS = ['nfl', 'nhl', 'nba', 'soccer'] as const
+export const GAME_FEED_MARKETS = ['spread', 'total', 'ml', 'moneyline', 'btts', 'dc'] as const
 export const GAME_FEED_MAX_LIMIT = 1200
 
 export interface GameQuery { sport: (typeof GAME_FEED_SPORTS)[number]; day?: string; market?: string; limit?: number }
@@ -159,7 +159,7 @@ function validDay(day: string): boolean {
 
 export function parseGameProjectionQuery(sp: URLSearchParams): { ok: true; query: GameQuery } | { ok: false; error: string } {
   const sport = (sp.get('sport') ?? '').toLowerCase()
-  if (!(GAME_FEED_SPORTS as readonly string[]).includes(sport)) return { ok: false, error: 'sport must be one of nfl, nhl, nba' }
+  if (!(GAME_FEED_SPORTS as readonly string[]).includes(sport)) return { ok: false, error: 'sport must be one of nfl, nhl, nba, soccer' }
   const query: GameQuery = { sport: sport as GameQuery['sport'] }
 
   const day = sp.get('day')
@@ -170,7 +170,7 @@ export function parseGameProjectionQuery(sp: URLSearchParams): { ok: true; query
   const market = sp.get('market')
   if (market != null && market !== '') {
     const m = market.toLowerCase()
-    if (!(GAME_FEED_MARKETS as readonly string[]).includes(m)) return { ok: false, error: 'market must be spread, total, ml or moneyline' }
+    if (!(GAME_FEED_MARKETS as readonly string[]).includes(m)) return { ok: false, error: 'market must be spread, total, ml, moneyline, btts or dc' }
     query.market = m
   }
   const limit = sp.get('limit')

@@ -99,7 +99,7 @@ export default async function ProjectionsPage({ searchParams }: Props) {
       <main>
         {header('NBA and NHL game engines')}
         <div className="max-w-page mx-auto px-6 pb-6">
-          <GameLinesClient key={gameSport} feeds={{ nba: cut(nba), nhl: cut(nhl) }} sport={gameSport} />
+          <GameLinesClient key={gameSport} feeds={{ nba: cut(nba), nhl: cut(nhl) }} sport={gameSport === 'soccer' ? 'all' : gameSport} />
           <p className="text-[11.5px] text-text-secondary leading-[1.55] max-w-[90ch]" style={{ margin: '14px 2px 0' }}>
             The bar on each game is the model&rsquo;s expected score. NHL uses its goal rates (lambda for each team); NBA splits the modelled total by the modelled margin.
             Model % is the model&rsquo;s probability for the side; market fair is the books&rsquo; probability with the vig removed. Every price for these games is on{' '}

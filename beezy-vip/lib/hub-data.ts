@@ -20,10 +20,12 @@ type Env = Record<string, string | undefined>
 
 export function shapeHub(sport: HubSport, feed: EvFeed | null, projections: SportProjections | null, viewer: Viewer, env: Env = process.env): HubData {
   const board = limitRows(projections?.rows ?? [], viewer, 'player_board', sport, r => r.beezy_score, env)
+  // The EV feed carries NFL / NHL / NBA blocks only; soccer (game markets, no player board) has no feed block.
+  const feedSport = sport === 'nfl' || sport === 'nhl' || sport === 'nba' ? sport : null
   // NFL carries its book/exchange outliers under `book_outliers` (its `rows` are Kalshi asks, shown on /ev); NHL and NBA under `rows`.
-  const all: EvBookOutlierRow[] = sport === 'nfl' ? (feed?.nfl?.book_outliers ?? []) : (feed?.[sport]?.rows ?? [])
+  const all: EvBookOutlierRow[] = feedSport === 'nfl' ? (feed?.nfl?.book_outliers ?? []) : feedSport ? (feed?.[feedSport]?.rows ?? []) : []
   const prices = limitRows(all, viewer, 'player_board', sport, r => r.ev, env)
-  const mine = feed?.[sport] ?? null
+  const mine = feedSport ? feed?.[feedSport] ?? null : null
   return {
     projections: projections ? { ...projections, rows: board.rows } : null,
     lockedProjections: board.locked,

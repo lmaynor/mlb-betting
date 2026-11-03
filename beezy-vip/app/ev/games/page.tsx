@@ -6,13 +6,15 @@ import { getViewer } from '@/lib/auth'
 import { apiGetGameOddsBoard, apiGetGameProjections } from '@/lib/betting-api'
 import type { GameProjectionsFeed } from '@/lib/game-lines'
 import type { GameOddsFeed } from '@/lib/game-odds'
+import type { SoccerProjectionsFeed } from '@/lib/soccer-games'
 import { GameLinesClient } from './game-lines-client'
 import { GamePricesClient } from './game-prices-client'
 import { GamesNav, parseGameSport, parseGamesView } from './games-nav'
+import { SoccerGamesClient } from './soccer-games-client'
 
 export const metadata: Metadata = {
   title: 'Game Lines',
-  description: 'NBA and NHL moneyline, spread / puck line and total: every book\'s price side by side with best price, de-vigged fair value and arbitrage, plus the model estimate. Unvalidated.',
+  description: 'NBA and NHL moneyline, spread / puck line and total: every book\'s price side by side with best price, de-vigged fair value and arbitrage, plus the model estimate. Soccer (EPL / UCL) three-way 1X2, totals and BTTS from the Dixon-Coles matrix. Unvalidated.',
 }
 
 /** The Scanner's Game Lines tab. PRICES (default) is the price screen: every book's game-line prices with best price, fair
@@ -27,7 +29,18 @@ export default async function GameLinesPage({ searchParams }: { searchParams: Pr
   const wants = (s: 'nba' | 'nhl') => sport === 'all' || sport === s
 
   let body: React.ReactNode
-  if (view === 'model') {
+  if (sport === 'soccer') {
+    // Soccer is its own surface in both views: a three-way market cannot run through the two-way price screen.
+    // PRICES and MODEL collapse to the one soccer board (books' three-way prices + the Dixon-Coles deep dive).
+    const [proj, odds] = await Promise.all([
+      apiGetGameProjections('soccer').catch(() => null),
+      apiGetGameOddsBoard('soccer', { limit: 3000 }).catch(() => null),
+    ])
+    const projections = proj && Array.isArray((proj as unknown as SoccerProjectionsFeed).priced_games)
+      ? (proj as unknown as SoccerProjectionsFeed) : null
+    const oddsFeed = odds && Array.isArray(odds.rows) ? odds : null
+    body = <SoccerGamesClient projections={projections} odds={oddsFeed} />
+  } else if (view === 'model') {
     const [nba, nhl] = await Promise.all([
       wants('nba') ? apiGetGameProjections('nba').catch(() => null) : Promise.resolve(null),
       wants('nhl') ? apiGetGameProjections('nhl').catch(() => null) : Promise.resolve(null),

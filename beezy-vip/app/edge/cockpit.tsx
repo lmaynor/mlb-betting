@@ -26,7 +26,8 @@ import { HeadshotFallback } from '@/components/ui/sport-assets'
 import { isOffshore, onshoreQuotes } from '@/lib/offshore'
 
 export type CockpitSport = 'all' | 'mlb' | 'nfl' | 'nhl' | 'nba'
-export const COCKPIT_SPORTS: CockpitSport[] = ['all', ...LIVE_SPORTS.map(p => p.slug)]
+// Soccer has no props cockpit feed (game markets only), so it stays out of the cockpit sport list.
+export const COCKPIT_SPORTS: CockpitSport[] = ['all', ...LIVE_SPORTS.map(p => p.slug).filter((s): s is Exclude<CockpitSport, 'all'> => s !== 'soccer')]
 
 const CARD = 'rounded-xl border border-separator-border bg-background-primary-default shadow-card'
 const HAIR = 'var(--color-separator-border)'

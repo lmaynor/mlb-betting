@@ -29,7 +29,7 @@ from ev.props import DFS_BOOKS
 from ev.sports import ADAPTERS, kalshi_code
 from mlb.execution.kalshi.mapping import MapFail
 from mlb_core.alerts.discord_routes import BOOK_ALIASES, canonical_book
-from mlb_core.odds.utils import american_to_implied_prob, devig_two_way
+from mlb_core.odds.utils import american_to_implied_prob, devig_three_way, devig_two_way
 
 _ET = ZoneInfo("America/New_York")
 _ND = statistics.NormalDist()
@@ -44,7 +44,8 @@ GAME_SD = {"nfl": {"margin": 13.5, "total": 12.0}, "nba": {"margin": 12.0, "tota
 GAME_INTERP_MAX_SD = 1.0
 DISP_PER_SD = 0.02
 P_LO, P_HI = 0.01, 0.99
-PARLAY_SPORT_KEYS = {"nfl": "americanfootball_nfl", "nba": "basketball_nba", "nhl": "icehockey_nhl"}
+PARLAY_SPORT_KEYS = {"nfl": "americanfootball_nfl", "nba": "basketball_nba", "nhl": "icehockey_nhl",
+                     "soccer_epl": "soccer_epl", "soccer_ucl": "soccer_uefa_champs_league"}
 _MON = "JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC".split()
 EXCLUDED_BOOKS = DFS_BOOKS | {"kalshi"}
 
@@ -85,6 +86,54 @@ def _p_home(book: dict, home: str, away: str):
         if len(px) != 2 or len(mk.get("outcomes", []) or []) != 2:        # a Draw outcome => 3-way: not our proposition
             return None
         return _fair_pair(px[home], px[away])
+    return None
+
+
+def _p_three_way(book: dict, home: str, away: str):
+    """One book's own de-vigged (P(home), P(draw), P(away)) from a THREE-outcome h2h market (soccer 1X2), or None.
+
+    The 2-outcome guard in _p_home refuses these markets outright (a Draw outcome means the proposition is
+    three-way); here all three prices are de-vigged TOGETHER with devig_three_way(method="power"), so the draw
+    leg carries its proper share of the overround instead of being dropped or folded into the sides."""
+    for mk in book.get("markets", []) or []:
+        if mk.get("key") != "h2h":
+            continue
+        outcomes = mk.get("outcomes", []) or []
+        if len(outcomes) != 3:
+            return None
+        px = {}
+        for o in outcomes:
+            name = str(o.get("name", "")).strip()
+            if o.get("price") is None:
+                continue
+            if name == home:
+                px["home"] = int(o["price"])
+            elif name == away:
+                px["away"] = int(o["price"])
+            elif name.lower() in ("draw", "tie"):
+                px["draw"] = int(o["price"])
+        if len(px) != 3:
+            return None
+        try:
+            return devig_three_way(american_to_implied_prob(px["home"]), american_to_implied_prob(px["draw"]),
+                                   american_to_implied_prob(px["away"]), method="power")
+        except ValueError:
+            return None
+    return None
+
+
+def _btts(book: dict):
+    """One book's own de-vigged P(BTTS Yes) from its btts market (Yes / No outcomes), or None."""
+    for mk in book.get("markets", []) or []:
+        if mk.get("key") != "btts":
+            continue
+        px = {}
+        for o in mk.get("outcomes", []) or []:
+            side = str(o.get("name", "")).strip().lower()
+            if side in ("yes", "no") and o.get("price") is not None:
+                px[side] = int(o["price"])
+        if len(px) == 2:
+            return _fair_pair(px["yes"], px["no"])
     return None
 
 
@@ -376,14 +425,132 @@ def slate_rows(slate: list, sport: str, now: float, team_code=None) -> tuple[lis
     return rows, stats
 
 
+# ---- soccer: three-way match contracts (EPL / UCL) ---------------------------------------------------------------------
+_SOCCER_PRED_CACHE: dict = {}          # (monotonic ts, {game_key: priced game dict})
+
+
+def _soccer_priced_games() -> dict:
+    """{game_key: priced game} from the soccer model payload (soccer.game.run_daily), cached per process."""
+    hit = _SOCCER_PRED_CACHE.get("payload")
+    if hit is not None and time.monotonic() - hit[0] < _PRED_TTL_S:
+        return hit[1]
+    index: dict = {}
+    try:
+        from soccer.game.run_daily import read_cached_game_predictions
+        for g in (read_cached_game_predictions() or {}).get("priced_games", []) or []:
+            if isinstance(g, dict) and g.get("game_key"):
+                index[g["game_key"]] = g
+    except Exception:                                                                   # noqa: BLE001
+        log.exception("soccer game model payload unavailable; soccer legs carry no p_model_yes")
+    _SOCCER_PRED_CACHE["payload"] = (time.monotonic(), index)
+    return index
+
+
+def soccer_slate_rows(slate: list, league: str, now: float) -> tuple[list[dict], dict]:
+    """ParlayAPI soccer slate (h2h 3-way / totals / btts) -> Kalshi fair-book rows for one league.
+
+    Emits, per game: the three match contracts (home / TIE / away) from the median of each book's own power
+    de-vigged triple (the medians are renormalized to sum to 1), the quoted totals rungs, and a BTTS row.
+    Team identity resolves through the Reep bridge (soccer.data.reep_register, provider "parlayapi") and the
+    ticker tail round-trips through the league adapter's strict parser -- an unresolved club drops the game.
+    Kalshi soccer has no verified margin grammar, so no spread rows are emitted (adapter.disabled). BTTS rows
+    use a {prefix}BTTS- series name: no Kalshi BTTS series has been verified, so those rows serve the fair
+    book / board only and simply never match an RFQ leg until a real series is confirmed by the probe.
+    Dixon-Coles model probabilities ride along as p_model_yes when the soccer payload has the game.
+    """
+    from ev.sports.soccer import LEAGUE_ADAPTERS
+    from soccer.data.reep_register import resolve_club
+
+    adapter = LEAGUE_ADAPTERS[league]
+    model = _soccer_priced_games()
+    rows: list[dict] = []
+    stats = {"events": 0, "games_priced": 0, "dropped_unknown_team": 0, "dropped_thin": 0,
+             "tie_rows": 0, "total_rows": 0, "btts_rows": 0}
+    for ev in slate or []:
+        stats["events"] += 1
+        home_n, away_n = ev.get("home_team"), ev.get("away_team")
+        home = resolve_club(home_n, league=league, provider="parlayapi")
+        away = resolve_club(away_n, league=league, provider="parlayapi")
+        if home not in adapter.codes or away not in adapter.codes or home == away or not ev.get("commence_time"):
+            stats["dropped_unknown_team"] += 1
+            continue
+        start = datetime.fromisoformat(ev["commence_time"].replace("Z", "+00:00")).astimezone(_ET)
+        tail = f"{start:%y}{_MON[start.month - 1]}{start:%d}{away}{home}"
+        if parse_event(adapter, f"{adapter.series('ml')}-{tail}") != (start.date().isoformat(), away, home):
+            stats["dropped_unknown_team"] += 1                                    # round-trip failed: do not guess
+            continue
+        gk = game_key("soccer", start.date().isoformat(), away, home)
+        pg = model.get(gk)
+        triples: dict[str, tuple] = {}
+        tot: dict[float, list] = {}
+        btts_vals: list[float] = []
+        for b in ev.get("bookmakers", []) or []:
+            raw = str(b.get("key", "")).strip().lower()
+            name = canonical_book(b.get("key", "")) if raw in BOOK_ALIASES else raw
+            if name in EXCLUDED_BOOKS or raw in EXCLUDED_BOOKS:
+                continue
+            t = _p_three_way(b, home_n, away_n)
+            if t is not None and all(0.0 < p < 1.0 for p in t):
+                triples[name] = t
+            for pt, fair in _totals(b).items():
+                tot.setdefault(pt, []).append(fair)
+            bt = _btts(b)
+            if bt is not None and 0.0 < bt < 1.0:
+                btts_vals.append(bt)
+        if triples:
+            legs = [float(statistics.median(v[i] for v in triples.values())) for i in range(3)]
+            s = sum(legs)
+            legs = [v / s for v in legs]
+            disps = [_mad([v[i] for v in triples.values()]) for i in range(3)]
+            model_p = {"HOME": (pg or {}).get("p_home"), "TIE": (pg or {}).get("p_draw"),
+                       "AWAY": (pg or {}).get("p_away")}
+            for suffix, p, disp in ((home, legs[0], disps[0]), ("TIE", legs[1], disps[1]), (away, legs[2], disps[2])):
+                r = {"ticker": f"{adapter.series('ml')}-{tail}-{suffix}", "sport": "soccer", "game_key": gk,
+                     "market_class": "game_ml", "player_norm": None, "stat": "ml", "strike": 0.0,
+                     "p_yes": p, "n_books": len(triples), "disp": disp, "updated_ts": now}
+                mp = model_p["HOME" if suffix == home else "AWAY" if suffix == away else "TIE"]
+                if mp is not None:
+                    r["p_model_yes"] = float(mp)
+                rows.append(r)
+            stats["tie_rows"] += 1
+        for pt, vals in tot.items():
+            r = {"ticker": f"{adapter.series('total')}-{tail}-{int(pt + 0.5)}", "sport": "soccer", "game_key": gk,
+                 "market_class": "game_total", "player_norm": None, "stat": "total", "strike": pt,
+                 "p_yes": float(statistics.median(vals)), "n_books": len(vals), "disp": _mad(vals),
+                 "updated_ts": now}
+            mt = ((pg or {}).get("totals") or {}).get(f"{pt:g}")
+            if mt and mt.get("p_over") is not None:
+                r["p_model_yes"] = float(mt["p_over"])
+            rows.append(r)
+            stats["total_rows"] += 1
+        if btts_vals:
+            r = {"ticker": f"{adapter.kalshi_prefix}BTTS-{tail}-YES", "sport": "soccer", "game_key": gk,
+                 "market_class": "game_btts", "player_norm": None, "stat": "btts", "strike": 0.0,
+                 "p_yes": float(statistics.median(btts_vals)), "n_books": len(btts_vals),
+                 "disp": _mad(btts_vals), "updated_ts": now}
+            if pg and pg.get("p_btts_yes") is not None:
+                r["p_model_yes"] = float(pg["p_btts_yes"])
+            rows.append(r)
+            stats["btts_rows"] += 1
+        if triples or tot or btts_vals:
+            stats["games_priced"] += 1
+        else:
+            stats["dropped_thin"] += 1
+    return rows, stats
+
+
 def fetch_game_rows(client, sports, now: float, markets=("h2h", "spreads", "totals")) -> tuple[list[dict], dict]:
     """One slate pull per sport (1 credit PER MARKET per sport). A sport that fails is skipped and reported, never fatal."""
     rows: list[dict] = []
     stats: dict = {}
     for sport in sports:
         try:
-            slate = client.get_slate(PARLAY_SPORT_KEYS[sport], markets=list(markets))
-            r, s = slate_rows(slate, sport, now)
+            if sport in ("soccer_epl", "soccer_ucl"):
+                slate = client.get_slate(PARLAY_SPORT_KEYS[sport], markets=["h2h", "totals", "btts"])
+                r, s = soccer_slate_rows(slate, sport.split("_", 1)[1], now)
+            else:
+                slate = client.get_slate(PARLAY_SPORT_KEYS[sport], markets=list(markets))
+                r, s = slate_rows(slate, sport, now)
             rows += r
             stats[sport] = s
         except Exception as e:                                                  # noqa: BLE001
