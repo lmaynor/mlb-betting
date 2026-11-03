@@ -2,8 +2,9 @@ import type { Metadata } from 'next'
 import { apiGetAnalyticsDeepDive, apiGetStats } from '@/lib/betting-api'
 import type { SystemStats } from '@/lib/types'
 import { AnalyticsClient } from './analytics-client'
+import { Suspense } from 'react'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 60
 
 export const metadata: Metadata = {
   title: 'Analytics',
@@ -16,5 +17,5 @@ export default async function AnalyticsPage() {
     apiGetAnalyticsDeepDive('EV').catch(() => null),
     apiGetStats().then(s => s.bySystem).catch(() => [] as SystemStats[]),
   ])
-  return <AnalyticsClient initial={data} stats={stats} />
+  return <Suspense><AnalyticsClient initial={data} stats={stats} /></Suspense>
 }

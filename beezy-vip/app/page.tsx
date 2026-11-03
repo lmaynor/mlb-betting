@@ -8,7 +8,7 @@ import { RecentPicksTable } from '@/components/landing/recent-picks-table'
 import { PricingSummary } from '@/components/landing/pricing-summary'
 import { DiscordFollowCTA } from '@/components/landing/discord-follow-cta'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 60
 
 export const metadata: Metadata = {
   title: { absolute: 'beezy.fyi \u2014 Quantitative Sports Betting Analytics & +EV Scanner' },
