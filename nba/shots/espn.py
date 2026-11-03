@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 
 from mlb_core.data.player_names import norm_name
-from nba.shots.court import HALF_Y, HOOP, hex_of, shot_group
+from nba.shots.court import FRAME_COLS, HALF_Y, HOOP, hex_of, shot_group
 from nba.teams import team_code
 
 HOOP_X_ESPN = 41.75
@@ -62,13 +62,14 @@ def normalize_espn_frame(pbp: pd.DataFrame, release_season: int) -> pd.DataFrame
     s = pbp[(pbp["shooting_play"] == True) & (pbp["season_type"] == REGULAR)].copy()      # noqa: E712 -- nullable bool column
     s = s[~s["type_text"].astype(str).str.contains("Free Throw", na=False)]
     s = s.dropna(subset=["coordinate_x", "coordinate_y", "athlete_id_1", "team_id", "game_date"])
-    home = s["team_id"].astype(str) == s["home_team_id"].astype(str)
+    # team_id is a float in the real files (18.0) and the home id an int: compare numerically, never as strings
+    home = pd.to_numeric(s["team_id"], errors="coerce").to_numpy() == pd.to_numeric(s["home_team_id"], errors="coerce").to_numpy()
     team = np.where(home, s["home_team_abbrev"], s["away_team_abbrev"])
     opp = np.where(home, s["away_team_abbrev"], s["home_team_abbrev"])
     s["team"] = [team_code(str(a)) for a in team]
     s["opp"] = [team_code(str(a)) for a in opp]
     s = s[s["team"].notna() & s["opp"].notna()].copy()                                    # All-Star / exhibition teams do not resolve
-    s["home"] = (s["team_id"].astype(str) == s["home_team_id"].astype(str)).to_numpy()
+    s["home"] = pd.to_numeric(s["team_id"], errors="coerce").to_numpy() == pd.to_numeric(s["home_team_id"], errors="coerce").to_numpy()
     x, y = canonical_xy(s["coordinate_x"].to_numpy(float), s["coordinate_y"].to_numpy(float))
     s["x"], s["y"] = np.round(x, 2), np.round(y, 2)
     s = s[(s["y"] >= 0) & (s["y"] <= HALF_Y) & (s["x"].abs() <= 25)].copy()
@@ -86,6 +87,10 @@ def normalize_espn_frame(pbp: pd.DataFrame, release_season: int) -> pd.DataFrame
     hq = [hex_of(a, b) for a, b in zip(s["x"].to_numpy(), s["y"].to_numpy())]
     s["hex_q"] = [h[0] for h in hq]
     s["hex_r"] = [h[1] for h in hq]
-    cols = ["season", "player_id", "name", "name_norm", "team", "opp", "home", "game_id", "date", "x", "y", "made", "three",
-            "group", "zone", "hex_q", "hex_r"]
-    return s[cols].drop_duplicates(["game_id", "player_id", "x", "y", "made"]).reset_index(drop=True)
+    s["period"] = pd.to_numeric(s["period_number"], errors="coerce").fillna(0).clip(upper=5).astype("int8")
+    txt = s["text"].astype(str)
+    s["assisted"] = (s["made"] & txt.str.contains(r" assists\)", regex=True, na=False)).to_numpy()
+    s["ast_id"] = pd.to_numeric(s["athlete_id_2"].where(s["assisted"]), errors="coerce").astype("Int64")
+    names2 = s["athlete_name_2"].where(s["assisted"]).fillna("")
+    s["ast_norm"] = [norm_name(n) if n else "" for n in names2.astype(str)]
+    return s[FRAME_COLS].drop_duplicates(["game_id", "player_id", "x", "y", "made"]).reset_index(drop=True)

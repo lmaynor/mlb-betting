@@ -74,14 +74,44 @@ export function sizeBins(counts: number[]): (n: number) => 0 | 1 | 2 {
 }
 export const SIZE_FRACTION = [0.5, 0.75, 1] as const
 
-export interface HexMark { key: string; points: string; fill: string; bin: 0 | 1 | 2; q: number; r: number; att: number; made: number; lAtt: number; lMade: number; diff: number }
+export type HexMetric = 'diff' | 'fg' | 'pps'
+export const HEX_METRICS: { id: HexMetric; label: string }[] = [
+  { id: 'diff', label: 'FG% vs league' }, { id: 'fg', label: 'FG%' }, { id: 'pps', label: 'Points per shot' },
+]
+/** Break points and legend text per colour metric (six bins each; differences in points, FG in percent, PPS in points per shot). */
+export const METRIC_SCALE: Record<HexMetric, { breaks: readonly number[]; labels: readonly string[]; unit: string }> = {
+  diff: { breaks: DIFF_BREAKS, labels: DIFF_LABELS, unit: 'pts vs league' },
+  fg:   { breaks: [30, 38, 44, 50, 58], labels: ['under 30%', '30-38%', '38-44%', '44-50%', '50-58%', '58%+'], unit: 'FG%' },
+  pps:  { breaks: [0.8, 0.95, 1.05, 1.15, 1.3], labels: ['under 0.80', '0.80-0.95', '0.95-1.05', '1.05-1.15', '1.15-1.30', '1.30+'], unit: 'points per shot' },
+}
 
-export function hexMarks(cells: ShotHexCell[], size: number): HexMark[] {
+export function metricBin(v: number, metric: HexMetric): number {
+  const br = METRIC_SCALE[metric].breaks
+  let i = 0
+  while (i < br.length && v >= br[i]) i++
+  return i
+}
+
+/** One cell's colour value for the metric, shrunk toward the league's rate in that same cell so a 1-for-1 cell stays honest. */
+export function cellValue(c: ShotHexCell, metric: HexMetric): number {
+  const [, , a, m, la, lm, pts = 0, lpts = 0] = c
+  if (metric === 'diff') return diffPoints(m, a, lm, la)
+  if (metric === 'fg') return shrunkRate(m, a, la ? lm / la : 0) * 100
+  return shrunkRate(pts, a, la ? lpts / la : 0)
+}
+
+export interface HexMark { key: string; points: string; fill: string; bin: 0 | 1 | 2; q: number; r: number; att: number; made: number; lAtt: number; lMade: number; diff: number; value: number; pts: number; lPts: number; zone: number | null }
+
+export function hexMarks(cells: ShotHexCell[], size: number, metric: HexMetric = 'diff', color?: (c: ShotHexCell) => string): HexMark[] {
   const bin = sizeBins(cells.map(c => c[2]))
-  return cells.map(([q, r, a, m, la, lm]) => {
+  return cells.map(c => {
+    const [q, r, a, m, la, lm, pts = 0, lPts = 0, zone] = c
     const b = bin(a)
-    const d = diffPoints(m, a, lm, la)
-    return { key: `${q},${r}`, points: hexPoints(q, r, size, size * SIZE_FRACTION[b] * 0.98), fill: diffColor(d), bin: b, q, r, att: a, made: m, lAtt: la, lMade: lm, diff: d }
+    const v = cellValue(c, metric)
+    return {
+      key: `${q},${r}`, points: hexPoints(q, r, size, size * SIZE_FRACTION[b] * 0.98), fill: color ? color(c) : DIFF_COLORS[metricBin(v, metric)],
+      bin: b, q, r, att: a, made: m, lAtt: la, lMade: lm, diff: diffPoints(m, a, lm, la), value: v, pts, lPts, zone: zone ?? null,
+    }
   })
 }
 
@@ -157,4 +187,62 @@ export function distanceRows(player: [number, number][], league: [number, number
   }
   if (tail.att || tail.lAtt) rows.push(tail)
   return rows
+}
+
+// -- heat map (kernel density of attempts) --------------------------------------------------------------------------------
+export const HEAT_COLORS = ['#10243d', '#1d4e89', '#38bdf8', '#a7e3ff', '#fde68a', '#f59e0b'] as const
+export function heatColor(v: number): string {
+  return HEAT_COLORS[Math.min(HEAT_COLORS.length - 1, Math.floor(Math.max(0, Math.min(1, v)) * HEAT_COLORS.length))]
+}
+
+/** Gaussian kernel density of shot locations on a 1-ft grid; values scale to 0..1 against the 97th percentile so one hot spot does
+ * not wash the rest out. `skipRim` drops attempts within 4 ft of the hoop first (the rim dominates every player's map). */
+export function heatCells(shots: ShotTuple[], opts: { bandwidth?: number; skipRim?: boolean } = {}): { x: number; y: number; v: number }[] {
+  const bw = opts.bandwidth ?? 2, reach = Math.ceil(bw * 2.5)
+  const W = 50, H = VIEW_TOP
+  const grid = new Float64Array(W * H)
+  let n = 0
+  for (const s of shots) {
+    const x = s[0] / 10, y = s[1] / 10
+    if (opts.skipRim && Math.hypot(x, y - 5.25) <= 4) continue
+    n++
+    const cx = Math.floor(x + 25), cy = Math.floor(y)
+    for (let gx = Math.max(0, cx - reach); gx <= Math.min(W - 1, cx + reach); gx++) {
+      for (let gy = Math.max(0, cy - reach); gy <= Math.min(H - 1, cy + reach); gy++) {
+        const dx = gx + 0.5 - 25 - x, dy = gy + 0.5 - y
+        grid[gy * W + gx] += Math.exp(-(dx * dx + dy * dy) / (2 * bw * bw))
+      }
+    }
+  }
+  if (!n) return []
+  const sorted = Array.from(grid).filter(v => v > 0).sort((a, b) => a - b)
+  const top = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.97))] || 1
+  const out: { x: number; y: number; v: number }[] = []
+  for (let gy = 0; gy < H; gy++) for (let gx = 0; gx < W; gx++) {
+    const v = grid[gy * W + gx] / top
+    if (v >= 0.06) out.push({ x: gx - 25, y: gy, v: Math.min(1, v) })
+  }
+  return out
+}
+
+// -- matchup ----------------------------------------------------------------------------------------------------------------
+/** Where he shoots weighted by where the opponent is soft: sum over zones of (his share of attempts) x (opponent FG% allowed minus the
+ * league's FG% there), in percentage points. Positive = the opponent gives up more than average in the zones he lives in. Zones where
+ * the opponent faced fewer than `minAtt` attempts are left out and the remaining shares are renormalised. */
+export function matchupShift(zones: { key: string; fga: number; lfga: number; lfgm: number }[], opp: { zones: { key: string; fga: number; fgm: number }[] }, minAtt = 60): number | null {
+  let wsum = 0, acc = 0
+  for (const z of zones) {
+    const o = opp.zones.find(x => x.key === z.key)
+    if (!o || o.fga < minAtt || !z.lfga || !z.fga) continue
+    wsum += z.fga
+    acc += z.fga * (o.fgm / o.fga - z.lfgm / z.lfga)
+  }
+  return wsum ? (acc / wsum) * 100 : null
+}
+
+/** Opponent difference (points of FG%) for one zone, shrunk by the same pseudo-attempts as the rest of the chart. */
+export function opponentZoneDiff(zone: { key: string; lfga: number; lfgm: number }, opp: { zones: { key: string; fga: number; fgm: number }[] }): number | null {
+  const o = opp.zones.find(x => x.key === zone.key)
+  if (!o || !o.fga || !zone.lfga) return null
+  return diffPoints(o.fgm, o.fga, zone.lfgm, zone.lfga)
 }

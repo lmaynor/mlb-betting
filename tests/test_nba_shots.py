@@ -157,7 +157,11 @@ def test_route_requires_key_and_passes_args(client):
     with patch("nba.shots.charts.shot_chart", return_value={"status": "ok"}) as f:
         r = client.get("/api/public/edge/shotchart?player=Jalen%20Brunson&season=2024&opp=bos", headers={"X-API-Key": "k"})
     assert r.status_code == 200 and r.get_json() == {"status": "ok"} and r.headers["Cache-Control"] == "public, max-age=300"
-    assert f.call_args.args == ("Jalen Brunson",) and f.call_args.kwargs == {"season": 2024, "opp": "BOS"}
+    assert f.call_args.args == ("Jalen Brunson",)
+    assert f.call_args.kwargs == {"season": 2024, "opp": "BOS", "last": None, "venue": None, "vs": None, "period": None}
+    with patch("nba.shots.charts.shot_chart", return_value={"status": "ok"}) as f2:
+        client.get("/api/public/edge/shotchart?player=x&last=10&venue=home&vs=bos&period=4", headers={"X-API-Key": "k"})
+    assert f2.call_args.kwargs == {"season": None, "opp": None, "last": 10, "venue": "home", "vs": "BOS", "period": 4}
     assert client.get("/api/public/edge/shotchart?sport=nhl&player=x", headers={"X-API-Key": "k"}).status_code == 400
 
 
@@ -167,10 +171,11 @@ from nba.shots import espn as E
 
 def _pbp():
     """Six shooting plays from one game: rim make, a corner three at each basket end, a mid-range miss, a free throw, a playoff shot."""
-    base = dict(shooting_play=True, season_type=2, game_id=401, game_date="2026-10-28", home_team_id=18, away_team_id=2,
+    base = dict(shooting_play=True, season_type=2, game_id=401, period_number=2, athlete_id_2=None, athlete_name_2=None, game_date="2026-10-28", home_team_id=18, away_team_id=2,
                 home_team_abbrev="NY", away_team_abbrev="BOS", athlete_id_1=3934672.0, athlete_name_1="Jalen Brunson", type_text="Jump Shot")
     rows = [
-        dict(base, coordinate_x=40.75, coordinate_y=0.0, text="makes 2-foot layup", scoring_play=True, team_id=18, type_text="Driving Layup Shot"),
+        dict(base, coordinate_x=40.75, coordinate_y=0.0, text="Jalen Brunson makes 2-foot layup (Josh Hart assists)", scoring_play=True, team_id=18,
+             type_text="Driving Layup Shot", athlete_id_2=3062679.0, athlete_name_2="Josh Hart"),
         dict(base, coordinate_x=-36.75, coordinate_y=-22.0, text="makes 24-foot three point jumper", scoring_play=True, team_id=18),   # left basket
         dict(base, coordinate_x=36.75, coordinate_y=-22.0, text="misses 25-foot three point jumper", scoring_play=False, team_id=2,
              athlete_id_1=4065648.0, athlete_name_1="Jayson Tatum"),
@@ -198,6 +203,8 @@ def test_espn_frame_drops_free_throws_playoffs_and_resolves_teams_and_zones():
     threes = {int(r.player_id): ZONE_KEYS[r.zone] for r in df.itertuples() if r.three}
     assert threes == {3934672: "Left Corner 3|L", 4065648: "Right Corner 3|R"}         # left-basket (-36.75, -22) folds to +22 = left; (36.75, -22) = right
     assert df[df["three"]]["made"].sum() == 1
+    assert rim["assisted"] and rim["ast_norm"] == "josh hart" and rim["ast_id"] == 3062679 and rim["period"] == 2
+    assert not df[df["three"]]["assisted"].any()
 
 
 def test_zone_index_exact_restricted_area_and_unmapped():
@@ -236,3 +243,80 @@ def test_default_season_skips_a_thin_current_season_but_an_explicit_one_has_no_f
     assert C.shot_chart("Jalen Brunson")["season"] == 2024                  # 25 < 60: fall back to last season
     assert C.shot_chart("Jalen Brunson", season=2025)["fga"] == 25         # asked for explicitly: shown as is
     C.clear_cache()
+
+
+# -- filters, quarters, points per cell, assisted baskets ------------------------------------------------------------------
+@pytest.fixture()
+def store2(tmp_path, monkeypatch):
+    """Like `store`, but the 2024 frame has periods, assisted makes and a passer (Brunson sets up Tatum's makes)."""
+    monkeypatch.setenv("MLB_BASE_DATA", str(tmp_path))
+    monkeypatch.delenv("MLB_GCS_BUCKET", raising=False)
+    C.clear_cache()
+    monkeypatch.setattr(C, "DEFAULT_MIN_FGA", 50)
+    df = B.normalize_csv_frame(_raw())
+    df["period"] = (np.arange(len(df)) % 4 + 1).astype("int8")
+    tatum_made = (df["player_id"] == 2) & df["made"]
+    df.loc[tatum_made, "assisted"] = True
+    df.loc[tatum_made, "ast_norm"] = "jalen brunson"
+    B.write_season(df, 2024, "synthetic")
+    yield df
+    C.clear_cache()
+
+
+def test_filters_narrow_games_venue_opponent_and_period(store2):
+    full = C.shot_chart("Jalen Brunson")
+    assert full["filters"]["games"] == 4 and full["filters"]["games_season"] == 4 and full["fga"] == 100
+    last2 = C.shot_chart("Jalen Brunson", last=2)
+    assert last2["filters"]["games"] == 2 and last2["fga"] == 50 and last2["n_games"] == 2
+    assert last2["games"] and len(last2["games"]) == 4                      # the volume chart keeps the whole season
+    home = C.shot_chart("Jalen Brunson", venue="home")
+    away = C.shot_chart("Jalen Brunson", venue="away")
+    assert home["fga"] + away["fga"] == 100 and home["filters"]["venue"] == "home"
+    vs = C.shot_chart("Jalen Brunson", vs="bos")
+    assert vs["filters"]["vs"] == "BOS" and vs["fga"] == 50                  # NYK-BOS twice
+    q = C.shot_chart("Jalen Brunson", period=3)
+    assert q["filters"]["period"] == 3 and 0 < q["fga"] < 100 and all(s_[2] >= 0 for s_ in q["shots"])
+    assert sum(r["fga"] for r in full["quarters"]) == 100 and [r["period"] for r in full["quarters"]] == [1, 2, 3, 4, 5]
+    assert full["quarters"][4]["fga"] == 0
+
+
+def test_hex_cells_carry_points_and_modal_zone(store2):
+    out = C.shot_chart("Jalen Brunson")
+    cell = out["hexes"][0]
+    assert len(cell) == 9
+    pts = sum(c[6] for c in out["hexes"])
+    assert 0 < pts <= 2 * out["fgm"] and pts % 2 == 0                       # twos only; cells the league barely shot from are left out
+    assert all(c[7] >= c[6] for c in out["hexes"]) and all(0 <= c[8] < 14 for c in out["hexes"])
+
+
+def test_assists_are_the_baskets_he_set_up_and_follow_the_game_filters(store2):
+    out = C.shot_chart("Jalen Brunson")
+    assert out["has_assist"]
+    n = int(((store2["ast_norm"] == "jalen brunson") & store2["game_id"].isin(["22400000", "22400001", "22400003", "22400004"])).sum())
+    assert out["assists"]["n"] == n > 0
+    assert out["assists"]["recipients"][0]["name"] == "Jayson Tatum" and out["assists"]["recipients"][0]["n"] == n
+    assert all(s_[2] & 1 for s_ in out["assists"]["shots"]) and sum(z["n"] for z in out["assists"]["zones"]) <= n
+    assert C.shot_chart("Jalen Brunson", last=1)["assists"]["n"] < n or n == 0
+    zr = next(z for z in C.shot_chart("Jayson Tatum")["zones"] if z["key"] == "Left Corner 3|L")
+    assert zr["ast"] == zr["fgm"] > 0                                       # every Tatum make was assisted in the fixture
+    assert C.shot_chart("Jayson Tatum")["assists"]["n"] == 0                # he set up nobody
+
+
+def test_seasons_without_passer_data_have_no_assist_payload(store):
+    out = C.shot_chart("Jalen Brunson")
+    assert out["has_assist"] is False and out["assists"] is None
+    assert "ast" not in out["zones"][0]
+
+
+def test_espn_team_and_home_survive_the_real_files_float_team_ids():
+    """The real play-by-play has team_id as float64 (18.0) and home_team_id as int32 (18): a string compare labels every shooter
+    as the away team. The synthetic fixture above uses ints, so this one mirrors the real dtypes."""
+    pbp = _pbp()
+    pbp["team_id"] = pbp["team_id"].astype("float64")
+    pbp["home_team_id"] = pbp["home_team_id"].astype("int32")
+    pbp["away_team_id"] = pbp["away_team_id"].astype("int32")
+    df = E.normalize_espn_frame(pbp, 2027)
+    brunson = df[df["player_id"] == 3934672]
+    assert (brunson["team"] == "NYK").all() and (brunson["opp"] == "BOS").all() and brunson["home"].all()
+    tatum = df[df["player_id"] == 4065648]
+    assert (tatum["team"] == "BOS").all() and (tatum["opp"] == "NYK").all() and not tatum["home"].any()

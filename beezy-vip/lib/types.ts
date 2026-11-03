@@ -419,13 +419,17 @@ export interface CockpitFeed {
 }
 
 // -- /edge NBA shot chart (GET /api/public/edge/shotchart; nba/shots/charts.py) -------------------------------------------
-/** A shot is [x * 10, y * 10, flags] in the court frame of nba/shots/court.py (feet from the centre line / the baseline); bit 0 = made, bit 1 = three. */
+/** A shot is [x * 10, y * 10, flags] in the court frame of nba/shots/court.py (feet from the centre line / the baseline); bit 0 = made, bit 1 = three, bit 2 = assisted. */
 export type ShotTuple = [number, number, number]
 
-export interface ShotZoneRow { key: string; label: string; cx: number; cy: number; fga: number; fgm: number; lfga: number; lfgm: number }
+/** `ast` / `last` / `lmade` exist only in seasons with passer data: his makes that were assisted, league assisted makes, league makes. */
+export interface ShotZoneRow { key: string; label: string; cx: number; cy: number; fga: number; fgm: number; lfga: number; lfgm: number; ast?: number; last?: number; lmade?: number }
+export interface ShotQuarter { period: number; fga: number; fgm: number; fg3a: number; fg3m: number; pts: number; pts_pg: number; lfga: number; lfgm: number }
+export interface ShotFilters { last: number | null; venue: 'home' | 'away' | null; vs: string | null; period: number | null; games: number; games_season: number }
+export interface ShotAssists { n: number; games: number; threes?: number; shots: ShotTuple[]; recipients: { name: string; n: number }[]; zones: { key: string; n: number; three: number }[] }
 export interface ShotGroupRow { group: string; fga: number; fgm: number; lfga: number; lfgm: number }
-/** [q, r, player fga, player fgm, league fga, league fgm] for one hex cell (axial coordinates, pointy-top, circumradius `hex_r`). */
-export type ShotHexCell = [number, number, number, number, number, number]
+/** [q, r, player fga, player fgm, league fga, league fgm, player pts, league pts, modal zone index] for one hex cell (axial coordinates, pointy-top, circumradius `hex_r`). */
+export type ShotHexCell = [number, number, number, number, number, number, number?, number?, number?]
 export interface ShotGameRow { date: string; opp: string; home: boolean; fga: number; fgm: number; fg3a: number; fg3m: number }
 export interface ShotVenue { games: number; fga: number; fgm: number; fg3a: number; fg3m: number }
 
@@ -441,6 +445,10 @@ export interface ShotChartOk {
   hoop: [number, number]
   hex_r: number
   fga: number; fgm: number; fg3a: number; fg3m: number; n_games: number
+  filters?: ShotFilters
+  has_assist?: boolean
+  quarters?: ShotQuarter[]
+  assists?: ShotAssists | null
   league: { fga: number; fgm: number; fg3a: number; fg3m: number }
   shots: ShotTuple[]
   hexes: ShotHexCell[]
@@ -455,3 +463,34 @@ export interface ShotChartOk {
   opponent: { team: string; fga: number; fg3a: number; zones: { key: string; fga: number; fgm: number }[]; lfga: number; lfg3a: number; n_teams: number } | null
 }
 export type ShotChartResult = ShotChartOk | { status: 'no_data' | 'no_player'; seasons?: number[]; reason?: string } | { status: 'locked' }
+
+// -- /edge NBA trends (GET /api/public/edge/trends; nba/trends.py) -------------------------------------------------------
+export interface TrendGame {
+  date: string; opp: string | null; home: boolean | null; rest: number | null; stype: string; season: number; starter?: boolean | null
+  min: number | null; val: number | null
+  pts: number | null; reb: number | null; ast: number | null; fg3m: number | null; fg3a: number | null; fga: number | null; fta: number | null
+  tov: number | null; pf: number | null; stl?: number | null; blk?: number | null
+  tm_fgm?: number | null; tm_fga?: number | null; tm_fg3m?: number | null; tm_ast?: number | null
+  opp_fga?: number | null; opp_fgm?: number | null; opp_reb?: number | null
+  r5: number | null; r10: number | null
+}
+export interface TrendWindow { n: number; mean: number | null; median: number | null; sd: number | null; cv: number | null; over: number | null; under: number | null; push: number | null; over_rate: number | null; p10: number | null; p25: number | null; p75: number | null; p90: number | null }
+export interface TrendSplit { key: string; label: string; n: number; mean: number | null; over_rate: number | null; min_mean: number | null }
+export interface TrendTeammate { player: string; min_avg: number | null; n_with: number; n_without: number; mean_with: number | null; mean_without: number | null; over_with: number | null; over_without: number | null; min_with: number | null; min_without: number | null; fga_with: number | null; fga_without: number | null }
+export interface TrendDriver { key: string; label: string; corr: number | null; n: number; recent_mean: number | null; season_mean: number | null; z: number | null }
+export interface TrendsOk {
+  status: 'ok'
+  player: string; team: string; stat: string; label: string; line: number | null
+  season: number; seasons: number[]; as_of: string; n_loaded: number; scope: string; postseason_games_excluded: number
+  games: TrendGame[]
+  summary: { season: TrendWindow; l10: TrendWindow; l5: TrendWindow; prev: TrendWindow }
+  hist: { lo: number; hi: number; width: number; counts: number[] }
+  rolling: { l5: (number | null)[]; l10: (number | null)[] }
+  splits: TrendSplit[]
+  minutes: { n: number; mean: number | null; sd: number | null; l5_mean: number | null; corr_val_min: number | null; slope_per_min: number | null; per36: number | null }
+  teammate_out: TrendTeammate[]
+  drivers: TrendDriver[]
+  variance: { n: number; sd: number | null; cv: number | null; min_cv: number | null; share_from_minutes: number | null; note: string }
+  proxies: { available: string[]; missing: string[]; note: string }
+}
+export type TrendsResult = TrendsOk | { status: 'no_data' | 'no_player'; reason?: string } | { status: 'locked' }

@@ -1188,6 +1188,10 @@ def public_edge_shotchart():
             request.args.get("player"),
             season=int(season) if season and season.isdigit() else None,
             opp=(request.args.get("opp") or "").upper() or None,
+            last=int(request.args["last"]) if request.args.get("last", "").isdigit() else None,
+            venue=request.args.get("venue") or None,
+            vs=(request.args.get("vs") or "").upper() or None,
+            period=int(request.args["period"]) if request.args.get("period", "").isdigit() else None,
         )
         resp = jsonify(data)
         resp.headers.update(_cors_headers())
@@ -1195,6 +1199,38 @@ def public_edge_shotchart():
         return resp
     except Exception as exc:
         logger.exception("public_edge_shotchart failed")
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/public/edge/trends", methods=["GET", "OPTIONS"])
+def public_edge_trends():
+    """/edge NBA prop trends (nba/trends.py): one player's game log vs the line with distribution, rolling form, home/away and
+    rest splits, minutes, teammate-out splits and the box-score drivers of variance. `player` is a NAME; `stat` is a cockpit
+    market (points, rebounds, ...); `line` and `opp` (tricode) are optional. `status` is "no_data" / "no_player" (HTTP 200)."""
+    if request.method == "OPTIONS":
+        return "", 204, _cors_headers()
+    err = _auth_required(request)
+    if err:
+        return err
+    try:
+        from nba.trends import trends
+        if (request.args.get("sport") or "nba").lower() != "nba":
+            return jsonify({"error": "trends are NBA only"}), 400
+        raw_line = request.args.get("line")
+        try:
+            line = float(raw_line) if raw_line not in (None, "") else None
+        except ValueError:
+            return jsonify({"error": "line must be a number"}), 400
+        data = trends(request.args.get("player"), request.args.get("stat") or "points", line=line,
+                      opp=(request.args.get("opp") or "").upper() or None)
+        resp = jsonify(data)
+        resp.headers.update(_cors_headers())
+        resp.headers["Cache-Control"] = "public, max-age=300"
+        return resp
+    except ValueError as exc:      # unsupported stat
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        logger.exception("public_edge_trends failed")
         return jsonify({"error": str(exc)}), 500
 
 

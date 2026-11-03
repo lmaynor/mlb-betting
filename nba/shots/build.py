@@ -20,11 +20,12 @@ import logging
 from collections import Counter
 from datetime import datetime, timezone
 
+import numpy as np
 import pandas as pd
 
 from mlb_core import storage as _st
 from mlb_core.data.player_names import norm_name
-from nba.shots.court import DIST_BINS, HALF_Y, HEX_R, HOOP, ZONE_KEYS, ZONE_LABELS, dist_bin, hex_of, season_label, shot_group
+from nba.shots.court import DIST_BINS, FRAME_COLS, HALF_Y, HEX_R, HOOP, ZONE_KEYS, ZONE_LABELS, dist_bin, hex_of, season_label, shot_group
 
 logger = logging.getLogger(__name__)
 
@@ -88,9 +89,11 @@ def normalize_csv_frame(raw: pd.DataFrame) -> pd.DataFrame:
     df["hex_r"] = [h[1] for h in hq]
     df["player_id"] = df["player_id"].astype("int64")
     df["season"] = df["season"].astype("int16")
-    cols = ["season", "player_id", "name", "name_norm", "team", "opp", "home", "game_id", "date", "x", "y", "made", "three",
-            "group", "zone", "hex_q", "hex_r"]
-    return df[cols].reset_index(drop=True)
+    df["period"] = pd.to_numeric(df["QUARTER"], errors="coerce").fillna(0).astype("int8")
+    df["assisted"] = False                                    # the file has no passer; ESPN seasons do (nba/shots/espn.py)
+    df["ast_id"] = pd.array([pd.NA] * len(df), dtype="Int64")
+    df["ast_norm"] = ""
+    return df[FRAME_COLS].reset_index(drop=True)
 
 
 def _pct(m: int, a: int):
@@ -106,11 +109,17 @@ def league_artifact(df: pd.DataFrame, year: int, source: str) -> dict:
         a, m = int(len(g)), int(g["made"].sum())
         zones.append({"key": key, "label": ZONE_LABELS[key], "fga": a, "fgm": m,
                       "cx": round(float(g["x"].mean()), 2) if a else 0.0, "cy": round(float(g["y"].mean()), 2) if a else 0.0})
-    hx = df.groupby(["hex_q", "hex_r"]).agg(fga=("made", "size"), fgm=("made", "sum"))
+    df = df.assign(_pts=np.where(df["made"], np.where(df["three"], 3, 2), 0))
+    hx = df.groupby(["hex_q", "hex_r"]).agg(fga=("made", "size"), fgm=("made", "sum"), pts=("_pts", "sum"))
     hx = hx[hx["fga"] >= MIN_HEX_FGA]
     # a cell's zone = its modal zone, so the zone view can colour whole cells
     mode = z.groupby(["hex_q", "hex_r"])["zone"].agg(lambda s: int(s.mode().iloc[0]))
-    hexes = [[int(q), int(r), int(row.fga), int(row.fgm), int(mode.get((q, r), -1))] for (q, r), row in hx.iterrows()]
+    hexes = [[int(q), int(r), int(row.fga), int(row.fgm), int(mode.get((q, r), -1)), int(row.pts)] for (q, r), row in hx.iterrows()]
+    quarters = [[int((df["period"] == p).sum()), int(df[df["period"] == p]["made"].sum())] for p in range(1, 6)]
+    has_assist = bool(df["assisted"].any())
+    assist = None
+    if has_assist:       # league makes and assisted makes by zone: the base rate for "how much of his scoring is created by others"
+        assist = [[int(((z["zone"] == i) & z["made"]).sum()), int(((z["zone"] == i) & z["made"] & z["assisted"]).sum())] for i in range(len(ZONE_KEYS))]
     groups = {k: [int(len(g)), int(g["made"].sum())] for k, g in df.groupby("group")}
     db = dist_bin(df["x"].to_numpy(), df["y"].to_numpy())
     dist = [[int((db == i).sum()), int(df["made"].to_numpy()[db == i].sum())] for i in range(DIST_BINS)]
@@ -125,7 +134,8 @@ def league_artifact(df: pd.DataFrame, year: int, source: str) -> dict:
         "n_shots": int(len(df)), "fga": int(len(df)), "fgm": int(df["made"].sum()), "fg3a": int(df["three"].sum()),
         "fg3m": int((df["three"] & df["made"]).sum()), "n_games": int(df["game_id"].nunique()),
         "last_game": str(df["date"].max()), "hex_r": HEX_R, "hoop": list(HOOP),
-        "zones": zones, "hexes": hexes, "groups": groups, "dist": dist, "defense": defense,
+        "zones": zones, "hexes": hexes, "groups": groups, "dist": dist, "quarters": quarters, "has_assist": has_assist,
+        "assist": assist, "defense": defense,
     }
 
 

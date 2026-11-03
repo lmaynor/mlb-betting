@@ -95,3 +95,7 @@ def dist_bin(x, y):
     import numpy as np
     d = np.hypot(np.asarray(x, dtype=float) - HOOP[0], np.asarray(y, dtype=float) - HOOP[1])
     return np.minimum(np.floor(d), DIST_BINS - 1).astype(int)
+
+
+FRAME_COLS = ["season", "player_id", "name", "name_norm", "team", "opp", "home", "game_id", "date", "x", "y", "made", "three",
+              "group", "zone", "hex_q", "hex_r", "period", "assisted", "ast_id", "ast_norm"]

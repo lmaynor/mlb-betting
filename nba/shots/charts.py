@@ -14,12 +14,13 @@ import logging
 import threading
 import time
 
+import numpy as np
 import pandas as pd
 
 from mlb_core import storage as _st
 from mlb_core.data.player_names import norm_name
 from nba.shots.build import league_key, shots_key
-from nba.shots.court import DIST_BINS, HEX_R, SHOT_GROUPS, dist_bin
+from nba.shots.court import DIST_BINS, HEX_R, SHOT_GROUPS, ZONE_KEYS, dist_bin
 from nba.teams import team_code
 
 logger = logging.getLogger(__name__)
@@ -82,27 +83,31 @@ def _pick_player(df: pd.DataFrame, name_norm: str):
     return g
 
 
-def _rate(a: int, m: int):
-    return round(m / a, 4) if a else None
-
-
 def _hex_cells(g: pd.DataFrame, league: dict) -> list:
-    lg = {(q, r): (a, m) for q, r, a, m, _ in league["hexes"]}
+    """[q, r, fga, fgm, league fga, league fgm, pts, league pts, modal zone] for every cell the player shot from that the league did too."""
+    lg = {(q, r): (a, m, z, p) for q, r, a, m, z, p in league["hexes"]}
+    pts = g["made"].to_numpy() * np.where(g["three"].to_numpy(), 3, 2)
     out = []
-    for (q, r), c in g.groupby(["hex_q", "hex_r"]):
+    for (q, r), idx in g.groupby(["hex_q", "hex_r"]).indices.items():
         if (q, r) not in lg:
             continue
-        la, lm = lg[(q, r)]
-        out.append([int(q), int(r), int(len(c)), int(c["made"].sum()), la, lm])
+        la, lm, z, lp = lg[(q, r)]
+        out.append([int(q), int(r), int(len(idx)), int(g["made"].to_numpy()[idx].sum()), la, lm, int(pts[idx].sum()), lp, z])
     return out
 
 
 def _zone_rows(g: pd.DataFrame, league: dict) -> list:
+    la = league.get("assist")
     rows = []
     for i, z in enumerate(league["zones"]):
         c = g[g["zone"] == i]
-        rows.append({"key": z["key"], "label": z["label"], "cx": z["cx"], "cy": z["cy"],
-                     "fga": int(len(c)), "fgm": int(c["made"].sum()), "lfga": z["fga"], "lfgm": z["fgm"]})
+        row = {"key": z["key"], "label": z["label"], "cx": z["cx"], "cy": z["cy"],
+               "fga": int(len(c)), "fgm": int(c["made"].sum()), "lfga": z["fga"], "lfgm": z["fgm"]}
+        if la:
+            row["ast"] = int((c["made"] & c["assisted"]).sum())          # his makes that a teammate set up
+            row["last"] = la[i][1]                                        # league makes that were assisted ...
+            row["lmade"] = la[i][0]                                       # ... out of this many league makes
+        rows.append(row)
     return rows
 
 
@@ -122,6 +127,20 @@ def _dist(g: pd.DataFrame, league: dict) -> dict:
     made = g["made"].to_numpy()
     player = [[int((db == i).sum()), int(made[db == i].sum())] for i in range(DIST_BINS)]
     return {"player": player, "league": league.get("dist") or [[0, 0]] * DIST_BINS}
+
+
+def _quarters(g: pd.DataFrame, league: dict) -> list:
+    """Shooting by period (1-4, 5 = overtime): attempts, makes, threes, points per game played, and the league's FG% for context."""
+    out = []
+    games = max(int(g["game_id"].nunique()), 1)
+    lq = league.get("quarters") or [[0, 0]] * 5
+    for p in range(1, 6):
+        c = g[g["period"] == p]
+        pts = int((c["made"].to_numpy() * np.where(c["three"].to_numpy(), 3, 2)).sum())
+        out.append({"period": p, "fga": int(len(c)), "fgm": int(c["made"].sum()), "fg3a": int(c["three"].sum()),
+                    "fg3m": int((c["three"] & c["made"]).sum()), "pts": pts, "pts_pg": round(pts / games, 2),
+                    "lfga": lq[p - 1][0], "lfgm": lq[p - 1][1]})
+    return out
 
 
 def _games(g: pd.DataFrame) -> list:
@@ -159,9 +178,40 @@ def _opponent(league: dict, opp: str | None):
             "lfga": league["fga"], "lfg3a": league["fg3a"], "n_teams": len(league["defense"])}
 
 
-def shot_chart(player: str | None, season: int | None = None, opp: str | None = None) -> dict:
+def _apply_filters(g: pd.DataFrame, last, venue, vs):
+    """Game-level filters in order: the player's last N games, home/away, games against one opponent."""
+    if vs:
+        g = g[g["opp"] == (team_code(vs) or vs.upper())]
+    if venue in ("home", "away"):
+        g = g[g["home"] == (venue == "home")]
+    if last:
+        ids = g.sort_values(["date", "game_id"]).drop_duplicates("game_id")["game_id"].tail(int(last))
+        g = g[g["game_id"].isin(set(ids))]
+    return g
+
+
+def _assists(df: pd.DataFrame, nn: str, game_ids: set, period) -> dict | None:
+    """Baskets this player set up (ESPN play-by-play marks the passer): where they landed, who scored them. None when the season
+    has no passer data. These are ASSISTED BASKETS, not potential assists: passes that did not become makes are tracking data."""
+    a = df[(df["ast_norm"] == nn) & df["game_id"].isin(game_ids)]
+    if period:
+        a = a[a["period"] == int(period)]
+    if not len(a):
+        return {"n": 0, "games": len(game_ids), "shots": [], "recipients": [], "zones": []}
+    rec = a.groupby("name").size().sort_values(ascending=False).head(6)
+    zones = a[a["zone"] >= 0].groupby("zone").agg(n=("made", "size"), three=("three", "sum"))
+    return {
+        "n": int(len(a)), "games": len(game_ids), "threes": int(a["three"].sum()),
+        "shots": [[int(round(x * 10)), int(round(y * 10)), 1 | (int(t) << 1)] for x, y, t in zip(a["x"], a["y"], a["three"])],
+        "recipients": [{"name": str(k), "n": int(v)} for k, v in rec.items()],
+        "zones": [{"key": ZONE_KEYS[int(i)], "n": int(r.n), "three": int(r.three)} for i, r in zones.iterrows()],
+    }
+
+
+def shot_chart(player: str | None, season: int | None = None, opp: str | None = None, last=None, venue=None, vs=None, period=None) -> dict:
     """-> {"status": "ok"|"no_data"|"no_player", ...}. `season` is a start year (2024 = 2024-25); default: the player's newest
-    built season with >= DEFAULT_MIN_FGA attempts (early in a season that is last season, and the season picker offers the partial one)."""
+    built season with >= DEFAULT_MIN_FGA attempts (early in a season that is last season, and the season picker offers the partial one).
+    Filters (all optional): `last` = his last N games, `venue` = home|away, `vs` = games against one opponent tricode, `period` = 1-5."""
     seasons = available_seasons()
     if not seasons:
         return {"status": "no_data", "reason": "no shot artifacts built", "seasons": []}
@@ -174,23 +224,33 @@ def shot_chart(player: str | None, season: int | None = None, opp: str | None = 
         league = _league(y)
         if df is None or league is None:
             continue
-        g = _pick_player(df, nn)
-        if len(g) < DEFAULT_MIN_FGA and season is None:
+        full = _pick_player(df, nn)
+        if len(full) < DEFAULT_MIN_FGA and season is None:
             continue
-        if not len(g):
+        if not len(full):
             continue
-        g = g.sort_values(["date", "game_id"])
-        shots = [[int(round(x * 10)), int(round(yy * 10)), int(m) | (int(t) << 1)]
-                 for x, yy, m, t in zip(g["x"], g["y"], g["made"], g["three"])]
+        full = full.sort_values(["date", "game_id"])
+        base = _apply_filters(full, last, venue, vs)
+        g = base[base["period"] == int(period)] if period else base
+        shots = [[int(round(x * 10)), int(round(yy * 10)), int(m) | (int(t) << 1) | (int(a) << 2)]
+                 for x, yy, m, t, a in zip(g["x"], g["y"], g["made"], g["three"], g["assisted"])]
+        has_assist = bool(league.get("has_assist"))
         return {
-            "status": "ok", "player": str(g["name"].iloc[-1]), "team": str(g["team"].iloc[-1]),
+            "status": "ok", "player": str(full["name"].iloc[-1]), "team": str(full["team"].iloc[-1]),
             "season": y, "label": league["label"], "seasons": seasons, "source": league["source"],
             "last_game": league["last_game"], "hoop": league["hoop"], "hex_r": HEX_R,
+            "filters": {"last": int(last) if last else None, "venue": venue if venue in ("home", "away") else None,
+                        "vs": (team_code(vs) or vs.upper()) if vs else None, "period": int(period) if period else None,
+                        "games": int(base["game_id"].nunique()), "games_season": int(full["game_id"].nunique())},
             "fga": int(len(g)), "fgm": int(g["made"].sum()), "fg3a": int(g["three"].sum()),
             "fg3m": int((g["three"] & g["made"]).sum()), "n_games": int(g["game_id"].nunique()),
+            "has_assist": has_assist,
             "league": {"fga": league["fga"], "fgm": league["fgm"], "fg3a": league["fg3a"], "fg3m": league["fg3m"]},
-            "shots": shots, "hexes": _hex_cells(g, league), "grid": [[q, r, z] for q, r, _a, _m, z in league["hexes"]], "zones": _zone_rows(g, league),
-            "groups": _group_rows(g, league), "dist": _dist(g, league), "games": _games(g), "venue": _venue(g),
+            "shots": shots, "hexes": _hex_cells(g, league),
+            "grid": [[q, r, z] for q, r, _a, _m, z, _p in league["hexes"]],
+            "zones": _zone_rows(g, league), "groups": _group_rows(g, league), "dist": _dist(g, league),
+            "quarters": _quarters(base, league), "games": _games(full), "venue": _venue(full),
             "opponent": _opponent(league, opp),
+            "assists": _assists(df, nn, set(base["game_id"]), period) if has_assist else None,
         }
     return {"status": "no_player", "seasons": seasons}

@@ -10,7 +10,7 @@ const apiGetShotChart = jest.fn()
 jest.mock('@/lib/betting-api', () => ({ apiGetShotChart: (...a: unknown[]) => apiGetShotChart(...a), apiGetEdgeCockpit: jest.fn(() => new Promise(() => {})) }))
 
 import {
-  DIFF_BREAKS, DIFF_COLORS, courtPaths, diffBin, diffColor, diffPoints, distanceRows, hexCenter, hexMarks, hexPoints, shotPaths, shotQuality, shrunkRate, sizeBins, sx, sy,
+  DIFF_BREAKS, DIFF_COLORS, HEAT_COLORS, cellValue, courtPaths, diffBin, diffColor, diffPoints, distanceRows, hexCenter, hexMarks, hexPoints, heatCells, heatColor, matchupShift, metricBin, opponentZoneDiff, shotPaths, shotQuality, shrunkRate, sizeBins, sx, sy,
 } from '../lib/shot-chart'
 import { opponentOf, ShotChartBody, ShotChartPanel, VolumeBars } from '../app/edge/shot-chart'
 
@@ -91,6 +91,44 @@ describe('shot quality', () => {
   })
 })
 
+describe('colour metrics, heat map and matchup maths', () => {
+  const cell = [0, 0, 40, 24, 1000, 400, 66, 880] as const              // 60% on 40; league 40% and 0.88 points per shot
+  it('values a cell three ways, all shrunk toward the league cell', () => {
+    expect(cellValue([...cell] as never, 'diff')).toBeCloseTo(diffPoints(24, 40, 400, 1000), 6)
+    expect(cellValue([...cell] as never, 'fg')).toBeCloseTo(((24 + 5 * 0.4) / 45) * 100, 6)
+    expect(cellValue([...cell] as never, 'pps')).toBeCloseTo((66 + 5 * 0.88) / 45, 6)
+    expect(metricBin(62, 'fg')).toBe(5)
+    expect(metricBin(0.7, 'pps')).toBe(0)
+    expect(metricBin(1.0, 'pps')).toBe(2)
+    const marks = hexMarks([[0, 0, 40, 24, 1000, 400, 66, 880]], 1.5, 'pps')
+    expect(marks[0].value).toBeCloseTo(1.564, 2)
+    expect(marks[0].fill).toBe(DIFF_COLORS[5])
+  })
+  it('estimates a kernel density that peaks where the shots are and can drop the rim', () => {
+    const rim = Array.from({ length: 30 }, () => [0, 60, 1] as [number, number, number])          // 30 layups at (0, 6)
+    const mid = Array.from({ length: 10 }, () => [150, 180, 0] as [number, number, number])        // 10 jumpers at (15, 18)
+    const all = heatCells([...rim, ...mid])
+    const top = all.reduce((a, b) => (b.v > a.v ? b : a))
+    expect(top.v).toBe(1)
+    expect(Math.hypot(top.x + 0.5, top.y + 0.5 - 6)).toBeLessThan(2)
+    const noRim = heatCells([...rim, ...mid], { skipRim: true })
+    const hot = noRim.reduce((a, b) => (b.v > a.v ? b : a))
+    expect(Math.hypot(hot.x + 0.5 - 15, hot.y + 0.5 - 18)).toBeLessThan(2)
+    expect(heatCells([])).toEqual([])
+    expect(HEAT_COLORS).toHaveLength(6)
+    expect(heatColor(0)).toBe(HEAT_COLORS[0])
+    expect(heatColor(1)).toBe(HEAT_COLORS[5])
+  })
+  it('weights the opponent zone gaps by where the player shoots', () => {
+    const zones = [{ key: 'a', fga: 75, lfga: 1000, lfgm: 400 }, { key: 'b', fga: 25, lfga: 1000, lfgm: 500 }]
+    const opp = { zones: [{ key: 'a', fga: 200, fgm: 100 }, { key: 'b', fga: 200, fgm: 90 }] }       // allows 50% (lg 40) and 45% (lg 50)
+    expect(matchupShift(zones, opp)).toBeCloseTo(0.75 * 10 + 0.25 * -5, 6)
+    expect(matchupShift(zones, { zones: [{ key: 'a', fga: 10, fgm: 5 }] })).toBeNull()               // under 60 attempts: left out
+    expect(opponentZoneDiff(zones[0], opp)).toBeGreaterThan(8)
+    expect(opponentZoneDiff({ key: 'zz', lfga: 5, lfgm: 1 }, opp)).toBeNull()
+  })
+})
+
 describe('opponentOf', () => {
   it('reads the opponent from either side of the matchup', () => {
     expect(opponentOf('NYK @ BOS', 'NYK')).toBe('BOS')
@@ -101,7 +139,7 @@ describe('opponentOf', () => {
   })
 })
 
-const hexCells: ShotChartOk['hexes'] = [[0, 0, 40, 30, 1000, 650], [1, 0, 6, 2, 900, 400], [0, 1, 14, 6, 800, 360]]
+const hexCells: ShotChartOk['hexes'] = [[0, 0, 40, 30, 1000, 650, 62, 1300, 0], [1, 0, 6, 2, 900, 400, 4, 800, 1], [0, 1, 14, 6, 800, 360, 14, 700, 0]]
 const zones: ShotChartOk['zones'] = [
   { key: 'Restricted Area|C', label: 'Restricted area', cx: 0, cy: 6.4, fga: 226, fgm: 145, lfga: 59000, lfgm: 39000 },
   { key: 'Left Corner 3|L', label: 'Left corner 3', cx: -22, cy: 6, fga: 14, fgm: 5, lfga: 9000, lfgm: 3400 },
@@ -114,6 +152,7 @@ const ok = (over: Partial<ShotChartOk> = {}): ShotChartOk => ({
   shots: [[0, 60, 1], [100, 150, 0], [-220, 70, 3], [180, 250, 2]], hexes: hexCells, grid: [[0, 0, 0], [1, 0, 1], [0, 1, 2], [2, 0, -1]],
   zones,
   dist: { player: Array.from({ length: 35 }, (_, i) => [i < 6 ? 30 : i < 30 ? 4 : 0, i < 6 ? 20 : i < 30 ? 2 : 0]) as [number, number][], league: Array.from({ length: 35 }, (_, i) => [1000, i < 6 ? 640 : 400]) as [number, number][] },
+  quarters: [1, 2, 3, 4, 5].map(p => ({ period: p, fga: p === 5 ? 0 : 60, fgm: p === 5 ? 0 : 30, fg3a: p === 5 ? 0 : 15, fg3m: p === 5 ? 0 : 6, pts: p === 5 ? 0 : 80, pts_pg: p === 5 ? 0 : 1.2, lfga: 50000, lfgm: 23500 })),
   groups: [{ group: 'Layup', fga: 100, fgm: 70, lfga: 40000, lfgm: 24000 }, { group: 'Jump shot', fga: 120, fgm: 50, lfga: 68000, lfgm: 25600 }],
   games: Array.from({ length: 6 }, (_, i) => ({ date: `2025-04-0${i + 1}`, opp: 'BOS', home: i % 2 === 0, fga: 18 + i, fgm: 9, fg3a: 6 + (i % 3), fg3m: 2 })),
   venue: { home: { games: 34, fga: 606, fgm: 289, fg3a: 202, fg3m: 75 }, away: { games: 31, fga: 594, fgm: 296, fg3a: 195, fg3m: 77 } },
@@ -151,9 +190,49 @@ describe('ShotChartBody', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Shots' }))
     expect(container.querySelectorAll('svg[role=img] path').length).toBeGreaterThan(8)
     expect(screen.getByRole('button', { name: 'Shots' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'Heat' }))
+    expect(container.querySelectorAll('svg[role=img] rect').length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByLabelText('Without the rim'))
     fireEvent.click(screen.getByRole('button', { name: 'Zones' }))
     expect(container.querySelectorAll('svg[role=img] polygon').length).toBe(3)  // grid cells without a zone are skipped
     expect(screen.getByLabelText(/shooting by zone/)).toBeInTheDocument()
+  })
+
+  it('colours the hexes by a chosen metric and offers matchup and assists views only when the data is there', () => {
+    const { container, rerender } = render(<ShotChartBody data={ok()} onSeason={() => {}} />)
+    fireEvent.change(screen.getByLabelText('Colour the hexes by'), { target: { value: 'pps' } })
+    expect(screen.getByLabelText('Colour scale, points per shot')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Assists' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Matchup' }))
+    expect(container.querySelectorAll('svg[role=img] polygon').length).toBe(3)
+    expect(screen.getByText(/BOS's zones are worth/)).toBeInTheDocument()
+    rerender(<ShotChartBody data={ok({ opponent: null })} onSeason={() => {}} />)
+    expect(screen.queryByRole('button', { name: 'Matchup' })).not.toBeInTheDocument()
+    rerender(<ShotChartBody data={ok({ opponent: null, assists: { n: 40, games: 20, threes: 12, shots: [[0, 60, 1], [220, 80, 3]], recipients: [{ name: 'Josh Hart', n: 14 }], zones: [{ key: 'Restricted Area|C', n: 20, three: 0 }] } })} onSeason={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Assists' }))
+    expect(screen.getByRole('table', { name: 'Who scored the baskets he set up' })).toHaveTextContent('Josh Hart')
+    expect(screen.getByText(/40 baskets he set up in 20 games \(2.0 a game, 12 of them threes\)/)).toBeInTheDocument()
+  })
+
+  it('reports filter changes and shows what is filtered', () => {
+    const onFilters = jest.fn()
+    const data = ok({ filters: { last: 10, venue: 'home', vs: null, period: 4, games: 10, games_season: 65 } })
+    render(<ShotChartBody data={data} onSeason={() => {}} onFilters={onFilters} opp="BOS" filters={{ last: 10, venue: 'home', vs: false, period: 4 }} />)
+    expect(screen.getByText(/Filtered: 10 of 65 games, Q4 only/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Away' }))
+    expect(onFilters).toHaveBeenLastCalledWith({ last: 10, venue: 'away', vs: false, period: 4 })
+    fireEvent.click(screen.getByRole('button', { name: 'vs BOS' }))
+    expect(onFilters).toHaveBeenLastCalledWith({ last: 10, venue: 'home', vs: true, period: 4 })
+    fireEvent.click(screen.getByRole('button', { name: 'Q4' }))
+    expect(onFilters).toHaveBeenLastCalledWith({ last: 10, venue: 'home', vs: false, period: null })
+    expect(screen.getByRole('button', { name: 'Last 10' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('draws scoring by quarter', () => {
+    render(<ShotChartBody data={ok()} onSeason={() => {}} />)
+    const t = screen.getByRole('table', { name: 'Shooting by quarter' })
+    expect(within(t).getAllByRole('row')).toHaveLength(5)                       // header + Q1-Q4 (no overtime attempts)
+    expect(within(t).queryByText('OT')).not.toBeInTheDocument()
   })
 
   it('offers the other seasons and reports the pick', () => {
@@ -190,7 +269,7 @@ describe('ShotChartPanel', () => {
     render(<ShotChartPanel row={row} />)
     expect(screen.getByRole('status')).toHaveTextContent('Loading shot chart')
     await waitFor(() => expect(screen.getByLabelText('Season shooting summary')).toBeInTheDocument())
-    expect(apiGetShotChart).toHaveBeenCalledWith({ player: 'Jalen Brunson', season: undefined, opp: 'BOS' })
+    expect(apiGetShotChart).toHaveBeenCalledWith({ player: 'Jalen Brunson', season: undefined, opp: 'BOS', last: null, venue: null, vs: null, period: null })
   })
 
   it('says so when a player has no shots, the viewer is locked out, or the call fails', async () => {

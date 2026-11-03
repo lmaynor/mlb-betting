@@ -53,6 +53,20 @@ Uploaded 2026-11-03 to `gs://concrete-crow-445205-m4-mlb-data/NBA/shots/` (16 ob
 (complete) and 2026-27 (through 2026-11-02) from ESPN. **The live season goes stale:** nothing rebuilds `shots_2026`/`league_2026` until a
 job runs the ESPN command nightly (not provisioned; needs the pbp file fetched first, `python -m nba.data.hoopr --datasets pbp`).
 
+## 2026-11-03 later: assisted baskets, filters, and a bug in the first ESPN upload
+
+- The ESPN frames now carry `period`, `assisted`, `ast_id`, `ast_norm` (the passer, from the play text " (X assists)"; 63.7% of 2025-26 makes
+  are assisted, Brunson's 489 assisted baskets vs 515 box-score assists after the 40 ft cut and dedupe). The supplied file has no passer,
+  so assist data exists for 2025-26 and 2026-27 only (`has_assist`). These are ASSISTED BASKETS, not potential assists: a pass that did not
+  become a make is NBA tracking data we do not hold.
+- **Bug fixed before it reached a user:** `team_id` is float64 (`18.0`) in the real files and `home_team_id` int32, so the string compare
+  that decided home/away was always False: every ESPN shooter was labelled as the away team (wrong `team`, `opp`, `home`, so the defence
+  tables, home/away split and `vs` filter were wrong; shot locations and FG% were fine). The first upload (2026-11-03 ~22:40 UTC) carried
+  it; the corrected artifacts were re-uploaded ~22:57 UTC. `test_espn_team_and_home_survive_the_real_files_float_team_ids` pins it.
+  Lesson: a synthetic fixture with int ids hid it; mirror the real dtypes.
+- Filters (`last`, `venue`, `vs`, `period`) are server-side, so the artifacts stay small; the quarter table is field-goal points only (no
+  free throws in the shot data).
+
 ## What is still open
 - Deploy the service BEFORE the frontend (the artifacts are already in the bucket): until the service rev carries `/api/public/edge/shotchart`
   the panel says shot data is unavailable.
