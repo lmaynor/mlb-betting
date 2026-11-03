@@ -23,6 +23,13 @@ const DISCORD_BTN_STYLE: React.CSSProperties = {
   color: '#c6ccff', borderColor: 'color-mix(in oklab, #5865f2 50%, var(--color-background-full))',
 }
 
+// A menu row: full width, 48px tall, icon then label, a hairline between rows. Install is a button with its own modal, so it takes the same look as a style.
+const MENU_ROW = 'flex h-12 w-full items-center gap-3 border-b border-separator-border px-4 text-[15px] text-text-primary no-underline hover:bg-background-primary-hover'
+const ROW_STYLE: React.CSSProperties = {
+  height: 48, width: '100%', padding: '0 16px', gap: 14, borderRadius: 0, border: 0, borderBottom: '1px solid var(--color-separator-border)',
+  background: 'transparent', fontSize: 15, fontWeight: 400, justifyContent: 'flex-start',
+}
+
 const SIGN_IN = 'button-press-motion cursor-pointer whitespace-nowrap rounded-lg border border-separator-border bg-transparent px-3 py-[7px] text-body-2-semibold text-text-primary no-underline hover:bg-background-primary-hover'
 
 /** `authDisabled` (lib/auth-mode.ts) renders the nav with no Clerk hooks/components, so it works without a ClerkProvider. */
@@ -130,7 +137,7 @@ function NavShell({ isSignedIn, userButton, signIn }: {
           <div className="mobile-only nav-mobile-actions ml-auto items-center gap-2">
             {isSignedIn && userButton}
             <button type="button" aria-label={menuOpen ? 'Close menu' : 'Open menu'} aria-expanded={menuOpen} aria-controls="nav-menu" data-testid="nav-burger"
-              onClick={() => setMenuOpen(o => !o)} className={cx(ICON_BOX, 'cursor-pointer')} style={{ width: 44, height: 44 }}>
+              onClick={() => setMenuOpen(o => !o)} className="button-press-motion inline-flex cursor-pointer items-center justify-center rounded-2lg border border-separator-border bg-transparent text-text-primary hover:border-border-button-hover" style={{ width: 44, height: 44 }}>
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
                 {menuOpen ? <path d="M4 4l10 10M14 4L4 14" /> : <path d="M3 5h12M3 9h12M3 13h12" />}
               </svg>
@@ -140,27 +147,31 @@ function NavShell({ isSignedIn, userButton, signIn }: {
       </nav>
 
       {menuOpen && (
-        <div id="nav-menu" data-testid="nav-menu" className="mobile-only absolute inset-x-0 top-full z-[60] flex-col gap-1 border-b border-separator-border bg-background-secondary-default px-4 py-3 shadow-card">
-          <div className="flex flex-wrap items-center gap-2">
-            <InstallAppButton />
-            <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" className={DISCORD_BTN} style={DISCORD_BTN_STYLE}>
-              <DiscordMark size={15} color="currentColor" /> Discord
+        <>
+          {/* Scrim: dims the page under the header and closes the menu on a tap. */}
+          <div aria-hidden onClick={() => setMenuOpen(false)} className="mobile-only absolute inset-x-0 top-full z-[59] bg-black/60" style={{ height: '100dvh' }} />
+          <div id="nav-menu" data-testid="nav-menu" className="mobile-only absolute inset-x-0 top-full z-[60] flex-col border-b border-separator-border bg-background-secondary-default shadow-card">
+            <InstallAppButton style={ROW_STYLE} />
+            <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" className={MENU_ROW}>
+              <span className="inline-flex w-[12px] flex-none justify-center"><DiscordMark size={14} color="currentColor" /></span> Discord
             </a>
-            <a href={X_URL} target="_blank" rel="noopener noreferrer" className={cx(ICON_BOX, 'w-auto gap-[7px] px-[11px] text-body-2-semibold')}>
-              <XMark size={14} color="currentColor" /> Follow on X
+            <a href={X_URL} target="_blank" rel="noopener noreferrer" className={MENU_ROW}>
+              <span className="inline-flex w-[12px] flex-none justify-center"><XMark size={14} color="currentColor" /></span> Follow on X
             </a>
-          </div>
-          {isSignedIn ? (
-            <Link href="/dashboard" className="mt-2 block rounded-md border border-separator-border px-3 py-[11px] text-body-2-semibold text-text-primary no-underline">Dashboard</Link>
-          ) : (
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              {signIn}
-              <Link href="/pricing" className="whitespace-nowrap rounded-md bg-signal px-3 py-2.5 text-caption-1-bold tracking-[0.02em] text-background-secondary-default no-underline">
-                {PRE_LAUNCH ? 'JOIN WAITLIST' : 'UPGRADE TO PRO'}
-              </Link>
+            <div className="grid gap-2 px-4 py-3 [&>a]:flex [&>a]:min-h-[44px] [&>a]:items-center [&>a]:justify-center [&>button]:min-h-[44px] [&>button]:w-full">
+              {isSignedIn ? (
+                <Link href="/dashboard" className="rounded-lg border border-separator-border text-body-2-semibold text-text-primary no-underline">Dashboard</Link>
+              ) : (
+                <>
+                  {signIn}
+                  <Link href="/pricing" className="rounded-lg bg-signal text-caption-1-bold tracking-[0.02em] text-background-secondary-default no-underline">
+                    {PRE_LAUNCH ? 'JOIN WAITLIST' : 'UPGRADE TO PRO'}
+                  </Link>
+                </>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        </>
       )}
     </header>
   )
