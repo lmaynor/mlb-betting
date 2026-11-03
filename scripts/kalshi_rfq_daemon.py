@@ -35,6 +35,7 @@ from dataclasses import replace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from ev.kalshi_game_banked import BANKED_SPORTS, banked_game_rows  # noqa: E402
 from ev.kalshi_game_legs import fetch_game_rows  # noqa: E402
 from ev.kalshi_rfq_props import load_all_prop_indices  # noqa: E402
 from ev.kalshi_rfq_pricer import (  # noqa: E402
@@ -101,21 +102,26 @@ def load_credentials(env_file: str | None, rfq_env: str = "demo") -> tuple[str, 
 
 
 class FeedState:
-    """The fair book is the union of two feeds that refresh on different clocks: the props file (cheap, every --reload-sec)
-    and the game-winner slate pulls (1 ParlayAPI credit per sport per pull, every --game-reload-sec). Each refresh swaps the
-    whole book atomically with the latest rows of BOTH."""
+    """The fair book is the union of three feeds that refresh on different clocks: the props file (cheap, every --reload-sec),
+    the BANKED game lines (zero credits, every --banked-reload-sec: BestBook ladders, else the banked ParlayAPI snapshot) and the
+    live game-winner slate pulls (1 ParlayAPI credit per market per sport per pull, every --game-reload-sec), which only run for
+    a sport the banked feeds could not serve. Each refresh swaps the whole book atomically with the latest rows of ALL of them."""
 
     def __init__(self, book: InMemoryFairBook, feed: str, hot_file: str | None, game_client=None, game_sports=(),
-                 prop_sports=(), game_markets=("h2h", "spreads", "totals"), prop_loader=None):
+                 prop_sports=(), game_markets=("h2h", "spreads", "totals"), prop_loader=None, banked_sports=(), banked_loader=None):
         self.book, self.feed, self.hot_file = book, feed, hot_file
         self.game_client, self.game_sports = game_client, tuple(game_sports)
         self.prop_sports, self.game_markets = tuple(prop_sports), tuple(game_markets)
+        self.banked_sports = tuple(banked_sports)
         self._prop_loader = prop_loader or load_all_prop_indices
+        self._banked_loader = banked_loader or banked_game_rows
         self.props_rows: list[dict] = []
+        self.banked_rows: list[dict] = []
+        self.banked_ok: set = set()                        # sports the LAST banked refresh served (no live pull for these)
         self.game_rows: list[dict] = []
 
     def _apply(self) -> int:
-        n = self.book.load_rows(self.props_rows + self.game_rows)
+        n = self.book.load_rows(self.props_rows + self.banked_rows + self.game_rows)
         if self.hot_file and os.path.exists(self.hot_file):
             with open(self.hot_file) as fh:
                 for gk in json.load(fh) or []:
@@ -141,13 +147,29 @@ class FeedState:
             raise err
         return self._apply()
 
-    def refresh_games(self) -> int:
-        if self.game_client is None or not self.game_sports:
+    def refresh_banked(self) -> int:
+        """Game / spread / total legs from the free banked feeds. A sport that served rows replaces its previous rows and drops any
+        live-pull rows for it; one that failed keeps its previous rows (the staleness gate ages them out) and is left to the live pull."""
+        if not self.banked_sports:
             return len(self.book)
-        rows, stats = fetch_game_rows(self.game_client, self.game_sports, time.time(), self.game_markets)
+        rows, stats = self._banked_loader(self.banked_sports, time.time())
+        ok = {r["sport"] for r in rows}
+        self.banked_ok = ok
+        if ok:
+            self.banked_rows = [r for r in self.banked_rows if r["sport"] not in ok] + rows
+            self.game_rows = [r for r in self.game_rows if r["sport"] not in ok]
+        log.info("banked game legs: %d rows | %s", len(rows), json.dumps(stats, default=str))
+        return self._apply()
+
+    def refresh_games(self) -> int:
+        live = [s for s in self.game_sports if s not in self.banked_ok]
+        if self.game_client is None or not live:
+            return len(self.book)
+        rows, stats = fetch_game_rows(self.game_client, live, time.time(), self.game_markets)
         if rows:                                           # a failed pull keeps the previous rows (staleness gate ages them out)
-            self.game_rows = rows
-        log.info("game legs: %d rows | %s", len(rows), json.dumps(stats, default=str))
+            got = {r["sport"] for r in rows}
+            self.game_rows = [r for r in self.game_rows if r["sport"] not in got] + rows
+        log.info("game legs (live pull, %s): %d rows | %s", ",".join(live), len(rows), json.dumps(stats, default=str))
         return self._apply()
 
 
@@ -156,10 +178,22 @@ def refresh_book(book: InMemoryFairBook, feed: str, hot_file: str | None) -> int
     return FeedState(book, feed, hot_file).refresh_props()
 
 
+def split_sports(spec: str | None) -> tuple:
+    """'nfl,nba' / 'nfl:nba' / 'nfl;nba' -> ('nfl', 'nba'). ':' and ';' also separate (gcloud --set-env-vars splits on commas,
+    so the job passes 'nfl:nba:nhl')."""
+    return tuple(x for x in (spec or "").replace(" ", "").replace(":", ",").replace(";", ",").split(",") if x)
+
+
+def banked_sports_for(game_source: str, game_sports: tuple) -> tuple:
+    """Sports whose game lines come from the free banked feeds first. 'live' = the old behaviour (ParlayAPI pulls only)."""
+    if game_source == "live":
+        return ()
+    return tuple(s for s in game_sports if s in BANKED_SPORTS)
+
+
 def make_game_client(sports: str):
     """ParlayAPI client for the game-winner pulls, or None (with a warning) when there is no key / no sports."""
-    # ':' and ';' also separate (gcloud --set-env-vars splits on commas, so the job passes 'nfl:nba:nhl')
-    sports = tuple(x for x in (sports or "").replace(" ", "").replace(":", ",").replace(";", ",").split(",") if x)
+    sports = split_sports(sports)
     if not sports:
         return None, ()
     if not os.environ.get("PARLAY_API_KEY"):
@@ -178,8 +212,12 @@ async def amain(args) -> int:
     client = RFQReadOnlyClient(key_id, pem) if rfq_env == PROD_READONLY_ENV else RFQClient("demo", key_id, pem)
     log.info("RFQ daemon: env=%s mode=%s client=%s", rfq_env, mode, type(client).__name__)
     book = InMemoryFairBook()
-    game_client, game_sports = make_game_client(
-        args.game_sports if args.game_sports is not None else os.environ.get("KALSHI_RFQ_GAME_SPORTS", "nfl,nba,nhl"))
+    game_spec = args.game_sports if args.game_sports is not None else os.environ.get("KALSHI_RFQ_GAME_SPORTS", "nfl,nba,nhl")
+    game_client, game_sports = make_game_client(game_spec)
+    game_source = args.game_source or os.environ.get("KALSHI_RFQ_GAME_SOURCE", "auto")
+    if game_source not in ("auto", "live"):
+        raise SystemExit(f"refusing: --game-source {game_source!r} (allowed: auto, live)")
+    banked_sports = banked_sports_for(game_source, split_sports(game_spec))   # free feeds first; works with no PARLAY_API_KEY
     prop_sports = tuple(x for x in (args.prop_sports if args.prop_sports is not None else os.environ.get(
         "KALSHI_RFQ_PROP_SPORTS", "nfl,nba,nhl")).replace(":", ",").replace(";", ",").replace(" ", "").split(",") if x)
     game_markets = tuple(x for x in (args.game_markets or os.environ.get("KALSHI_RFQ_GAME_MARKETS", "h2h,spreads,totals"))
@@ -189,11 +227,13 @@ async def amain(args) -> int:
         os.environ.get("KALSHI_RFQ_GAME_BUDGET", "120"))
     per_pull = max(len(game_sports) * len(game_markets), 1)
     args.game_reload_sec = max(args.game_reload_sec, per_pull * 86400.0 / max(budget, 1.0))
-    log.info("game legs: %d sports x %d markets = %d credits/pull, every %.0fs = ~%.0f credits/day (budget %.0f); props from %s",
-             len(game_sports), len(game_markets), per_pull, args.game_reload_sec, per_pull * 86400.0 / args.game_reload_sec,
-             budget, list(prop_sports))
-    feed = FeedState(book, args.feed, args.hot_games_file, game_client, game_sports, prop_sports, game_markets)
-    for what, fn in (("props", feed.refresh_props), ("games", feed.refresh_games)):
+    log.info("game legs: banked first for %s (every %.0fs, zero credits); live pull is the fallback: %d sports x %d markets = %d "
+             "credits/pull, every %.0fs = at most ~%.0f credits/day (budget %.0f); props from %s",
+             list(banked_sports), args.banked_reload_sec, len(game_sports), len(game_markets), per_pull, args.game_reload_sec,
+             per_pull * 86400.0 / args.game_reload_sec, budget, list(prop_sports))
+    feed = FeedState(book, args.feed, args.hot_games_file, game_client, game_sports, prop_sports, game_markets,
+                     banked_sports=banked_sports)
+    for what, fn in (("props", feed.refresh_props), ("banked games", feed.refresh_banked), ("games", feed.refresh_games)):
         try:
             log.info("fair book after %s refresh: %d legs", what, fn())
         except Exception as e:                             # noqa: BLE001 -- the tape needs no fair book: start empty
@@ -247,6 +287,15 @@ async def amain(args) -> int:
             except Exception as e:                         # noqa: BLE001 -- keep the last good book; staleness gate rejects
                 log.warning("fair book reload failed (keeping previous): %r", e)
 
+    async def reload_banked():
+        while banked_sports:
+            await asyncio.sleep(args.banked_reload_sec)
+            try:
+                await asyncio.to_thread(feed.refresh_banked)
+            except Exception as e:                         # noqa: BLE001
+                log.warning("banked game legs reload failed (keeping previous): %r", e)
+        await asyncio.Event().wait()                       # nothing banked: idle (gather() must not finish)
+
     async def reload_games():
         while True:
             await asyncio.sleep(args.game_reload_sec)
@@ -278,7 +327,8 @@ async def amain(args) -> int:
         else:
             await asyncio.Event().wait()
 
-    main_task = asyncio.ensure_future(asyncio.gather(stream.run(), poll(), reload(), reload_games(), flusher(), watchdog()))
+    main_task = asyncio.ensure_future(asyncio.gather(stream.run(), poll(), reload(), reload_banked(), reload_games(), flusher(),
+                                                  watchdog()))
     stop_task = asyncio.ensure_future(deadline())
     for sig in (signal.SIGTERM, signal.SIGINT):            # Cloud Run sends SIGTERM on shutdown: flush the tape first
         try:
@@ -322,6 +372,12 @@ def main(argv=None) -> int:
                          "sport/pull). Default $KALSHI_RFQ_GAME_SPORTS or nfl,nba,nhl; '' disables")
     ap.add_argument("--game-markets", default=None, help="ParlayAPI game markets to pull (default $KALSHI_RFQ_GAME_MARKETS or "
                     "h2h,spreads,totals; 1 credit per market per sport per pull)")
+    ap.add_argument("--game-source", choices=("auto", "live"), default=None,
+                    help="auto (default, or $KALSHI_RFQ_GAME_SOURCE): game / spread / total legs from the free banked feeds (BestBook "
+                         "ladders, else banked ParlayAPI) and a live ParlayAPI pull only for a sport they cannot serve; live: "
+                         "ParlayAPI pulls only (the pre-2026-11-03 behaviour)")
+    ap.add_argument("--banked-reload-sec", type=float, default=300.0,
+                    help="how often the banked game lines are re-read (zero credits; BestBook itself refreshes hourly)")
     ap.add_argument("--game-reload-sec", type=float, default=3600.0,
                     help="minimum slate pull cadence; stretched automatically to fit --max-daily-game-credits")
     ap.add_argument("--max-daily-game-credits", type=float, default=None,

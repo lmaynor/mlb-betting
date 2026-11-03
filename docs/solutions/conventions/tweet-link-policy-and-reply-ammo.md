@@ -93,6 +93,36 @@ Discord posts each as a plain message with the angle in the webhook `username`, 
 - `engine-accuracy.json` is no longer read by `tweet_drafter` (its MAE line fed only the removed analysis); the Dockerfile copy is harmless.
   MLB plays still have no engine row, so their `driver_note` is skipped.
 
+## Addendum 2026-11-03: why reply_ammo posted only ticker fallbacks, and the value-add fix
+
+The 2026-11-02 Discord run posted exactly one reply per play, both the deterministic fallback verbatim
+("bet365 is still hanging +155 on the Under 0.5 receptions if you shop around; the other 4 books are near +143").
+Root causes, in order:
+
+1. **The number guard rejected every draft that named bet365.** `_NUM_RE` extracts "365" from the book's own name;
+   365 is never an allowed number, and `price_check` is *required* to name the book -- so for bet365 plays no Gemini
+   draft could ever pass, for any style that mentioned the book. Fix: `_scan_text_for_numbers()` blanks book names
+   before number extraction. A lowercase book name also no longer opens the fallback sentence
+   ("Still +155 at bet365 for the Under 0.5 receptions while ...").
+2. **Selection was raw EV only**, which promotes obscure props with a few cents of edge and no story (a backup RB
+   under 0.5 receptions at +155 vs +143 fair, ~1.9 points of implied probability) -- nothing a big account's thread
+   wants, and often no parent tweet exists to reply to. Fix: `insight_score()` ranks the final plays (price edge +
+   relative projection gap + usage/matchup/context), and `has_reply_insight()` drops a play with no projection, no
+   engine context and EV under `REPLY_BIG_PRICE_EV` (0.08). No ammo beats ticker spam.
+3. **The dossier starved the model, then the validator over-filtered it.** When the mean sat on the other side of
+   the line, ALL engine numbers were withheld, leaving Gemini two prices and nothing legal to say beyond them.
+   Fix: the mean stays hidden, but season average / usage / range become quotable *context* (`context_ok`,
+   dossier says "No quotable projection mean"); the number guard still rejects the hidden mean's value, and
+   `_MEAN_CLAIM_RE` rejects value-free mean claims. This reverses the earlier "engine numbers are public only next
+   to a supporting projection" rule for context numbers only.
+4. **One batched call, no feedback.** A rejected draft silently became the fallback. Fix:
+   `reply_variant_reject_reason()` names why (invented odds, unknown number, template structure, ...),
+   `generate_reply_fodder()` logs it and makes ONE repair call per play feeding the reasons back; Gemini
+   temperature for the shared caller dropped 0.8 -> 0.6 (variance mostly produced rejected drafts).
+5. **The prompt and the Discord header framed the job as price-checking.** Both now frame it as value-add:
+   lead with the mechanism (projection, usage, matchup, range), give the price second as the evidence; the
+   ticker shape is named in the prompt as the bad example.
+
 ## Gemini reliability
 
 `_gemini_json_text()` asks for JSON mode (`responseMimeType`, plus a string-array schema for the tweet drafts) with a 4096-token

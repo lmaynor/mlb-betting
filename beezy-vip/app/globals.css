@@ -587,8 +587,8 @@ a { color: inherit; }
   .cockpit-grid { grid-template-columns: minmax(340px, 0.9fr) minmax(0, 1.2fr); }
   .cockpit-detail,
   .cockpit-detail.is-open {
-    display: block; position: sticky; inset: auto; top: calc(106px + env(safe-area-inset-top, 0px)); z-index: auto; background: transparent;
-    padding: 0; max-height: calc(100vh - 122px); overflow-y: auto;
+    display: block; position: sticky; inset: auto; top: calc(146px + env(safe-area-inset-top, 0px)); z-index: auto; background: transparent;
+    padding: 0; max-height: calc(100dvh - 162px); overflow-y: auto;
   }
   .cockpit-close { display: none !important; }
 }

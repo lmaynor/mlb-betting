@@ -15,8 +15,8 @@ from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ev.kalshi_rfq_replay import (  # noqa: E402
-    CompositeStore, SnapshotStore, audit_legs, fetch_cycle_frames, leg_records, load_combos, pull_combos, raw_prop_snapshots,
-    replay_one, store_from_raw, summarize,
+    CompositeStore, SnapshotStore, audit_legs, fetch_cycle_frames, leg_records, load_combos, pull_combos, raw_game_line_snapshots,
+    raw_prop_snapshots, replay_one, store_from_game_lines, store_from_raw, summarize,
 )
 
 
@@ -74,6 +74,10 @@ def main(argv=None) -> int:
             snaps = raw_prop_snapshots(sport, days, cache_dir=a.cache_dir)
             print(f"raw {sport}: {len(snaps)} snapshots", file=sys.stderr)
             stores.append(store_from_raw(sport, snaps))
+            if sport in ("nba", "nhl"):
+                gl = raw_game_line_snapshots(sport, days, cache_dir=a.cache_dir)
+                print(f"game lines {sport}: {len(gl)} snapshots", file=sys.stderr)
+                stores.append(store_from_game_lines(sport, gl))
     store = CompositeStore(stores)
     if not len(stores[0]):
         raise SystemExit("no sweep cycle snapshots found for " + ",".join(days[:3]) + "...: set GCS_BUCKET (or MLB_GCS_BUCKET) "

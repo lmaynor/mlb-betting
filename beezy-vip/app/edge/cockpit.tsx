@@ -24,6 +24,8 @@ import { LIVE_SPORTS, propStatLabel, SPORT_PILLARS } from '@/lib/sports'
 import { headshotUrlById } from '@/lib/sport-assets'
 import { HeadshotFallback } from '@/components/ui/sport-assets'
 import { isOffshore, onshoreQuotes } from '@/lib/offshore'
+import { ShotChartPanel } from './shot-chart'
+import { TrendsPanel } from './trends'
 
 export type CockpitSport = 'all' | 'mlb' | 'nfl' | 'nhl' | 'nba'
 export const COCKPIT_SPORTS: CockpitSport[] = ['all', ...LIVE_SPORTS.map(p => p.slug)]
@@ -359,6 +361,9 @@ export function OddsMatrix({ r }: { r: CockpitRow }) {
 }
 
 // -- Inspector ------------------------------------------------------------------------------------------------------
+type NbaTab = 'trends' | 'shots' | 'prices'
+const NBA_TABS: { id: NbaTab; label: string }[] = [{ id: 'trends', label: 'Trends' }, { id: 'shots', label: 'Shots' }, { id: 'prices', label: 'Prices' }]
+
 function Inspector({ r, renderMlbExtras, onClose }: { r: CockpitRow; renderMlbExtras?: (r: CockpitRow) => ReactNode; onClose: () => void }) {
   const under = isUnder(r)
   const accent = SPORT_PILLARS[r.sport]?.accent ?? GOOD
@@ -366,6 +371,15 @@ function Inspector({ r, renderMlbExtras, onClose }: { r: CockpitRow; renderMlbEx
   const book = bookDisplay(r.book)
   const form = r.recentForm
   const mlbExtras = r.sport === 'mlb' && renderMlbExtras ? renderMlbExtras(r) : null
+  const [nbaTab, setNbaTab] = useState<NbaTab>('trends')
+  const logPanels = (
+    <>
+      <Panel title={`L${form?.n_games ?? 10} GAME LOG VS LINE`} sub={form ? `${propStatLabel(r.stat)} \u00b7 ${under ? 'Under' : 'Over'} ${form.line ?? ''}` : undefined}>
+        {form && form.games.length ? <FormSparkline form={form} under={under} /> : <NoData>No game log is available for this player and stat yet. The line and price above are still live.</NoData>}
+      </Panel>
+      {r.sport === 'nba' && (form && form.games.length ? <Panel title="OPPORTUNITY AND VOLUME TREND" sub={form.usage_label ?? undefined}><UsageSparkline form={form} /></Panel> : null)}
+    </>
+  )
   return (
     <div className="grid gap-3">
       <header className={cx(CARD, 'grid gap-3 p-4')}>
@@ -395,19 +409,46 @@ function Inspector({ r, renderMlbExtras, onClose }: { r: CockpitRow; renderMlbEx
         </div>
       </header>
 
-      <Panel title={`L${form?.n_games ?? 10} GAME LOG VS LINE`} sub={form ? `${propStatLabel(r.stat)} \u00b7 ${under ? 'Under' : 'Over'} ${form.line ?? ''}` : undefined}>
-        {form && form.games.length ? <FormSparkline form={form} under={under} /> : <NoData>No game log is available for this player and stat yet. The line and price above are still live.</NoData>}
-      </Panel>
+      {r.sport === 'nba' ? (
+        <>
+          <div role="tablist" aria-label="NBA research views" className="inline-flex gap-0.5 justify-self-start rounded-lg border border-separator-border bg-background-secondary-default p-[3px]">
+            {NBA_TABS.map(t => (
+              <button key={t.id} role="tab" aria-selected={nbaTab === t.id} onClick={() => setNbaTab(t.id)}
+                className={cx('cursor-pointer whitespace-nowrap rounded-md border px-[14px] py-1.5 text-caption-1-semibold', nbaTab === t.id ? 'border-border-button-hover bg-background-tertiary-default text-text-primary' : 'border-transparent bg-transparent text-text-secondary hover:bg-background-primary-hover')}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+          {nbaTab === 'trends' && (
+            <Panel title="TRENDS" sub={`${propStatLabel(r.stat)} \u00b7 ${under ? 'Under' : 'Over'} ${r.line ?? ''}`}>
+              <TrendsPanel row={r} fallback={logPanels} />
+            </Panel>
+          )}
+          {nbaTab === 'shots' && (
+            <Panel title="SHOT CHART" sub="vs league">
+              <ShotChartPanel row={r} />
+            </Panel>
+          )}
+          {nbaTab === 'prices' && (
+            <Panel title="MULTI-BOOK ODDS MATRIX" sub={r.all_books ? `${onshoreQuotes(r.all_books).length} books` : undefined}>
+              <OddsMatrix r={r} />
+            </Panel>
+          )}
+        </>
+      ) : (
+        <>
+          {logPanels}
+          <Panel title={r.sport === 'mlb' ? 'CONTACT QUALITY AND BATTED BALLS' : 'OPPORTUNITY AND VOLUME TREND'} sub={r.sport === 'mlb' ? 'Statcast' : form?.usage_label ?? undefined}>
+            {r.sport === 'mlb'
+              ? (mlbExtras ?? <NoData>Statcast batted-ball charts are not built for this player today.</NoData>)
+              : form && form.games.length ? <UsageSparkline form={form} /> : <NoData>No volume history for this player yet.</NoData>}
+          </Panel>
 
-      <Panel title={r.sport === 'mlb' ? 'CONTACT QUALITY AND BATTED BALLS' : 'OPPORTUNITY AND VOLUME TREND'} sub={r.sport === 'mlb' ? 'Statcast' : form?.usage_label ?? undefined}>
-        {r.sport === 'mlb'
-          ? (mlbExtras ?? <NoData>Statcast batted-ball charts are not built for this player today.</NoData>)
-          : form && form.games.length ? <UsageSparkline form={form} /> : <NoData>No volume history for this player yet.</NoData>}
-      </Panel>
-
-      <Panel title="MULTI-BOOK ODDS MATRIX" sub={r.all_books ? `${onshoreQuotes(r.all_books).length} books` : undefined}>
-        <OddsMatrix r={r} />
-      </Panel>
+          <Panel title="MULTI-BOOK ODDS MATRIX" sub={r.all_books ? `${onshoreQuotes(r.all_books).length} books` : undefined}>
+            <OddsMatrix r={r} />
+          </Panel>
+        </>
+      )}
     </div>
   )
 }
