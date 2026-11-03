@@ -4419,3 +4419,9 @@ closes that gap with the same machinery the MLB systems have. Everything is pape
 - **Gotchas:** the board archive keeps the LAST pre-game state, so an audit from it uses near-closing prices (not what an early bettor saw) and cannot compute CLV;
   `BetTracker.log_bet` only dedups when `game_pk` is set (winter bets have none), so `ev.model_picks` dedups itself with a SELECT; the bets column is `closing_prob`,
   not `closing_implied_prob`.
+
+- **Signal gating (2026-11-02, `docs/analysis/props_signal_gating_and_blend_refit_2026-11-02.md`, code only, undeployed):** the Official tier additionally needs a stat with MEASURED
+  market-blend c >= 0.08 (`ev.model_picks.PROPS_SIGNAL_ALLOWLIST`: NBA threes / rebounds / assists, NHL saves, NFL rush_yds on the hierarchical engine; NHL rows served from the trained
+  models: goals / assists / points / saves) and `sharp_agrees` (row fields `p_sharp_over`, `n_sharp`, `sharp_agrees` from Novig / ProphetX / Pinnacle, fail-open; unvalidated). Others stay `tracked`.
+  `blend_p_over` accepts `(a, b)` but `BLEND_AB_BY_SPORT_STAT` is EMPTY: the refit gained ~0.0002 log loss out of sample and was not adopted; the extra residual features gained nothing.
+  `NHL_TRAINED_PROPS` stays OFF; `setup_daily_projections_job.sh` passes it only if the operator sets it (that script's `--set-env-vars` drops a flag set via `--update-env-vars`).
