@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useUser, UserButton, SignInButton } from '@clerk/nextjs'
@@ -56,9 +57,23 @@ function NavShell({ isSignedIn, userButton, signIn }: {
   isSignedIn: boolean; userButton: React.ReactNode; signIn: React.ReactNode
 }) {
   const pathname  = usePathname()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const headerRef = useRef<HTMLElement>(null)
+
+  // The menu closes on navigation, Escape, and a tap anywhere outside the header.
+  useEffect(() => { setMenuOpen(false) }, [pathname])
+  useEffect(() => {
+    if (!menuOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuOpen(false) }
+    const onDown = (e: MouseEvent | TouchEvent) => { if (headerRef.current && !headerRef.current.contains(e.target as Node)) setMenuOpen(false) }
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('touchstart', onDown)
+    return () => { document.removeEventListener('keydown', onKey); document.removeEventListener('mousedown', onDown); document.removeEventListener('touchstart', onDown) }
+  }, [menuOpen])
 
   return (
-    <header className="w-full max-w-[100vw]">
+    <header ref={headerRef} className="relative w-full max-w-[100vw]">
       {/* TIER 1 -- product bar */}
       <nav className="overflow-hidden border-b border-separator-border bg-background-secondary-default">
         <div className="mx-auto flex h-14 max-w-[1280px] items-center gap-5 px-6">
@@ -111,20 +126,42 @@ function NavShell({ isSignedIn, userButton, signIn }: {
             )}
           </div>
 
-          {/* Mobile: auth + Discord + Install. BottomNav handles routing. */}
+          {/* Mobile: the account button (when signed in) and a menu for Install, Discord, X and sign in. BottomNav handles routing. */}
           <div className="mobile-only nav-mobile-actions ml-auto items-center gap-2">
-            <InstallAppButton compact />
-            {isSignedIn ? (
-              userButton
-            ) : (
-              signIn
-            )}
-            <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" aria-label="Join Discord" className={DISCORD_BTN} style={DISCORD_BTN_STYLE}>
-              <DiscordMark size={15} color="currentColor" />
-            </a>
+            {isSignedIn && userButton}
+            <button type="button" aria-label={menuOpen ? 'Close menu' : 'Open menu'} aria-expanded={menuOpen} aria-controls="nav-menu" data-testid="nav-burger"
+              onClick={() => setMenuOpen(o => !o)} className={cx(ICON_BOX, 'cursor-pointer')} style={{ width: 44, height: 44 }}>
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+                {menuOpen ? <path d="M4 4l10 10M14 4L4 14" /> : <path d="M3 5h12M3 9h12M3 13h12" />}
+              </svg>
+            </button>
           </div>
         </div>
       </nav>
+
+      {menuOpen && (
+        <div id="nav-menu" data-testid="nav-menu" className="mobile-only absolute inset-x-0 top-full z-[60] flex-col gap-1 border-b border-separator-border bg-background-secondary-default px-4 py-3 shadow-card">
+          <div className="flex flex-wrap items-center gap-2">
+            <InstallAppButton />
+            <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" className={DISCORD_BTN} style={DISCORD_BTN_STYLE}>
+              <DiscordMark size={15} color="currentColor" /> Discord
+            </a>
+            <a href={X_URL} target="_blank" rel="noopener noreferrer" className={cx(ICON_BOX, 'w-auto gap-[7px] px-[11px] text-body-2-semibold')}>
+              <XMark size={14} color="currentColor" /> Follow on X
+            </a>
+          </div>
+          {isSignedIn ? (
+            <Link href="/dashboard" className="mt-2 block rounded-md border border-separator-border px-3 py-[11px] text-body-2-semibold text-text-primary no-underline">Dashboard</Link>
+          ) : (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {signIn}
+              <Link href="/pricing" className="whitespace-nowrap rounded-md bg-signal px-3 py-2.5 text-caption-1-bold tracking-[0.02em] text-background-secondary-default no-underline">
+                {PRE_LAUNCH ? 'JOIN WAITLIST' : 'UPGRADE TO PRO'}
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
     </header>
   )
 }

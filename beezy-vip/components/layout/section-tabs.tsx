@@ -14,7 +14,8 @@ export function SectionTabs() {
 
   return (
     <nav aria-label={`${section.id} views`} className="border-b border-separator-border bg-background-secondary-default">
-      <div className="mx-auto flex max-w-[1280px] gap-0.5 overflow-x-auto whitespace-nowrap px-6">
+      {/* A right-edge fade tells a phone the row scrolls; it is a mask on the scroller, so nothing sits on top of the last tab. */}
+      <div className="mx-auto flex max-w-[1280px] gap-0.5 overflow-x-auto whitespace-nowrap px-6 [mask-image:linear-gradient(to_right,#000_calc(100%-32px),transparent)] md:[mask-image:none]">
         {section.tabs.map(t => {
           const active = tabActive(pathname, sp.get('tab'), t)
           return (
