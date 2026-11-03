@@ -33,23 +33,24 @@ beforeEach(() => {
 })
 
 describe('/ev/games view and sport routing (server-side)', () => {
-  it('defaults to the BOARD: both odds feeds, no model feeds, one row per game', async () => {
+  it('defaults to the BOARD: both odds feeds and both model feeds (the card\'s Analysis tab needs them), one row per game', async () => {
     render(await page({}))
     expect(oddsMock.mock.calls.map(c => c[0]).sort()).toEqual(['nba', 'nhl'])
-    expect(projMock).not.toHaveBeenCalled()
+    expect(projMock.mock.calls.map(c => c[0]).sort()).toEqual(['nba', 'nhl'])
     expect(screen.getByTestId('best-board')).toBeInTheDocument()
     expect(screen.getAllByTestId('board-row').length).toBeGreaterThan(0)
     expect(screen.getByRole('link', { name: 'BOARD' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByTestId('game-popup')).toBeNull()
   })
-  it('ANALYSIS is the full read: both model feeds and the card strip with its deep-dive', async () => {
-    render(await page({ view: 'analysis' }))
-    expect(projMock.mock.calls.map(c => c[0]).sort()).toEqual(['nba', 'nhl'])
-    expect(screen.getAllByTestId('game-card').length).toBeGreaterThan(0)
-    expect(screen.getByRole('link', { name: 'ANALYSIS' })).toHaveAttribute('aria-current', 'page')
+  it('an analysis link opens that game\'s card straight on its Analysis tab', async () => {
+    render(await page({ view: 'analysis', game: 'nba:g' }))
+    expect(screen.getByTestId('game-popup')).toBeInTheDocument()
+    expect(screen.getByTestId('tab-analysis')).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByTestId('game-detail')).toBeInTheDocument()
   })
-  it('an old ?game= link with no view still opens the analysis', async () => {
+  it('an old ?game= link with no view does the same', async () => {
     render(await page({ game: 'nba:g' }))
-    expect(screen.getAllByTestId('game-card').length).toBeGreaterThan(0)
+    expect(screen.getByTestId('tab-analysis')).toHaveAttribute('aria-selected', 'true')
   })
   it('the retired MODEL view lands on the board', async () => {
     render(await page({ view: 'model', sport: 'nhl' }))
@@ -60,12 +61,12 @@ describe('/ev/games view and sport routing (server-side)', () => {
     render(await page({}))
     expect(screen.getByRole('status').textContent).toMatch(/Game-line prices are not published yet/)
   })
-  it('TABLE keeps the all-rows screen and ?sport narrows its fetch', async () => {
+  it('ALL LINES keeps the all-rows screen and ?sport narrows its fetch', async () => {
     render(await page({ view: 'table', sport: 'nba' }))
     expect(oddsMock.mock.calls.map(c => c[0])).toEqual(['nba'])
     expect(projMock).not.toHaveBeenCalled()
     expect(screen.getByTestId('game-prices-strip')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'TABLE' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'ALL LINES' })).toHaveAttribute('aria-current', 'page')
   })
   it('cuts the price feed on the server for a free viewer before it reaches the client', async () => {
     getViewerMock.mockResolvedValue({ tier: 'public', sport: null })

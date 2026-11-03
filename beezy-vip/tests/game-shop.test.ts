@@ -1,5 +1,5 @@
 import { buildGameBoard } from '../lib/game-board'
-import { altRows, EDGE_MIN, edgesNow, gameEdges, gameHeadline, shopMarket, shopSide } from '../lib/game-shop'
+import { ALT_MIN_BOOKS, altRows, EDGE_MIN, LONGSHOT_MAX_AMERICAN, edgesNow, gameEdges, gameHeadline, shopMarket, shopSide } from '../lib/game-shop'
 import type { GameOddsFeed, GameOddsRow } from '../lib/game-odds'
 
 const q = (book: string, a: number | null, b: number | null) => ({ book, a, b })
@@ -41,6 +41,25 @@ describe('shopSide', () => {
   it('a line with fewer than three books is never actionable', () => {
     const [g] = board([mk('spread', -3.5, [q('draftkings', -300, 240), q('fanduel', -280, 400)])])
     expect(shopSide(g.main.spread!, 'b').actionable).toBe(false)
+  })
+})
+
+describe('what counts as an edge: not a longshot artifact, not a thin alt', () => {
+  it('a price longer than +300 is never actionable, however good it looks', () => {
+    expect(LONGSHOT_MAX_AMERICAN).toBe(300)
+    // five books at -110/-110 and one paying +400 for a 20%+ looking gap: shown, not headlined
+    const [g] = board([mk('spread', -1.5, [...FLAT, q('caesars', -600, 400)])])
+    expect(shopSide(g.main.spread!, 'b').american).toBe(400)
+    expect(shopSide(g.main.spread!, 'b').actionable).toBe(false)
+  })
+  it('an alt line needs five books, the main line only three', () => {
+    expect(ALT_MIN_BOOKS).toBe(5)
+    const four = ['draftkings', 'fanduel', 'betmgm'].map(k => q(k, -110, -110))
+    const [g] = board([mk('spread', -1.5, [...FLAT, q('espnbet', -110, -110), q('hardrock', -110, -110), q('betrivers', -110, -110)]), mk('spread', -2.5, [...four, q('caesars', -140, 125)])])
+    const alt = g.rows.spread.find(r => r.row.line === -2.5)!
+    expect(shopSide(alt, 'b').actionable).toBe(true)                        // judged as a main line it would pass
+    expect(shopSide(alt, 'b', { alt: true }).actionable).toBe(false)        // five books are needed on an alt
+    expect(gameEdges(g).some(e => e.line === -2.5)).toBe(false)
   })
 })
 
@@ -103,5 +122,22 @@ describe('primaryMove', () => {
     expect(primaryMove(h)).toMatchObject({ market: 'spread', side: 'b' })
     const [none] = buildGameBoard({ odds: { nhl: feedOf(EDGE_ROWS) }, proj: {} }, base)
     expect(primaryMove(none)).toBeNull()
+  })
+})
+
+import { medianFair } from '../lib/game-shop'
+
+describe('one bad book cannot invent an edge', () => {
+  it('the median fair price ignores a single outlier book', () => {
+    const [g] = board([mk('total', 8.5, [...FLAT, q('caesars', -600, 525)])])
+    const over = medianFair(g.main.total!, 'a', null)!
+    expect(over).toBeCloseTo(0.5, 2)               // the mean would be dragged to about 0.56
+    expect(medianFair(g.main.total!, 'a', 'draftkings')).toBeCloseTo(0.5, 2)
+    expect(medianFair(board([mk('total', 8.5, FLAT.slice(0, 3))])[0].main.total!, 'a', 'draftkings')).toBeNull()   // needs three other books
+  })
+  it('an outlier book makes no phantom edge on the opposite side', () => {
+    const [g] = board([mk('total', 8.5, [...FLAT, q('caesars', -600, 525)])])
+    expect(shopSide(g.main.total!, 'a').ev!).toBeGreaterThan(EDGE_MIN)       // the mean-based EV is fooled ...
+    expect(shopSide(g.main.total!, 'a').actionable).toBe(false)              // ... the median-based check is not
   })
 })

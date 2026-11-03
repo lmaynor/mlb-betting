@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { GamePricesClient } from '@/app/ev/games/game-prices-client'
-import { GamesNav, gamesHref, parseGamesView } from '@/app/ev/games/games-nav'
+import { analysisGame, GamesNav, gamesHref, parseGamesView } from '@/app/ev/games/games-nav'
 import type { GameOddsFeed, GameOddsRow } from '@/lib/game-odds'
 
 let mobile = false
@@ -127,10 +127,9 @@ describe('GamePricesClient (the /ev/games PRICES view)', () => {
   })
 })
 
-describe('the BOARD | ANALYSIS | TABLE switch', () => {
+describe('the BOARD | ALL LINES switch', () => {
   it('builds shareable hrefs: the board and all sports are the defaults and stay out of the URL', () => {
     expect(gamesHref('board', 'all')).toBe('/ev/games')
-    expect(gamesHref('analysis', 'all')).toBe('/ev/games?view=analysis')
     expect(gamesHref('table', 'all')).toBe('/ev/games?view=table')
     expect(gamesHref('board', 'nba')).toBe('/ev/games?sport=nba')
     expect(gamesHref('table', 'nhl')).toBe('/ev/games?view=table&sport=nhl')
@@ -138,27 +137,30 @@ describe('the BOARD | ANALYSIS | TABLE switch', () => {
   it('old links still land somewhere sensible', () => {
     expect(parseGamesView('prices')).toBe('table')
     expect(parseGamesView('table')).toBe('table')
-    expect(parseGamesView('analysis')).toBe('analysis')
+    expect(parseGamesView('analysis')).toBe('board')
     expect(parseGamesView('model')).toBe('board')
     expect(parseGamesView(undefined)).toBe('board')
-    expect(parseGamesView(undefined, 'nhl:2026-11-02:DET@FLA')).toBe('analysis')   // an old ?game= link was the analysis
-    expect(parseGamesView('table', 'nhl:x')).toBe('table')
   })
-  it('on the table the view links keep the sport and the sport links keep the view', () => {
+  it('an analysis link opens that game\'s card on its Analysis tab', () => {
+    expect(analysisGame('analysis', 'nhl:2026-11-02:DET@FLA')).toBe('nhl:2026-11-02:DET@FLA')
+    expect(analysisGame(undefined, 'nhl:x')).toBe('nhl:x')       // a bare ?game= is an old analysis link
+    expect(analysisGame('table', 'nhl:x')).toBeNull()
+    expect(analysisGame('analysis', undefined)).toBeNull()
+    expect(analysisGame(undefined, undefined)).toBeNull()
+  })
+  it('on the all-lines table the view links keep the sport and the sport links keep the view', () => {
     render(<GamesNav view="table" sport="nba" />)
     const view = within(screen.getByRole('navigation', { name: 'Game lines view' }))
+    expect(view.getAllByRole('link').map(l => l.textContent)).toEqual(['BOARD', 'ALL LINES'])
     expect(view.getByRole('link', { name: 'BOARD' })).toHaveAttribute('href', '/ev/games?sport=nba')
-    expect(view.getByRole('link', { name: 'TABLE' })).toHaveAttribute('href', '/ev/games?view=table&sport=nba')
-    expect(view.getByRole('link', { name: 'TABLE' })).toHaveAttribute('aria-current', 'page')
+    expect(view.getByRole('link', { name: 'ALL LINES' })).toHaveAttribute('href', '/ev/games?view=table&sport=nba')
+    expect(view.getByRole('link', { name: 'ALL LINES' })).toHaveAttribute('aria-current', 'page')
     const sports = within(screen.getByRole('navigation', { name: 'Game lines sport' }))
     expect(sports.getByRole('link', { name: 'All sports' })).toHaveAttribute('href', '/ev/games?view=table')
     expect(sports.getByRole('link', { name: 'NBA' })).toHaveAttribute('aria-current', 'page')
   })
-  it('the board and the analysis have their own sport pills, so the page header carries no sport links', () => {
-    for (const v of ['board', 'analysis'] as const) {
-      const { unmount } = render(<GamesNav view={v} sport="all" />)
-      expect(screen.queryByRole('navigation', { name: 'Game lines sport' })).toBeNull()
-      unmount()
-    }
+  it('the board has its own sport pills, so the page header carries no sport links', () => {
+    render(<GamesNav view="board" sport="all" />)
+    expect(screen.queryByRole('navigation', { name: 'Game lines sport' })).toBeNull()
   })
 })

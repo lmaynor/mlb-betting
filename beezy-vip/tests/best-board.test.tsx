@@ -68,12 +68,27 @@ describe('Edges now', () => {
     render(board(TIGHT))
     expect(screen.getByTestId('edges-none').textContent).toMatch(/Nothing clears the bar/)
   })
-  it('a chip opens that game\'s card, on the Alt lines pane when the edge is on an alt line', () => {
-    // make the -1.5 line the main line (most books) with no edge, and put the edge on the -2.5 alt
+  it('a chip opens that game\'s card on the right market, with the edge\'s line already picked', () => {
+    // -1.5 is the main line (most books, no edge); the edge is on the -2.5 alt, which has six books and pays +125
     const wide = [mk('spread', -1.5, [...FLAT, q('espnbet', -110, -110), q('hardrock', -110, -110), q('betrivers', -110, -110)]), mk('spread', -2.5, [...FLAT, q('caesars', -140, 125)])]
     render(board(wide))
     fireEvent.click(screen.getAllByTestId('edge-chip')[0])
-    expect(screen.getByTestId('alt-pane')).toBeInTheDocument()
+    expect(screen.getByTestId('tab-spread')).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByTestId('line-chip--2.5')).toHaveAttribute('aria-pressed', 'true')
+  })
+  it('a longshot or a thin alt line is never an edge, even when its gap looks huge', () => {
+    const rows = [mk('spread', -1.5, [...FLAT, q('espnbet', -110, -110), q('hardrock', -110, -110), q('betrivers', -110, -110)]), mk('total', 8.5, [...FLAT, q('caesars', -600, 525)])]
+    render(board(rows))
+    expect(screen.getByTestId('edges-none')).toBeInTheDocument()
+  })
+  it('the edges are small cards: the game, the line, the price at its book and the EV', () => {
+    render(board(EDGE))
+    const card = screen.getAllByTestId('edge-chip')[0]
+    expect(card.textContent).toMatch(/DET @ FLA/)
+    expect(card.textContent).toMatch(/FLA -2\.5/)        // the biggest of the game's edges (the -2.5 alt, six books, +125)
+    expect(card.textContent).toMatch(/\+125/)
+    expect(card.textContent).toMatch(/\+\d+\.\d%/)
+    expect(within(card).getByRole('img', { name: /Caesars/i })).toBeInTheDocument()
   })
 })
 
@@ -112,54 +127,88 @@ describe('the card (double-click)', () => {
     open(screen.getAllByTestId('board-row')[0])
     expect(screen.getByTestId('popup-headline').textContent).toBe('No price beats the market fair price by 2% or more on the main lines.')
   })
-  it('SHOP: both sides of each market with the best price at its book, the next best elsewhere, and an EV chip only for a real edge', () => {
+  it('makes opening obvious: a hint above the table and a labelled Open button on every row', () => {
+    render(board(EDGE))
+    expect(screen.getByTestId('open-hint').textContent).toMatch(/Double-click any game to open its card/)
+    expect(screen.getByRole('button', { name: /Open the card for DET at FLA/ }).textContent).toMatch(/Open/)
+    expect(screen.getByRole('columnheader', { name: 'Card' })).toBeInTheDocument()
+  })
+  it('tabs: one per market, then Movement and Analysis, starting on the spread', () => {
     render(board(EDGE))
     open(screen.getAllByTestId('board-row')[0])
-    const pane = within(screen.getByTestId('shop-pane'))
-    expect(pane.getAllByTestId('shop-row').length).toBe(6)         // moneyline, spread, total: two sides each
-    const spreadHome = pane.getAllByTestId('shop-row').find(r => /FLA -1\.5/.test(r.textContent!))!
-    expect(spreadHome.textContent).toMatch(/\+106/)
-    expect(spreadHome.textContent).toMatch(/also/)
-    expect(within(spreadHome).getByTestId('price-chip').textContent).toMatch(/\+\d+\.\d%/)
-    const total = pane.getAllByTestId('shop-row').find(r => /O 6\.5/.test(r.textContent!))!
-    expect(total.textContent).not.toMatch(/%/)                     // a tight total shows no EV chip
+    expect(within(screen.getByRole('tablist')).getAllByRole('tab').map(t => t.textContent)).toEqual(['Moneyline', 'Spread', 'Total', 'Movement', 'Analysis'])
+    expect(screen.getByTestId('tab-spread')).toHaveAttribute('aria-selected', 'true')
+  })
+  it('a market is a line scroller, two big best-price buttons, and every line as tiles (the Pikkit layout)', () => {
+    render(board(EDGE))
+    open(screen.getAllByTestId('board-row')[0])
+    const chips = within(screen.getByTestId('line-scroller')).getAllByRole('button')
+    expect(chips.map(c => c.getAttribute('data-testid'))).toEqual(['line-chip--3.5', 'line-chip--2.5', 'line-chip--1.5'])
+    expect(screen.getByTestId('line-chip--1.5')).toHaveAttribute('aria-pressed', 'true')       // the main line is picked
+    const [away, home] = within(screen.getByTestId('side-buttons')).getAllByTestId('side-button')
+    expect(away.textContent).toMatch(/DET \+1\.5/)
+    expect(home.textContent).toMatch(/FLA -1\.5/)
+    expect(home.textContent).toMatch(/\+106/)
+    expect(home.textContent).toMatch(/Caesars/)
+    expect(home.textContent).toMatch(/also/)
+    expect(home).toHaveAttribute('data-actionable', 'true')
+    expect(away).not.toHaveAttribute('data-actionable')
+    expect(within(screen.getByTestId('line-tiles')).getAllByTestId('line-tile')).toHaveLength(6)   // three lines, two sides each
+  })
+  it('picking a line in the scroller, or a tile, changes the big buttons', () => {
+    render(board(EDGE))
+    open(screen.getAllByTestId('board-row')[0])
+    fireEvent.click(screen.getByTestId('line-chip--2.5'))
+    expect(within(screen.getByTestId('side-buttons')).getAllByTestId('side-button')[1].textContent).toMatch(/FLA -2\.5/)
+    fireEvent.click(within(screen.getByTestId('line-tiles')).getAllByTestId('line-tile').find(t => t.getAttribute('data-line') === '-1.5')!)
+    expect(screen.getByTestId('line-chip--1.5')).toHaveAttribute('aria-pressed', 'true')
+  })
+  it('a thin line says no edge is claimed, and its tiles carry no EV chip', () => {
+    render(board(EDGE))
+    open(screen.getAllByTestId('board-row')[0])
+    fireEvent.click(screen.getByTestId('line-chip--3.5'))
+    expect(screen.getByTestId('side-buttons').parentElement!.textContent).toMatch(/Fewer than 3 books quote this line, so no edge is claimed/)
+    const tiles = within(screen.getByTestId('line-tiles')).getAllByTestId('line-tile').filter(t => t.getAttribute('data-line') === '-3.5')
+    expect(tiles.every(t => !/%/.test(t.textContent!))).toBe(true)
+  })
+  it('the total has the same layout, and the moneyline has the two buttons only', () => {
+    render(board(EDGE))
+    open(screen.getAllByTestId('board-row')[0])
+    fireEvent.click(screen.getByTestId('tab-total'))
+    expect(screen.getByTestId('market-total')).toBeInTheDocument()
+    expect(within(screen.getByTestId('side-buttons')).getAllByTestId('side-button')[0].textContent).toMatch(/O 6\.5/)
+    fireEvent.click(screen.getByTestId('tab-ml'))
+    expect(screen.queryByTestId('line-scroller')).toBeNull()
+    expect(screen.queryByTestId('line-tiles')).toBeNull()
+    expect(within(screen.getByTestId('side-buttons')).getAllByTestId('side-button')).toHaveLength(2)
   })
   it('MOVEMENT: the line and the fair price from the history, or an honest empty state', () => {
     const history = { [`${GK}|spread`]: { points: [pt(0, -1.0, 0.50), pt(60, -1.0, 0.52), pt(120, -1.5, 0.44), pt(180, -1.5, 0.46)] } }
     const a = render(board(EDGE, { history }))
     open(screen.getAllByTestId('board-row')[0])
-    fireEvent.click(screen.getByRole('button', { name: 'Movement' }))
+    fireEvent.click(screen.getByTestId('tab-move'))
     const sp = within(screen.getByTestId('move-spread'))
     expect(sp.getAllByTestId('sparkline')).toHaveLength(2)
-    expect(sp.getByText(/FLA -1 → -1\.5/)).toBeInTheDocument()
-    expect(screen.getByTestId('move-spread').textContent).toMatch(/56\.0% → 54\.0% \(-2\.0 pts, FLA\)/)
+    expect(sp.getByText(/FLA -1 \u2192 -1\.5/)).toBeInTheDocument()
+    expect(screen.getByTestId('move-spread').textContent).toMatch(/56\.0% \u2192 54\.0% \(-2\.0 pts, FLA\)/)
     a.unmount()
     render(board(EDGE, { history: {} }))
     open(screen.getAllByTestId('board-row')[0])
-    fireEvent.click(screen.getByRole('button', { name: 'Movement' }))
+    fireEvent.click(screen.getByTestId('tab-move'))
     expect(screen.getByTestId('move-empty').textContent).toMatch(/not enough snapshots/)
   })
   it('MOVEMENT says it is not available when the backend sends no history at all', () => {
     render(board(EDGE))
     open(screen.getAllByTestId('board-row')[0])
-    fireEvent.click(screen.getByRole('button', { name: 'Movement' }))
+    fireEvent.click(screen.getByTestId('tab-move'))
     expect(screen.getByTestId('move-empty').textContent).toMatch(/not available yet/)
   })
-  it('ALT LINES: every line with both sides, the main marked, thin lines flagged and no edge claimed on them', () => {
+  it('ANALYSIS: the full read of the game inside the card, and a link to open it as a page', () => {
     render(board(EDGE))
     open(screen.getAllByTestId('board-row')[0])
-    fireEvent.click(screen.getByRole('button', { name: 'Alt lines' }))
-    const rows = within(screen.getByTestId('alt-pane')).getAllByTestId('alt-row')
-    expect(rows.map(r => r.getAttribute('data-line'))).toEqual(['-3.5', '-2.5', '-1.5'])
-    expect(rows.find(r => r.getAttribute('data-line') === '-1.5')!.textContent).toMatch(/MAIN/)
-    const thin = rows.find(r => r.getAttribute('data-line') === '-3.5')!
-    expect(thin.textContent).toMatch(/THIN/)
-    expect(within(thin).queryAllByTestId('price-chip').every(c => !/%/.test(c.textContent!))).toBe(true)
-  })
-  it('links to the full analysis of that game', () => {
-    render(board(EDGE))
-    open(screen.getAllByTestId('board-row')[0])
-    expect(screen.getByRole('link', { name: /Full analysis/ })).toHaveAttribute('href', `/ev/games?view=analysis&game=${encodeURIComponent(GK)}`)
+    fireEvent.click(screen.getByTestId('tab-analysis'))
+    expect(screen.getByTestId('game-detail')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Open as a page/ })).toHaveAttribute('href', `/ev/games?view=analysis&game=${encodeURIComponent(GK)}`)
   })
 })
 

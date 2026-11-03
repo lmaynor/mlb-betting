@@ -77,12 +77,12 @@ function EdgeCell({ g }: { g: GameBoardEntry }) {
  * table, "Edges now" lists the few real edges on the slate (against the market fair price, 3+ books, not suspiciously large), or says
  * there are none. UNVALIDATED market data.
  */
-export function BestBoard({ feeds: initial, initialSport }: { feeds: GameBoardFeeds; initialSport?: string }) {
-  const { odds, proj, feedSports } = useGameFeeds(initial, { model: false })
+export function BestBoard({ feeds: initial, initialSport, initialOpen }: { feeds: GameBoardFeeds; initialSport?: string; initialOpen?: { key: string; pane?: PopupPane } }) {
+  const { odds, proj, feedSports } = useGameFeeds(initial)
   const [sport, setSport] = useState(initialSport ?? 'all')
   const [sort, setSort] = useState<BoardSort>('time')
   const [sel, setSel] = useState<string | null>(null)
-  const [open, setOpen] = useState<{ key: string; pane: PopupPane } | null>(null)
+  const [open, setOpen] = useState<{ key: string; pane?: PopupPane; line?: number | null } | null>(initialOpen ?? null)
   const [bankroll] = useBankroll(1000)
   const myBooks = useMyBooks()
   const isMobile = useIsMobile(768)
@@ -105,7 +105,7 @@ export function BestBoard({ feeds: initial, initialSport }: { feeds: GameBoardFe
   const unavailable = gameOddsUnavailable(Object.values(odds))
   const quiet = feedSports.filter(s => !available.includes(s)).map(s => `${s.toUpperCase()}: ${odds[s]?.status === 'awaiting_lines' ? 'the next slate\'s lines are not posted yet' : 'no games with prices right now'}`)
 
-  const openCard = (key: string, pane: PopupPane = 'shop') => setOpen({ key, pane })
+  const openCard = (key: string, pane?: PopupPane, line?: number | null) => setOpen({ key, pane, line })
 
   return (
     <div>
@@ -124,23 +124,25 @@ export function BestBoard({ feeds: initial, initialSport }: { feeds: GameBoardFe
         <div role="status" className="py-6 text-neutral-300 text-cozy">No book has posted game lines for this slate yet. Prices appear as soon as a slate and its lines are posted.</div>
       ) : (
         <>
-          <section aria-label="Edges now" className="mb-3 bg-background-primary-default border border-separator-border rounded-xl px-3.5 py-2.5" data-testid="edges-now">
+          <section aria-label="Edges now" className="mb-3" data-testid="edges-now">
             <div className="flex items-baseline justify-between gap-2 mb-1.5">
               <span className="text-compact font-semibold text-text-primary">Edges now</span>
-              <span className="text-[11.5px] text-text-tertiary">2%+ against the market fair price, 3+ books{myBooks.enabled ? ', at your books' : ''}</span>
+              <span className="text-[11.5px] text-text-tertiary">2%+ vs the market fair price, 3+ books, prices to +300{myBooks.enabled ? ', at your books' : ''}</span>
             </div>
             {edges.length === 0 ? (
-              <p className="m-0 text-compact text-text-secondary" data-testid="edges-none">Nothing clears the bar right now. The market is tight on every game below.</p>
+              <p className="m-0 rounded-xl border border-separator-border bg-background-primary-default px-3.5 py-3 text-compact text-text-secondary" data-testid="edges-none">Nothing clears the bar right now. The market is tight on every game below.</p>
             ) : (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollSnapType: 'x proximity' }}>
                 {edges.map((e: EdgeItem) => (
-                  <button key={`${e.game.key}-${e.market}-${e.line}-${e.side}`} type="button" data-testid="edge-chip" onClick={() => openCard(e.game.key, e.alt ? 'alt' : 'shop')}
-                    className="inline-flex items-center gap-2 rounded-control border border-separator-border bg-transparent px-2.5 py-1.5 text-left cursor-pointer hover:bg-[color:var(--color-background-primary-hover)] transition-colors duration-150">
-                    <span className="text-[11.5px] text-text-secondary">{e.game.away} @ {e.game.home}</span>
-                    <span className="text-compact font-semibold text-text-primary">{e.shop.label}{e.alt ? ' (alt)' : ''}</span>
-                    <BookLogo book={e.shop.book!} size={14} />
-                    <b className="mono font-semibold" style={{ color: GREEN }}>{formatOdds(e.shop.american!)}</b>
-                    <span className="mono text-[10.5px] font-semibold rounded-chip px-1" style={{ color: GREEN, background: 'rgba(87,242,135,0.10)' }}>{signedPct(e.shop.ev!)}</span>
+                  <button key={`${e.game.key}-${e.market}-${e.line}-${e.side}`} type="button" data-testid="edge-chip" onClick={() => openCard(e.game.key, e.market, e.line)}
+                    className="flex-none w-[188px] text-left rounded-xl border bg-background-primary-default px-3 py-2.5 cursor-pointer transition-colors duration-150 hover:bg-[color:var(--color-background-primary-hover)]"
+                    style={{ borderColor: 'rgba(87,242,135,0.45)', scrollSnapAlign: 'start' }}>
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="text-[11.5px] text-text-secondary truncate">{e.game.away} @ {e.game.home}</span>
+                      <span className="mono text-[10.5px] font-semibold rounded-chip px-1.5" style={{ color: GREEN, background: 'rgba(87,242,135,0.10)' }}>{signedPct(e.shop.ev!)}</span>
+                    </span>
+                    <span className="mt-1 flex items-center gap-1.5 text-compact font-semibold text-text-primary">{e.shop.label}{e.alt && <span className="mono text-[9px] font-semibold tracking-fine text-text-tertiary">ALT</span>}</span>
+                    <span className="mt-1 flex items-center gap-1.5"><BookLogo book={e.shop.book!} size={16} /><b className="mono text-[17px] font-semibold" style={{ color: GREEN }}>{formatOdds(e.shop.american!)}</b></span>
                   </button>
                 ))}
               </div>
@@ -153,7 +155,7 @@ export function BestBoard({ feeds: initial, initialSport }: { feeds: GameBoardFe
               {available.map(s => <Pill key={s} active={activeSport === s} onClick={() => setSport(s)}>{s.toUpperCase()}</Pill>)}
             </PillGroup>
             <Select id="bb-sort" label="SORT" value={sort} onChange={v => setSort(v as BoardSort)} options={BOARD_SORTS.map(s => ({ v: s.v, l: s.l }))} />
-            <span className="text-[11.5px] text-text-tertiary hidden md:inline">Double-click a game for its card</span>
+            <span className="hidden md:inline-flex items-center gap-1.5 text-[12px] text-text-secondary rounded-control border border-separator-border px-2.5 py-1" data-testid="open-hint"><span aria-hidden className="text-[13px] leading-none">&#9755;</span>Double-click any game to open its card</span>
           </div>
           {quiet.length > 0 && <p className="text-[12px] text-text-secondary m-0 mb-2.5" data-testid="quiet-sports">{quiet.join(' · ')}</p>}
 
@@ -169,8 +171,8 @@ export function BestBoard({ feeds: initial, initialSport }: { feeds: GameBoardFe
                     <th scope="col" className="text-left font-medium px-3 py-2 hidden md:table-cell">Spread</th>
                     <th scope="col" className="text-left font-medium px-3 py-2 hidden md:table-cell">Total</th>
                     <th scope="col" className="text-left font-medium px-3 py-2" title="The best price that beats the market fair price by 2% or more">Edge</th>
-                    <th scope="col" className="text-left font-medium px-3 py-2 hidden md:table-cell" title="How the line or fair price has moved since the board first saw the game">Move</th>
-                    <th scope="col" className="px-2 py-2"><span className="sr-only">Open</span></th>
+                    <th scope="col" className="text-left font-medium px-3 py-2 hidden lg:table-cell" title="How the line or fair price has moved since the board first saw the game">Move</th>
+                    <th scope="col" className="px-2 py-2 text-right font-medium">Card</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -187,16 +189,16 @@ export function BestBoard({ feeds: initial, initialSport }: { feeds: GameBoardFe
                         <td className="px-3 py-2 text-left whitespace-nowrap" style={{ boxShadow: `inset 3px 0 0 ${on ? GREEN : 'transparent'}` }}>
                           <span className="inline-flex items-center gap-1.5 font-semibold text-text-primary"><SportLogo sport={sport} team={g.away} size={18} />{g.away}<span className="text-text-tertiary font-normal">@</span><SportLogo sport={sport} team={g.home} size={18} />{g.home}</span>
                           <span className="mono block text-[11px] text-text-secondary">{g.sport.toUpperCase()} &middot; {startLabel(g.start)}</span>
-                          <span className="block mt-1 md:hidden"><MoveCell g={g} /></span>
+                          <span className="block mt-1 lg:hidden"><MoveCell g={g} /></span>
                         </td>
                         <td className="px-3 py-2 hidden md:table-cell"><MarketCell g={g} market="ml" /></td>
                         <td className="px-3 py-2 hidden md:table-cell"><MarketCell g={g} market="spread" /></td>
                         <td className="px-3 py-2 hidden md:table-cell"><MarketCell g={g} market="total" /></td>
                         <td className="px-3 py-2"><EdgeCell g={g} /></td>
-                        <td className="px-3 py-2 hidden md:table-cell"><MoveCell g={g} /></td>
+                        <td className="px-3 py-2 hidden lg:table-cell"><MoveCell g={g} /></td>
                         <td className="px-2 py-2 text-right">
                           <button type="button" onClick={e => { e.stopPropagation(); openCard(g.key) }} aria-label={`Open the card for ${g.away} at ${g.home}`} title="Open the card (or double-click the row)"
-                            className="size-7 rounded-control border border-separator-border bg-transparent text-text-secondary hover:text-text-primary cursor-pointer text-[14px] leading-none">&rsaquo;</button>
+                            className="inline-flex items-center gap-1 h-7 px-2.5 rounded-control border border-separator-border bg-transparent text-[12px] font-semibold text-text-secondary hover:text-text-primary hover:border-[color:var(--color-border-button-hover)] cursor-pointer whitespace-nowrap transition-colors duration-150">Open <span aria-hidden>&rsaquo;</span></button>
                         </td>
                       </tr>
                     )
@@ -208,7 +210,7 @@ export function BestBoard({ feeds: initial, initialSport }: { feeds: GameBoardFe
           <LockedNotice locked={locked} shown={entries.length} what="game-line rows" plan="The game-line price screen is part of All-Access Pro." />
         </>
       )}
-      {popup && <GamePopup key={popup.key} game={popup} initialPane={open!.pane} onClose={() => setOpen(null)} />}
+      {popup && <GamePopup key={popup.key} game={popup} initialPane={open!.pane} initialLine={open!.line} bettable={bettable} ageLabel={`${ageText(age)} old`} onClose={() => setOpen(null)} />}
     </div>
   )
 }

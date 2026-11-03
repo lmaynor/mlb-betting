@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-export type GamesView = 'board' | 'analysis' | 'table'
+export type GamesView = 'board' | 'table'
 export type GameSport = 'all' | 'nba' | 'nhl'
 
 export const SPORT_TABS: { key: GameSport; label: string }[] = [
@@ -10,18 +10,17 @@ export const SPORT_TABS: { key: GameSport; label: string }[] = [
 ]
 const VIEW_TABS: { key: GamesView; label: string; title: string }[] = [
   { key: 'board', label: 'BOARD', title: 'One row per game with the best price at every market; double-click a game for its card' },
-  { key: 'analysis', label: 'ANALYSIS', title: 'The full read on one game: ladder, every book on every line, model and movement' },
-  { key: 'table', label: 'TABLE', title: 'Every game, market and line in one table, with a column per book' },
+  { key: 'table', label: 'ALL LINES', title: 'Every game, market and line in one table, with a column per book' },
 ]
 
-/**
- * `table` (and the old `prices` links) open the all-rows table, `analysis` the full read. A link that names a game (?game=) and no view
- * is an old analysis link and still opens the analysis; anything else, including the retired `model` view, is the board.
- */
-export function parseGamesView(v: string | undefined, game?: string | undefined): GamesView {
-  if (v === 'table' || v === 'prices') return 'table'
-  if (v === 'analysis' || (!v && game)) return 'analysis'
-  return 'board'
+/** `table` (and the old `prices` links) open the all-lines table; everything else, including the retired `model` and `analysis` views, is the board. */
+export function parseGamesView(v: string | undefined): GamesView {
+  return v === 'table' || v === 'prices' ? 'table' : 'board'
+}
+
+/** The game an old analysis link points at (?view=analysis&game=KEY, or a bare ?game=KEY): the board opens that game's card on its Analysis tab. */
+export function analysisGame(v: string | undefined, game: string | undefined): string | null {
+  return game && (v === 'analysis' || !v) ? game : null
 }
 
 export function parseGameSport(v: string | undefined): GameSport {
@@ -31,13 +30,13 @@ export function parseGameSport(v: string | undefined): GameSport {
 /** A shareable /ev/games URL: the view and the sport live in the query string, never in client state. BOARD and ALL are the defaults and stay out of it. */
 export function gamesHref(view: GamesView, sport: GameSport): string {
   const sp = new URLSearchParams()
-  if (view !== 'board') sp.set('view', view)
+  if (view === 'table') sp.set('view', 'table')
   if (sport !== 'all') sp.set('sport', sport)
   const qs = sp.toString()
   return qs ? `/ev/games?${qs}` : '/ev/games'
 }
 
-/** The page toolbar's right side: the BOARD | ANALYSIS | TABLE switch and, on the table, the sport links (the games board has its own sport pills). Plain links, so each state is shareable. */
+/** The page toolbar's right side: the BOARD | ALL LINES switch and, on the table, the sport links (the games board has its own sport pills). Plain links, so each state is shareable. */
 export function GamesNav({ view, sport }: { view: GamesView; sport: GameSport }) {
   return (
     <div className="flex items-center gap-y-2 gap-x-4 flex-wrap">

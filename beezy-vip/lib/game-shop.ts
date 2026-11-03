@@ -9,11 +9,20 @@ import { decimalOf, LADDER_SUSPECT_EV, LADDER_THIN_BELOW } from '@/lib/game-ladd
 import type { GameBoardEntry } from '@/lib/game-board'
 import { sideLabels, type GameMarket, type GamePriceRow } from '@/lib/game-odds'
 import { hasMovement, type MoveSummary } from '@/lib/line-move'
+import { americanToImpliedProb } from '@/lib/odds'
 import { isOffshore } from '@/lib/offshore'
 import { bookDisplay } from '@/lib/tokens'
 
 /** The smallest market-fair EV the board calls an edge. */
 export const EDGE_MIN = 0.02
+/** An alternate line needs this many books before its fair price is trusted (the main line needs LADDER_THIN_BELOW). */
+export const ALT_MIN_BOOKS = 5
+/**
+ * No price longer than this is ever called an edge. De-vigging in proportion to the odds inflates the fair chance of a longshot, so
+ * long alternate lines (+500, +900) look +EV almost everywhere; real edges at those prices cannot be told from that artifact.
+ * The price is still shown, just never headlined.
+ */
+export const LONGSHOT_MAX_AMERICAN = 300
 
 export interface ShopSide {
   /** 'FLA -1.5', 'O 6.5', 'DET ML' */
@@ -29,7 +38,26 @@ export interface ShopSide {
   suspect: boolean
 }
 
-export function shopSide(r: GamePriceRow, which: 'a' | 'b'): ShopSide {
+/**
+ * The market fair probability of one side as the MEDIAN of every other book's own de-vigged two-way price. The board's fair value is a
+ * mean, so a single stale or fat-fingered book drags it and invents an edge on the OTHER side; an edge is only called one when it
+ * survives the median too. Null with fewer than three two-way books besides `exclude`.
+ */
+export function medianFair(r: GamePriceRow, which: 'a' | 'b', exclude: string | null): number | null {
+  const ps: number[] = []
+  for (const b of r.row.books ?? []) {
+    if (b.book === exclude || b.a == null || b.b == null) continue
+    const pa = americanToImpliedProb(b.a), pb = americanToImpliedProb(b.b)
+    const t = pa + pb
+    if (t > 0) ps.push((which === 'a' ? pa : pb) / t)
+  }
+  if (ps.length < LADDER_THIN_BELOW) return null
+  ps.sort((x, y) => x - y)
+  const m = Math.floor(ps.length / 2)
+  return ps.length % 2 ? ps[m] : (ps[m - 1] + ps[m]) / 2
+}
+
+export function shopSide(r: GamePriceRow, which: 'a' | 'b', opts: { alt?: boolean } = {}): ShopSide {
   const sp = which === 'a' ? r.a : r.b
   const label = sideLabels(r.row)[which]
   const others = (r.row.books ?? [])
@@ -39,9 +67,13 @@ export function shopSide(r: GamePriceRow, which: 'a' | 'b'): ShopSide {
     .sort((x, y) => decimalOf(y.american) - decimalOf(x.american) || x.book.localeCompare(y.book))
     .slice(0, 3)
   const ev = sp.ev
-  const enough = (r.row.books ?? []).length >= LADDER_THIN_BELOW
+  const enough = (r.row.books ?? []).length >= (opts.alt ? ALT_MIN_BOOKS : LADDER_THIN_BELOW)
   const suspect = ev != null && ev > LADDER_SUSPECT_EV
-  return { label, american: sp.american, book: sp.book, ev, others, suspect, actionable: ev != null && enough && !suspect && ev >= EDGE_MIN }
+  const short = sp.american != null && sp.american <= LONGSHOT_MAX_AMERICAN
+  const med = sp.american != null ? medianFair(r, which, sp.book) : null
+  const evMedian = med != null && sp.american != null ? med * decimalOf(sp.american) - 1 : null
+  const robust = evMedian != null && evMedian >= EDGE_MIN
+  return { label, american: sp.american, book: sp.book, ev, others, suspect, actionable: ev != null && enough && short && robust && !suspect && ev >= EDGE_MIN }
 }
 
 export interface ShopMarket { market: GameMarket; row: GamePriceRow; a: ShopSide; b: ShopSide }
@@ -60,9 +92,10 @@ export function gameEdges(g: GameBoardEntry): EdgeItem[] {
   for (const market of ['ml', 'spread', 'total'] as const) {
     const main = g.main[market]
     for (const r of g.rows[market]) {
+      const alt = market !== 'ml' && main != null && r !== main
       for (const side of ['a', 'b'] as const) {
-        const shop = shopSide(r, side)
-        if (shop.actionable) out.push({ game: g, market, line: r.row.line, side, shop, alt: market !== 'ml' && main != null && r !== main })
+        const shop = shopSide(r, side, { alt })
+        if (shop.actionable) out.push({ game: g, market, line: r.row.line, side, shop, alt })
       }
     }
   }
@@ -93,7 +126,10 @@ export interface AltRow { line: number | null; row: GamePriceRow; a: ShopSide; b
 /** Every line of a market with both sides' best prices, in ladder order (home side hardest cover first), main flagged. */
 export function altRows(g: GameBoardEntry, market: GameMarket): AltRow[] {
   const main = g.main[market]
-  return g.rows[market].map(r => ({ line: r.row.line, row: r, a: shopSide(r, 'a'), b: shopSide(r, 'b'), thin: (r.row.books ?? []).length < LADDER_THIN_BELOW, main: r === main }))
+  return g.rows[market].map(r => {
+    const alt = market !== 'ml' && r !== main
+    return { line: r.row.line, row: r, a: shopSide(r, 'a', { alt }), b: shopSide(r, 'b', { alt }), thin: (r.row.books ?? []).length < LADDER_THIN_BELOW, main: r === main }
+  })
 }
 
 /** The one movement a game's card or row shows: the spread's (else the total's, else the moneyline's), and the side it is named from (home / over / home). */

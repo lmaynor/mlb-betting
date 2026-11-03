@@ -9,22 +9,21 @@ import { restrictProjToOdds } from '@/lib/game-board'
 import type { GameProjectionsFeed } from '@/lib/game-lines'
 import { GAME_ODDS_SPORTS, type GameOddsFeed } from '@/lib/game-odds'
 import { BestBoard } from './best-board'
-import { GameBoard } from './game-board'
 import { GamePricesClient } from './game-prices-client'
-import { GamesNav, parseGameSport, parseGamesView } from './games-nav'
+import { analysisGame, GamesNav, parseGameSport, parseGamesView } from './games-nav'
 
 export const metadata: Metadata = {
   title: 'Game Lines',
   description: 'Every game\'s moneyline, spread and total: our projection, every alternate line and every book\'s price side by side, with best price, fair value and arbitrage. Unvalidated.',
 }
 
-/** The Scanner's Game Lines tab. BOARD (default): one row per game with the best price at every market, the edges worth a look and how each game has moved; double-click a row for a brief card. ANALYSIS is the full read on one game (our projection
+/** The Scanner's Game Lines tab. BOARD (default): one row per game with the best price at every market, the edges worth a look and how each game has moved; double-click a row for its card (markets, movement, and the full analysis) (our projection
  *  against the market on every alternate line, and every book side by side). TABLE is the dense all-rows price screen. Both are
  *  UNVALIDATED and have no tracked record, so they live here beside the market data and not under Picks. MLB's tracked game picks
  *  stay at /picks/games. */
 export default async function GameLinesPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const params = await searchParams
-  const view = parseGamesView(params.view, params.game)
+  const view = parseGamesView(params.view)
   const sport = parseGameSport(params.sport)
   const viewer = await getViewer()
   const sports = view === 'table' ? GAME_ODDS_SPORTS.filter(s => sport === 'all' || sport === s) : GAME_ODDS_SPORTS
@@ -42,14 +41,13 @@ export default async function GameLinesPage({ searchParams }: { searchParams: Pr
   let body: React.ReactNode
   if (view === 'table') {
     body = <GamePricesClient key={sport} feeds={odds} sport={sport} />
-  } else if (view === 'board') {
-    body = <BestBoard feeds={{ odds, proj: {} }} initialSport={params.sport === 'nba' || params.sport === 'nhl' ? params.sport : undefined} />
   } else {
     const projRaw = await Promise.all(sports.map(s => (odds[s] ? apiGetGameProjections(s).catch(() => null) : Promise.resolve(null))))
     // The model never rides along for a game the viewer's price preview withheld.
     const proj: Record<string, GameProjectionsFeed | null> = {}
     sports.forEach((s, i) => { proj[s] = restrictProjToOdds(projRaw[i], odds[s]) })
-    body = <GameBoard feeds={{ odds, proj }} initialGame={params.game} initialSport={params.sport === 'nba' || params.sport === 'nhl' ? params.sport : undefined} />
+    const open = analysisGame(params.view, params.game)
+    body = <BestBoard feeds={{ odds, proj }} initialSport={params.sport === 'nba' || params.sport === 'nhl' ? params.sport : undefined} initialOpen={open ? { key: open, pane: 'analysis' } : undefined} />
   }
 
   return (

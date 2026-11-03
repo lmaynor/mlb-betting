@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom'
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { GameBoard } from '@/app/ev/games/game-board'
+import { GameDetail } from '@/app/ev/games/game-detail'
+import { buildGameBoard, sortBoard } from '@/lib/game-board'
 import type { GameProjectionsFeed } from '@/lib/game-lines'
 import type { GameOddsFeed, GameOddsRow } from '@/lib/game-odds'
 import { breakEvenProb } from '@/lib/game-ladder'
@@ -44,50 +45,15 @@ const projNhl: GameProjectionsFeed = {
   }],
 }
 
-const feeds = () => ({ odds: { nhl: oddsFeed('nhl', rowsNhl), nba: oddsFeed('nba', rowsNba) }, proj: { nhl: projNhl, nba: null } })
+const BASE = { refs: [] as string[], method: 'proportional' as const, bettable: null }
+/** The deep-dive of one game of a feed (the earliest by default), the way the card's Analysis tab renders it. */
+function detail(f: { odds: Record<string, GameOddsFeed | null>; proj: Record<string, GameProjectionsFeed | null> }, key?: string) {
+  const entries = sortBoard(buildGameBoard(f, BASE), 'time')
+  const g = key ? entries.find(e => e.key === key)! : entries[0]
+  return render(<GameDetail game={g} bettable={null} ageLabel="4 MIN old" />)
+}
 
-describe('GameBoard: cards across the top, one deep-dive below', () => {
-  it('shows a card per game, earliest first, with the two main lines', () => {
-    render(<GameBoard feeds={feeds()} />)
-    const cards = screen.getAllByTestId('game-card')
-    expect(cards.map(c => c.getAttribute('data-game'))).toEqual([GK, 'nba:2026-11-02:BOS@MIA'])
-    expect(cards[0].textContent).toMatch(/FLA -1\.5/)
-    expect(cards[0].textContent).toMatch(/6\.5/)
-  })
-  it('opens the first game by default; clicking another card swaps the deep-dive', () => {
-    render(<GameBoard feeds={feeds()} />)
-    expect(screen.getByRole('heading', { name: 'DET @ FLA' })).toBeInTheDocument()
-    fireEvent.click(screen.getAllByTestId('game-card')[1])
-    expect(screen.getByRole('heading', { name: 'BOS @ MIA' })).toBeInTheDocument()
-  })
-  it('only offers the sports that have games, and the pill narrows the cards', () => {
-    render(<GameBoard feeds={feeds()} />)
-    const pills = within(screen.getByRole('group', { name: 'Sport' }))
-    expect(pills.getAllByRole('button').map(b => b.textContent)).toEqual(['All sports', 'NHL', 'NBA'])
-    fireEvent.click(pills.getByRole('button', { name: 'NBA' }))
-    expect(screen.getAllByTestId('game-card')).toHaveLength(1)
-  })
-  it('says the labels are unvalidated and offers no offshore book as a place to bet', () => {
-    render(<GameBoard feeds={feeds()} />)
-    expect(screen.getByTestId('game-board-strip').textContent).toMatch(/UNVALIDATED/)
-    expect(screen.getByTestId('game-detail').textContent).toMatch(/UNVALIDATED MODEL ESTIMATE/)
-  })
-  it('sort reorders the cards and starts at start time', () => {
-    render(<GameBoard feeds={feeds()} />)
-    const sort = screen.getByLabelText('SORT') as HTMLSelectElement
-    expect(sort.value).toBe('time')
-    expect(Array.from(sort.options).map(o => o.textContent)).toEqual(['Start time', 'Best EV', 'Arbitrage', 'Model gap', 'Movement'])
-    fireEvent.change(sort, { target: { value: 'gap' } })
-    expect(screen.getAllByTestId('game-card')[0].getAttribute('data-game')).toBe(GK)   // only the NHL game has a model
-  })
-  it('says so when nothing is published, and when a feed is empty', () => {
-    const first = render(<GameBoard feeds={{ odds: { nhl: null, nba: null }, proj: {} }} />)
-    expect(screen.getByRole('status').textContent).toMatch(/not published yet/)
-    first.unmount()
-    render(<GameBoard feeds={{ odds: { nhl: oddsFeed('nhl', []), nba: null }, proj: {} }} />)
-    expect(screen.getByRole('status').textContent).toMatch(/No book has posted/)
-  })
-})
+const feeds = () => ({ odds: { nhl: oddsFeed('nhl', rowsNhl), nba: oddsFeed('nba', rowsNba) }, proj: { nhl: projNhl, nba: null } })
 
 describe('line movement (flow)', () => {
   const at = (min: number) => new Date(Date.UTC(2026, 10, 3, 14, 0) + min * 60_000).toISOString()
@@ -95,23 +61,8 @@ describe('line movement (flow)', () => {
   const withHistory = (history: Record<string, { points: ReturnType<typeof pt>[] }>) => ({ odds: { nhl: { ...oddsFeed('nhl', rowsNhl), history } }, proj: {} })
   const moving = { [`${GK}|spread`]: { points: [pt(0, -1.0, 0.50), pt(60, -1.0, 0.52), pt(120, -1.5, 0.44), pt(180, -1.5, 0.46)] }, [`${GK}|total`]: { points: [pt(0, 6.5, 0.5), pt(5, 6.5, 0.5)] } }
 
-  it('a card shows a sparkline and where the line went when it moved', () => {
-    render(<GameBoard feeds={withHistory(moving)} />)
-    const c = within(screen.getAllByTestId('game-card')[0]).getByTestId('card-move')
-    expect(within(c).getByTestId('sparkline')).toBeInTheDocument()
-    expect(c.textContent).toMatch(/FLA -1 \u2192 -1\.5/)
-  })
-  it('a card with a steady line shows the fair-price move in points instead', () => {
-    const steady = { [`${GK}|spread`]: { points: [pt(0, -1.5, 0.40), pt(90, -1.5, 0.43)] } }
-    render(<GameBoard feeds={withHistory(steady)} />)
-    expect(within(screen.getAllByTestId('game-card')[0]).getByTestId('card-move').textContent).toMatch(/\u25bc 3\.0 pts/)   // the card names the home side: away 40% -> 43% is home 60% -> 57%
-  })
-  it('two snapshots minutes apart are not movement: no chip', () => {
-    render(<GameBoard feeds={withHistory({ [`${GK}|spread`]: { points: [pt(0, -1.5, 0.4), pt(5, -1.5, 0.5)] } })} />)
-    expect(screen.queryByTestId('card-move')).toBeNull()
-  })
   it('the deep-dive draws the line and the fair price at the current line, from the side shown', () => {
-    render(<GameBoard feeds={withHistory(moving)} />)
+    detail(withHistory(moving))
     const mv = screen.getByTestId('movement')
     expect(within(mv).getAllByTestId('sparkline')).toHaveLength(2)
     expect(screen.getByTestId('movement-line').textContent).toMatch(/FLA -1 \u2192 -1\.5/)
@@ -121,36 +72,19 @@ describe('line movement (flow)', () => {
     expect(screen.getByTestId('movement-fair').textContent).toMatch(/44\.0% \u2192 46\.0% \(\+2\.0 pts\)/)
   })
   it('says tracking is new when the market has too few snapshots, and says nothing when the backend has no history', () => {
-    const first = render(<GameBoard feeds={withHistory({ [`${GK}|spread`]: { points: [pt(0, -1.5, 0.4)] } })} />)
+    const first = detail(withHistory({ [`${GK}|spread`]: { points: [pt(0, -1.5, 0.4)] } }))
     expect(screen.getByTestId('movement-empty').textContent).toMatch(/not enough snapshots/)
     first.unmount()
-    render(<GameBoard feeds={feeds()} />)
+    detail(feeds())
     expect(screen.queryByTestId('movement')).toBeNull()
     expect(screen.queryByTestId('movement-empty')).toBeNull()
     expect(screen.queryByTestId('card-move')).toBeNull()
-  })
-  it('the Movement sort puts the game that moved most first', () => {
-    const other = rowsNhl.map(r => ({ ...r, key: r.key.replace('FLA', 'MTL'), game_key: 'nhl:2026-11-02:TOR@MTL', away: 'TOR', home: 'MTL' }))
-    const hist = { ...moving, ['nhl:2026-11-02:TOR@MTL|spread']: { points: [pt(0, -1.5, 0.50), pt(120, -1.5, 0.505)] } }
-    render(<GameBoard feeds={{ odds: { nhl: { ...oddsFeed('nhl', [...rowsNhl, ...other]), history: hist } }, proj: {} }} />)
-    fireEvent.change(screen.getByLabelText('SORT'), { target: { value: 'move' } })
-    expect(screen.getAllByTestId('game-card')[0].getAttribute('data-game')).toBe(GK)
-    expect(Array.from((screen.getByLabelText('SORT') as HTMLSelectElement).options).map(o => o.textContent)).toContain('Movement')
-  })
-})
-
-describe('a sport with a feed but no games', () => {
-  it('says why it is missing instead of silently vanishing', () => {
-    const waiting = { ...oddsFeed('nba', []), status: 'awaiting_lines' as const }
-    render(<GameBoard feeds={{ odds: { nhl: oddsFeed('nhl', rowsNhl), nba: waiting }, proj: {} }} />)
-    expect(within(screen.getByRole('group', { name: 'Sport' })).getAllByRole('button').map(b => b.textContent)).toEqual(['All sports', 'NHL'])
-    expect(screen.getByTestId('quiet-sports').textContent).toMatch(/NBA: the next slate's lines are not posted yet/)
   })
 })
 
 describe('GameDetail: summary, drivers and the model', () => {
   it('shows the projected score, the ML win probability and only the drivers that exist', () => {
-    render(<GameBoard feeds={feeds()} />)
+    detail(feeds())
     const strip = screen.getByTestId('detail-strip').textContent!
     expect(strip).toMatch(/DET 2\.4 – FLA 3\.1/)
     expect(strip).toMatch(/FLA by 0\.7/)
@@ -163,7 +97,7 @@ describe('GameDetail: summary, drivers and the model', () => {
     expect(drivers).not.toMatch(/GSAx/)
   })
   it('a game with no model shows no empty cells, no model columns and no drivers line', () => {
-    render(<GameBoard feeds={feeds()} initialGame="nba:2026-11-02:BOS@MIA" />)
+    detail(feeds(), 'nba:2026-11-02:BOS@MIA')
     const strip = screen.getByTestId('detail-strip').textContent!
     expect(strip).not.toMatch(/--/)
     expect(strip).not.toMatch(/Projected score|Model margin|Model total/)
@@ -173,7 +107,7 @@ describe('GameDetail: summary, drivers and the model', () => {
     expect(screen.queryByRole('columnheader', { name: 'Model EV' })).toBeNull()
   })
   it('opens with one plain sentence: the best price, against fair, and how many books beat it', () => {
-    render(<GameBoard feeds={feeds()} />)
+    detail(feeds())
     const v = screen.getByTestId('verdict').textContent!
     expect(v).toMatch(/^Best price on FLA -1\.5: \+134 at BetMGM/)
     expect(v).toMatch(/market fair price of/)
@@ -183,7 +117,7 @@ describe('GameDetail: summary, drivers and the model', () => {
 
 describe('the ladder chart: dots at break-even, edge gaps, rung selection', () => {
   it('the best price is plotted at its break-even: +134 sits at 42.7%, never above 50%', () => {
-    render(<GameBoard feeds={feeds()} />)
+    detail(feeds())
     const chart = within(screen.getByTestId('ladder-chart'))
     const best = chart.getAllByTestId('best-dot').map(e => Number(e.getAttribute('data-y')))
     expect(best).toContain(breakEvenProb(134))
@@ -192,18 +126,18 @@ describe('the ladder chart: dots at break-even, edge gaps, rung selection', () =
   it('shows the lines near the main line by default, and every line on request', () => {
     const rows = Array.from({ length: 21 }, (_, i) => mk(GK, 'DET', 'FLA', T1, 'spread', -12.5 + i, SIX(-110, -110)))
     const f = { odds: { nhl: oddsFeed('nhl', rows) }, proj: {} }
-    render(<GameBoard feeds={f} />)
+    detail(f)
     expect(screen.getAllByTestId(/^rung-/).filter(e => /^rung-[-\d.]+$/.test(e.getAttribute('data-testid')!))).toHaveLength(7)
     fireEvent.click(screen.getByTestId('ladder-wide'))
     expect(screen.getAllByTestId(/^rung-/).filter(e => /^rung-[-\d.]+$/.test(e.getAttribute('data-testid')!))).toHaveLength(21)
   })
   it('the selected main rung is framed, and a better price than the market fair value draws a market gap', () => {
-    render(<GameBoard feeds={feeds()} />)
+    detail(feeds())
     expect(screen.getByTestId('ladder-selected')).toBeInTheDocument()
     expect(screen.queryByTestId('gap-model')).toBeInTheDocument()   // 46.7% model vs +134 (42.7%)
   })
   it('clicking a rung column selects it and swaps the selected-line panel to that line', () => {
-    render(<GameBoard feeds={feeds()} />)
+    detail(feeds())
     expect(within(screen.getByTestId('selected-line')).getByText('FLA -1.5')).toBeInTheDocument()
     expect(within(screen.getByTestId('best-vs-rest')).getAllByTestId('bvr-row')).toHaveLength(5)
     fireEvent.click(screen.getByTestId('rung--3.5'))
@@ -216,7 +150,7 @@ describe('the ladder chart: dots at break-even, edge gaps, rung selection', () =
 
 describe('the heat strip: every line against every book', () => {
   it('has a row per shown line and a cell per book, with the books that do not quote a line left empty', () => {
-    render(<GameBoard feeds={feeds()} />)
+    detail(feeds())
     const strip = within(screen.getByTestId('heat-strip'))
     expect(strip.getByTestId('heat-row--1.5').textContent).toMatch(/FLA -1\.5/)
     expect(strip.getByTestId('heat-row--1.5').textContent).toMatch(/MAIN/)
@@ -225,26 +159,26 @@ describe('the heat strip: every line against every book', () => {
     expect(strip.getByTestId('heat-cell--3.5-draftkings')).toBeInTheDocument()
   })
   it('shades a cell by its EV against the market fair price and outlines the best bettable price on each line', () => {
-    render(<GameBoard feeds={feeds()} />)
+    detail(feeds())
     const best = screen.getByTestId('heat-cell--1.5-betmgm')
     expect(best).toHaveAttribute('data-best', 'true')
     expect(Number(best.getAttribute('data-ev'))).toBeGreaterThan(Number(screen.getByTestId('heat-cell--1.5-novig').getAttribute('data-ev')))
     expect(screen.getByTestId('heat-cell--1.5-pinnacle')).not.toHaveAttribute('data-best')   // a reference, never the best price
   })
   it('a line with no fair value (under 3 books) shows prices, not an EV, and is marked THIN', () => {
-    render(<GameBoard feeds={feeds()} />)
+    detail(feeds())
     expect(screen.getByTestId('heat-cell--3.5-draftkings').textContent).toBe('+240')
     expect(screen.getByTestId('heat-row--3.5').textContent).toMatch(/THIN/)
     expect(screen.getByTestId('heat-row-2.5').textContent).toMatch(/THIN/)
   })
   it('clicking a cell opens that line', () => {
-    render(<GameBoard feeds={feeds()} />)
+    detail(feeds())
     fireEvent.click(screen.getByTestId('heat-cell-2.5-draftkings'))
     expect(within(screen.getByTestId('selected-line')).getByText('FLA +2.5')).toBeInTheDocument()
   })
   it('a suspiciously large gap is amber and marked with a question mark', () => {
     const rows = [mk(GK, 'DET', 'FLA', T1, 'spread', -1.5, [...['draftkings', 'fanduel', 'betmgm', 'novig', 'kalshi'].map(k => q(k, -110, -110)), q('caesars', -250, 400)])]
-    render(<GameBoard feeds={{ odds: { nhl: oddsFeed('nhl', rows) }, proj: {} }} />)
+    detail({ odds: { nhl: oddsFeed('nhl', rows) }, proj: {} })
     const cell = screen.getByTestId('heat-cell--1.5-caesars')
     expect(cell).toHaveAttribute('data-suspect', 'true')
     expect(cell.textContent).toMatch(/\?$/)
@@ -254,12 +188,12 @@ describe('the heat strip: every line against every book', () => {
 describe('the selected line: best vs the rest', () => {
   const bvr = () => within(screen.getByTestId('best-vs-rest'))
   it('shows the three best prices you can bet, the sharp references, and one summary row for everyone else', () => {
-    render(<GameBoard feeds={feeds()} />)
+    detail(feeds())
     expect(bvr().getAllByTestId('bvr-row').map(r => r.getAttribute('data-book'))).toEqual(['betmgm', 'draftkings', 'fanduel', 'pinnacle', 'novig'])
     expect(bvr().getByTestId('bvr-rest').textContent).toMatch(/2 other books/)
   })
   it('puts a better price further right', () => {
-    render(<GameBoard feeds={feeds()} />)
+    detail(feeds())
     const x = (book: string) => Number(bvr().getAllByTestId('bvr-row').find(r => r.getAttribute('data-book') === book)!.getAttribute('data-x'))
     expect(x('betmgm')).toBeGreaterThan(x('draftkings'))
     expect(x('draftkings')).toBeGreaterThan(x('fanduel'))
@@ -267,7 +201,7 @@ describe('the selected line: best vs the rest', () => {
     expect(x('pinnacle')).toBeGreaterThan(x('novig'))
   })
   it('every row shares one grid and the fair and model lines are drawn once down the list', () => {
-    render(<GameBoard feeds={feeds()} />)
+    detail(feeds())
     const rows = bvr().getAllByTestId('bvr-row')
     expect(new Set(rows.map(r => r.className)).size).toBe(1)
     expect(rows[0].className).toMatch(/grid-cols-\[var\(--ml\)_minmax\(0,1fr\)_var\(--mr\)\]/)
@@ -276,7 +210,7 @@ describe('the selected line: best vs the rest', () => {
   })
   it('a book that beats fair has a green bar right of the line; one that does not has a grey bar to its left', () => {
     const rows = [mk(GK, 'DET', 'FLA', T1, 'spread', -1.5, [...['draftkings', 'fanduel', 'betmgm', 'novig', 'kalshi'].map(k => q(k, -110, -110)), q('caesars', -125, 105)])]
-    render(<GameBoard feeds={{ odds: { nhl: oddsFeed('nhl', rows) }, proj: {} }} />)
+    detail({ odds: { nhl: oddsFeed('nhl', rows) }, proj: {} })
     const row = (book: string) => bvr().getAllByTestId('bvr-row').find(r => r.getAttribute('data-book') === book)!
     const bar = (book: string) => within(row(book)).getByTestId('bvr-bar') as HTMLElement
     expect(Number(row('caesars').getAttribute('data-x'))).toBeGreaterThan(0.5)
@@ -285,7 +219,7 @@ describe('the selected line: best vs the rest', () => {
     expect(bar('draftkings').style.background).not.toBe('rgb(87, 242, 135)')
   })
   it('labels the market and model fair prices and shows both sides of every quote', () => {
-    render(<GameBoard feeds={feeds()} />)
+    detail(feeds())
     const legend = bvr().getByTestId('matrix-legend').textContent!
     expect(legend).toMatch(/Market fair/)
     expect(legend).toMatch(/Model fair/)
@@ -295,13 +229,13 @@ describe('the selected line: best vs the rest', () => {
     expect(bm.textContent).toMatch(/BEST/)
   })
   it('Pinnacle is a SHARP reference row but can never be the best price', () => {
-    render(<GameBoard feeds={feeds()} />)
+    detail(feeds())
     const pin = bvr().getAllByTestId('bvr-row').find(r => r.getAttribute('data-book') === 'pinnacle')!
     expect(pin.textContent).toMatch(/SHARP/)
     expect(pin.textContent).not.toMatch(/BEST/)
   })
   it('"Every book" opens the full list, with the long tail still folded', () => {
-    render(<GameBoard feeds={feeds()} />)
+    detail(feeds())
     expect(screen.queryByTestId('book-matrix')).toBeNull()
     fireEvent.click(screen.getByTestId('bvr-full'))
     expect(screen.getByTestId('book-matrix')).toBeInTheDocument()
@@ -311,7 +245,7 @@ describe('the selected line: best vs the rest', () => {
 
 describe('markets and sides', () => {
   it('the side toggle flips the ladder to the other team and reverses the rung order', () => {
-    render(<GameBoard feeds={feeds()} />)
+    detail(feeds())
     const order = () => screen.getAllByTestId('ladder-chart')[0].querySelectorAll('[data-testid^="rung-"]')
     const lines = () => Array.from(order()).map(e => e.getAttribute('data-testid'))
     expect(lines()).toEqual(['rung--3.5', 'rung--1.5', 'rung-2.5'])
@@ -321,7 +255,7 @@ describe('markets and sides', () => {
     expect(best).toContain(breakEvenProb(-145))   // DET's best price is Caesars -145
   })
   it('Total offers Over / Under and the Moneyline is a single line with no ladder chart', () => {
-    render(<GameBoard feeds={feeds()} />)
+    detail(feeds())
     fireEvent.click(within(screen.getByRole('group', { name: 'Market' })).getByRole('button', { name: 'Total' }))
     expect(within(screen.getByRole('group', { name: 'Side' })).getAllByRole('button').map(b => b.textContent)).toEqual(['Over', 'Under'])
     fireEvent.click(within(screen.getByRole('group', { name: 'Market' })).getByRole('button', { name: 'Moneyline' }))
@@ -331,7 +265,7 @@ describe('markets and sides', () => {
   })
   it('the heat strip shows the lines near the main one, and every line on request', () => {
     const rows = Array.from({ length: 21 }, (_, i) => mk(GK, 'DET', 'FLA', T1, 'spread', -12.5 + i, SIX(-110, -110)))
-    render(<GameBoard feeds={{ odds: { nhl: oddsFeed('nhl', rows) }, proj: {} }} />)
+    detail({ odds: { nhl: oddsFeed('nhl', rows) }, proj: {} })
     expect(screen.getAllByTestId(/^heat-row-/)).toHaveLength(7)
     fireEvent.click(screen.getByTestId('ladder-wide'))
     expect(screen.getAllByTestId(/^heat-row-/)).toHaveLength(21)
