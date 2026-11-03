@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from statistics import median
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
@@ -55,6 +55,10 @@ STALE_MINUTES = 270
 # eleven books had Utah -180 / Philadelphia +150), which would show as a ~28% "arbitrage". Needs FLIP_MIN_BOOKS two-sided books.
 FLIP_DEVIATION = 0.15
 FLIP_MIN_BOOKS = 4
+# Rolling price history (payload["history"]): one point per board run per (game, market), so the site can draw how a line moved.
+HISTORY_MAX_POINTS = 200            # per series
+HISTORY_MAX_AGE = timedelta(hours=36)
+HISTORY_MIN_DEVIG_BOOKS = 3         # books quoting BOTH sides needed for the fair probability p_a of a point
 # ParlayAPI market key -> board market. The alternate_* keys are accepted in case the feed carries them (unverified).
 _MARKET_OF = {"h2h": "ml", "spreads": "spread", "totals": "total",
               "alternate_spreads": "spread", "alternate_totals": "total"}
@@ -201,13 +205,84 @@ def _ts(v: Any) -> Optional[datetime]:
     return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
 
 
+def _history_points(kept: List[dict], modal: Dict[tuple, Any], t: str) -> Dict[str, dict]:
+    """The board's current main-line snapshot per (game, market): {"{game_key}|{market}": point}. The main line is the modal line
+    (the same rule that orders the rows). `p_a` = mean over the books quoting BOTH sides of the proportional two-way de-vig of side
+    a (away / over), needs >= HISTORY_MIN_DEVIG_BOOKS such books (Pinnacle counts), else None. `best_a` / `best_b` = the highest
+    American price among NON-offshore books (Pinnacle never), `n` = books quoting the line (any side)."""
+    out: Dict[str, dict] = {}
+    for r in kept:
+        gm = (r["game_key"], r["market"])
+        if r["market"] != "ml" and (gm not in modal or modal[gm][1] != r["line"]):
+            continue
+        probs = [p for p in (_devig_a(b["a"], b["b"]) for b in r["books"]) if p is not None]
+        best = {side: [b[side] for b in r["books"] if b[side] is not None and b["book"] not in OFFSHORE_BOOKS] for side in ("a", "b")}
+        out[f"{r['game_key']}|{r['market']}"] = {
+            "t": t, "line": None if r["market"] == "ml" else r["line"],
+            "p_a": round(sum(probs) / len(probs), 4) if len(probs) >= HISTORY_MIN_DEVIG_BOOKS else None,
+            "best_a": max(best["a"]) if best["a"] else None, "best_b": max(best["b"]) if best["b"] else None,
+            "n": len(r["books"])}
+    return out
+
+
+def _clean_history(raw: Any) -> Dict[str, dict]:
+    """A previous payload's `history` -> a well-formed {series_key: {"points": [...]}} (anything malformed is skipped)."""
+    out: Dict[str, dict] = {}
+    if not isinstance(raw, dict):
+        return out
+    for key, ser in raw.items():
+        pts = ser.get("points") if isinstance(ser, dict) else None
+        if not isinstance(key, str) or "|" not in key or not isinstance(pts, list):
+            continue
+        good = [p for p in pts if isinstance(p, dict) and _ts(p.get("t")) is not None]
+        if good:
+            out[key] = {"points": good}
+    return out
+
+
+def merge_history(prev: Any, current: Dict[str, dict], live_games: set, now: datetime) -> Dict[str, dict]:
+    """Append this run's points to the previous history. A point whose `t` is already stored is not added again (idempotent
+    re-runs), points older than HISTORY_MAX_AGE are dropped, each series keeps its newest HISTORY_MAX_POINTS, and a series whose
+    game is no longer on the board is dropped. Series are sorted ascending by `t`."""
+    cutoff = now - HISTORY_MAX_AGE
+    merged = _clean_history(prev)
+    for key, pt in current.items():
+        pts = merged.setdefault(key, {"points": []})["points"]
+        if all(p.get("t") != pt["t"] for p in pts):
+            pts.append(pt)
+    out: Dict[str, dict] = {}
+    for key, ser in merged.items():
+        if key.rsplit("|", 1)[0] not in live_games:
+            continue
+        pts = sorted((p for p in ser["points"] if _ts(p["t"]) >= cutoff), key=lambda p: _ts(p["t"]))
+        if pts:
+            out[key] = {"points": pts[-HISTORY_MAX_POINTS:]}
+    return out
+
+
+def read_previous_history(sport: str) -> Dict[str, dict]:
+    """The `history` of the previously written board (empty when absent or unreadable; never raises)."""
+    try:
+        from mlb_core import storage
+        key = OUT_KEY.format(sport=sport)
+        if not storage.exists(key):
+            return {}
+        return _clean_history(json.loads(storage.read_bytes(key).decode("utf-8")).get("history"))
+    except Exception as exc:                                                            # noqa: BLE001
+        log.warning("game odds board history unreadable for %s (starting empty): %s", sport, exc)
+        return {}
+
+
 def build_game_board(sport: str, events: Optional[list], now: datetime, meta: Optional[dict] = None,
-                     bb_games: Optional[list] = None, bb_meta: Optional[dict] = None) -> dict:
+                     bb_games: Optional[list] = None, bb_meta: Optional[dict] = None,
+                     prev_history: Optional[dict] = None) -> dict:
     """Banked game-line events (+ the BestBook ladders) -> the board payload for one sport (see the module docstring).
 
     One row per (game, market, line); a row needs >= MIN_BOOKS books (a book counts when at least one side is priced). DFS /
     pick'em apps are skipped, a game that has started is dropped, a malformed price is skipped and never aborts the build, and
-    a side quote whose decimal payout is above ROGUE_RATIO x the side's median is dropped when >= ROGUE_MIN_BOOKS books quote it."""
+    a side quote whose decimal payout is above ROGUE_RATIO x the side's median is dropped when >= ROGUE_MIN_BOOKS books quote it.
+    `prev_history` is the previous board's `history`; the payload's `history` = it + this run's main-line point per (game, market)
+    (see merge_history). A history failure never breaks the board: it is logged and the payload carries whatever history survived."""
     meta = meta or {}
     bb_meta = bb_meta or {}
     code_of = _resolver(sport)
@@ -343,12 +418,21 @@ def build_game_board(sport: str, events: Optional[list], now: datetime, meta: Op
     used = ([LINES_SOURCE] if events else []) + ([BESTBOOK_SOURCE] if n_bb_games else [])
     stamps = [t for t in (pa_ts if events else None, bb_ts if n_bb_games else None) if t is not None]
     ages = [x for x in (meta.get("age_min") if events else None, bb_meta.get("age_min") if n_bb_games else None) if x is not None]
+    as_of = max(stamps).isoformat() if stamps else now.isoformat()
+    try:
+        history = merge_history(prev_history, _history_points(kept, modal, as_of), set(per_game), now)
+    except Exception as exc:                                                            # noqa: BLE001 -- history never breaks the board
+        log.warning("game odds board %s: history merge failed (%s); writing the board without new points", sport, exc)
+        try:
+            history = {k: v for k, v in _clean_history(prev_history).items() if k.rsplit("|", 1)[0] in per_game}
+        except Exception:                                                               # noqa: BLE001
+            history = {}
     return {
-        "sport": sport, "ts": now.isoformat(), "as_of": max(stamps).isoformat() if stamps else now.isoformat(), "validated": False,
+        "sport": sport, "ts": now.isoformat(), "as_of": as_of, "validated": False,
         "status": "live" if kept else "awaiting_lines", "lines_source": "+".join(used) or LINES_SOURCE,
         "lines_age_minutes": min(ages) if ages else None, "count": len(kept), "rows": kept, "books": book_keys,
         "offshore_books": sorted(b for b in book_keys if b in OFFSHORE_BOOKS),
-        "games": sorted(per_game.values(), key=lambda g: (g["start"], g["game_key"])),
+        "games": sorted(per_game.values(), key=lambda g: (g["start"], g["game_key"])), "history": history,
         "summary": {"events": n_events, "events_started": n_started, "events_unmapped": n_unmapped,
                     "banked_events": meta.get("banked_events"), "flipped_quotes_dropped": n_flipped,
                     "bestbook_games": n_bb_games, "bestbook_quotes_used": n_bb_quotes},
@@ -387,9 +471,9 @@ def run(sport: str, now: Optional[datetime] = None, write: bool = True) -> dict:
         old = meta.get("age_min") is not None and meta["age_min"] > odds_feed.MAX_AGE_MIN
         return {"sport": sport, "ts": now.isoformat(), "as_of": meta.get("snapshot_ts"), "validated": False,
                 "status": "stale" if old else "unavailable", "lines_source": LINES_SOURCE, "count": 0, "rows": [],
-                "books": [], "offshore_books": [], "games": [], "lines_age_minutes": meta.get("age_min"),
+                "books": [], "offshore_books": [], "games": [], "history": {}, "lines_age_minutes": meta.get("age_min"),
                 "reason": meta.get("reason") or "no banked game-line snapshot", "summary": {}}
-    payload = build_game_board(sport, events, now, meta, bb_games, bb_meta)
+    payload = build_game_board(sport, events, now, meta, bb_games, bb_meta, prev_history=read_previous_history(sport))
     if write:
         write_game_board(payload, sport)
     return payload

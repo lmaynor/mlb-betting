@@ -1113,7 +1113,8 @@ def get_game_odds_board(sport, day=None, market=None, limit=1500):
     day = _proj_day(day, "day")
     now = _datetime.now(_timezone.utc)
     empty = {"sport": sport, "status": "unavailable", "as_of": None, "age_minutes": None, "stale": True, "validated": False,
-             "lines_source": _gob.LINES_SOURCE, "count": 0, "books": [], "offshore_books": [], "games": [], "rows": []}
+             "lines_source": _gob.LINES_SOURCE, "count": 0, "books": [], "offshore_books": [], "games": [], "rows": [],
+             "history": {}}
 
     hit = _GAME_ODDS_CACHE.get(sport)
     if hit and _time.monotonic() - hit[0] < _GAME_ODDS_CACHE_TTL:
@@ -1154,18 +1155,27 @@ def get_game_odds_board(sport, day=None, market=None, limit=1500):
         rows = [r for r in rows if r.get("market") == mkt]
     stale = age is None or age > _gob.STALE_MINUTES or bool(payload.get("stale"))
     status = "awaiting_lines" if not live else ("stale" if stale else "live")
+    count = len(rows)
     books = sorted({b["book"] for r in rows for b in r.get("books") or []})
     per_game: dict = {}
     for r in rows:
         g = per_game.setdefault(r.get("game_key"), {"game_key": r.get("game_key"), "away": r.get("away"),
                                                     "home": r.get("home"), "start": r.get("commence"), "n_rows": 0})
         g["n_rows"] += 1
+    rows = rows[:limit]
+    # price history: only the games in the returned rows (started games, other days and rows cut by `limit` take theirs along),
+    # and only the requested market
+    shown = {r.get("game_key") for r in rows}
+    hist = payload.get("history")
+    history = {k: v for k, v in hist.items()
+               if isinstance(k, str) and "|" in k and k.rsplit("|", 1)[0] in shown and (not mkt or k.rsplit("|", 1)[1] == mkt)
+               } if isinstance(hist, dict) else {}
     return {"sport": sport, "status": status, "as_of": as_of, "age_minutes": None if age is None else round(age, 1),
             "stale": stale, "validated": False, "lines_source": payload.get("lines_source") or _gob.LINES_SOURCE,
-            "count": len(rows), "books": books,
+            "count": count, "books": books,
             "offshore_books": [b for b in payload.get("offshore_books") or [] if b in books],
             "games": sorted(per_game.values(), key=lambda g: (str(g["start"]), str(g["game_key"]))),
-            "rows": rows[:limit]}
+            "rows": rows, "history": history}
 
 
 def _roi(profit, stake):
