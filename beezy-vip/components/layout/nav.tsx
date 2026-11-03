@@ -83,7 +83,7 @@ function NavShell({ isSignedIn, userButton, signIn }: {
     <header ref={headerRef} className="relative w-full max-w-[100vw]">
       {/* TIER 1 -- product bar */}
       <nav className="overflow-hidden border-b border-separator-border bg-background-secondary-default">
-        <div className="mx-auto flex h-14 max-w-[1280px] items-center gap-5 px-6">
+        <div className="mx-auto flex h-12 md:h-14 max-w-[1280px] items-center gap-5 px-6">
 
           <Link href="/" aria-label="beezy.fyi home" className="flex shrink-0 items-center no-underline">
             <BrandWordmark size="md" showDomain />
