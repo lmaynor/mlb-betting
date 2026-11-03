@@ -1,15 +1,15 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { LADDER_THIN_BELOW, type LadderRung } from '@/lib/game-ladder'
+import { rungSpread, type LadderRung } from '@/lib/game-ladder'
 import { GREEN, SKY } from './game-prices-parts'
 
 export interface ChartRung { line: number | null; label: string; rung: LadderRung }
 
 const MARKET = '#9ca3af'
-const DOT = '#7d8596'
-const H = 232
-const PAD = { l: 40, r: 8, t: 10, b: 62 }
+const BAND = '#7d8596'
+const H = 214
+const PAD = { l: 40, r: 8, t: 10, b: 46 }
 
 /** The width of an element in px, kept current with a ResizeObserver (a fixed fallback where there is none, e.g. jsdom). */
 function useWidth(fallback = 640): [React.RefObject<HTMLDivElement | null>, number] {
@@ -75,7 +75,7 @@ export function LadderChart({ rungs, selected, onSelect, sideLabel }: { rungs: C
           </g>
         ))}
         {selIdx >= 0 && (
-          <rect x={X(selIdx) - colW / 2 + 2} y={PAD.t} width={colW - 4} height={ph + 56} rx={8} fill="rgba(87,242,135,0.05)" stroke={GREEN} strokeOpacity={0.7} strokeWidth={1.5} data-testid="ladder-selected" />
+          <rect x={X(selIdx) - colW / 2 + 2} y={PAD.t} width={colW - 4} height={ph + 52} rx={8} fill="rgba(87,242,135,0.05)" stroke={GREEN} strokeOpacity={0.7} strokeWidth={1.5} data-testid="ladder-selected" />
         )}
         {market && <polyline points={market} fill="none" stroke={MARKET} strokeWidth={2} strokeLinejoin="round" />}
         {model && <polyline points={model} fill="none" stroke={SKY} strokeWidth={2} strokeDasharray="5 4" strokeLinejoin="round" />}
@@ -90,30 +90,35 @@ export function LadderChart({ rungs, selected, onSelect, sideLabel }: { rungs: C
             </g>
           )
         })}
-        {rungs.map((c, i) => c.rung.dots.map((d, di) => {
-          const x = X(i) + (di - (c.rung.dots.length - 1) / 2) * 6
-          const y = Y(d.y)
-          return d.best
-            ? <circle key={`${c.label}-${d.book}`} cx={x} cy={y} r={5.5} fill={GREEN} stroke="var(--color-background-primary-default)" strokeWidth={2} data-testid="best-dot" data-y={d.y}><title>{`${d.book} ${d.american > 0 ? '+' : ''}${d.american}: break-even ${(d.y * 100).toFixed(1)}%`}</title></circle>
-            : <circle key={`${c.label}-${d.book}`} cx={x} cy={y} r={3.2} fill={DOT} fillOpacity={0.9} data-testid="book-dot" data-y={d.y}><title>{`${d.book} ${d.american > 0 ? '+' : ''}${d.american}: break-even ${(d.y * 100).toFixed(1)}%`}</title></circle>
-        }))}
+        {rungs.map((c, i) => {
+          const sp = rungSpread(c.rung)
+          const best = c.rung.best
+          if (!sp) return null
+          const w = Math.min(10, Math.max(4, colW * 0.16))
+          return (
+            <g key={`${c.label}-band`}>
+              <rect x={X(i) - w / 2} y={Y(sp.hi)} width={w} height={Math.max(2, Y(sp.lo) - Y(sp.hi))} rx={w / 2} fill={BAND} fillOpacity={c.rung.thin ? 0.2 : 0.38}
+                data-testid="book-range" data-lo={sp.lo} data-hi={sp.hi}><title>{`${c.rung.nBooks} books: break-even ${(sp.lo * 100).toFixed(1)}% to ${(sp.hi * 100).toFixed(1)}%`}</title></rect>
+              {best && <circle cx={X(i)} cy={Y(best.y)} r={5} fill={GREEN} stroke="var(--color-background-primary-default)" strokeWidth={2} data-testid="best-dot" data-y={best.y}><title>{`${best.book} ${best.american > 0 ? '+' : ''}${best.american}: break-even ${(best.y * 100).toFixed(1)}%`}</title></circle>}
+            </g>
+          )
+        })}
         {rungs.map((c, i) => {
           const r = c.rung
           const on = c.line === selected
           const evColor = r.thin || r.suspect ? '#facc15' : r.evMarket != null && r.evMarket > 0 ? GREEN : 'var(--color-text-tertiary)'
           return (
             <g key={`${c.label}-${i}`}>
-              <text x={X(i)} y={H - 46} textAnchor="middle" fontSize={narrow ? 11 : 12.5} fontWeight={on ? 600 : 500} fill="var(--color-text-primary)">{narrow ? c.label.split(' ').pop() : c.label}</text>
-              {!narrow && <text x={X(i)} y={H - 29} textAnchor="middle" fontSize="11" fill={r.thin || r.suspect ? '#facc15' : 'var(--color-text-tertiary)'}>{r.nBooks} {r.nBooks === 1 ? 'book' : 'books'}{r.thin ? ' · thin' : ''}</text>}
-              <text x={X(i)} y={H - (narrow ? 30 : 11)} textAnchor="middle" fontSize={narrow ? 11 : 12.5} fontWeight={600} fill={evColor} data-testid="ladder-ev">{r.evMarket != null ? evText(r.evMarket) : '--'}</text>
+              <text x={X(i)} y={H - 28} textAnchor="middle" fontSize={narrow ? 11 : 12.5} fontWeight={on ? 600 : 500} fill={r.thin ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)'}>{narrow ? c.label.split(' ').pop() : c.label}</text>
+              <text x={X(i)} y={H - 10} textAnchor="middle" fontSize={narrow ? 11 : 12.5} fontWeight={600} fill={evColor} data-testid="ladder-ev">{r.thin ? 'thin' : r.evMarket != null ? `${evText(r.evMarket)}${r.suspect ? '?' : ''}` : '--'}</text>
               <rect x={X(i) - colW / 2} y={PAD.t} width={colW} height={H - PAD.t} fill="transparent" style={{ cursor: 'pointer' }} role="button" tabIndex={0} aria-pressed={on} aria-label={`${c.label}: ${r.nBooks} books`}
                 data-testid={`rung-${c.line ?? 'ml'}`} onClick={() => onSelect(c.line)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(c.line) } }} />
             </g>
           )
         })}
       </svg>
-      <div className="mono text-[10.5px] text-text-tertiary mt-0.5" data-thin-below={LADDER_THIN_BELOW}>
-        Dots are each book&apos;s break-even price; lower is a better price for you. EV under each line is the best price against the market fair value.
+      <div className="text-[11.5px] text-text-tertiary mt-0.5">
+        Grey bars span every book&apos;s price on that line; the green dot is the best one. Lower is a better price for you. The number under each line is the best price against the market fair value; &ldquo;thin&rdquo; means fewer than 3 books, &ldquo;?&rdquo; an unusually large gap worth double-checking.
       </div>
     </div>
   )

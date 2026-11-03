@@ -1,7 +1,8 @@
 'use client'
 
 import { BookLogo } from '@/components/ui/book-logo'
-import { bookX, type LadderRung } from '@/lib/game-ladder'
+import { useState } from 'react'
+import { bookX, splitBooks, type LadderRung } from '@/lib/game-ladder'
 import { SHARP_BOOKS, type GameOddsRow } from '@/lib/game-odds'
 import { formatOdds, probToAmerican } from '@/lib/odds'
 import { bookDisplay } from '@/lib/tokens'
@@ -10,6 +11,7 @@ import { GREEN, SKY } from './game-prices-parts'
 const MARKET = '#9ca3af'
 const sp = (x: number) => `${x >= 0 ? '+' : ''}${(x * 100).toFixed(1)}%`
 
+const SHARP_SET: ReadonlySet<string> = new Set(SHARP_BOOKS)
 const GRID = { gridTemplateColumns: 'minmax(84px,132px) minmax(0,1fr) auto' } as const
 
 const fairText = (p: number) => `${formatOdds(probToAmerican(p))} (${(p * 100).toFixed(1)}%)`
@@ -21,15 +23,18 @@ const fairText = (p: number) => `${formatOdds(probToAmerican(p))} (${(p * 100).t
  * market fair value.
  */
 export function BookMatrix({ rung, row, side, sideLabel, otherLabel }: { rung: LadderRung; row: GameOddsRow; side: 'a' | 'b'; sideLabel: string; otherLabel: string }) {
-  const rows = rung.dots.slice().sort((x, y) => y.decimal - x.decimal || x.book.localeCompare(y.book))
-  if (rows.length === 0) return <div className="text-compact text-text-secondary py-2">No book has a price on this line.</div>
+  const [all, setAll] = useState(false)
+  const sorted = rung.dots.slice().sort((x, y) => y.decimal - x.decimal || x.book.localeCompare(y.book))
+  const { shown, rest } = splitBooks(sorted, SHARP_SET, 5)
+  const rows = all ? sorted : shown
+  if (sorted.length === 0) return <div className="text-compact text-text-secondary py-2">No book has a price on this line.</div>
 
   const fairDec = (p: number | null) => (p != null && p > 0 && p < 1 ? 1 / p : null)
   const dMarket = fairDec(rung.pMarket)
   const dModel = fairDec(rung.pModel)
-  const all = [...rows.map(r => r.decimal), ...(dMarket ? [dMarket] : []), ...(dModel ? [dModel] : [])]
-  const lo = Math.min(...all)
-  const hi = Math.max(...all)
+  const scale = [...sorted.map(r => r.decimal), ...(dMarket ? [dMarket] : []), ...(dModel ? [dModel] : [])]
+  const lo = Math.min(...scale)
+  const hi = Math.max(...scale)
   const xs = (d: number) => `${(bookX(d, lo, hi) * 100).toFixed(2)}%`
   const other = (book: string) => { const q = row.books.find(b => b.book === book); const v = q ? (side === 'a' ? q.b : q.a) : null; return v == null ? null : v }
 
@@ -75,6 +80,13 @@ export function BookMatrix({ rung, row, side, sideLabel, otherLabel }: { rung: L
           </div>
         )
       })}
+      {rest.length > 0 && (
+        <button type="button" onClick={() => setAll(a => !a)} aria-expanded={all} data-testid="matrix-more"
+          className="mt-1.5 w-full text-left text-[12px] text-text-secondary hover:text-text-primary cursor-pointer bg-transparent border-0 border-t border-t-[color:var(--color-separator-border)] pt-2">
+          {all ? 'Show fewer books' : `Show ${rest.length} more ${rest.length === 1 ? 'book' : 'books'}`}
+          {!all && <span className="mono text-text-tertiary"> &middot; {formatOdds(rest[0].american)} to {formatOdds(rest[rest.length - 1].american)}</span>}
+        </button>
+      )}
     </div>
   )
 }

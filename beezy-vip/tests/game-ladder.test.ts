@@ -160,3 +160,61 @@ describe('suspect: a huge edge is usually a stale quote', () => {
     expect(buildLadderRung(MAIN, 'b').suspect).toBe(false)
   })
 })
+
+import { LADDER_WINDOW, rungSpread, splitBooks, windowRungs } from '../lib/game-ladder'
+
+describe('what the chart shows by default', () => {
+  const mkRung = (line: number, thin = false) => ({ line, rung: { thin } as never })
+  const ladder = Array.from({ length: 21 }, (_, i) => mkRung(-12.5 + i))   // -12.5 .. +7.5
+  it('windows the ladder around the main line, clamped at the ends, and never more than the window', () => {
+    const w = windowRungs(ladder, -4.5)
+    expect(w).toHaveLength(LADDER_WINDOW)
+    expect(w.map(x => x.line)).toEqual([-7.5, -6.5, -5.5, -4.5, -3.5, -2.5, -1.5])
+    expect(windowRungs(ladder, -12.5).map(x => x.line)[0]).toBe(-12.5)
+    expect(windowRungs(ladder, 7.5).map(x => x.line).slice(-1)[0]).toBe(7.5)
+  })
+  it('drops thin rungs unless that would leave fewer than three', () => {
+    const l = [mkRung(-3.5, true), mkRung(-2.5), mkRung(-1.5), mkRung(-0.5, true), mkRung(0.5), mkRung(1.5)]
+    expect(windowRungs(l, -1.5).map(x => x.line)).toEqual([-2.5, -1.5, 0.5, 1.5])
+    const sparse = [mkRung(-1.5), mkRung(0.5, true), mkRung(1.5, true)]
+    expect(windowRungs(sparse, -1.5)).toHaveLength(3)
+  })
+  it('summarises a rung by the spread of its books and how many beat the market fair value', () => {
+    const r = buildLadderRung(MAIN, 'b', { pMarket: 0.435 })
+    const s = rungSpread(r)!
+    expect(s.lo).toBeCloseTo(breakEvenProb(134), 10)
+    expect(s.hi).toBeCloseTo(breakEvenProb(123), 10)
+    expect(s.lo).toBeLessThan(s.median)
+    expect(s.median).toBeLessThan(s.hi)
+    expect(s.beating).toBe(r.dots.filter(d => d.y < 0.435).length)
+    expect(rungSpread({ dots: [], pMarket: null } as never)).toBeNull()
+  })
+  it('shows the top books plus any sharp reference and folds the rest', () => {
+    const dots = ['a', 'b', 'c', 'd', 'e', 'f', 'pinnacle', 'g'].map(book => ({ book }))
+    const { shown, rest } = splitBooks(dots, new Set(['pinnacle']), 5)
+    expect(shown.map(d => d.book)).toEqual(['a', 'b', 'c', 'd', 'e', 'pinnacle'])
+    expect(rest.map(d => d.book)).toEqual(['f', 'g'])
+  })
+})
+
+import { rungVerdict } from '../lib/game-ladder'
+
+describe('rungVerdict: one plain sentence', () => {
+  const name = (b: string) => ({ betmgm: 'BetMGM', draftkings: 'DraftKings' } as Record<string, string>)[b] ?? b
+  it('says where the best price is, against fair, and how many books beat it', () => {
+    const r = buildLadderRung(MAIN, 'b', { pMarket: 0.435 })
+    const v = rungVerdict(r, 'FLA -1.5', name)
+    expect(v).toMatch(/^Best price on FLA -1\.5: \+134 at BetMGM\./)
+    expect(v).toMatch(/EV against the market fair price of \+130/)
+    expect(v).toMatch(/\d of 6 books beat it\./)
+  })
+  it('never claims an edge on a thin rung, and says when there is no fair value', () => {
+    const thin = buildLadderRung(row({ books: [q('draftkings', -150, 125), q('fanduel', -150, 124)] }), 'b', { pMarket: 0.3 })
+    expect(rungVerdict(thin, 'FLA +2.5', name)).toMatch(/Only 2 books quote this line, so no edge is claimed/)
+    expect(rungVerdict(buildLadderRung(MAIN, 'b'), 'FLA -1.5', name)).toMatch(/no market fair price/)
+  })
+  it('flags a suspiciously large gap and handles a rung nobody can bet', () => {
+    expect(rungVerdict(buildLadderRung(MAIN, 'b', { pMarket: 0.6 }), 'FLA -1.5', name)).toMatch(/unusually large/)
+    expect(rungVerdict(buildLadderRung(row({ books: [q('pinnacle', -150, 125)] }), 'b'), 'FLA -1.5', name)).toMatch(/No book you can bet at/)
+  })
+})

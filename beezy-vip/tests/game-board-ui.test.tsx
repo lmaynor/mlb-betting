@@ -14,7 +14,7 @@ const mk = (gk: string, away: string, home: string, commence: string, market: Ga
 const GK = 'nhl:2026-11-02:DET@FLA'
 const T1 = '2026-11-03T00:10:00Z'
 // FLA -1.5: the home (b) side pays +123..+134, DET (a) the -150s. Pinnacle is a reference book.
-const MAIN = [q('novig', -150, 123), q('kalshi', -150, 127), q('draftkings', -158, 132), q('fanduel', -157, 131), q('betmgm', -160, 134), q('pinnacle', -151, 130)]
+const MAIN = [q('novig', -150, 123), q('kalshi', -150, 127), q('draftkings', -158, 132), q('fanduel', -157, 131), q('betmgm', -160, 134), q('pinnacle', -151, 130), q('caesars', -145, 118)]
 const SIX = (a: number, b: number) => ['draftkings', 'fanduel', 'betmgm', 'caesars', 'novig', 'kalshi'].map(k => q(k, a, b))
 const rowsNhl: GameOddsRow[] = [
   mk(GK, 'DET', 'FLA', T1, 'spread', -3.5, [q('draftkings', -300, 240), q('fanduel', -280, 235)]),
@@ -103,25 +103,49 @@ describe('GameDetail: summary, drivers and the model', () => {
     expect(drivers).toMatch(/back-to-back/)
     expect(drivers).not.toMatch(/GSAx/)
   })
-  it('a game with no model has dashes and no drivers line', () => {
+  it('a game with no model shows no empty cells, no model columns and no drivers line', () => {
     render(<GameBoard feeds={feeds()} initialGame="nba:2026-11-02:BOS@MIA" />)
-    expect(screen.getByTestId('detail-strip').textContent).toMatch(/Projected score--/)
+    const strip = screen.getByTestId('detail-strip').textContent!
+    expect(strip).not.toMatch(/--/)
+    expect(strip).not.toMatch(/Projected score|Model margin|Model total/)
+    expect(strip).toMatch(/Market main/)
     expect(screen.queryByTestId('model-drivers')).toBeNull()
+    expect(screen.queryByRole('columnheader', { name: 'Model' })).toBeNull()
+    expect(screen.queryByRole('columnheader', { name: 'Model EV' })).toBeNull()
+  })
+  it('opens with one plain sentence: the best price, against fair, and how many books beat it', () => {
+    render(<GameBoard feeds={feeds()} />)
+    const v = screen.getByTestId('verdict').textContent!
+    expect(v).toMatch(/^Best price on FLA -1\.5: \+134 at BetMGM/)
+    expect(v).toMatch(/market fair price of/)
+    expect(v).toMatch(/of 7 books beat it|No book beats it/)
   })
 })
 
 describe('the ladder chart: dots at break-even, edge gaps, rung selection', () => {
-  it('every book dot is at its price break-even and +134 sits at 42.7%, never above 50%', () => {
+  it('the best price is plotted at its break-even: +134 sits at 42.7%, never above 50%', () => {
     render(<GameBoard feeds={feeds()} />)
     const chart = within(screen.getByTestId('ladder-chart'))
     const best = chart.getAllByTestId('best-dot').map(e => Number(e.getAttribute('data-y')))
     expect(best).toContain(breakEvenProb(134))
     expect(breakEvenProb(134)).toBeCloseTo(0.4274, 4)
-    const all = [...chart.getAllByTestId('best-dot'), ...chart.getAllByTestId('book-dot')].map(e => Number(e.getAttribute('data-y')))
-    expect(all.length).toBe(6 + 2 + 2)
-    // the home side pays up to +480 on the +2.5 alt, so only the main rung is bounded by 50%
-    const main = chart.getByTestId('rung--1.5')
-    expect(main).toBeInTheDocument()
+  })
+  it('each line is one range bar from its best to its worst book, not a dot per book', () => {
+    render(<GameBoard feeds={feeds()} />)
+    const chart = within(screen.getByTestId('ladder-chart'))
+    expect(chart.queryAllByTestId('book-dot')).toHaveLength(0)
+    const bands = chart.getAllByTestId('book-range')
+    expect(bands).toHaveLength(3)
+    const main = bands.find(b => Math.abs(Number(b.getAttribute('data-lo')) - breakEvenProb(134)) < 1e-9)!
+    expect(Number(main.getAttribute('data-hi'))).toBeCloseTo(breakEvenProb(118), 10)
+  })
+  it('shows the lines near the main line by default, and every line on request', () => {
+    const rows = Array.from({ length: 21 }, (_, i) => mk(GK, 'DET', 'FLA', T1, 'spread', -12.5 + i, SIX(-110, -110)))
+    const f = { odds: { nhl: oddsFeed('nhl', rows) }, proj: {} }
+    render(<GameBoard feeds={f} />)
+    expect(screen.getAllByTestId(/^rung-/).filter(e => /^rung-[-\d.]+$/.test(e.getAttribute('data-testid')!))).toHaveLength(7)
+    fireEvent.click(screen.getByTestId('ladder-wide'))
+    expect(screen.getAllByTestId(/^rung-/).filter(e => /^rung-[-\d.]+$/.test(e.getAttribute('data-testid')!))).toHaveLength(21)
   })
   it('the selected main rung is framed, and a better price than the market fair value draws a market gap', () => {
     render(<GameBoard feeds={feeds()} />)
@@ -147,8 +171,18 @@ describe('the ladder chart: dots at break-even, edge gaps, rung selection', () =
 })
 
 describe('the book matrix: right = better price', () => {
-  it('orders the books by payout, with +134 furthest right and +123 furthest left', () => {
+  it('shows the top books by payout (and any sharp reference) and folds the rest behind one button', () => {
     render(<GameBoard feeds={feeds()} />)
+    const rows = () => within(screen.getByTestId('book-matrix')).getAllByTestId('matrix-row')
+    expect(rows().map(r => r.getAttribute('data-book'))).toEqual(['betmgm', 'draftkings', 'fanduel', 'pinnacle', 'kalshi', 'novig'])   // novig is a sharp reference, so it stays
+    expect(screen.getByTestId('matrix-more').textContent).toMatch(/Show 1 more book/)
+    fireEvent.click(screen.getByTestId('matrix-more'))
+    expect(rows()).toHaveLength(7)
+    expect(rows()[6].getAttribute('data-book')).toBe('caesars')
+  })
+  it('puts +134 furthest right and +123 furthest left', () => {
+    render(<GameBoard feeds={feeds()} />)
+    fireEvent.click(screen.getByTestId('matrix-more'))
     const rows = within(screen.getByTestId('book-matrix')).getAllByTestId('matrix-row')
     const x = (book: string) => Number(rows.find(r => r.getAttribute('data-book') === book)!.getAttribute('data-x'))
     expect(x('betmgm')).toBeGreaterThan(x('draftkings'))
@@ -156,8 +190,6 @@ describe('the book matrix: right = better price', () => {
     expect(x('fanduel')).toBeGreaterThan(x('pinnacle'))
     expect(x('pinnacle')).toBeGreaterThan(x('kalshi'))
     expect(x('kalshi')).toBeGreaterThan(x('novig'))
-    expect(rows[0].getAttribute('data-book')).toBe('betmgm')
-    expect(rows[rows.length - 1].getAttribute('data-book')).toBe('novig')
   })
   it('labels the market and model fair markers and shows both sides of every quote', () => {
     render(<GameBoard feeds={feeds()} />)
@@ -187,7 +219,7 @@ describe('markets and sides', () => {
     fireEvent.click(within(screen.getByRole('group', { name: 'Side' })).getByRole('button', { name: 'DET' }))
     expect(lines()).toEqual(['rung-2.5', 'rung--1.5', 'rung--3.5'])
     const best = within(screen.getByTestId('ladder-chart')).getAllByTestId('best-dot').map(e => Number(e.getAttribute('data-y')))
-    expect(best).toContain(breakEvenProb(-150))
+    expect(best).toContain(breakEvenProb(-145))   // DET's best price is Caesars -145
   })
   it('Total offers Over / Under and the Moneyline is a single rung with no ladder chart', () => {
     render(<GameBoard feeds={feeds()} />)

@@ -4,7 +4,7 @@ import { Fragment, useMemo, useState } from 'react'
 import { BookLogo } from '@/components/ui/book-logo'
 import { SportLogo } from '@/components/ui/sport-assets'
 import { modelSideProb, type GameBoardEntry } from '@/lib/game-board'
-import { buildLadderRung, mainLineOf, orderRungs, selectRung, type LadderRung, type LadderSide } from '@/lib/game-ladder'
+import { buildLadderRung, mainLineOf, orderRungs, rungVerdict, selectRung, windowRungs, type LadderSide } from '@/lib/game-ladder'
 import { GAME_PRICES_LABEL, gameArbHedgeText, signedLine, startLabel, type GameMarket } from '@/lib/game-odds'
 import { formatOdds, probToAmerican } from '@/lib/odds'
 import { bookDisplay } from '@/lib/tokens'
@@ -57,6 +57,7 @@ export function GameDetail({ game, bettable, ageLabel }: { game: GameBoardEntry;
   const [market, setMarket] = useState<GameMarket>(() => (markets.find(m => m.key === 'spread') ?? markets[0])?.key ?? 'spread')
   const [sideByMarket, setSideByMarket] = useState<Record<GameMarket, LadderSide>>({ ml: 'b', spread: 'b', total: 'a' })
   const [alts, setAlts] = useState(false)
+  const [wide, setWide] = useState(false)
   const [picked, setPicked] = useState<Partial<Record<GameMarket, number | null>>>({})
 
   const side = sideByMarket[market]
@@ -73,9 +74,17 @@ export function GameDetail({ game, bettable, ageLabel }: { game: GameBoardEntry;
 
   const lines = built.map(b => b.r.row.line)
   const selected = selectRung(lines, picked[market] ?? null, market === 'ml' ? (lines[0] ?? null) : mainLine)
-  const chartRungs: ChartRung[] = built.map(b => ({ line: b.r.row.line, label: b.label, rung: b.rung }))
+  const allChart: ChartRung[] = built.map(b => ({ line: b.r.row.line, label: b.label, rung: b.rung }))
+  const near = new Set(windowRungs(allChart, market === 'ml' ? null : mainLine).map(c => c.line))
+  const chartRungs = wide ? allChart : allChart.filter(c => near.has(c.line) || c.line === selected)
   const visible = built.filter(b => b.r.row.line === mainLine || market === 'ml' || alts || b.r.row.line === selected)
   const sel = built.find(b => b.r.row.line === selected) ?? null
+
+  const hasModel = built.some(b => b.rung.pModel != null)
+  const verdict = sel ? rungVerdict(sel.rung, sel.label, b => bookDisplay(b).label) : null
+  const elsewhere = built
+    .filter(b => b.r.row.line !== selected && !b.rung.thin && !b.rung.suspect && b.rung.evMarket != null && b.rung.evMarket > 0.005 && (sel?.rung.evMarket ?? -1) < b.rung.evMarket)
+    .sort((x, y) => (y.rung.evMarket ?? 0) - (x.rung.evMarket ?? 0))[0]
 
   const sportLogo = game.sport as LogoSport
   const mainSpread = game.main.spread
@@ -102,12 +111,12 @@ export function GameDetail({ game, bettable, ageLabel }: { game: GameBoardEntry;
 
       <dl className="mono grid m-0 border-y border-separator-border text-compact" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }} data-testid="detail-strip">
         {[
-          { k: 'Projected score', v: m?.projHome != null && m?.projAway != null ? `${game.away} ${m.projAway.toFixed(1)} – ${game.home} ${m.projHome.toFixed(1)}` : '--' },
-          { k: 'Model margin', v: winText ? `${marginText} (${winText} ML)` : marginText },
-          { k: 'Model total', v: m?.total != null ? m.total.toFixed(1) : '--' },
-          { k: 'Market main', v: marketMain || '--' },
-          { k: 'Coverage', v: `${game.nBooks} books · ${ageLabel}` },
-        ].map((c, i) => (
+          { k: 'Projected score', v: m?.projHome != null && m?.projAway != null ? `${game.away} ${m.projAway.toFixed(1)} \u2013 ${game.home} ${m.projHome.toFixed(1)}` : null },
+          { k: 'Model margin', v: m?.margin != null ? (winText ? `${marginText} (${winText} ML)` : marginText) : null },
+          { k: 'Model total', v: m?.total != null ? m.total.toFixed(1) : null },
+          { k: 'Market main', v: marketMain || null },
+          { k: 'Coverage', v: `${game.nBooks} books \u00b7 ${ageLabel}` },
+        ].filter((c): c is { k: string; v: string } => c.v != null).map((c, i) => (
           <div key={c.k} className="px-4 py-2.5" style={{ borderLeft: i === 0 ? 'none' : '1px solid var(--color-separator-border)' }}>
             <dt className="text-[10.5px] tracking-fine uppercase text-text-tertiary">{c.k}</dt>
             <dd className="m-0 font-semibold text-text-primary">{c.v}</dd>
@@ -121,6 +130,18 @@ export function GameDetail({ game, bettable, ageLabel }: { game: GameBoardEntry;
         </div>
       )}
 
+      {verdict && (
+        <p className="m-0 px-4 pt-3 text-[13.5px] leading-[1.5] text-text-primary" data-testid="verdict">
+          {verdict}
+          {elsewhere && (
+            <button type="button" className="ml-1.5 text-link text-[12.5px] cursor-pointer bg-transparent border-0 p-0 underline-offset-2 hover:underline"
+              onClick={() => setPicked(p => ({ ...p, [market]: elsewhere.r.row.line }))}>
+              Largest gap nearby: {elsewhere.label} ({signedPct(elsewhere.rung.evMarket ?? 0)})
+            </button>
+          )}
+        </p>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-3">
         <Seg label="Market" value={market} options={markets.map(t => ({ v: t.key, l: t.label }))} onChange={v => setMarket(v)} />
         <Seg label="Side" value={side} options={sideTabs} onChange={v => setSideByMarket(s => ({ ...s, [market]: v }))} />
@@ -131,11 +152,16 @@ export function GameDetail({ game, bettable, ageLabel }: { game: GameBoardEntry;
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-text-secondary">
             <span className="text-text-primary font-semibold text-compact">{sideLabel} ladder</span>
             <span className="inline-flex items-center gap-1.5"><svg width="18" height="6" aria-hidden><line x1="0" y1="3" x2="18" y2="3" stroke="#9ca3af" strokeWidth="2" /></svg>Market fair</span>
-            <span className="inline-flex items-center gap-1.5"><svg width="18" height="6" aria-hidden><line x1="0" y1="3" x2="18" y2="3" stroke={SKY} strokeWidth="2" strokeDasharray="4 3" /></svg>Our projection</span>
-            <span className="inline-flex items-center gap-1.5"><svg width="8" height="8" aria-hidden><circle cx="4" cy="4" r="3" fill="#7d8596" /></svg>Book break-even</span>
+            {hasModel && <span className="inline-flex items-center gap-1.5"><svg width="18" height="6" aria-hidden><line x1="0" y1="3" x2="18" y2="3" stroke={SKY} strokeWidth="2" strokeDasharray="4 3" /></svg>Our projection</span>}
+            <span className="inline-flex items-center gap-1.5"><svg width="8" height="12" aria-hidden><rect x="1" y="0" width="6" height="12" rx="3" fill="#7d8596" fillOpacity="0.45" /></svg>Range of book prices</span>
             <span className="inline-flex items-center gap-1.5"><svg width="10" height="10" aria-hidden><circle cx="5" cy="5" r="4" fill={GREEN} /></svg>Best price</span>
           </div>
           <LadderChart rungs={chartRungs} selected={selected} sideLabel={sideLabel} onSelect={line => setPicked(p => ({ ...p, [market]: line }))} />
+          {allChart.length > chartRungs.length || wide ? (
+            <button type="button" onClick={() => setWide(w => !w)} data-testid="ladder-wide" className="mt-1 text-[12.5px] text-link cursor-pointer bg-transparent border-0 p-0 hover:underline">
+              {wide ? 'Show nearby lines only' : `Show all ${allChart.length} lines`}
+            </button>
+          ) : null}
         </div>
       )}
 
@@ -149,11 +175,11 @@ export function GameDetail({ game, bettable, ageLabel }: { game: GameBoardEntry;
             <tr className="text-[11px] text-text-tertiary" style={{ background: 'var(--color-background-secondary-default)' }}>
               <th scope="col" className="text-left font-medium px-3 py-2">Line</th>
               <th scope="col" className="text-right font-medium px-3 py-2">Books</th>
-              <th scope="col" className="text-right font-medium px-3 py-2 hidden md:table-cell">Model</th>
+              {hasModel && <th scope="col" className="text-right font-medium px-3 py-2 hidden md:table-cell">Model</th>}
               <th scope="col" className="text-right font-medium px-3 py-2 hidden md:table-cell">Market fair</th>
               <th scope="col" className="text-right font-medium px-3 py-2">Best price</th>
               <th scope="col" className="text-right font-medium px-3 py-2" title="EV of the best price against the market fair value">EV vs market</th>
-              <th scope="col" className="text-right font-medium px-3 py-2 hidden md:table-cell" title="EV of the best price against our model. UNVALIDATED.">Model EV</th>
+              {hasModel && <th scope="col" className="text-right font-medium px-3 py-2 hidden md:table-cell" title="EV of the best price against our model. UNVALIDATED.">Model EV</th>}
               <th scope="col" className="text-right font-medium px-3 py-2 hidden md:table-cell" title="1/4 Kelly on the market-fair EV">1/4 Kelly</th>
               <th scope="col" className="px-3 py-2" />
             </tr>
@@ -174,7 +200,7 @@ export function GameDetail({ game, bettable, ageLabel }: { game: GameBoardEntry;
                       {label}{isMain && <span className="mono text-[9.5px] font-semibold tracking-fine ml-2" style={{ color: GREEN }}>MAIN</span>}
                     </td>
                     <td className="mono px-3 py-2 text-right text-text-secondary">{rung.nBooks}</td>
-                    <td className="mono px-3 py-2 text-right hidden md:table-cell">{pctOf(rung.pModel)} <span className="text-text-tertiary">{fairOdds(rung.pModel)}</span></td>
+                    {hasModel && <td className="mono px-3 py-2 text-right hidden md:table-cell">{pctOf(rung.pModel)} <span className="text-text-tertiary">{fairOdds(rung.pModel)}</span></td>}
                     <td className="mono px-3 py-2 text-right text-text-secondary hidden md:table-cell">{pctOf(rung.pMarket)} <span className="text-text-tertiary">{fairOdds(rung.pMarket)}</span></td>
                     <td className="mono px-3 py-2 text-right whitespace-nowrap">
                       {rung.best ? (
@@ -186,7 +212,7 @@ export function GameDetail({ game, bettable, ageLabel }: { game: GameBoardEntry;
                       ) : '--'}
                     </td>
                     <td className="mono px-3 py-2 text-right font-semibold" style={{ color: evColor }}>{rung.evMarket != null ? signedPct(rung.evMarket) : '--'}</td>
-                    <td className="mono px-3 py-2 text-right hidden md:table-cell" style={{ color: rung.evModel != null && rung.evModel > 0 ? SKY : 'var(--color-text-tertiary)' }}>{rung.evModel != null ? signedPct(rung.evModel) : '--'}</td>
+                    {hasModel && <td className="mono px-3 py-2 text-right hidden md:table-cell" style={{ color: rung.evModel != null && rung.evModel > 0 ? SKY : 'var(--color-text-tertiary)' }}>{rung.evModel != null ? signedPct(rung.evModel) : '--'}</td>}
                     <td className="mono px-3 py-2 text-right text-text-secondary hidden md:table-cell">{sp.stake > 0 ? usd(sp.stake) : '--'}</td>
                     <td className="px-3 py-2 text-left whitespace-nowrap">
                       {rung.thin && <span className="mono text-[10px] font-semibold tracking-fine text-warn" title="Fewer than 3 books quote this line: the price is shown, but no edge is claimed.">THIN</span>}

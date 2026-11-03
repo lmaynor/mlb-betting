@@ -11,7 +11,7 @@
  *  - A game row's `a` side is away / over and `b` is home / under; a spread row's `line` is the HOME line.
  */
 import type { GameMarket, GameOddsRow } from '@/lib/game-odds'
-import { americanToImpliedProb } from '@/lib/odds'
+import { americanToImpliedProb, formatOdds, probToAmerican } from '@/lib/odds'
 import { isOffshore } from '@/lib/offshore'
 
 export type LadderSide = 'a' | 'b'
@@ -139,4 +139,61 @@ export function buildLadderRung(row: GameOddsRow, side: LadderSide, opts: Ladder
     marketGap: gap(pMarket),
     modelGap: gap(pModel),
   }
+}
+
+/** Lines shown by default around the main line (the rest sit behind "all lines"). */
+export const LADDER_WINDOW = 7
+
+/**
+ * The rungs worth looking at by default: thin rungs (under 3 books) drop out unless that would leave fewer than three, then a window
+ * of `size` rungs centred on the main line (clamped at either end). `ordered` is already hardest cover first.
+ */
+export function windowRungs<T extends { rung: LadderRung; line: number | null }>(ordered: readonly T[], mainLine: number | null, size = LADDER_WINDOW): T[] {
+  const solid = ordered.filter(x => !x.rung.thin)
+  const pool = solid.length >= 3 ? solid : ordered.slice()
+  if (pool.length <= size) return pool
+  let mi = pool.findIndex(x => x.line === mainLine)
+  if (mi < 0) mi = Math.floor(pool.length / 2)
+  const start = Math.max(0, Math.min(pool.length - size, mi - Math.floor(size / 2)))
+  return pool.slice(start, start + size)
+}
+
+/** The spread of the book prices on a rung as break-even probabilities (lowest = best price), and how many beat the market fair value. */
+export function rungSpread(rung: LadderRung): { lo: number; hi: number; median: number; beating: number } | null {
+  const ys = rung.dots.map(d => d.y).sort((a, b) => a - b)
+  if (ys.length === 0) return null
+  const mid = Math.floor(ys.length / 2)
+  const median = ys.length % 2 ? ys[mid] : (ys[mid - 1] + ys[mid]) / 2
+  const beating = rung.pMarket == null ? 0 : ys.filter(y => y < rung.pMarket!).length
+  return { lo: ys[0], hi: ys[ys.length - 1], median, beating }
+}
+
+/**
+ * The books worth a row by default on a rung: the top `top` by payout plus any sharp reference book; everything else is summarised.
+ * `dots` must be sorted best payout first.
+ */
+export function splitBooks<T extends { book: string }>(dots: readonly T[], sharp: ReadonlySet<string>, top = 5): { shown: T[]; rest: T[] } {
+  const shown: T[] = []
+  const rest: T[] = []
+  dots.forEach((d, i) => (i < top || sharp.has(d.book.toLowerCase()) ? shown : rest).push(d))
+  return { shown, rest }
+}
+
+/**
+ * One plain sentence for a rung: where the best price is, how it compares with the market fair price, and how many books beat it.
+ * Never claims an edge on a thin rung, and says so when a gap is large enough to be a stale quote.
+ */
+export function rungVerdict(rung: LadderRung, label: string, bookLabel: (book: string) => string): string {
+  const best = rung.best
+  if (!best) return `No book you can bet at has a price on ${label}.`
+  const head = `Best price on ${label}: ${formatOdds(best.american)} at ${bookLabel(best.book)}.`
+  if (rung.thin) return `${head} Only ${rung.nBooks} ${rung.nBooks === 1 ? 'book quotes' : 'books quote'} this line, so no edge is claimed.`
+  if (rung.pMarket == null || rung.evMarket == null) return `${head} There is no market fair price for this line yet (it needs 3 reference books).`
+  const fair = formatOdds(probToAmerican(rung.pMarket))
+  const ev = `${rung.evMarket >= 0 ? '+' : ''}${(rung.evMarket * 100).toFixed(1)}%`
+  const sp = rungSpread(rung)
+  const beat = sp ? sp.beating : 0
+  const beatText = beat > 0 ? `${beat} of ${rung.nBooks} books beat it.` : 'No book beats it.'
+  const sus = rung.suspect ? ' That gap is unusually large: check the price at the book before trusting it.' : ''
+  return `${head} That is ${ev} EV against the market fair price of ${fair}. ${beatText}${sus}`
 }
