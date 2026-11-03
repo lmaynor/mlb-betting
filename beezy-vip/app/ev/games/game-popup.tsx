@@ -5,16 +5,20 @@ import { useEffect, useRef, useState } from 'react'
 import { BookLogo } from '@/components/ui/book-logo'
 import { SportLogo } from '@/components/ui/sport-assets'
 import { useFocusTrap } from '@/components/ui/use-focus-trap'
-import type { GameBoardEntry } from '@/lib/game-board'
+import { modelSideProb, type GameBoardEntry } from '@/lib/game-board'
+import { buildLadderRung } from '@/lib/game-ladder'
 import { altRows, gameHeadline, type AltRow, type ShopSide } from '@/lib/game-shop'
 import { signedLine, startLabel, type GameMarket } from '@/lib/game-odds'
 import { hasMovement, moveForSide } from '@/lib/line-move'
 import { formatOdds } from '@/lib/odds'
 import { bookDisplay } from '@/lib/tokens'
-import { GameDetail } from './game-detail'
+import { Seg } from './game-detail'
 import { GREEN, signedPct } from './game-prices-parts'
+import { HeatStrip, type HeatRung } from './heat-strip'
+import { ModelPane } from './model-pane'
 import { Sparkline } from './sparkline'
 
+/** 'analysis' is the Model tab; the id stays so old ?view=analysis links keep landing on it. */
 export type PopupPane = GameMarket | 'move' | 'analysis'
 type LogoSport = Parameters<typeof SportLogo>[0]['sport']
 
@@ -66,11 +70,13 @@ function SideButtons({ r }: { r: AltRow }) {
  * One market the way Pikkit lays out a spread or total: a line scroller to pick the line, the two big best-price buttons for it, and
  * every other line as a pair of tiles underneath (tap a tile to jump to that line). A moneyline has the buttons only.
  */
-function MarketPane({ g, market, initialLine }: { g: GameBoardEntry; market: GameMarket; initialLine?: number | null }) {
+function MarketPane({ g, market, initialLine, bettable }: { g: GameBoardEntry; market: GameMarket; initialLine?: number | null; bettable: ReadonlySet<string> | null }) {
   const rows = altRows(g, market)
   const main = rows.find(r => r.main) ?? rows[0] ?? null
   const [line, setLine] = useState<number | null>(initialLine !== undefined && rows.some(r => r.line === initialLine) ? initialLine : (main?.line ?? null))
   const [all, setAll] = useState(false)
+  const [books, setBooks] = useState(false)
+  const [bookSide, setBookSide] = useState<'a' | 'b'>(market === 'total' ? 'a' : 'b')
   const chipRef = useRef<HTMLButtonElement | null>(null)
   useEffect(() => { chipRef.current?.scrollIntoView?.({ block: 'nearest', inline: 'center' }) }, [line])
   if (rows.length === 0 || !main) return <p className="m-0 text-compact text-text-secondary" data-testid="market-empty">No book has posted this market yet.</p>
@@ -79,6 +85,10 @@ function MarketPane({ g, market, initialLine }: { g: GameBoardEntry; market: Gam
   const mi = Math.max(0, rows.findIndex(r => r.main))
   const start = Math.max(0, Math.min(rows.length - ALT_WINDOW, mi - Math.floor(ALT_WINDOW / 2)))
   const tiles = all || rows.length <= ALT_WINDOW ? rows : rows.slice(start, start + ALT_WINDOW)
+  const heatRungs: HeatRung[] = tiles.map(r => {
+    const sp = bookSide === 'a' ? r.a : r.b
+    return { line: r.line, label: sp.label, main: r.main && market !== 'ml', rung: buildLadderRung(r.row.row, bookSide, { pModel: modelSideProb(g.model, market, r.line, bookSide), pMarket: (bookSide === 'a' ? r.row.a : r.row.b).pFair, bettable }) }
+  })
   return (
     <div className="grid gap-3" data-testid={`market-${market}`}>
       {market !== 'ml' && rows.length > 1 && (
@@ -125,6 +135,20 @@ function MarketPane({ g, market, initialLine }: { g: GameBoardEntry; market: Gam
           {rows.length > ALT_WINDOW && <button type="button" onClick={() => setAll(a => !a)} data-testid="alt-all" className="mt-2 text-[12.5px] text-link cursor-pointer bg-transparent border-0 p-0 hover:underline">{all ? 'Show nearby lines only' : `Show all ${rows.length} lines`}</button>}
         </div>
       )}
+      <div data-testid="all-books">
+        <button type="button" aria-expanded={books} onClick={() => setBooks(b => !b)} data-testid="all-books-toggle" className="text-[12.5px] text-link cursor-pointer bg-transparent border-0 p-0 hover:underline">
+          {books ? 'Hide all books' : 'All books, line by line'}
+        </button>
+        {books && (
+          <div className="mt-2 grid gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Seg label="Side" value={bookSide} options={[{ v: 'a', l: sel.a.label }, { v: 'b', l: sel.b.label }]} onChange={setBookSide} />
+              <span className="text-[11.5px] text-text-tertiary">Green beats the market fair price (EV %), amber is a big gap to check.</span>
+            </div>
+            <HeatStrip rungs={heatRungs} selected={sel.line} onSelect={l => setLine(l)} />
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -167,10 +191,10 @@ function MovePane({ g }: { g: GameBoardEntry }) {
 
 /**
  * The card behind a row of the board. One honest sentence about the game, then tabs: one per market (a line scroller, the two big
- * best-price buttons, every line as tiles), MOVEMENT (how the line and the fair price have moved) and ANALYSIS (the full read: ladder,
- * every book on every line, model). Esc, the backdrop and the close button dismiss it.
+ * best-price buttons, every line as tiles), MOVEMENT (how the line and the fair price have moved) and MODEL (where our projection disagrees with
+ * the market, and why). Every book on every line is the "All books" row under a market. Esc, the backdrop and the close button dismiss it.
  */
-export function GamePopup({ game, initialPane, initialLine, bettable = null, ageLabel = '', onClose }: {
+export function GamePopup({ game, initialPane, initialLine, bettable = null, onClose }: {
   game: GameBoardEntry; initialPane?: PopupPane; initialLine?: number | null; bettable?: ReadonlySet<string> | null; ageLabel?: string; onClose: () => void
 }) {
   const markets = (['ml', 'spread', 'total'] as const).filter(m => game.rows[m].length > 0)
@@ -187,7 +211,7 @@ export function GamePopup({ game, initialPane, initialLine, bettable = null, age
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev }
   }, [onClose])
 
-  const tabs: { v: PopupPane; l: string }[] = [...markets.map(m => ({ v: m as PopupPane, l: MARKET_NAME[m] })), { v: 'move', l: 'Movement' }, { v: 'analysis', l: 'Analysis' }]
+  const tabs: { v: PopupPane; l: string }[] = [...markets.map(m => ({ v: m as PopupPane, l: MARKET_NAME[m] })), { v: 'move', l: 'Movement' }, { v: 'analysis', l: 'Model' }]
   const sport = game.sport as LogoSport
   return (
     <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center bg-black/60" data-testid="game-popup-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
@@ -214,9 +238,9 @@ export function GamePopup({ game, initialPane, initialLine, bettable = null, age
           </div>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 pt-3" role="tabpanel" data-testid="popup-body">
-          {(pane === 'ml' || pane === 'spread' || pane === 'total') && <MarketPane key={pane} g={game} market={pane} initialLine={pane === first ? initialLine : undefined} />}
+          {(pane === 'ml' || pane === 'spread' || pane === 'total') && <MarketPane key={pane} g={game} market={pane} initialLine={pane === first ? initialLine : undefined} bettable={bettable} />}
           {pane === 'move' && <MovePane g={game} />}
-          {pane === 'analysis' && <div className="-mx-4 -mb-4 -mt-3 border-t-0"><GameDetail game={game} bettable={bettable} ageLabel={ageLabel} embedded /></div>}
+          {pane === 'analysis' && <ModelPane game={game} />}
         </div>
         <footer className="flex-none px-4 py-2.5 border-t border-separator-border text-[12px] text-text-tertiary">
           Prices move: check the number at the book. Not financial advice.{' '}

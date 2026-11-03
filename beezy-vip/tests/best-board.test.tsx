@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { BestBoard } from '@/app/ev/games/best-board'
+import type { GameProjectionsFeed } from '@/lib/game-lines'
 import type { GameOddsFeed, GameOddsRow } from '@/lib/game-odds'
 
 jest.mock('@/lib/betting-api', () => ({ apiGetGameOddsBoard: jest.fn(), apiGetGameProjections: jest.fn() }))
@@ -25,6 +26,19 @@ const feed = (rows: GameOddsRow[], extra: Partial<GameOddsFeed> = {}): GameOddsF
   books: [], offshore_books: ['pinnacle'], games: [], rows, ...extra,
 })
 const board = (rows: GameOddsRow[], extra: Partial<GameOddsFeed> = {}) => <BestBoard feeds={{ odds: { nhl: feed(rows, extra) }, proj: {} }} />
+const PROJ: GameProjectionsFeed = {
+  sport: 'nhl', status: 'live', engine: 'dixon_coles_eng_matrix_v1', as_of: null, age_minutes: 4, stale: false, count: 0, rows: [], markets: [],
+  games: [{ game_key: GK, away: 'DET', home: 'FLA', start: T1, home_goalie: 'Bobrovsky', away_goalie: 'Lyon', is_b2b_road: true }],
+  priced_games: [{
+    game_key: GK, home_team: 'FLA', away_team: 'DET', game_date: '2026-11-02', lambda_h: 3.1, lambda_a: 2.4, exp_total: 5.5, markets: [],
+    ladder: {
+      ml: { p_home: 0.614, p_away: 0.386 },
+      spread: [{ line: -3.5, p_home: 0.2, p_away: 0.8, push: 0 }, { line: -2.5, p_home: 0.32, p_away: 0.68, push: 0 }, { line: -1.5, p_home: 0.55, p_away: 0.45, push: 0 }],
+      total: [{ line: 6.5, p_over: 0.4, p_under: 0.6, push: 0 }],
+    },
+  }],
+}
+const withModel = (rows: GameOddsRow[]) => <BestBoard feeds={{ odds: { nhl: feed(rows) }, proj: { nhl: PROJ } }} />
 const pt = (min: number, line: number | null, p_a: number | null) => ({ t: new Date(Date.UTC(2026, 10, 3, 14, min)).toISOString(), line, p_a, best_a: -110, best_b: -110, n: 6 })
 
 describe('BestBoard: one row per game', () => {
@@ -149,10 +163,10 @@ describe('the card (double-click)', () => {
     expect(screen.getByRole('button', { name: /Open the card for DET at FLA/ }).textContent).toMatch(/Open/)
     expect(screen.getByRole('columnheader', { name: 'Card' })).toBeInTheDocument()
   })
-  it('tabs: one per market, then Movement and Analysis, starting on the spread', () => {
+  it('tabs: one per market, then Movement and Model, starting on the spread', () => {
     render(board(EDGE))
     open(screen.getAllByTestId('board-row')[0])
-    expect(within(screen.getByRole('tablist')).getAllByRole('tab').map(t => t.textContent)).toEqual(['Moneyline', 'Spread', 'Total', 'Movement', 'Analysis'])
+    expect(within(screen.getByRole('tablist')).getAllByRole('tab').map(t => t.textContent)).toEqual(['Moneyline', 'Spread', 'Total', 'Movement', 'Model'])
     expect(screen.getByTestId('tab-spread')).toHaveAttribute('aria-selected', 'true')
   })
   it('a market is a line scroller, two big best-price buttons, and every line as tiles (the Pikkit layout)', () => {
@@ -219,12 +233,36 @@ describe('the card (double-click)', () => {
     fireEvent.click(screen.getByTestId('tab-move'))
     expect(screen.getByTestId('move-empty').textContent).toMatch(/not available yet/)
   })
-  it('ANALYSIS: the full read of the game inside the card, and a link to open it as a page', () => {
+  it('MODEL: one sentence, the main lines as model against market, the drivers and one chart, with a link to open the page', () => {
+    render(withModel(EDGE))
+    open(screen.getAllByTestId('board-row')[0])
+    fireEvent.click(screen.getByTestId('tab-analysis'))
+    const pane = within(screen.getByTestId('model-pane'))
+    expect(pane.getByTestId('model-verdict').textContent).toMatch(/^Our model leans .*against the market's .* pts\)\.$/)
+    expect(pane.getByTestId('model-score').textContent).toMatch(/DET 2\.4 \u2013 FLA 3\.1/)
+    expect(pane.getAllByTestId(/^model-row-/).map(r => r.getAttribute('data-testid'))).toEqual(['model-row-ml', 'model-row-spread', 'model-row-total'])
+    expect(within(pane.getByTestId('model-drivers')).getByText('Goalies')).toBeInTheDocument()
+    expect(pane.getByTestId('model-chart')).toBeInTheDocument()
+    expect(screen.queryByTestId('heat-strip')).toBeNull()        // the book grid is under the markets now, not here
+    expect(screen.queryByTestId('game-detail')).toBeNull()
+    expect(screen.getByRole('link', { name: /Open as a page/ })).toHaveAttribute('href', `/ev/games?view=analysis&game=${encodeURIComponent(GK)}`)
+  })
+  it('MODEL says so honestly when the game has no projection', () => {
     render(board(EDGE))
     open(screen.getAllByTestId('board-row')[0])
     fireEvent.click(screen.getByTestId('tab-analysis'))
-    expect(screen.getByTestId('game-detail')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Open as a page/ })).toHaveAttribute('href', `/ev/games?view=analysis&game=${encodeURIComponent(GK)}`)
+    expect(screen.getByTestId('model-empty').textContent).toMatch(/no model projection/)
+  })
+  it('ALL BOOKS: every book on every line sits collapsed under a market, and opens as a grid for either side', () => {
+    render(board(EDGE))
+    open(screen.getAllByTestId('board-row')[0])
+    expect(screen.queryByTestId('heat-strip')).toBeNull()
+    fireEvent.click(screen.getByTestId('all-books-toggle'))
+    expect(screen.getByTestId('heat-strip')).toBeInTheDocument()
+    expect(screen.getByTestId('heat-cell--1.5-caesars').getAttribute('data-ev')).not.toBe('')
+    expect(screen.getByRole('group', { name: 'Side' })).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('all-books-toggle'))
+    expect(screen.queryByTestId('heat-strip')).toBeNull()
   })
 })
 

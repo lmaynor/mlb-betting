@@ -46,7 +46,7 @@ describe('/ev/games view and sport routing (server-side)', () => {
     render(await page({ view: 'analysis', game: 'nba:g' }))
     expect(screen.getByTestId('game-popup')).toBeInTheDocument()
     expect(screen.getByTestId('tab-analysis')).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByTestId('game-detail')).toBeInTheDocument()
+    expect(screen.getByTestId('model-empty')).toBeInTheDocument()
   })
   it('an old ?game= link with no view does the same', async () => {
     render(await page({ game: 'nba:g' }))
