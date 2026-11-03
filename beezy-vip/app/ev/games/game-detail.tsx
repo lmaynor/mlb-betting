@@ -54,7 +54,7 @@ function rungLabel(market: GameMarket, line: number | null, side: LadderSide, aw
  * lines table (main by default, alt lines on request) and, under the selected row, every book side by side. Everything the model
  * says is UNVALIDATED; the green marks are always against the market fair value.
  */
-export function GameDetail({ game, bettable, ageLabel }: { game: GameBoardEntry; bettable: ReadonlySet<string> | null; ageLabel: string }) {
+export function GameDetail({ game, bettable, ageLabel, embedded = false }: { game: GameBoardEntry; bettable: ReadonlySet<string> | null; ageLabel: string; /** inside the card, which already has the matchup header and the border */ embedded?: boolean }) {
   const markets = MARKET_TABS.filter(m => game.rows[m.key].length > 0)
   const [market, setMarket] = useState<GameMarket>(() => (markets.find(m => m.key === 'spread') ?? markets[0])?.key ?? 'spread')
   const [sideByMarket, setSideByMarket] = useState<Record<GameMarket, LadderSide>>({ ml: 'b', spread: 'b', total: 'a' })
@@ -98,8 +98,8 @@ export function GameDetail({ game, bettable, ageLabel }: { game: GameBoardEntry;
   const sideLabel = (side === 'a' ? sideTabs[0] : sideTabs[1]).l
 
   return (
-    <section aria-label={`${game.away} at ${game.home}`} data-testid="game-detail" className="bg-background-primary-default border border-separator-border rounded-xl shadow-card">
-      <header className="flex flex-wrap items-center justify-between gap-2 px-4 pt-3.5 pb-3">
+    <section aria-label={`${game.away} at ${game.home}`} data-testid="game-detail" className={embedded ? 'bg-background-primary-default' : 'bg-background-primary-default border border-separator-border rounded-xl shadow-card'}>
+      {!embedded && <header className="flex flex-wrap items-center justify-between gap-2 px-4 pt-3.5 pb-3">
         <div className="flex items-center gap-3">
           <span className="inline-flex items-center gap-1.5"><SportLogo sport={sportLogo} team={game.away} size={28} /><SportLogo sport={sportLogo} team={game.home} size={28} /></span>
           <div>
@@ -108,7 +108,7 @@ export function GameDetail({ game, bettable, ageLabel }: { game: GameBoardEntry;
           </div>
         </div>
         <span className="mono text-[10.5px] font-bold tracking-fine text-warn border border-[color:#facc1555] rounded-chip py-0 px-[6px]" title="Prices are market data; the model is an estimate with no tested edge.">{m ? 'UNVALIDATED MODEL ESTIMATE' : GAME_PRICES_LABEL}</span>
-      </header>
+      </header>}
 
       <dl className="mono grid m-0 border-y border-separator-border text-compact" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }} data-testid="detail-strip">
         {[

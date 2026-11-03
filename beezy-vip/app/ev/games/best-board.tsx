@@ -65,8 +65,8 @@ function EdgeCell({ g }: { g: GameBoardEntry }) {
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap" data-testid="row-edge">
       <BookLogo book={e.shop.book!} size={14} />
       <span className="text-[11.5px] text-text-primary">{e.shop.label}{e.alt ? ' (alt)' : ''}</span>
-      <b className="mono text-[12px] font-semibold" style={{ color: GREEN }}>{formatOdds(e.shop.american!)}</b>
-      <span className="mono text-[10.5px] font-semibold rounded-chip px-1" style={{ color: GREEN, background: 'rgba(87,242,135,0.10)' }}>{signedPct(e.shop.ev!)}</span>
+      <b className="mono text-[12px] font-semibold" style={{ color: e.outlier ? '#facc15' : GREEN }}>{formatOdds(e.shop.american!)}</b>
+      <span className="mono text-[10.5px] font-semibold rounded-chip px-1" style={{ color: e.outlier ? '#facc15' : GREEN, background: e.outlier ? 'rgba(250,204,21,0.10)' : 'rgba(87,242,135,0.10)' }}>{signedPct(e.shop.ev!)}{e.outlier ? ' CHECK' : ''}</span>
     </span>
   )
 }
@@ -127,7 +127,7 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen }: { feeds
           <section aria-label="Edges now" className="mb-3" data-testid="edges-now">
             <div className="flex items-baseline justify-between gap-2 mb-1.5">
               <span className="text-compact font-semibold text-text-primary">Edges now</span>
-              <span className="text-[11.5px] text-text-tertiary">2%+ vs the market fair price, 3+ books, prices to +300{myBooks.enabled ? ', at your books' : ''}</span>
+              <span className="text-[11.5px] text-text-tertiary">2%+ vs the market fair price on 3+ books; amber = a big gap to confirm{myBooks.enabled ? ', at your books' : ''}</span>
             </div>
             {edges.length === 0 ? (
               <p className="m-0 rounded-xl border border-separator-border bg-background-primary-default px-3.5 py-3 text-compact text-text-secondary" data-testid="edges-none">Nothing clears the bar right now. The market is tight on every game below.</p>
@@ -136,13 +136,13 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen }: { feeds
                 {edges.map((e: EdgeItem) => (
                   <button key={`${e.game.key}-${e.market}-${e.line}-${e.side}`} type="button" data-testid="edge-chip" onClick={() => openCard(e.game.key, e.market, e.line)}
                     className="flex-none w-[188px] text-left rounded-xl border bg-background-primary-default px-3 py-2.5 cursor-pointer transition-colors duration-150 hover:bg-[color:var(--color-background-primary-hover)]"
-                    style={{ borderColor: 'rgba(87,242,135,0.45)', scrollSnapAlign: 'start' }}>
+                    data-outlier={e.outlier || undefined} style={{ borderColor: e.outlier ? '#facc1599' : 'rgba(87,242,135,0.45)', scrollSnapAlign: 'start' }}>
                     <span className="flex items-center justify-between gap-2">
                       <span className="text-[11.5px] text-text-secondary truncate">{e.game.away} @ {e.game.home}</span>
-                      <span className="mono text-[10.5px] font-semibold rounded-chip px-1.5" style={{ color: GREEN, background: 'rgba(87,242,135,0.10)' }}>{signedPct(e.shop.ev!)}</span>
+                      <span className="mono text-[10.5px] font-semibold rounded-chip px-1.5" style={{ color: e.outlier ? '#facc15' : GREEN, background: e.outlier ? 'rgba(250,204,21,0.10)' : 'rgba(87,242,135,0.10)' }}>{signedPct(e.shop.ev!)}{e.outlier ? ' CHECK' : ''}</span>
                     </span>
                     <span className="mt-1 flex items-center gap-1.5 text-compact font-semibold text-text-primary">{e.shop.label}{e.alt && <span className="mono text-[9px] font-semibold tracking-fine text-text-tertiary">ALT</span>}</span>
-                    <span className="mt-1 flex items-center gap-1.5"><BookLogo book={e.shop.book!} size={16} /><b className="mono text-[17px] font-semibold" style={{ color: GREEN }}>{formatOdds(e.shop.american!)}</b></span>
+                    <span className="mt-1 flex items-center gap-1.5"><BookLogo book={e.shop.book!} size={16} /><b className="mono text-[17px] font-semibold" style={{ color: e.outlier ? '#facc15' : GREEN }}>{formatOdds(e.shop.american!)}</b></span>
                   </button>
                 ))}
               </div>

@@ -40,12 +40,12 @@ function SideButtons({ r }: { r: AltRow }) {
     <div className="grid grid-cols-2 gap-2" data-testid="side-buttons">
       {[r.a, r.b].map(s => (
         <div key={s.label} data-testid="side-button" data-actionable={s.actionable || undefined}
-          className="rounded-xl border px-3 py-2.5 min-w-0" style={{ borderColor: s.actionable ? GREEN : 'var(--color-separator-border)', background: s.actionable ? 'rgba(87,242,135,0.04)' : 'var(--color-background-secondary-default)' }}>
+          className="rounded-xl border px-3 py-2.5 min-w-0 min-h-[116px]" style={{ borderColor: s.actionable ? GREEN : s.suspect ? '#facc1580' : 'var(--color-separator-border)', background: s.actionable ? 'rgba(87,242,135,0.04)' : 'var(--color-background-secondary-default)' }}>
           <div className="text-[12px] text-text-secondary truncate">{s.label}</div>
           <div className="mt-1 flex items-center gap-2 flex-wrap">
             {s.american != null && s.book != null ? (
               <>
-                <b className="mono text-[22px] leading-[26px] font-semibold" style={{ color: s.actionable ? GREEN : 'var(--color-text-primary)' }}>{formatOdds(s.american)}</b>
+                <b className="mono text-[22px] leading-[26px] font-semibold" style={{ color: s.actionable ? GREEN : s.suspect ? '#facc15' : 'var(--color-text-primary)' }}>{formatOdds(s.american)}</b>
                 <BookLogo book={s.book} size={20} />
                 <span className="text-[12px] text-text-secondary">{bookDisplay(s.book).label}</span>
               </>
@@ -53,7 +53,7 @@ function SideButtons({ r }: { r: AltRow }) {
           </div>
           <div className="mt-1 flex items-center gap-2 flex-wrap min-h-[18px]">
             {s.actionable && s.ev != null && <span className="mono text-[11px] font-semibold rounded-chip px-1.5" style={{ color: GREEN, background: 'rgba(87,242,135,0.10)' }}>{signedPct(s.ev)} vs fair</span>}
-            {s.suspect && <span className="mono text-[10.5px] font-semibold tracking-fine text-warn" title="Unusually large against the market fair price: often a stale quote.">CHECK</span>}
+            {s.suspect && s.ev != null && <span className="mono text-[11px] font-semibold rounded-chip px-1.5 text-warn" style={{ background: 'rgba(250,204,21,0.10)' }} title="Far better than the market fair price: often a stale quote, sometimes a mispriced line. Confirm the price at the book.">{signedPct(s.ev)} CHECK</span>}
             {s.others.length > 0 && <span className="mono text-[11px] text-text-tertiary" title="The next best prices at other books">also {s.others.map(o => `${bookDisplay(o.book).short} ${formatOdds(o.american)}`).join(' · ')}</span>}
           </div>
         </div>
@@ -113,7 +113,7 @@ function MarketPane({ g, market, initialLine }: { g: GameBoardEntry; market: Gam
               [r.a, r.b].map((s, i) => (
                 <button key={`${r.row.key}-${i}`} type="button" onClick={() => setLine(r.line)} data-testid="line-tile" data-line={r.line ?? ''} data-selected={r.line === sel.line || undefined}
                   className="relative text-left rounded-control border px-2.5 py-1.5 cursor-pointer transition-colors duration-150 hover:bg-[color:var(--color-background-primary-hover)]"
-                  style={{ borderColor: s.actionable ? GREEN : r.line === sel.line ? 'var(--color-border-button-hover)' : 'var(--color-separator-border)', background: 'transparent', opacity: r.thin ? 0.75 : 1 }}>
+                  style={{ borderColor: s.actionable ? GREEN : s.suspect ? '#facc1580' : r.line === sel.line ? 'var(--color-border-button-hover)' : 'var(--color-separator-border)', background: 'transparent', opacity: r.thin ? 0.75 : 1 }}>
                   <span className="block text-[11.5px] text-text-secondary truncate">{s.label}</span>
                   <b className="mono text-[14px] font-semibold" style={{ color: s.actionable ? GREEN : 'var(--color-text-primary)' }}>{s.american != null ? formatOdds(s.american) : '--'}</b>
                   {s.actionable && s.ev != null && <span className="mono text-[10px] font-semibold ml-1.5" style={{ color: GREEN }}>{signedPct(s.ev)}</span>}
@@ -192,8 +192,8 @@ export function GamePopup({ game, initialPane, initialLine, bettable = null, age
   return (
     <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center bg-black/60" data-testid="game-popup-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div ref={ref} role="dialog" aria-modal="true" aria-label={`${game.away} at ${game.home}`} data-testid="game-popup" tabIndex={-1}
-        className={`w-full ${pane === 'analysis' ? 'sm:max-w-[960px]' : 'sm:max-w-[640px]'} max-h-[90vh] overflow-y-auto bg-background-primary-default border border-separator-border rounded-t-xl sm:rounded-xl shadow-card`}>
-        <header className="flex items-start justify-between gap-3 px-4 pt-3.5 pb-2">
+        className="w-full sm:max-w-[720px] h-[88vh] sm:h-[680px] max-h-[92vh] flex flex-col bg-background-primary-default border border-separator-border rounded-t-xl sm:rounded-xl shadow-card">
+        <header className="flex-none flex items-start justify-between gap-3 px-4 pt-3.5 pb-2">
           <div className="flex items-center gap-3">
             <span className="inline-flex items-center gap-1.5"><SportLogo sport={sport} team={game.away} size={30} /><SportLogo sport={sport} team={game.home} size={30} /></span>
             <div>
@@ -203,8 +203,8 @@ export function GamePopup({ game, initialPane, initialLine, bettable = null, age
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="size-8 rounded-control border border-separator-border bg-transparent text-text-secondary hover:text-text-primary cursor-pointer text-[16px] leading-none">&times;</button>
         </header>
-        <p className="m-0 px-4 pb-3 text-[13.5px] leading-[1.5] text-text-primary" data-testid="popup-headline">{gameHeadline(game)}</p>
-        <div className="px-4 border-b border-separator-border overflow-x-auto" role="tablist" aria-label="Card">
+        <p className="flex-none m-0 px-4 pb-3 text-[13.5px] leading-[1.5] text-text-primary" data-testid="popup-headline">{gameHeadline(game)}</p>
+        <div className="flex-none px-4 border-b border-separator-border overflow-x-auto" role="tablist" aria-label="Card">
           <div className="flex gap-1 min-w-max">
             {tabs.map(t => (
               <button key={t.v} type="button" role="tab" aria-selected={pane === t.v} onClick={() => setPane(t.v)} data-testid={`tab-${t.v}`}
@@ -213,12 +213,12 @@ export function GamePopup({ game, initialPane, initialLine, bettable = null, age
             ))}
           </div>
         </div>
-        <div className="px-4 pb-4 pt-3" role="tabpanel">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 pt-3" role="tabpanel" data-testid="popup-body">
           {(pane === 'ml' || pane === 'spread' || pane === 'total') && <MarketPane key={pane} g={game} market={pane} initialLine={pane === first ? initialLine : undefined} />}
           {pane === 'move' && <MovePane g={game} />}
-          {pane === 'analysis' && <div className="-mx-4 -mb-4"><GameDetail game={game} bettable={bettable} ageLabel={ageLabel} /></div>}
+          {pane === 'analysis' && <div className="-mx-4 -mb-4 -mt-3 border-t-0"><GameDetail game={game} bettable={bettable} ageLabel={ageLabel} embedded /></div>}
         </div>
-        <footer className="px-4 py-2.5 border-t border-separator-border text-[12px] text-text-tertiary">
+        <footer className="flex-none px-4 py-2.5 border-t border-separator-border text-[12px] text-text-tertiary">
           Prices move: check the number at the book. Not financial advice.{' '}
           <Link className="text-link" href={`/ev/games?view=analysis&game=${encodeURIComponent(game.key)}`}>Open as a page</Link>
         </footer>

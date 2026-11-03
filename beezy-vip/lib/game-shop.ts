@@ -2,8 +2,11 @@
  * What a bettor does with a game: shop the best number, spot a real edge, see what is moving. Pure functions over the board entries
  * (lib/game-board.ts), no React, so the row cells, the popup card and the "edges now" strip share one definition of "actionable".
  *
- * An edge is only ever called actionable when it is against the MARKET fair price (never our unvalidated model), on a line with enough
- * books to have one, at a book the viewer can bet at, and not so large that it is more likely a stale quote.
+ * Two kinds of price are worth a look, both against the MARKET fair price (never our unvalidated model), on a line with enough books to
+ * have one, at a book the viewer can bet at, and only when the gap survives a median fair price (one stale book cannot invent it):
+ *   EDGE     2% to 15% better than fair: a clean line-shopping or soft-line edge, any line, any price (a +5000 alt counts)
+ *   OUTLIER  more than 15% better: usually a stale or erroneous quote and sometimes the best bet on the board, so it is shown (amber,
+ *            "check") and never hidden or styled as a clean edge
  */
 import { decimalOf, LADDER_SUSPECT_EV, LADDER_THIN_BELOW } from '@/lib/game-ladder'
 import type { GameBoardEntry } from '@/lib/game-board'
@@ -15,14 +18,6 @@ import { bookDisplay } from '@/lib/tokens'
 
 /** The smallest market-fair EV the board calls an edge. */
 export const EDGE_MIN = 0.02
-/** An alternate line needs this many books before its fair price is trusted (the main line needs LADDER_THIN_BELOW). */
-export const ALT_MIN_BOOKS = 5
-/**
- * No price longer than this is ever called an edge. De-vigging in proportion to the odds inflates the fair chance of a longshot, so
- * long alternate lines (+500, +900) look +EV almost everywhere; real edges at those prices cannot be told from that artifact.
- * The price is still shown, just never headlined.
- */
-export const LONGSHOT_MAX_AMERICAN = 300
 
 export interface ShopSide {
   /** 'FLA -1.5', 'O 6.5', 'DET ML' */
@@ -32,9 +27,9 @@ export interface ShopSide {
   ev: number | null
   /** the next best prices at other books (up to three), best first */
   others: { book: string; american: number }[]
-  /** EV >= EDGE_MIN against the market fair price on a line with enough books, and not suspiciously large */
+  /** a clean EDGE: EV from EDGE_MIN up to LADDER_SUSPECT_EV against the market fair price, 3+ books, survives the median */
   actionable: boolean
-  /** EV above LADDER_SUSPECT_EV: more likely a stale quote than an edge */
+  /** an OUTLIER: EV above LADDER_SUSPECT_EV and it survives the median: check the price at the book before trusting it */
   suspect: boolean
 }
 
@@ -57,7 +52,7 @@ export function medianFair(r: GamePriceRow, which: 'a' | 'b', exclude: string | 
   return ps.length % 2 ? ps[m] : (ps[m - 1] + ps[m]) / 2
 }
 
-export function shopSide(r: GamePriceRow, which: 'a' | 'b', opts: { alt?: boolean } = {}): ShopSide {
+export function shopSide(r: GamePriceRow, which: 'a' | 'b'): ShopSide {
   const sp = which === 'a' ? r.a : r.b
   const label = sideLabels(r.row)[which]
   const others = (r.row.books ?? [])
@@ -67,13 +62,13 @@ export function shopSide(r: GamePriceRow, which: 'a' | 'b', opts: { alt?: boolea
     .sort((x, y) => decimalOf(y.american) - decimalOf(x.american) || x.book.localeCompare(y.book))
     .slice(0, 3)
   const ev = sp.ev
-  const enough = (r.row.books ?? []).length >= (opts.alt ? ALT_MIN_BOOKS : LADDER_THIN_BELOW)
-  const suspect = ev != null && ev > LADDER_SUSPECT_EV
-  const short = sp.american != null && sp.american <= LONGSHOT_MAX_AMERICAN
+  const enough = (r.row.books ?? []).length >= LADDER_THIN_BELOW
   const med = sp.american != null ? medianFair(r, which, sp.book) : null
   const evMedian = med != null && sp.american != null ? med * decimalOf(sp.american) - 1 : null
   const robust = evMedian != null && evMedian >= EDGE_MIN
-  return { label, american: sp.american, book: sp.book, ev, others, suspect, actionable: ev != null && enough && short && robust && !suspect && ev >= EDGE_MIN }
+  const big = ev != null && ev > LADDER_SUSPECT_EV
+  const suspect = big && enough && robust
+  return { label, american: sp.american, book: sp.book, ev, others, suspect, actionable: ev != null && enough && robust && !big && ev >= EDGE_MIN }
 }
 
 export interface ShopMarket { market: GameMarket; row: GamePriceRow; a: ShopSide; b: ShopSide }
@@ -84,9 +79,9 @@ export function shopMarket(g: GameBoardEntry, market: GameMarket): ShopMarket | 
   return row ? { market, row, a: shopSide(row, 'a'), b: shopSide(row, 'b') } : null
 }
 
-export interface EdgeItem { game: GameBoardEntry; market: GameMarket; line: number | null; side: 'a' | 'b'; shop: ShopSide; alt: boolean }
+export interface EdgeItem { game: GameBoardEntry; market: GameMarket; line: number | null; side: 'a' | 'b'; shop: ShopSide; alt: boolean; outlier: boolean }
 
-/** Every actionable side of every line of one game, biggest EV first. */
+/** Every edge and outlier of every line of one game, biggest EV first. */
 export function gameEdges(g: GameBoardEntry): EdgeItem[] {
   const out: EdgeItem[] = []
   for (const market of ['ml', 'spread', 'total'] as const) {
@@ -94,31 +89,46 @@ export function gameEdges(g: GameBoardEntry): EdgeItem[] {
     for (const r of g.rows[market]) {
       const alt = market !== 'ml' && main != null && r !== main
       for (const side of ['a', 'b'] as const) {
-        const shop = shopSide(r, side, { alt })
-        if (shop.actionable) out.push({ game: g, market, line: r.row.line, side, shop, alt })
+        const shop = shopSide(r, side)
+        if (shop.actionable || shop.suspect) out.push({ game: g, market, line: r.row.line, side, shop, alt, outlier: shop.suspect })
       }
     }
   }
   return out.sort((x, y) => (y.shop.ev ?? 0) - (x.shop.ev ?? 0))
 }
 
-/** The best actionable edges across the slate (at most `perGame` from one game), biggest first. */
-export function edgesNow(games: readonly GameBoardEntry[], max = 5, perGame = 1): EdgeItem[] {
-  const all: EdgeItem[] = []
-  for (const g of games) all.push(...gameEdges(g).slice(0, perGame))
-  return all.sort((x, y) => (y.shop.ev ?? 0) - (x.shop.ev ?? 0)).slice(0, max)
+/**
+ * The best edges across the slate (at most `perGame` from one game), biggest first. Clean edges and outliers are ranked separately and
+ * outliers get at most `maxOutliers` of the places, so a slate of stale quotes cannot crowd out the real edges, and the real
+ * mispricings are never hidden either.
+ */
+export function edgesNow(games: readonly GameBoardEntry[], max = 5, perGame = 1, maxOutliers = 2): EdgeItem[] {
+  const clean: EdgeItem[] = [], outliers: EdgeItem[] = []
+  for (const g of games) {
+    const all = gameEdges(g)
+    clean.push(...all.filter(e => !e.outlier).slice(0, perGame))
+    outliers.push(...all.filter(e => e.outlier).slice(0, perGame))
+  }
+  const byEv = (x: EdgeItem, y: EdgeItem) => (y.shop.ev ?? 0) - (x.shop.ev ?? 0)
+  clean.sort(byEv); outliers.sort(byEv)
+  const o = outliers.slice(0, Math.min(maxOutliers, max))
+  return [...clean.slice(0, max - o.length), ...o].sort(byEv)
 }
 
-/** One plain sentence for a game: its best edge, or an honest "nothing" (an alt-line edge is named but not headlined as the game's). */
+/** One plain sentence for a game: its best clean edge, or an honest "nothing" (an edge or outlier on an alt line is named but not headlined as the game's). */
 export function gameHeadline(g: GameBoardEntry): string {
   const edges = gameEdges(g)
-  const main = edges.find(e => !e.alt)
   const pct = (x: number | null) => `${((x ?? 0) * 100).toFixed(1)}%`
   const fmt = (e: EdgeItem) => `${e.shop.label} ${e.shop.american != null && e.shop.american > 0 ? '+' : ''}${e.shop.american} at ${bookDisplay(e.shop.book).label}, ${pct(e.shop.ev)} against the market fair price`
+  const main = edges.find(e => !e.alt && !e.outlier)
   if (main) return `Best edge: ${fmt(main)}.`
-  const alt = edges.find(e => e.alt)
   const none = `No price beats the market fair price by ${(EDGE_MIN * 100).toFixed(0)}% or more on the main lines.`
-  return alt ? `${none} On an alt line: ${fmt(alt)}.` : none
+  const alt = edges.find(e => e.alt && !e.outlier)
+  const big = edges.find(e => e.outlier)
+  const parts = [none]
+  if (alt) parts.push(`On an alt line: ${fmt(alt)}.`)
+  if (big) parts.push(`Big gap to check: ${fmt(big)}. Often a stale quote, sometimes a mispriced line: confirm the price at the book.`)
+  return parts.join(' ')
 }
 
 export interface AltRow { line: number | null; row: GamePriceRow; a: ShopSide; b: ShopSide; thin: boolean; main: boolean }
@@ -126,10 +136,7 @@ export interface AltRow { line: number | null; row: GamePriceRow; a: ShopSide; b
 /** Every line of a market with both sides' best prices, in ladder order (home side hardest cover first), main flagged. */
 export function altRows(g: GameBoardEntry, market: GameMarket): AltRow[] {
   const main = g.main[market]
-  return g.rows[market].map(r => {
-    const alt = market !== 'ml' && r !== main
-    return { line: r.row.line, row: r, a: shopSide(r, 'a', { alt }), b: shopSide(r, 'b', { alt }), thin: (r.row.books ?? []).length < LADDER_THIN_BELOW, main: r === main }
-  })
+  return g.rows[market].map(r => ({ line: r.row.line, row: r, a: shopSide(r, 'a'), b: shopSide(r, 'b'), thin: (r.row.books ?? []).length < LADDER_THIN_BELOW, main: r === main }))
 }
 
 /** The one movement a game's card or row shows: the spread's (else the total's, else the moneyline's), and the side it is named from (home / over / home). */

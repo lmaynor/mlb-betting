@@ -76,10 +76,14 @@ describe('Edges now', () => {
     expect(screen.getByTestId('tab-spread')).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByTestId('line-chip--2.5')).toHaveAttribute('aria-pressed', 'true')
   })
-  it('a longshot or a thin alt line is never an edge, even when its gap looks huge', () => {
+  it('a huge gap is shown as an amber outlier to confirm: never hidden, never styled as a clean edge', () => {
     const rows = [mk('spread', -1.5, [...FLAT, q('espnbet', -110, -110), q('hardrock', -110, -110), q('betrivers', -110, -110)]), mk('total', 8.5, [...FLAT, q('caesars', -600, 525)])]
     render(board(rows))
-    expect(screen.getByTestId('edges-none')).toBeInTheDocument()
+    const chip = screen.getByTestId('edge-chip')
+    expect(chip).toHaveAttribute('data-outlier', 'true')
+    expect(chip.textContent).toMatch(/\+525/)
+    expect(chip.textContent).toMatch(/CHECK/)
+    expect(screen.queryByTestId('edges-none')).toBeNull()
   })
   it('the edges are small cards: the game, the line, the price at its book and the EV', () => {
     render(board(EDGE))
@@ -93,6 +97,18 @@ describe('Edges now', () => {
 })
 
 describe('the card (double-click)', () => {
+  it('keeps one size however you switch tabs, so it never jumps', () => {
+    render(board(EDGE, { history: { [`${GK}|spread`]: { points: [pt(0, -1.0, 0.50), pt(60, -1.5, 0.45)] } } }))
+    fireEvent.doubleClick(screen.getAllByTestId('board-row')[0])
+    const cls = screen.getByTestId('game-popup').className
+    expect(cls).toMatch(/\bh-\[88vh\]/)
+    expect(cls).toMatch(/sm:h-\[680px\]/)
+    for (const t of ['tab-total', 'tab-ml', 'tab-move', 'tab-analysis', 'tab-spread']) {
+      fireEvent.click(screen.getByTestId(t))
+      expect(screen.getByTestId('game-popup').className).toBe(cls)
+    }
+    expect(screen.getByTestId('popup-body').className).toMatch(/overflow-y-auto/)
+  })
   const open = (e: HTMLElement) => fireEvent.doubleClick(e)
   it('opens on a double-click, from Enter and from the arrow button, and a single click only selects', () => {
     render(board(EDGE))

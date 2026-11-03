@@ -1,5 +1,5 @@
 import { buildGameBoard } from '../lib/game-board'
-import { ALT_MIN_BOOKS, altRows, EDGE_MIN, LONGSHOT_MAX_AMERICAN, edgesNow, gameEdges, gameHeadline, shopMarket, shopSide } from '../lib/game-shop'
+import { altRows, EDGE_MIN, edgesNow, gameEdges, gameHeadline, shopMarket, shopSide } from '../lib/game-shop'
 import type { GameOddsFeed, GameOddsRow } from '../lib/game-odds'
 
 const q = (book: string, a: number | null, b: number | null) => ({ book, a, b })
@@ -44,22 +44,53 @@ describe('shopSide', () => {
   })
 })
 
-describe('what counts as an edge: not a longshot artifact, not a thin alt', () => {
-  it('a price longer than +300 is never actionable, however good it looks', () => {
-    expect(LONGSHOT_MAX_AMERICAN).toBe(300)
-    // five books at -110/-110 and one paying +400 for a 20%+ looking gap: shown, not headlined
-    const [g] = board([mk('spread', -1.5, [...FLAT, q('caesars', -600, 400)])])
-    expect(shopSide(g.main.spread!, 'b').american).toBe(400)
-    expect(shopSide(g.main.spread!, 'b').actionable).toBe(false)
+describe('what counts as an edge: any line, any price, but a big gap is flagged, not hidden', () => {
+  it('a longshot price is judged like any other: a clean +420 against a +400 market is an edge', () => {
+    const market = ['draftkings', 'fanduel', 'betmgm', 'novig', 'kalshi'].map(k => q(k, -500, 380))
+    const [g] = board([mk('spread', -3.5, [...market, q('caesars', -600, 420)])])
+    const s = shopSide(g.main.spread!, 'b')
+    expect(s.american).toBe(420)
+    expect(s.actionable).toBe(true)
+    expect(s.suspect).toBe(false)
+    expect(s.ev!).toBeGreaterThan(EDGE_MIN)
   })
-  it('an alt line needs five books, the main line only three', () => {
-    expect(ALT_MIN_BOOKS).toBe(5)
-    const four = ['draftkings', 'fanduel', 'betmgm'].map(k => q(k, -110, -110))
-    const [g] = board([mk('spread', -1.5, [...FLAT, q('espnbet', -110, -110), q('hardrock', -110, -110), q('betrivers', -110, -110)]), mk('spread', -2.5, [...four, q('caesars', -140, 125)])])
-    const alt = g.rows.spread.find(r => r.row.line === -2.5)!
-    expect(shopSide(alt, 'b').actionable).toBe(true)                        // judged as a main line it would pass
-    expect(shopSide(alt, 'b', { alt: true }).actionable).toBe(false)        // five books are needed on an alt
-    expect(gameEdges(g).some(e => e.line === -2.5)).toBe(false)
+  it('a price far better than every other book is an OUTLIER: shown and flagged, never styled as a clean edge', () => {
+    const [g] = board([mk('spread', -1.5, [...FLAT, q('caesars', -600, 400)])])
+    const s = shopSide(g.main.spread!, 'b')
+    expect(s.american).toBe(400)
+    expect(s.suspect).toBe(true)
+    expect(s.actionable).toBe(false)
+    const e = gameEdges(g)
+    expect(e).toHaveLength(1)
+    expect(e[0]).toMatchObject({ line: -1.5, outlier: true })
+  })
+  it('a +1500 alt that nobody else matches is an outlier you can see', () => {
+    const market = ['draftkings', 'fanduel', 'betmgm', 'novig', 'kalshi'].map(k => q(k, -1000, 700))
+    const wide = [...FLAT, q('espnbet', -110, -110), q('hardrock', -110, -110), q('betrivers', -110, -110)]
+    const [g] = board([mk('spread', -1.5, wide), mk('spread', -3.5, [...market, q('caesars', -1500, 1500)])])
+    const e = gameEdges(g).find(x => x.line === -3.5)!
+    expect(e.alt).toBe(true)
+    expect(e.outlier).toBe(true)
+    expect(e.shop.american).toBe(1500)
+    expect(gameHeadline(g)).toMatch(/Big gap to check: FLA -3\.5 \+1500 at Caesars/)
+  })
+  it('a line with fewer than three books never has an edge or an outlier', () => {
+    const [g] = board([mk('spread', -3.5, [q('draftkings', -300, 240), q('fanduel', -280, 5000)])])
+    const s = shopSide(g.main.spread!, 'b')
+    expect(s.actionable).toBe(false)
+    expect(s.suspect).toBe(false)
+    expect(gameEdges(g)).toHaveLength(0)
+  })
+  it('edgesNow gives outliers at most two places so stale quotes cannot crowd out the clean edges', () => {
+    const mkGame = (i: number) => {
+      const gk = `nhl:2026-11-02:A${i}@B${i}`
+      return [mk('spread', -1.5, [...FLAT, q('caesars', -125, 106)], gk, `A${i}`, `B${i}`), mk('total', 6.5, [...FLAT, q('caesars', -600, 400)], gk, `A${i}`, `B${i}`)]
+    }
+    const games = board([0, 1, 2, 3, 4].flatMap(mkGame))
+    const out = edgesNow(games, 5, 2)
+    expect(out.filter(e => e.outlier).length).toBeLessThanOrEqual(2)
+    expect(out.filter(e => !e.outlier).length).toBeGreaterThanOrEqual(3)
+    expect(out).toHaveLength(5)
   })
 })
 
