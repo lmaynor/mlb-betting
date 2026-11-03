@@ -3515,6 +3515,10 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
   from the ticker alone against the banked prop feeds (zero credits); `ev/kalshi_game_legs.slate_rows` also emits SPREAD/TOTAL (NHL totals never).
   Game pulls cost 1 credit per market per sport; the daemon enforces `--max-daily-game-credits` (default 120). Verified prop series are listed
   in the analysis doc (the original spec's NHL/NBA series guesses mostly do not exist on Kalshi).
+  **Game / spread / total legs (2026-11-03, `ev/kalshi_game_banked.py`, UNVALIDATED):** now read from the free banked feeds first -- BestBook ladders
+  (all three sports), else the banked ParlayAPI snapshot (NBA / NHL) -- through the same `slate_rows`, and a live ParlayAPI pull only runs for a sport
+  they cannot serve (`--game-source auto|live`; works with no `PARLAY_API_KEY`). Rows keep the feed's own `updated_ts`, so the 1500 s leg gate still
+  applies (BestBook is hourly: widening it for game lines is an owner call, not made). Coverage of Kalshi's open NFL game / spread / total markets: ~75%.
 - **Pooled evidence must also be collected LOCALLY.** The cloud sweep skips `pooled_rows_from_snapshot` whenever
   Kalshi blocks its egress IP (`kalshi_ok=False`, the legs are empty), and that is exactly when the laptop does the
   Kalshi join. `props_exec.build_latest_local` now computes it too (never fatal) and `publish_local` writes

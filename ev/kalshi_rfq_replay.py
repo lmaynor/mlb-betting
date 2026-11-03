@@ -369,6 +369,34 @@ def store_from_raw(sport: str, snaps) -> SnapshotStore:
     return SnapshotStore(out, sport=sport)
 
 
+def raw_game_line_snapshots(sport: str, days, *, cache_dir: str | None = None, storage=None, workers: int = 12):
+    """Banked ParlayAPI GAME-LINE payloads (h2h / spreads / totals, main lines) -> [(ts, events)], time-ordered. nba / nhl only:
+    OddsAccum/{sport_key}/raw/{day}/game_lines_{HHMM}.json. NFL game lines were never banked (the sweep banks props only), and BestBook's
+    ladders are overwritten hourly, so neither can be replayed. `ts` is the object's write time, i.e. when the lines were true."""
+    import json
+    from concurrent.futures import ThreadPoolExecutor
+    if sport not in PARLAY_KEYS:
+        return []
+    keyed = []
+    for d in days:
+        keyed += [(k, ts) for k, ts in _list_with_ts(f"OddsAccum/{PARLAY_KEYS[sport]}/raw/{d}/game_lines_", storage) if k.endswith(".json")]
+    keyed.sort(key=lambda x: x[1])
+    with ThreadPoolExecutor(workers) as ex:
+        blobs = list(ex.map(lambda kt: json.loads(_read_cached(kt[0], cache_dir, storage)), keyed))
+    return [(ts, obj if isinstance(obj, list) else obj.get("events") or []) for (k, ts), obj in zip(keyed, blobs)]
+
+
+def store_from_game_lines(sport: str, snaps) -> SnapshotStore:
+    """[(ts, events)] -> SnapshotStore of DIRECT game / spread / total legs (ev.kalshi_game_legs.slate_rows, the live path's own consensus
+    and rung interpolation), stamped with the snapshot time, with per-game commence times so a started game is never priced."""
+    from ev.kalshi_game_legs import slate_rows
+    out = []
+    for ts, events in snaps:
+        rows, _ = slate_rows(events, sport, ts)
+        out.append((ts, [lf for lf in (leg_from_row(r, ts) for r in rows) if lf is not None], None, commence_map(sport, events)))
+    return SnapshotStore(out, sport=sport)
+
+
 def fetch_cycle_frames(days, storage=None, workers: int = 12):
     """Read every banked NFL sweep cycle for the given 'YYYY-MM-DD' folders (missing folders are skipped). Needs GCS_BUCKET /
     MLB_GCS_BUCKET set, otherwise mlb_core.storage looks in a local directory and finds nothing."""
