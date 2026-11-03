@@ -46,15 +46,17 @@ export default async function GameLinesPage({ searchParams }: { searchParams: Pr
     const proj: Record<string, GameProjectionsFeed | null> = {}
     sports.forEach((s, i) => { proj[s] = restrictProjToOdds(projRaw[i], odds[s]) })
     const open = analysisGame(params.view, params.game)
-    body = <BestBoard feeds={{ odds, proj }} initialSport={params.sport === 'nba' || params.sport === 'nhl' ? params.sport : undefined} initialOpen={open ? { key: open, pane: 'analysis' } : undefined} />
+    body = <BestBoard feeds={{ odds, proj }} initialSport={params.sport === 'nba' || params.sport === 'nhl' ? params.sport : undefined} initialOpen={open ? { key: open, pane: 'analysis' } : undefined} nav={<GamesNav view={view} sport={sport} />} />
   }
 
   return (
     <div className="max-w-[1400px] mx-auto pt-4 px-6 pb-6 gutter-m">
-      <div className="flex items-baseline justify-between gap-y-2 gap-x-4 flex-wrap mb-3">
-        <h1 className="text-[20px] font-semibold text-text-primary m-0 sr-only md:not-sr-only">Game Lines</h1>
-        <GamesNav view={view} sport={sport} />
-      </div>
+      {view === 'table' && (
+        <div className="flex items-baseline justify-between gap-y-2 gap-x-4 flex-wrap mb-3">
+          <h1 className="text-[20px] font-semibold text-text-primary m-0">Game Lines</h1>
+          <GamesNav view={view} sport={sport} />
+        </div>
+      )}
       {body}
     </div>
   )

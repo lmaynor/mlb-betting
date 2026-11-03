@@ -1,11 +1,11 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { LockedNotice } from '@/components/picks/locked-notice'
 import { BookLogo } from '@/components/ui/book-logo'
 import { SportLogo } from '@/components/ui/sport-assets'
 import { BOARD_SORTS, buildGameBoard, sortBoard, sportsWithGames, type BoardSort, type GameBoardEntry } from '@/lib/game-board'
-import { ageText, GAME_MIN_REF, GAME_PRICES_LABEL, GAME_PRICES_NOTE, gameOddsUnavailable, startLabel, type GameMarket, type GameOddsFeed } from '@/lib/game-odds'
+import { ageText, GAME_MIN_REF, freshnessBin, gameOddsUnavailable, startLabel, type Freshness, type GameMarket, type GameOddsFeed } from '@/lib/game-odds'
 import { edgesNow, gameEdges, primaryMove, shopMarket, type EdgeItem, type ShopSide } from '@/lib/game-shop'
 import { moveForSide } from '@/lib/line-move'
 import { formatOdds } from '@/lib/odds'
@@ -70,13 +70,33 @@ function EdgeCell({ g, testId = 'row-edge' }: { g: GameBoardEntry; testId?: stri
   )
 }
 
+const LIGHT: Record<'fresh' | 'aging' | 'old', { color: string; word: string }> = {
+  fresh: { color: GREEN, word: 'Fresh' },
+  aging: { color: '#facc15', word: 'Aging' },
+  old: { color: '#f87171', word: 'Old' },
+}
+
+/** Three small lights, the one for the board's price age lit (green up to 15 min, amber up to an hour, red past that or when the feed is stale). */
+function Stoplight({ bin, text }: { bin: Freshness | null; text: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5" data-testid="freshness" data-bin={bin ?? 'unknown'} title="How old the newest prices on this board are. Green: under 15 min. Amber: up to an hour. Red: older, or the feed is stale.">
+      <span aria-hidden className="inline-flex items-center gap-0.5 rounded-full px-1 py-0.5" style={{ background: 'var(--color-background-secondary-default)' }}>
+        {(['old', 'aging', 'fresh'] as const).map(k => (
+          <span key={k} className="rounded-full flex-none" style={{ width: 6, height: 6, background: bin === k ? LIGHT[k].color : 'var(--color-separator-border)' }} />
+        ))}
+      </span>
+      <span>{bin && <span className="sr-only">{LIGHT[bin].word}: </span>}{text}</span>
+    </span>
+  )
+}
+
 /**
  * The Game Lines board. Rows, not cards: each game is one line with the best price at every market, the best edge if there is one, and
  * how it has moved. Double-click a row (tap on a phone, Enter, or the arrow) for a brief card: SHOP, MOVEMENT, ALT LINES. Above the
  * table, "Edges now" lists the few real edges on the slate (against the market fair price, 3+ books, not suspiciously large), or says
  * there are none. UNVALIDATED market data.
  */
-export function BestBoard({ feeds: initial, initialSport, initialOpen }: { feeds: GameBoardFeeds; initialSport?: string; initialOpen?: { key: string; pane?: PopupPane } }) {
+export function BestBoard({ feeds: initial, initialSport, initialOpen, nav }: { feeds: GameBoardFeeds; initialSport?: string; initialOpen?: { key: string; pane?: PopupPane }; nav?: ReactNode }) {
   const { odds, proj, feedSports } = useGameFeeds(initial)
   const [sport, setSport] = useState(initialSport ?? 'all')
   const [sort, setSort] = useState<BoardSort>('time')
@@ -107,15 +127,16 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen }: { feeds
 
   return (
     <div>
-      <p className="m-0 mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-text-tertiary" data-testid="game-board-strip">
-        <span className="inline-flex items-center gap-1.5" title="How old the newest prices on this board are">
-          <span aria-hidden className="rounded-full flex-none" style={{ width: 6, height: 6, background: stale ? '#facc15' : GREEN }} />
-          {age == null ? 'Update time unknown' : `Updated ${ageText(age).toLowerCase()} ago`}
-        </span>
-        {stale && <span className="mono text-[11px] font-semibold tracking-fine text-warn">STALE</span>}
-        {myBooks.enabled && <span title="Best prices are limited to your books">My books ({myBooks.books.length})</span>}
-        <span title={`${GAME_PRICES_LABEL.charAt(0)}${GAME_PRICES_LABEL.slice(1).toLowerCase()} ${GAME_PRICES_NOTE}`}>Unvalidated prices</span>
-      </p>
+      <div className="flex items-center justify-between flex-wrap gap-y-2 gap-x-4 mb-3">
+        <h1 className="text-[20px] font-semibold text-text-primary m-0 sr-only md:not-sr-only">Game Lines</h1>
+        <div className="flex items-center flex-wrap gap-x-4 gap-y-2" data-testid="game-board-strip">
+          {nav}
+          <span className="inline-flex items-center gap-x-3 text-[12px] text-text-tertiary">
+            <Stoplight bin={freshnessBin(age, stale)} text={age == null ? 'Update time unknown' : `${ageText(age).toLowerCase()} ago`} />
+            {myBooks.enabled && <span title="Best prices are limited to your books">My books ({myBooks.books.length})</span>}
+          </span>
+        </div>
+      </div>
 
       {unavailable ? (
         <div role="status" className="py-6 text-neutral-300 text-cozy">Game-line prices are not published yet. Moneyline, spread and total prices refresh with the odds banker; check back shortly.</div>
@@ -126,7 +147,7 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen }: { feeds
           <section aria-label="Edges now" className="mb-3" data-testid="edges-now">
             <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 mb-1.5">
               <span className="text-compact font-semibold text-text-primary whitespace-nowrap">Edges now</span>
-              <span className="text-[12px] text-text-tertiary">2%+ over fair price on 3+ books. Amber: confirm first{myBooks.enabled ? ', at your books' : ''}</span>
+              <span className="text-[12px] text-text-tertiary">2%+ over fair price on 3+ books. Unvalidated{myBooks.enabled ? ', at your books' : ''}</span>
             </div>
             {edges.length === 0 ? (
               <p className="m-0 rounded-xl border border-separator-border bg-background-primary-default px-3.5 py-3 text-compact text-text-secondary" data-testid="edges-none">Nothing clears the bar right now. The market is tight on every game below.</p>

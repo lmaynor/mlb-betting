@@ -43,7 +43,7 @@ export async function LiveTicker() {
   const duration = Math.max(24, ticks.length * 4.5)
 
   return (
-    <div className="live-ticker-shell border-b border-b-[color:var(--color-separator-border)] bg-background-primary-default overflow-hidden py-2 px-0 flex items-center relative z-[1]">
+    <div className="live-ticker-shell border-b border-b-[color:var(--color-separator-border)] bg-background-primary-default overflow-hidden py-2 px-0 hidden md:flex items-center relative z-[1]">
       <div className="z-[10] bg-background-primary-default pt-0 pr-3.5 pb-0 pl-5 shrink-0 flex items-center gap-2 border-r border-r-[color:var(--color-separator-border)]">
         <span className="live-dot" />
         <span className="mono ticker-label text-micro tracking-label uppercase text-neutral-300 whitespace-nowrap">Latest results</span>

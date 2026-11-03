@@ -266,6 +266,22 @@ describe('the card (double-click)', () => {
   })
 })
 
+describe('freshness stoplight', () => {
+  it('lights green for a fresh feed (age 3 min), with the age beside the toggle', () => {
+    render(board(EDGE, { age_minutes: 3 }))
+    const f = screen.getByTestId('freshness')
+    expect(f).toHaveAttribute('data-bin', 'fresh')
+    expect(f.textContent).toMatch(/3 min ago/)
+  })
+  it('lights amber at 40 min and red when the feed is stale', () => {
+    const { unmount } = render(board(EDGE, { age_minutes: 40 }))
+    expect(screen.getByTestId('freshness')).toHaveAttribute('data-bin', 'aging')
+    unmount()
+    render(board(EDGE, { age_minutes: 5, stale: true }))
+    expect(screen.getByTestId('freshness')).toHaveAttribute('data-bin', 'old')
+  })
+})
+
 describe('on a phone', () => {
   beforeEach(() => {
     window.matchMedia = ((query: string) => ({ matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {}, onchange: null, dispatchEvent: () => false })) as unknown as typeof window.matchMedia

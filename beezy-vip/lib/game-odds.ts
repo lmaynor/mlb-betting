@@ -163,6 +163,16 @@ export function startLabel(iso: string): string {
 }
 
 /** '12 MIN' / '3.5 H' / '2 D' for the header strip; '--' when the feed has no age. */
+/** Stoplight bins for how old the board's newest prices are: green up to 15 min, amber up to an hour, red beyond that (or when the feed says stale). */
+export type Freshness = 'fresh' | 'aging' | 'old'
+export const FRESH_MAX_MIN = 15
+export const AGING_MAX_MIN = 60
+export function freshnessBin(mins: number | null | undefined, stale = false): Freshness | null {
+  if (stale) return 'old'
+  if (mins == null || !isFinite(mins)) return null
+  return mins <= FRESH_MAX_MIN ? 'fresh' : mins <= AGING_MAX_MIN ? 'aging' : 'old'
+}
+
 export function ageText(mins: number | null | undefined): string {
   if (mins == null || !isFinite(mins)) return '--'
   return mins < 90 ? `${Math.max(1, Math.round(mins))} MIN` : mins < 2880 ? `${(mins / 60).toFixed(1)} H` : `${Math.round(mins / 1440)} D`
