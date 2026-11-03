@@ -1,14 +1,14 @@
 'use client'
 
-import { Fragment, useMemo, useState } from 'react'
-import { BookLogo } from '@/components/ui/book-logo'
+import { useMemo, useState } from 'react'
 import { SportLogo } from '@/components/ui/sport-assets'
 import { modelSideProb, type GameBoardEntry } from '@/lib/game-board'
 import { buildLadderRung, mainLineOf, orderRungs, rungVerdict, selectRung, windowRungs, type LadderSide } from '@/lib/game-ladder'
 import { GAME_PRICES_LABEL, gameArbHedgeText, signedLine, startLabel, type GameMarket } from '@/lib/game-odds'
-import { formatOdds, probToAmerican } from '@/lib/odds'
+import { probToAmerican, formatOdds } from '@/lib/odds'
 import { bookDisplay } from '@/lib/tokens'
-import { BookMatrix } from './book-matrix'
+import { BestVsRest } from './best-vs-rest'
+import { HeatStrip, type HeatRung } from './heat-strip'
 import { LadderChart, type ChartRung } from './ladder-chart'
 import { GREEN, SKY, signedPct, usd } from './game-prices-parts'
 
@@ -56,7 +56,6 @@ export function GameDetail({ game, bettable, ageLabel }: { game: GameBoardEntry;
   const markets = MARKET_TABS.filter(m => game.rows[m.key].length > 0)
   const [market, setMarket] = useState<GameMarket>(() => (markets.find(m => m.key === 'spread') ?? markets[0])?.key ?? 'spread')
   const [sideByMarket, setSideByMarket] = useState<Record<GameMarket, LadderSide>>({ ml: 'b', spread: 'b', total: 'a' })
-  const [alts, setAlts] = useState(false)
   const [wide, setWide] = useState(false)
   const [picked, setPicked] = useState<Partial<Record<GameMarket, number | null>>>({})
 
@@ -77,7 +76,7 @@ export function GameDetail({ game, bettable, ageLabel }: { game: GameBoardEntry;
   const allChart: ChartRung[] = built.map(b => ({ line: b.r.row.line, label: b.label, rung: b.rung }))
   const near = new Set(windowRungs(allChart, market === 'ml' ? null : mainLine).map(c => c.line))
   const chartRungs = wide ? allChart : allChart.filter(c => near.has(c.line) || c.line === selected)
-  const visible = built.filter(b => b.r.row.line === mainLine || market === 'ml' || alts || b.r.row.line === selected)
+  const heatRungs: HeatRung[] = built.filter(b => chartRungs.some(c => c.line === b.r.row.line)).map(b => ({ line: b.r.row.line, label: b.label, rung: b.rung, main: market !== 'ml' && b.r.row.line === mainLine }))
   const sel = built.find(b => b.r.row.line === selected) ?? null
 
   const hasModel = built.some(b => b.rung.pModel != null)
@@ -153,86 +152,50 @@ export function GameDetail({ game, bettable, ageLabel }: { game: GameBoardEntry;
             <span className="text-text-primary font-semibold text-compact">{sideLabel} ladder</span>
             <span className="inline-flex items-center gap-1.5"><svg width="18" height="6" aria-hidden><line x1="0" y1="3" x2="18" y2="3" stroke="#9ca3af" strokeWidth="2" /></svg>Market fair</span>
             {hasModel && <span className="inline-flex items-center gap-1.5"><svg width="18" height="6" aria-hidden><line x1="0" y1="3" x2="18" y2="3" stroke={SKY} strokeWidth="2" strokeDasharray="4 3" /></svg>Our projection</span>}
-            <span className="inline-flex items-center gap-1.5"><svg width="8" height="14" aria-hidden><rect x="0" y="0" width="8" height="8" rx="2" fill={GREEN} fillOpacity="0.75" /><rect x="0" y="8" width="8" height="6" rx="2" fill="#7d8596" fillOpacity="0.5" /></svg>Books vs fair (green beats it)</span>
             <span className="inline-flex items-center gap-1.5"><svg width="10" height="10" aria-hidden><circle cx="5" cy="5" r="4" fill={GREEN} /></svg>Best price</span>
           </div>
           <LadderChart rungs={chartRungs} selected={selected} sideLabel={sideLabel} onSelect={line => setPicked(p => ({ ...p, [market]: line }))} />
-          {allChart.length > chartRungs.length || wide ? (
-            <button type="button" onClick={() => setWide(w => !w)} data-testid="ladder-wide" className="mt-1 text-[12.5px] text-link cursor-pointer bg-transparent border-0 p-0 hover:underline">
-              {wide ? 'Show nearby lines only' : `Show all ${allChart.length} lines`}
-            </button>
-          ) : null}
         </div>
       )}
 
-      <div className="flex items-center justify-between px-4 pt-3 pb-2">
-        <span className="text-compact font-semibold text-text-primary">Lines <span className="font-normal text-text-secondary">{visible.length} of {built.length}</span></span>
-        {market !== 'ml' && built.length > 1 && <Seg label="Lines shown" value={alts ? 'alts' : 'main'} options={[{ v: 'main', l: 'Main' }, { v: 'alts', l: 'With alt lines' }]} onChange={v => setAlts(v === 'alts')} />}
+      <div className="px-4 pt-4 pb-2">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-2">
+          <span className="text-compact font-semibold text-text-primary">Every line against every book</span>
+          <span className="text-[11.5px] text-text-tertiary">Green beats the market fair price, grey does not, amber is an unusually large gap. White outline is the best bettable price. Click a cell to open that line.</span>
+        </div>
+        <HeatStrip rungs={heatRungs} selected={selected} onSelect={line => setPicked(p => ({ ...p, [market]: line }))} />
+        {market !== 'ml' && (allChart.length > chartRungs.length || wide) && (
+          <button type="button" onClick={() => setWide(w => !w)} data-testid="ladder-wide" className="mt-2 text-[12.5px] text-link cursor-pointer bg-transparent border-0 p-0 hover:underline">
+            {wide ? 'Show nearby lines only' : `Show all ${allChart.length} lines`}
+          </button>
+        )}
       </div>
-      <div className="overflow-x-auto border-t border-separator-border">
-        <table className="w-full border-collapse text-compact" data-testid="rung-table">
-          <thead>
-            <tr className="text-[11px] text-text-tertiary" style={{ background: 'var(--color-background-secondary-default)' }}>
-              <th scope="col" className="text-left font-medium px-3 py-2">Line</th>
-              <th scope="col" className="text-right font-medium px-3 py-2">Books</th>
-              {hasModel && <th scope="col" className="text-right font-medium px-3 py-2 hidden md:table-cell">Model</th>}
-              <th scope="col" className="text-right font-medium px-3 py-2 hidden md:table-cell">Market fair</th>
-              <th scope="col" className="text-right font-medium px-3 py-2">Best price</th>
-              <th scope="col" className="text-right font-medium px-3 py-2" title="EV of the best price against the market fair value">EV vs market</th>
-              {hasModel && <th scope="col" className="text-right font-medium px-3 py-2 hidden md:table-cell" title="EV of the best price against our model. UNVALIDATED.">Model EV</th>}
-              <th scope="col" className="text-right font-medium px-3 py-2 hidden md:table-cell" title="1/4 Kelly on the market-fair EV">1/4 Kelly</th>
-              <th scope="col" className="px-3 py-2" />
-            </tr>
-          </thead>
-          <tbody>
-            {visible.map(({ r, rung, label }) => {
-              const on = r.row.line === selected
-              const isMain = r.row.line === mainLine
-              const sp = side === 'a' ? r.a : r.b
-              const evColor = rung.thin || rung.suspect ? '#facc15' : rung.evMarket != null && rung.evMarket > 0 ? GREEN : 'var(--color-text-secondary)'
-              const hedge = r.arbLive ? gameArbHedgeText(r, 100) : null
-              return (
-                <Fragment key={r.key}>
-                  <tr data-testid="rung-row" data-line={r.row.line ?? ''} aria-selected={on} onClick={() => setPicked(p => ({ ...p, [market]: r.row.line }))}
-                    className="cursor-pointer border-t border-t-[color:var(--color-separator-border)] transition-colors duration-150 hover:bg-[color:var(--color-background-primary-hover)]"
-                    style={{ background: on ? 'var(--color-background-primary-hover)' : undefined }}>
-                    <td className="px-3 py-2 text-left font-semibold whitespace-nowrap" style={{ boxShadow: `inset 3px 0 0 ${on ? GREEN : 'transparent'}`, color: 'var(--color-text-primary)' }}>
-                      {label}{isMain && <span className="mono text-[9.5px] font-semibold tracking-fine ml-2" style={{ color: GREEN }}>MAIN</span>}
-                    </td>
-                    <td className="mono px-3 py-2 text-right text-text-secondary">{rung.nBooks}</td>
-                    {hasModel && <td className="mono px-3 py-2 text-right hidden md:table-cell">{pctOf(rung.pModel)} <span className="text-text-tertiary">{fairOdds(rung.pModel)}</span></td>}
-                    <td className="mono px-3 py-2 text-right text-text-secondary hidden md:table-cell">{pctOf(rung.pMarket)} <span className="text-text-tertiary">{fairOdds(rung.pMarket)}</span></td>
-                    <td className="mono px-3 py-2 text-right whitespace-nowrap">
-                      {rung.best ? (
-                        <span className="inline-flex items-center gap-1.5 justify-end">
-                          <BookLogo book={rung.best.book} size={16} />
-                          <span className="font-semibold rounded-chip px-1.5" style={{ color: GREEN, background: 'rgba(87,242,135,0.06)' }}>{formatOdds(rung.best.american)}</span>
-                          <span className="text-text-tertiary text-[11px]">{bookDisplay(rung.best.book).short}</span>
-                        </span>
-                      ) : '--'}
-                    </td>
-                    <td className="mono px-3 py-2 text-right font-semibold" style={{ color: evColor }}>{rung.evMarket != null ? signedPct(rung.evMarket) : '--'}</td>
-                    {hasModel && <td className="mono px-3 py-2 text-right hidden md:table-cell" style={{ color: rung.evModel != null && rung.evModel > 0 ? SKY : 'var(--color-text-tertiary)' }}>{rung.evModel != null ? signedPct(rung.evModel) : '--'}</td>}
-                    <td className="mono px-3 py-2 text-right text-text-secondary hidden md:table-cell">{sp.stake > 0 ? usd(sp.stake) : '--'}</td>
-                    <td className="px-3 py-2 text-left whitespace-nowrap">
-                      {rung.thin && <span className="mono text-[10px] font-semibold tracking-fine text-warn" title="Fewer than 3 books quote this line: the price is shown, but no edge is claimed.">THIN</span>}
-                      {!rung.thin && rung.suspect && <span className="mono text-[10px] font-semibold tracking-fine text-warn" title="Unusually large against the market fair value: often a stale quote. Check the price at the book.">CHECK</span>}
-                      {r.arbLive && r.arb && <span className="mono text-[10px] font-semibold tracking-fine text-warn border border-[color:#facc1555] rounded-chip px-1 ml-1.5" title={hedge ?? 'Arbitrage'}>ARB {r.arb.netArbPct.toFixed(1)}%</span>}
-                    </td>
-                  </tr>
-                  {on && sel && (
-                    <tr>
-                      <td colSpan={9} className="p-0" style={{ background: 'var(--color-background-secondary-default)' }}>
-                        <BookMatrix rung={sel.rung} row={sel.r.row} side={side} sideLabel={sideLabel} otherLabel={otherLabel} />
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+
+      {sel && (
+        <div className="border-t border-separator-border mt-2" data-testid="selected-line" style={{ background: 'var(--color-background-secondary-default)' }}>
+          <dl className="mono flex flex-wrap items-baseline gap-x-6 gap-y-1.5 m-0 px-4 pt-3 text-compact">
+            <div className="flex items-baseline gap-2">
+              <dt className="sr-only">Line</dt>
+              <dd className="m-0 font-sans text-[15px] font-semibold text-text-primary">{sel.label}</dd>
+              {sel.r.row.line === mainLine && market !== 'ml' && <span className="text-[9.5px] font-semibold tracking-fine" style={{ color: GREEN }}>MAIN</span>}
+              {sel.rung.thin && <span className="text-[10px] font-semibold tracking-fine text-warn" title="Fewer than 3 books quote this line: the price is shown, but no edge is claimed.">THIN</span>}
+              {!sel.rung.thin && sel.rung.suspect && <span className="text-[10px] font-semibold tracking-fine text-warn" title="Unusually large against the market fair value: often a stale quote. Check the price at the book.">CHECK</span>}
+              {sel.r.arbLive && sel.r.arb && <span className="text-[10px] font-semibold tracking-fine text-warn border border-[color:#facc1555] rounded-chip px-1" title={gameArbHedgeText(sel.r, 100) ?? 'Arbitrage'}>ARB {sel.r.arb.netArbPct.toFixed(1)}%</span>}
+            </div>
+            {[
+              { k: 'Books', v: String(sel.rung.nBooks) },
+              hasModel ? { k: 'Model', v: `${pctOf(sel.rung.pModel)} ${fairOdds(sel.rung.pModel)}`, c: SKY } : null,
+              { k: 'Market fair', v: `${pctOf(sel.rung.pMarket)} ${fairOdds(sel.rung.pMarket)}` },
+              { k: 'EV vs market', v: sel.rung.evMarket != null ? signedPct(sel.rung.evMarket) : '--', c: sel.rung.thin || sel.rung.suspect ? '#facc15' : (sel.rung.evMarket ?? 0) > 0 ? GREEN : undefined },
+              hasModel ? { k: 'Model EV', v: sel.rung.evModel != null ? signedPct(sel.rung.evModel) : '--', c: SKY } : null,
+              { k: '1/4 Kelly', v: (side === 'a' ? sel.r.a : sel.r.b).stake > 0 ? usd((side === 'a' ? sel.r.a : sel.r.b).stake) : '--' },
+            ].filter((c): c is { k: string; v: string; c?: string } => c != null).map(c => (
+              <div key={c.k} className="flex items-baseline gap-1.5"><dt className="text-[10.5px] tracking-fine uppercase text-text-tertiary">{c.k}</dt><dd className="m-0 font-semibold" style={{ color: c.c ?? 'var(--color-text-primary)' }}>{c.v}</dd></div>
+            ))}
+          </dl>
+          <BestVsRest rung={sel.rung} row={sel.r.row} side={side} sideLabel={sideLabel} otherLabel={otherLabel} />
+        </div>
+      )}
       <p className="text-[11.5px] text-text-secondary leading-[1.5] px-4 py-3 m-0">
         Green is always against the market fair value (de-vigged from the reference books); blue is our model and is unvalidated. Offshore books other than Pinnacle are not shown, and Pinnacle is a reference only, never a place to bet.
         Lines move or limit quickly: check the price at the book. Not financial advice.

@@ -8,8 +8,8 @@ import { formatOdds, probToAmerican } from '@/lib/odds'
 import { bookDisplay } from '@/lib/tokens'
 import { GREEN, SKY } from './game-prices-parts'
 
-const MARKET = '#9ca3af'
-const sp = (x: number) => `${x >= 0 ? '+' : ''}${(x * 100).toFixed(1)}%`
+export const MARKET = '#9ca3af'
+export const sp = (x: number) => `${x >= 0 ? '+' : ''}${(x * 100).toFixed(1)}%`
 const SHARP_SET: ReadonlySet<string> = new Set(SHARP_BOOKS)
 
 /**
@@ -17,10 +17,10 @@ const SHARP_SET: ReadonlySet<string> = new Set(SHARP_BOOKS)
  * fair line landed at a different x on every row). The two reference lines are drawn once, over the middle column of the whole
  * list, so they are continuous and cannot drift.
  */
-const COLS = 'grid-cols-[var(--ml)_minmax(0,1fr)_var(--mr)]'
-const VARS = '[--ml:104px] [--mr:96px] sm:[--ml:132px] sm:[--mr:172px]'
+export const COLS = 'grid-cols-[var(--ml)_minmax(0,1fr)_var(--mr)]'
+export const VARS = '[--ml:104px] [--mr:96px] sm:[--ml:132px] sm:[--mr:172px]'
 
-const fairText = (p: number) => `${formatOdds(probToAmerican(p))} (${(p * 100).toFixed(1)}%)`
+export const fairText = (p: number) => `${formatOdds(probToAmerican(p))} (${(p * 100).toFixed(1)}%)`
 
 /**
  * Every book on one rung, as flat bars from the market fair price: a bar to the right is a book that beats fair (green), to the left
@@ -60,7 +60,7 @@ export function BookMatrix({ rung, row, side, sideLabel, otherLabel }: { rung: L
       </div>
       <div className={`grid ${COLS} gap-x-3 mb-1 text-[10.5px] text-text-tertiary`}>
         <span>Book</span>
-        <span className="flex justify-between"><span>&larr; worse price</span>{hasFair && <span className="text-text-secondary">fair</span>}<span>better price &rarr;</span></span>
+        <span className="flex justify-between"><span className="hidden sm:inline">&larr; worse price</span>{hasFair && <span className="text-text-secondary mx-auto sm:mx-0">fair</span>}<span className="hidden sm:inline">better price &rarr;</span></span>
         <span className="text-right">{sideLabel}<span className="hidden sm:inline"> / {otherLabel}</span></span>
       </div>
 
