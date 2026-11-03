@@ -74,7 +74,7 @@ export function ModelPane({ game }: { game: GameBoardEntry }) {
     : 'On the main lines our model has no side above the market fair price.'
 
   return (
-    <div className="grid gap-4" data-testid="model-pane">
+    <div className="grid gap-4" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }} data-testid="model-pane">
       <div>
         <p className="m-0 text-[13.5px] leading-[1.5] text-text-primary" data-testid="model-verdict">{verdict}</p>
         {score && <p className="m-0 mt-1 mono text-[12px] text-text-secondary" data-testid="model-score">Projected score {score}</p>}
@@ -108,8 +108,8 @@ export function ModelPane({ game }: { game: GameBoardEntry }) {
           <div className="text-[10.5px] tracking-fine uppercase text-text-tertiary mb-1.5">Why</div>
           <ul className="m-0 p-0 list-none flex flex-wrap gap-1.5">
             {m.drivers.map(d => (
-              <li key={d.label} className="text-[12px] rounded-chip border border-separator-border px-2 py-1">
-                <span className="text-text-tertiary">{d.label}</span> <span className="mono text-text-primary">{d.value}</span>
+              <li key={d.label} className="inline-flex flex-wrap items-baseline gap-x-1.5 text-[12px] rounded-control border border-separator-border px-2 py-1">
+                <span className="text-text-tertiary">{d.label}</span><span className="mono text-text-primary">{d.value}</span>
               </li>
             ))}
           </ul>

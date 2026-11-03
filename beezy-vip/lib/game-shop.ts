@@ -127,7 +127,7 @@ export function gameHeadline(g: GameBoardEntry): string {
   const big = edges.find(e => e.outlier)
   const parts = [none]
   if (alt) parts.push(`On an alt line: ${fmt(alt)}.`)
-  if (big) parts.push(`Big gap to check: ${fmt(big)}. Often a stale quote, sometimes a mispriced line: confirm the price at the book.`)
+  if (big) parts.push(`Big gap to check: ${fmt(big)}. Confirm the price at the book.`)
   return parts.join(' ')
 }
 

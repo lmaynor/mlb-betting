@@ -276,4 +276,11 @@ describe('on a phone', () => {
     fireEvent.click(screen.getAllByTestId('board-row')[0])
     expect(screen.getByTestId('game-popup')).toBeInTheDocument()
   })
+  it('a row is one stacked cell, with the edge under the game and no Edge or Card column to scroll sideways', () => {
+    render(board(EDGE))
+    expect(screen.queryByRole('columnheader', { name: 'Edge' })).toBeNull()
+    expect(screen.queryByRole('columnheader', { name: 'Card' })).toBeNull()
+    const row = screen.getAllByTestId('board-row')[0]
+    expect(within(row.querySelector('td')!).getByTestId('row-edge')).toBeInTheDocument()
+  })
 })

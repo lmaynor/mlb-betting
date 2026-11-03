@@ -90,7 +90,7 @@ function MarketPane({ g, market, initialLine, bettable }: { g: GameBoardEntry; m
     return { line: r.line, label: sp.label, main: r.main && market !== 'ml', rung: buildLadderRung(r.row.row, bookSide, { pModel: modelSideProb(g.model, market, r.line, bookSide), pMarket: (bookSide === 'a' ? r.row.a : r.row.b).pFair, bettable }) }
   })
   return (
-    <div className="grid gap-3" data-testid={`market-${market}`}>
+    <div className="grid gap-3" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }} data-testid={`market-${market}`}>
       {market !== 'ml' && rows.length > 1 && (
         <div>
           <div className="text-[11px] text-text-tertiary mb-1">{market === 'total' ? 'Total points' : `${g.home} line`}</div>
@@ -158,7 +158,7 @@ function MovePane({ g }: { g: GameBoardEntry }) {
   const rows = (['spread', 'total', 'ml'] as const).map(market => ({ market, m: g.move[market] })).filter(x => hasMovement(x.m))
   if (rows.length === 0) return <p className="m-0 text-compact text-text-secondary" data-testid="move-empty">Movement tracking started recently: not enough snapshots yet to draw how these lines have moved.</p>
   return (
-    <div className="grid gap-3" data-testid="move-pane">
+    <div className="grid gap-3" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }} data-testid="move-pane">
       {rows.map(({ market, m }) => {
         const side = market === 'total' ? 'a' : 'b'
         const f = moveForSide(m!, side)
@@ -201,7 +201,10 @@ export function GamePopup({ game, initialPane, initialLine, bettable = null, onC
   const first: PopupPane = initialPane ?? (markets.includes('spread') ? 'spread' : (markets[0] ?? 'move'))
   const [pane, setPane] = useState<PopupPane>(first)
   const ref = useRef<HTMLDivElement>(null)
+  const tabsRef = useRef<HTMLDivElement>(null)
   useFocusTrap(ref, true)
+  // on a phone the tab row scrolls sideways: keep the open tab in view (Movement / Model sit off the right edge)
+  useEffect(() => { tabsRef.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }) }, [pane])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -229,7 +232,7 @@ export function GamePopup({ game, initialPane, initialLine, bettable = null, onC
         </header>
         <p className="flex-none m-0 px-4 pb-3 text-[13.5px] leading-[1.5] text-text-primary" data-testid="popup-headline">{gameHeadline(game)}</p>
         <div className="flex-none px-4 border-b border-separator-border overflow-x-auto" role="tablist" aria-label="Card">
-          <div className="flex gap-1 min-w-max">
+          <div ref={tabsRef} className="flex gap-1 min-w-max">
             {tabs.map(t => (
               <button key={t.v} type="button" role="tab" aria-selected={pane === t.v} onClick={() => setPane(t.v)} data-testid={`tab-${t.v}`}
                 className="px-3 py-2.5 text-[13px] font-semibold bg-transparent border-0 cursor-pointer -mb-px border-b-2 transition-colors duration-150"
