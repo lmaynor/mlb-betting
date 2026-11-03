@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react'
 import { LockedNotice } from '@/components/picks/locked-notice'
 import { BookLogo } from '@/components/ui/book-logo'
-import { useIsMobile } from '@/components/ui/mobile-sheet'
 import { SportLogo } from '@/components/ui/sport-assets'
 import { BOARD_SORTS, buildGameBoard, sortBoard, sportsWithGames, type BoardSort, type GameBoardEntry } from '@/lib/game-board'
 import { ageText, GAME_MIN_REF, GAME_PRICES_LABEL, GAME_PRICES_NOTE, gameOddsUnavailable, startLabel, type GameMarket, type GameOddsFeed } from '@/lib/game-odds'
@@ -58,11 +57,11 @@ function MoveCell({ g }: { g: GameBoardEntry }) {
 }
 
 /** The best edge of a game as one chip: the label, the price at its book and the EV. Blank (a dash) when there is none, which is the honest answer most of the time. */
-function EdgeCell({ g }: { g: GameBoardEntry }) {
+function EdgeCell({ g, testId = 'row-edge' }: { g: GameBoardEntry; testId?: string }) {
   const e = gameEdges(g)[0]
   if (!e) return <span className="text-text-tertiary" title="No price beats the market fair price by 2% or more on 3+ books">--</span>
   return (
-    <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5" data-testid="row-edge">
+    <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5" data-testid={testId}>
       <BookLogo book={e.shop.book!} size={14} />
       <span className="text-[12px] text-text-primary">{e.shop.label}{e.alt ? ' (alt)' : ''}</span>
       <b className="mono text-[12px] font-semibold" style={{ color: e.outlier ? '#facc15' : GREEN }}>{formatOdds(e.shop.american!)}</b>
@@ -85,7 +84,6 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen }: { feeds
   const [open, setOpen] = useState<{ key: string; pane?: PopupPane; line?: number | null } | null>(initialOpen ?? null)
   const [bankroll] = useBankroll(1000)
   const myBooks = useMyBooks()
-  const isMobile = useIsMobile(768)
 
   const offshore = useMemo(() => new Set(feedSports.flatMap(s => odds[s]?.offshore_books ?? [])), [feedSports, odds])
   const bettable = useMemo(() => (myBooks.enabled ? new Set(myBooks.books) : null), [myBooks.enabled, myBooks.books])
@@ -110,7 +108,7 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen }: { feeds
   return (
     <div>
       <div className="flex items-center gap-y-[6px] gap-x-[14px] flex-wrap min-h-[40px] py-[6px] px-4 mb-[10px] bg-background-primary-default text-compact" data-testid="game-board-strip" style={{ border: `1px solid ${HAIR}`, borderRadius: '8px' }}>
-        <span className="mono font-semibold text-text-primary">{activeSport === 'all' ? 'ALL SPORTS' : activeSport.toUpperCase()}</span>
+        <span className="mono font-semibold text-text-primary hidden md:inline">{activeSport === 'all' ? 'ALL SPORTS' : activeSport.toUpperCase()}</span>
         <span className="mono text-neutral-300">{games.length} {games.length === 1 ? 'GAME' : 'GAMES'}</span>
         <span className="mono text-neutral-300">LINES {ageText(age)} OLD</span>
         {myBooks.enabled && <span className="mono text-neutral-300" title="Best prices are limited to your books">MY BOOKS ({myBooks.books.length})</span>}
@@ -127,7 +125,7 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen }: { feeds
           <section aria-label="Edges now" className="mb-3" data-testid="edges-now">
             <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 mb-1.5">
               <span className="text-compact font-semibold text-text-primary whitespace-nowrap">Edges now</span>
-              <span className="text-[12px] text-text-tertiary">2%+ vs the market fair price on 3+ books; amber = a big gap to confirm{myBooks.enabled ? ', at your books' : ''}</span>
+              <span className="text-[12px] text-text-tertiary">2%+ over fair price on 3+ books. Amber: confirm first{myBooks.enabled ? ', at your books' : ''}</span>
             </div>
             {edges.length === 0 ? (
               <p className="m-0 rounded-xl border border-separator-border bg-background-primary-default px-3.5 py-3 text-compact text-text-secondary" data-testid="edges-none">Nothing clears the bar right now. The market is tight on every game below.</p>
@@ -135,7 +133,7 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen }: { feeds
               <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollSnapType: 'x proximity' }}>
                 {edges.map((e: EdgeItem) => (
                   <button key={`${e.game.key}-${e.market}-${e.line}-${e.side}`} type="button" data-testid="edge-chip" onClick={() => openCard(e.game.key, e.market, e.line)}
-                    className="flex-none w-[188px] text-left rounded-xl border border-separator-border bg-background-primary-default px-3 py-2.5 cursor-pointer transition-colors duration-150 hover:bg-[color:var(--color-background-primary-hover)]"
+                    className="flex-none w-[calc((100%-0.5rem)/2)] md:w-[188px] text-left rounded-xl border border-separator-border bg-background-primary-default px-3 py-2.5 cursor-pointer transition-colors duration-150 hover:bg-[color:var(--color-background-primary-hover)]"
                     data-outlier={e.outlier || undefined} style={{ scrollSnapAlign: 'start' }}>
                     <span className="flex items-center justify-between gap-2">
                       <span className="text-[12px] text-text-secondary truncate">{e.game.away} @ {e.game.home}</span>
@@ -170,9 +168,9 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen }: { feeds
                     <th scope="col" className="text-left font-medium px-3 py-2 hidden md:table-cell">Moneyline</th>
                     <th scope="col" className="text-left font-medium px-3 py-2 hidden md:table-cell">Spread</th>
                     <th scope="col" className="text-left font-medium px-3 py-2 hidden md:table-cell">Total</th>
-                    {!isMobile && <th scope="col" className="text-left font-medium px-3 py-2" title="The best price that beats the market fair price by 2% or more">Edge</th>}
+                    <th scope="col" className="text-left font-medium px-3 py-2 hidden md:table-cell" title="The best price that beats the market fair price by 2% or more">Edge</th>
                     <th scope="col" className="text-left font-medium px-3 py-2 hidden lg:table-cell" title="How the line or fair price has moved since the board first saw the game">Move</th>
-                    {!isMobile && <th scope="col" className="px-2 py-2 text-right font-medium">Card</th>}
+                    <th scope="col" className="px-2 py-2 text-right font-medium hidden md:table-cell">Card</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -181,29 +179,29 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen }: { feeds
                     const sport = g.sport as LogoSport
                     return (
                       <tr key={g.key} data-testid="board-row" data-game={g.key} aria-selected={on} tabIndex={0}
-                        onClick={() => { setSel(g.key); if (isMobile) openCard(g.key) }}
+                        onClick={() => { setSel(g.key); if (window.matchMedia?.('(max-width: 767px)').matches) openCard(g.key) }}
                         onDoubleClick={() => openCard(g.key)}
                         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); openCard(g.key) } }}
                         className="cursor-pointer border-t border-t-[color:var(--color-separator-border)] transition-colors duration-150 hover:bg-[color:var(--color-background-primary-hover)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[color:var(--signal)]"
                         style={{ background: on ? 'var(--color-background-primary-hover)' : undefined }}>
-                        <td className={`px-3 py-2 text-left ${isMobile ? '' : 'whitespace-nowrap'}`} style={{ boxShadow: `inset 3px 0 0 ${on ? GREEN : 'transparent'}` }}>
+                        <td className="px-3 py-2 text-left md:whitespace-nowrap" style={{ boxShadow: `inset 3px 0 0 ${on ? GREEN : 'transparent'}` }}>
                           <span className="flex items-center justify-between gap-2">
                           <span className="inline-flex items-center gap-1.5 font-semibold text-text-primary"><SportLogo sport={sport} team={g.away} size={18} />{g.away}<span className="text-text-tertiary font-normal">@</span><SportLogo sport={sport} team={g.home} size={18} />{g.home}</span>
-                          {isMobile && <span aria-hidden className="text-[18px] leading-none text-text-tertiary">&rsaquo;</span>}
+                          <span aria-hidden className="text-[18px] leading-none text-text-tertiary md:hidden">&rsaquo;</span>
                           </span>
                           <span className="mono block text-[11px] text-text-secondary">{g.sport.toUpperCase()} &middot; {startLabel(g.start)}</span>
                           <span className="block mt-1 lg:hidden"><MoveCell g={g} /></span>
-                          {isMobile && <span className="block mt-1.5"><EdgeCell g={g} /></span>}
+                          <span className="block mt-1.5 md:hidden"><EdgeCell g={g} testId="row-edge-stacked" /></span>
                         </td>
                         <td className="px-3 py-2 hidden md:table-cell"><MarketCell g={g} market="ml" /></td>
                         <td className="px-3 py-2 hidden md:table-cell"><MarketCell g={g} market="spread" /></td>
                         <td className="px-3 py-2 hidden md:table-cell"><MarketCell g={g} market="total" /></td>
-                        {!isMobile && <td className="px-3 py-2"><EdgeCell g={g} /></td>}
+                        <td className="px-3 py-2 hidden md:table-cell"><EdgeCell g={g} /></td>
                         <td className="px-3 py-2 hidden lg:table-cell"><MoveCell g={g} /></td>
-                        {!isMobile && <td className="px-2 py-2 text-right">
+                        <td className="px-2 py-2 text-right hidden md:table-cell">
                           <button type="button" onClick={e => { e.stopPropagation(); openCard(g.key) }} aria-label={`Open the card for ${g.away} at ${g.home}`} title="Open the card (or double-click the row)"
                             className="inline-flex items-center gap-1 h-7 px-2.5 rounded-control border border-separator-border bg-transparent text-[12px] font-semibold text-text-secondary hover:text-text-primary hover:border-[color:var(--color-border-button-hover)] cursor-pointer whitespace-nowrap transition-colors duration-150">Open <span aria-hidden>&rsaquo;</span></button>
-                        </td>}
+                        </td>
                       </tr>
                     )
                   })}

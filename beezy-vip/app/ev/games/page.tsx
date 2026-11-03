@@ -52,7 +52,7 @@ export default async function GameLinesPage({ searchParams }: { searchParams: Pr
   return (
     <div className="max-w-[1400px] mx-auto pt-4 px-6 pb-6 gutter-m">
       <div className="flex items-baseline justify-between gap-y-2 gap-x-4 flex-wrap mb-3">
-        <h1 className="text-[20px] font-bold text-text-primary m-0">Game Lines</h1>
+        <h1 className="text-[20px] font-semibold text-text-primary m-0 sr-only md:not-sr-only">Game Lines</h1>
         <GamesNav view={view} sport={sport} />
       </div>
       {body}
