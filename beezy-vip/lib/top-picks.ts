@@ -3,7 +3,7 @@
  * NBA projection boards. Everything is scored on the same Beezy Score scale and labelled by where it came from, so a
  * tracked MLB pick is never presented as if it were a validated projection.
  */
-import { betTier, isWinterSport, notesBookCount } from '@/lib/bet-notes'
+import { betTier, isWinterSport, notesBookCount, parseNotesJson } from '@/lib/bet-notes'
 import { isOffshore } from '@/lib/offshore'
 import { beezyscore } from '@/lib/beezy-score'
 import { collapseBooks } from '@/lib/dedupe'
@@ -49,6 +49,8 @@ export interface TopPick {
   marketEv?: number | null
   /** a tracked NFL / NBA / NHL bet: it settles in the ledger like MLB but the model behind it has no tested edge, so it is labelled paper / unvalidated */
   unvalidated?: boolean
+  /** NFL / NBA / NHL: the backend's verdict (ev/model_picks.py): 'official' = a daily play. A ledger bet reads it from its notes, a board row from `pick_tier`. */
+  tier?: 'official' | 'tracked' | null
 }
 
 const edgeFraction = (e: number | null | undefined): number | null => {
@@ -90,6 +92,7 @@ export function fromBet(bet: Bet): TopPick {
     bet,
     nBooks: winter ? notesBookCount(bet.notes) : undefined,
     confluence,
+    tier: winter && bet.system === 'PROPS' ? betTier(bet) : null,
   }
 }
 
@@ -127,28 +130,23 @@ export function fromProjection(r: SportProjectionRow): TopPick | null {
     confluence: !!r.confluence,
     modelEdge: r.model_edge ?? null,
     marketEv: r.market_ev ?? null,
+    tier: r.pick_tier ?? null,
   }
 }
 
 /**
- * Strict Tier 1 Official Card Gate:
- * - Projections: confluence = true, nBooks >= 4, 3%-10% EV, modelEdge >= 1.5%, score >= 68.
+ * A daily play (the Official Card gate).
+ * - NFL / NHL / NBA: the backend's own official tier (ev/model_picks.py `qualifies`): the card gate (confluence, 4+ books, 3%-10% EV,
+ *   model edge >= 1.5%, score >= 68) PLUS a stat with measured signal, a blended EV >= 2.5% and no sharp book against the side. Those
+ *   last checks live only in Python, so the site reads the verdict (`tier`) rather than re-deriving a weaker copy of it. No stamp, no play.
  * - MLB: validated != false, 3%-10% edge, score >= 68.
  */
 export function isOfficialCardPlay(p: TopPick): boolean {
+  if (p.sport !== 'mlb') return p.tier === 'official'
   const edge = p.edge ?? 0
   if (edge < 0.03 || edge > 0.10) return false
   if (p.score < 68) return false
-
-  if (p.sport === 'mlb') {
-    if (p.bet && p.bet.validated === false) return false
-    return true
-  }
-
-  if (!p.confluence && p.basis !== 'confluence') return false
-  if (p.nBooks != null && p.nBooks < 4) return false
-  if (p.modelEdge != null && p.modelEdge < 0.015) return false
-
+  if (p.bet && p.bet.validated === false) return false
   return true
 }
 
@@ -161,8 +159,9 @@ export function isEvOutlier(p: TopPick): boolean {
 }
 
 /**
- * Dynamic 1..5 Daily Card Builder:
- * Deduplicates max 1 play per player, max 2 plays per game, returns 1..5 plays without padding.
+ * The Daily Card: every official play, no count cap (a slate with nine good plays has nine; one with none has none, and it is never padded).
+ * Same concentration rules as ev/daily_card.py: one play per player (the highest score), at most two per game. Today's card and every past
+ * day in Graded History run through this one function, so a day's record is exactly the card that was shown.
  */
 export function buildDailyCard(picks: TopPick[]): TopPick[] {
   const qualified = picks.filter(isOfficialCardPlay)
@@ -201,7 +200,7 @@ export function buildDailyCard(picks: TopPick[]): TopPick[] {
     }
   }
 
-  return gameDeduped.slice(0, 5)
+  return gameDeduped
 }
 
 /**
@@ -221,6 +220,24 @@ export function rankTopPicks(picks: TopPick[], n = TOP_N): TopPick[] {
 /** Tracked MLB bets (one row per prop, best book) -> ranked top picks. The Top 10 is player picks; game picks have their own page. */
 export function topFromBets(bets: Bet[], n = TOP_N, kind: PickKind = 'player'): TopPick[] {
   return rankTopPicks(collapseBooks(bets).filter(b => b.kelly_triggered && betKind(b) === kind).map(fromBet), n)
+}
+
+/**
+ * The daily plays in a day's tracked bets: MLB model picks and the model's own NFL / NHL / NBA 'PROPS' picks, one row per prop at the best
+ * book, run through the same Daily Card rules as today's card. Used for a past day's Graded History and for today's already-logged plays.
+ * Book-outlier alerts ('EV') are not plays. Game picks are not part of the card.
+ */
+export function dailyPlaysFromBets(bets: Bet[]): TopPick[] {
+  const picks = collapseBooks(bets)
+    .filter(b => b.kelly_triggered && b.system !== 'EV' && betKind(b) === 'player')
+    .map(fromBet)
+  return buildDailyCard(picks)
+}
+
+/** The `row_key` the backend wrote into a PROPS bet's notes ('game_key|player_norm|stat'), or null: the id a board row and its logged bet share. */
+export function ledgerRowKey(bet: Bet): string | null {
+  const k = parseNotesJson(bet.notes)?.row_key
+  return typeof k === 'string' && k ? `${(bet.sport ?? '').toLowerCase()}|${k}` : null
 }
 
 /** Flat 1-unit profit from the American odds: a win pays the price, a loss is -1, push / void / pending are null. */

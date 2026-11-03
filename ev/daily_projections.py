@@ -1490,7 +1490,7 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
     p_blend_over = blend_p_over(p_model_over, p_mkt_over, sport=sport, stat=stat, trained=extra.get("nhl_model") == "trained_v1")
     p_blend_side, blend_ev = blend_side_ev(p_blend_over, side, best)
     sharp = sharp_fields(cons, side, best)
-    return {
+    row = {
         "sport": sport, "stat": stat, "stat_label": STAT_LABEL.get(stat, stat), "player": player, "player_norm": pn,
         "team": team, "opp": opp, "game_key": gk, "commence": None if start is None else start.isoformat(),
         "mins_to_start": None if mins is None else round(mins, 1),
@@ -1514,6 +1514,19 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
         "validated": False, "engine": engine, **extra,
         **({"nba_model": NBA_MODEL} if nb is not None else {}),
     }
+    row["pick_tier"] = pick_tier(row)
+    return row
+
+
+def pick_tier(row: dict) -> str | None:
+    """'official' | 'tracked' | None: the row's tier under ev.model_picks.qualifies, the ONE definition of a pick. Stamped on every row
+    so the site's Daily Card and boards read the backend's verdict instead of re-deriving the gates (the allowlist of stats with
+    measured signal, the blended-EV bar and the sharp-book check live only in Python). Lazy import: model_picks imports this module."""
+    try:
+        from ev import model_picks
+        return model_picks.qualifies(row)
+    except Exception:                                                                  # noqa: BLE001
+        return None
 
 
 def _price_hier(stat, rows, team, opp, env_t, logs, coef, mu_raw, start):

@@ -34,9 +34,10 @@ const NHL: CardPick[] = [
 ]
 const SPORT_PICKS = { nba: NBA, nhl: NHL }
 const SHEETS = buildSheets(NBA.slice(0, SHEET_SIZE), { nba: NBA.slice(0, SHEET_SIZE), nhl: NHL.slice(0, SHEET_SIZE) }, 'Tuesday')
+const NO_RECORD = { wins: 0, losses: 0, pushes: 0, graded: 0, pending: 0, units: 0, days: 0 }
 
 function renderCard(canPost = true) {
-  const view = render(<CheatSheetClient canPost={canPost} sheets={SHEETS} sportPicks={SPORT_PICKS} players={NBA} games={[]} gamesLocked={0} today="TUESDAY, OCTOBER 20" yesterday={[]} />)
+  const view = render(<CheatSheetClient canPost={canPost} sheets={SHEETS} sportPicks={SPORT_PICKS} players={NBA} locked={0} today="TUESDAY, OCTOBER 20" yesterday={[]} weekRecord={NO_RECORD} />)
   const card = view.container.querySelector('.cheat-sheet-layout > div') as HTMLElement
   const mobile = view.container.querySelector('.cheat-sheet-mobile-post') as HTMLElement
   const sidebar = view.container.querySelector('.cheat-sheet-sidebar') as HTMLElement
@@ -48,14 +49,13 @@ const orderIn = (text: string, names: string[]) => names.filter(n => text.includ
 const lastName = (who: string) => who.split(' ').slice(-1)[0]
 
 describe('the card and the post text list the same picks', () => {
-  it('All chip: the card\'s first five and the OVERALL box are the same picks in the same order', () => {
+  it('All chip: the card lists EVERY play (no count cap) and the OVERALL box is a prefix of that order', () => {
     const { card, mobile } = renderCard()
-    const cardNames = NBA.slice(0, SHEET_SIZE).map(p => p.who)
-    for (const n of cardNames) expect(card).toHaveTextContent(n)
-    expect(card).not.toHaveTextContent('Pelle Larsson')                             // the sixth is not on the card...
+    const cardNames = NBA.map(p => p.who)
+    for (const n of cardNames) expect(card).toHaveTextContent(n)                    // all six, including the sixth: there is no cap of five
+    expect(card).toHaveTextContent('6 PLAYS')
     const text = (within(mobile).getByLabelText('OVERALL post') as HTMLTextAreaElement).value
-    expect(text).not.toContain('Larsson')                                           // ...nor in the text
-    const inText = NBA.slice(0, SHEET_SIZE).filter(p => text.includes(lastName(p.who)))
+    const inText = NBA.filter(p => text.includes(lastName(p.who)))
     expect(inText.length).toBeGreaterThanOrEqual(1)
     expect(orderIn(text, inText.map(p => lastName(p.who)))).toEqual(inText.map(p => lastName(p.who)))
     // whatever the 280 cap dropped is the LOWEST-ranked pick(s), never a middle one: the text is a prefix of the card's order
@@ -91,7 +91,7 @@ describe('hard 280 cap in the UI', () => {
       expect(within(mobile).getAllByText(new RegExp(`^${text.length}/${POST_LIMIT}$`)).length).toBeGreaterThan(0)
     }
     for (const sh of SHEETS) {
-      if (sh.lines < sh.offered) expect(within(mobile).getByText(new RegExp(`Showing ${sh.lines} of ${sh.offered}`))).toBeInTheDocument()
+      if (sh.lines < sh.offered) expect(within(mobile).getAllByText(new RegExp(`Showing ${sh.lines} of ${sh.offered}`)).length).toBeGreaterThan(0)    // OVERALL and NBA can both be cut the same way
     }
     expect(mobile.textContent).not.toMatch(/Over 280|Premium/)
   })
@@ -120,7 +120,7 @@ describe('POST TO X panel', () => {
   })
 
   it('renders nothing when there are no picks, and the posts carry no link', () => {
-    const { container } = render(<CheatSheetClient sheets={[]} sportPicks={{}} players={[]} games={[]} gamesLocked={0} today="T" yesterday={[]} />)
+    const { container } = render(<CheatSheetClient sheets={[]} sportPicks={{}} players={[]} locked={0} today="T" yesterday={[]} weekRecord={NO_RECORD} />)
     expect(screen.queryByText('POST TO X')).not.toBeInTheDocument()
     expect(container.textContent).not.toContain('Top player picks - ')
     const { mobile } = renderCard()

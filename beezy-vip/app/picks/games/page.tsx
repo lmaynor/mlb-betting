@@ -15,6 +15,8 @@ import { GamePicksTable } from './game-picks-table'
 export const metadata: Metadata = {
   title: 'Game Picks',
   description: 'Game picks: the side where our model is furthest above the market on moneyline, spread and total, with every line and book one tap away. Model estimates are unvalidated.',
+  // Hidden from the navigation, the sitemap and search: the page still answers so an old link does not 404.
+  robots: { index: false, follow: false },
 }
 
 /** Game Picks. While MLB is in season its graded game card leads (tracked and settled publicly). Below it, and on its own in the winter,

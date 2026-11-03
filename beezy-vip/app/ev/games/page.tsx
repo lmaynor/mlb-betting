@@ -1,7 +1,6 @@
 export const dynamic = 'force-dynamic'
 
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { limitGameOdds } from '@/lib/access-feeds'
 import { getViewer } from '@/lib/auth'
 import { apiGetGameOddsBoard, apiGetGameProjections } from '@/lib/betting-api'
@@ -57,9 +56,6 @@ export default async function GameLinesPage({ searchParams }: { searchParams: Pr
         <GamesNav view={view} sport={sport} />
       </div>
       {body}
-      <p className="text-compact text-text-secondary mt-4">
-        Looking for MLB game picks with a graded record? They are under <Link className="text-link" href="/picks/games">Picks &rarr; Game Picks</Link>.
-      </p>
     </div>
   )
 }

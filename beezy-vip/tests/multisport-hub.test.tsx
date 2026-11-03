@@ -141,14 +141,14 @@ describe('unified projections board', () => {
 })
 
 describe('sport tabs', () => {
-  it.each(['mlb', 'nfl', 'nhl', 'nba'] as const)('%s shows its name, its system count and the same three tabs', sport => {
-    render(<SportTabs sport={sport} active="projections" />)
+  it.each(['mlb', 'nfl', 'nhl', 'nba'] as const)('%s shows its name, its system count and the same two tabs (projections live in the Scanner)', sport => {
+    render(<SportTabs sport={sport} active="picks" />)
     expect(screen.getByText(SPORT_PILLARS[sport].shortName)).toBeInTheDocument()
     expect(screen.getByText(new RegExp(`${getSystemsBySport(sport).length} Systems`))).toBeInTheDocument()
-    expect(screen.getAllByRole('link').map(a => a.textContent)).toEqual(['PICKS & +EV', 'ALL PROJECTIONS', 'SYSTEMS'])
-    expect(screen.getByRole('link', { name: 'ALL PROJECTIONS' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getAllByRole('link').map(a => a.textContent)).toEqual(['PICKS & +EV', 'SYSTEMS'])
+    expect(screen.getByRole('link', { name: 'PICKS & +EV' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByRole('link', { name: 'ALL PROJECTIONS' })).toBeNull()
     expect(screen.getByRole('link', { name: 'PICKS & +EV' })).toHaveAttribute('href', `/picks/${sport}`)
-    expect(screen.getByRole('link', { name: 'ALL PROJECTIONS' })).toHaveAttribute('href', `/picks/${sport}/projections`)
     expect(screen.getByRole('link', { name: 'SYSTEMS' })).toHaveAttribute('href', `/picks/${sport}/systems`)
   })
   it('the header counts match the specified systems per sport', () => {

@@ -4427,3 +4427,23 @@ closes that gap with the same machinery the MLB systems have. Everything is pape
   models: goals / assists / points / saves) and `sharp_agrees` (row fields `p_sharp_over`, `n_sharp`, `sharp_agrees` from Novig / ProphetX / Pinnacle, fail-open; unvalidated). Others stay `tracked`.
   `blend_p_over` accepts `(a, b)` but `BLEND_AB_BY_SPORT_STAT` is EMPTY: the refit gained ~0.0002 log loss out of sample and was not adopted; the extra residual features gained nothing.
   `NHL_TRAINED_PROPS` stays OFF; `setup_daily_projections_job.sh` passes it only if the operator sets it (that script's `--set-env-vars` drops a flag set via `--update-env-vars`).
+
+## 24. Daily plays, Graded History and the Projections tab (2026-11-02, code + tests only, undeployed)
+
+- **One definition of a pick.** `ev.model_picks.qualifies()` (docs: `docs/analysis/props_integration_review_2026-11-02.md` s4, `props_signal_gating_and_blend_refit_2026-11-02.md`) is the ONLY
+  definition. `'official'` = a daily play. `ev.daily_projections.make_row` now stamps it on every board row as `pick_tier` (`'official' | 'tracked' | null`; lazy import, model_picks
+  imports daily_projections); the ledger already carries it as the bet's notes `tier`. The site no longer re-derives gates: `lib/top-picks.ts isOfficialCardPlay` and
+  `lib/board-rows.ts isOfficialRow` read the tier for NFL / NHL / NBA (**no stamp = no official plays: fails closed**, so the frontend needs the backend board rewritten first) and keep the
+  tracked card's own gate for MLB (3-10% edge, score >= 68). The measured-signal allowlist, the blended-EV bar and the sharp-book check exist only in Python.
+- **No count cap.** `ev.daily_card.build_daily_card`, `lib/top-picks.ts buildDailyCard` and `ev.model_picks.post_official` no longer stop at 5 (the per-player / per-game dedupe stays: one play per
+  player, two per game; `sport_alerts.MAX_ALERTS` = 10 is the only Discord flood guard). `SHEET_SIZE` (POST TO X) is 12; the 280-character cap is what trims a sheet.
+- **Daily Card = Graded History = today's list.** `/cheat-sheet` shows every official play (ledger plays, which keep their result after the game starts, plus official board rows the hourly
+  logger has not caught up with; they share `row_key`) with a LAST 7 DAYS record that links to `/picks/history`. `/picks/history` is each past day's ledger bets (`loadLedgerBets`: the MLB
+  card + `system=PROPS&sport=all`, two requests so a busy MLB day cannot crowd PROPS rows out of the 200 cap) run through `dailyPlaysFromBets` = the same `buildDailyCard`, graded flat 1u.
+  `apiGetPicks` takes `sport`. The old "Top 10 / first 5" card and the Players | Games toggle are gone. Free-tier note: `limitRows` still applies per sport (5-row preview when tiers are enforced);
+  the All list is the merge of the cut lists.
+- **Game Picks is hidden**: no tab (`lib/ia.ts`), no link, not in the sitemap, `/picks/games` answers with `noindex`; MLB game bets still exist in the ledger and the page still renders by URL.
+- **Projections moved to the Scanner** as its own tab: `/ev/projections` (`?league=` for props, `?view=games&sport=` for the NBA / NHL game engines). `/edge/projections` and
+  `/picks/[sport]/projections` are permanent redirects (query carried); `SportTabs` lost ALL PROJECTIONS. PLAYER PROPS reuses `SportProjectionsBoard` with `visuals`: RANGE = `LambdaBar` (the model's
+  lambda, `proj_p10`/`proj_p90` and the line on one SVG), MODEL VS MARKET = `ProbPair`, FORM = `FormBars`; GAME LINES reuses `GameLinesClient` and the game cards gained `ExpectedScoreBar`
+  (NHL goal rates, NBA total split by margin). `/ev/games?view=model` still exists and now duplicates the Projections game view: drop it when convenient. Quantiles are the model's own, not a validated interval.

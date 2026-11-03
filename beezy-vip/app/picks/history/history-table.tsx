@@ -4,14 +4,14 @@ import { Fragment, useState } from 'react'
 import { TopPicksTable } from '@/components/picks/top-picks-table'
 import { formatDateKey } from '@/lib/dates'
 import { TABLE_TD, TABLE_TH } from '@/lib/tokens'
-import type { Record1u, TopPick } from '@/lib/top-picks'
+import type { DailyPlaysDay } from '@/lib/top-picks-data'
 
-export interface HistoryDay { date: string; picks: TopPick[]; record: Record1u }
+export type HistoryDay = DailyPlaysDay
 
 const TH = { ...TABLE_TH, textAlign: 'left', padding: '9px 12px', position: 'sticky', top: 0, whiteSpace: 'nowrap' } as const
 const TD = { ...TABLE_TD, padding: '10px 12px', whiteSpace: 'nowrap' } as const
 
-/** One row per day; a day opens to its ranked ten as a colSpan sub-row. The newest day starts open. */
+/** One row per day; a day opens to that day's plays as a colSpan sub-row. The newest day starts open. */
 export function HistoryTable({ days }: { days: HistoryDay[] }) {
   const [open, setOpen] = useState<Set<string>>(() => new Set(days.slice(0, 1).map(d => d.date)))
   const toggle = (d: string) => setOpen(prev => { const n = new Set(prev); if (n.has(d)) n.delete(d); else n.add(d); return n })

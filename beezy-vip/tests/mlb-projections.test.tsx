@@ -110,11 +110,12 @@ describe('MLB projections on the unified board', () => {
     expect(screen.getByText(/publish with the ~11:00 AM CT model run/)).toBeInTheDocument()
   })
 
-  it('sport tabs mark the current view and link the three views of MLB', () => {
-    render(<SportTabs sport="mlb" active="projections" />)
-    expect(screen.getByRole('link', { name: 'ALL PROJECTIONS' })).toHaveAttribute('aria-current', 'page')
+  it('sport tabs mark the current view and link the two views of MLB', () => {
+    render(<SportTabs sport="mlb" active="systems" />)
+    expect(screen.getByRole('link', { name: 'SYSTEMS' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('link', { name: 'PICKS & +EV' })).not.toHaveAttribute('aria-current')
     expect(screen.getByRole('link', { name: 'PICKS & +EV' })).toHaveAttribute('href', '/picks/mlb')
+    expect(screen.queryByRole('link', { name: 'ALL PROJECTIONS' })).toBeNull()
   })
 })
 

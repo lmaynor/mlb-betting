@@ -25,10 +25,14 @@ EV Outlier Gate (Tier 2):
   - not an official card play
 
 Dynamic Card Builder:
-  - 1 to 5 plays max
+  - No count cap: the card is every play that clears the gate (2026-11-02; it used to stop at 5)
   - Filter: mins_to_start >= 30
   - Deduplicate: max 1 play per player (highest beezy score), max 2 plays per game
-  - Dynamic size: NEVER pad with weak plays to force 5. If only 2 qualify, return 2.
+  - Dynamic size: NEVER pad with weak plays. If only 2 qualify, return 2; if 9 qualify, return 9.
+
+The NFL / NBA / NHL prop picks the site tracks and grades (ev.model_picks, system 'PROPS') use this gate as their first test and
+add the measured-signal / blended-EV / sharp-book checks, so ev.model_picks.qualifies() == 'official' IS the definition of a daily
+play; the site's Daily Card and Graded History read that tier (row field `pick_tier`, ledger notes `tier`).
 """
 from __future__ import annotations
 
@@ -312,8 +316,8 @@ def build_daily_card(rows: list[dict[str, Any]], now: datetime | None = None) ->
             game_counts[g] = c + 1
             game_deduped.append(r)
 
-    # Dynamic 1..5 plays. If 2 qualify, returns 2. NEVER pads.
-    return game_deduped[:5]
+    # No count cap: every play that clears the gate (and the per-player / per-game dedupe above) is on the card. NEVER pads.
+    return game_deduped
 
 
 def central_today_str() -> str:

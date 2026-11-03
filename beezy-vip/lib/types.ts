@@ -274,6 +274,11 @@ export interface SportProjectionRow {
   nba_model?: string | null
   /** NHL rows the hierarchical model priced ('hierarchical_v1') */
   nhl_model?: string | null
+  /** the model's 10th / 90th percentile for the stat (its own quantiles, not a validated interval); null on older boards */
+  proj_p10?: number | null
+  proj_p90?: number | null
+  /** the backend's verdict (ev/model_picks.py qualifies): 'official' = a daily play, 'tracked' = monitored only, null = not a pick. Absent on a board written before the stamp existed. */
+  pick_tier?: 'official' | 'tracked' | null
   /** resolved server-side by name (NHL / NBA: a league player id; NFL: nfl.com image token); null when unknown */
   headshot_id?: number | string | null
 }

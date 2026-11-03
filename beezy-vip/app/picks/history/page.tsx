@@ -2,16 +2,14 @@ export const dynamic = 'force-dynamic'
 
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { apiGetPicks } from '@/lib/betting-api'
 import { addDaysToDateKey, siteDateKey } from '@/lib/dates'
-import { recordOf, topFromBets, TOP_N } from '@/lib/top-picks'
-import { withHeadshotIds } from '@/lib/sport-assets.server'
-import type { Bet } from '@/lib/types'
-import { HistoryTable, type HistoryDay } from './history-table'
+import { recordOf } from '@/lib/top-picks'
+import { loadDailyPlaysHistory } from '@/lib/top-picks-data'
+import { HistoryTable } from './history-table'
 
 export const metadata: Metadata = {
-  title: 'Picks History',
-  description: 'Every past day\'s top 10 MLB player picks with the result of each, graded at a flat 1 unit.',
+  title: 'Graded History',
+  description: 'Every past day\'s Daily Card: each official play with its result, graded at a flat 1 unit.',
 }
 
 const RANGES = [7, 14, 30] as const
@@ -22,15 +20,9 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
   const days = (RANGES as readonly number[]).includes(asked) ? asked : 14
   const today = siteDateKey()
 
-  // Newest first, today excluded (it lives on /picks). Days with no card (off days) are dropped.
+  // Newest first, today excluded (it lives on the Daily Card). Days with no plays (off days) are dropped.
   const dates = Array.from({ length: days }, (_, i) => addDaysToDateKey(today, -(i + 1)))
-  const cards = await Promise.all(dates.map(d => apiGetPicks({ date: d, limit: 200 }).catch(() => [] as Bet[])))
-  const history: HistoryDay[] = dates
-    .map((date, i) => {
-      const picks = withHeadshotIds(topFromBets(cards[i], TOP_N))
-      return { date, picks, record: recordOf(picks) }
-    })
-    .filter(d => d.picks.length > 0)
+  const history = await loadDailyPlaysHistory(dates)
 
   const total = recordOf(history.flatMap(d => d.picks))
   const roi = total.graded > 0 ? (total.units / total.graded) * 100 : null
@@ -38,7 +30,7 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
   return (
     <div className="max-w-page mx-auto p-6">
       <div className="flex items-baseline justify-between gap-y-2 gap-x-4 flex-wrap mb-3">
-        <h1 className="text-[20px] font-bold text-text-primary m-0">Picks history</h1>
+        <h1 className="text-[20px] font-bold text-text-primary m-0">Graded history</h1>
         <div role="group" aria-label="Range" className="flex gap-1.5">
           {RANGES.map(r => (
             <Link key={r} href={r === 14 ? '/picks/history' : `/picks/history?days=${r}`} aria-current={r === days ? 'true' : undefined}
@@ -66,17 +58,18 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
 
       {history.length === 0 ? (
         <div className="bg-background-primary-default border border-separator-border rounded-control py-9 px-5 text-center text-text-secondary text-cozy">
-          No settled cards in this range yet.
+          No daily plays in this range yet. The tracker started logging NFL, NHL and NBA plays on 2 Nov 2026; MLB resumes in March.
         </div>
       ) : (
         <HistoryTable days={history} />
       )}
 
       <p className="text-[11.5px] text-text-secondary leading-[1.55] max-w-[90ch]" style={{ margin: '14px 2px 0' }}>
-        Each day shows that day&rsquo;s ten highest-scoring player picks from the tracked MLB card and +EV alerts, one row per prop at the best book, ranked the same way as
-        today&rsquo;s <Link className="text-link" href="/picks">Top 10</Link>. Results are graded at a flat 1 unit at the flagged price; pushes and voids
-        are excluded. This is not the staked ledger: see <Link className="text-link" href="/results">Results</Link> for that.
-        NFL, NHL and NBA picks are not tracked yet, so they have no history.
+        Each day is that day&rsquo;s <Link className="text-link" href="/cheat-sheet">Daily Card</Link>: every official play, no count cap, one row per prop at the best
+        book. A play is official when it clears the model-plus-market gate described there; it is logged at the flagged price the first time it qualifies and never
+        re-priced afterwards, so this record cannot be edited after the fact. Results are graded at a flat 1 unit; pushes and voids are excluded. NFL, NHL and NBA plays
+        are paper and unvalidated: their models have no tested edge against prices, and this record is how that gets settled. See{' '}
+        <Link className="text-link" href="/results">Results</Link> for the full staked ledger.
       </p>
     </div>
   )

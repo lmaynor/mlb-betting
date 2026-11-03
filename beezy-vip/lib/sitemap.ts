@@ -12,7 +12,7 @@ export interface SitemapEntry {
 }
 
 const STATIC_PATHS = [
-  '/', '/picks', '/picks/games', '/picks/history', '/ev', '/ev/games', '/edge', '/edge/projections', '/analytics', '/cheat-sheet', '/pricing', '/about', '/compare/oddsjam-alternative',
+  '/', '/picks', '/picks/history', '/ev', '/ev/games', '/edge', '/ev/projections', '/analytics', '/cheat-sheet', '/pricing', '/about', '/compare/oddsjam-alternative',
   '/tools', '/tools/boost-ev', '/tools/odds-calculator', '/tools/kelly-calculator', '/results', '/models', '/learn',
 ]
 
@@ -25,7 +25,7 @@ const LEGAL_PATHS = [
 
 export function sitemapEntries(): SitemapEntry[] {
   // Pick-system and model pages come from the registry so a new system is listed automatically.
-  const sportPaths = SPORT_SLUGS.flatMap(sport => [`/picks/${sport}`, `/picks/${sport}/projections`, `/picks/${sport}/systems`])
+  const sportPaths = SPORT_SLUGS.flatMap(sport => [`/picks/${sport}`, `/picks/${sport}/systems`])
   const systemPaths = PICK_SYSTEMS.map(s => `/picks/${s.sport}/${s.slug}`)
   const modelPaths = MODEL_SPECS.map(m => `/models/${m.slug}`)
   const learn: SitemapEntry[] = ARTICLES.map(a => ({ path: `/learn/${a.slug}`, lastmod: a.dateModified }))

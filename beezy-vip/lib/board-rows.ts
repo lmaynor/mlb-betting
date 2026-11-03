@@ -59,6 +59,11 @@ export interface BoardRow {
   result: 'win' | 'loss' | 'push' | 'void' | null
   /** readable name of the engine that priced the row ('Hierarchical', 'Empirical EWM'), never the raw id; null when the feed names none */
   engine?: string | null
+  /** the backend's verdict on the row (ev/model_picks.py): 'official' = a daily play. Null for MLB rows and boards written before the stamp. */
+  tier?: 'official' | 'tracked' | null
+  /** the model's own 10th / 90th percentile for the stat, in the stat's unit; null when the board does not carry them */
+  p10?: number | null
+  p90?: number | null
 }
 
 const ENGINE_NAME: Record<string, string> = {
@@ -131,6 +136,9 @@ export function fromSportProjections(rows: SportProjectionRow[]): BoardRow[] {
       isPick: false,
       result: null,
       engine: rowEngineLabel(r),
+      tier: r.pick_tier ?? null,
+      p10: r.proj_p10 ?? null,
+      p90: r.proj_p90 ?? null,
     }
   })
 }
@@ -176,6 +184,23 @@ export function fromMlbProjections(rows: MlbProjectionRow[]): BoardRow[] {
 }
 
 export const fairAmerican = (p: number | null) => (p == null || p <= 0 || p >= 1 ? null : probToAmerican(p))
+
+/**
+ * A daily play. NFL / NHL / NBA: the backend's own official tier (ev/model_picks.py `qualifies`, stamped on the row as `pick_tier`): the
+ * card gate PLUS the measured-signal, blended-EV and sharp-book checks, which exist only in Python, so the site never re-derives them
+ * (a board that carries no stamp has no official plays: it fails closed). MLB: the tracked card's own gate, as before.
+ */
+export function isOfficialRow(r: BoardRow): boolean {
+  if (r.sport !== 'mlb') return r.tier === 'official'
+  const ev = r.marketEv ?? 0
+  return ev >= 0.03 && ev <= 0.10 && r.score >= 68 && r.isPick !== false
+}
+
+/** Tier 2: a +EV outlier: real market EV, at least three reference books, and not already a daily play. */
+export function isOutlierRow(r: BoardRow): boolean {
+  const ev = r.marketEv ?? 0
+  return ev >= 0.025 && ev <= 0.15 && (r.nBooks == null || r.nBooks >= 3) && !isOfficialRow(r)
+}
 
 /** Rows that carry a signal worth listing as a pick: a posted line and a positive Beezy Score. */
 export const pickRows = (rows: BoardRow[]): BoardRow[] => rows.filter(r => r.hasLine && r.score > 0)

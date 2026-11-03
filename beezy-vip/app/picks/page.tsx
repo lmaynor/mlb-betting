@@ -92,8 +92,7 @@ export default async function TopPicksPage({ searchParams }: { searchParams: Pro
           {sportsInSeason().map(p => (
             <Link key={p.slug} href={sportHref(p.slug)} className="text-accent-400 hover:underline">{p.shortName} &rarr;</Link>
           ))}
-          <Link href="/picks/games" className="text-accent-400 hover:underline">Game picks &rarr;</Link>
-          <Link href="/picks/history" className="text-accent-400 hover:underline">Picks history &rarr;</Link>
+          <Link href="/picks/history" className="text-accent-400 hover:underline">Graded history &rarr;</Link>
         </div>
 
         <p className="mx-0.5 mt-3.5 max-w-[90ch] text-caption-1-regular text-text-secondary">
