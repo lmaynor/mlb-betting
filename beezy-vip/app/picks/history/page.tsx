@@ -34,7 +34,7 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
         <div role="group" aria-label="Range" className="flex gap-1.5">
           {RANGES.map(r => (
             <Link key={r} href={r === 14 ? '/picks/history' : `/picks/history?days=${r}`} aria-current={r === days ? 'true' : undefined}
-              className="mono text-[11.5px] font-semibold py-[5px] px-[10px] no-underline"
+              className="mono text-[12px] font-semibold py-[5px] px-[10px] no-underline"
               style={{
                 borderRadius: '6px',
                 color: r === days ? 'var(--color-background-secondary-default)' : 'var(--color-neutral-300)',
@@ -47,7 +47,7 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
         </div>
       </div>
 
-      <div className="mono bg-background-primary-default border border-separator-border rounded-control py-[9px] px-3.5 mb-3.5 text-[12.5px] text-neutral-300 flex gap-y-1.5 gap-x-4 flex-wrap">
+      <div className="mono bg-background-primary-default border border-separator-border rounded-control py-[9px] px-3.5 mb-3.5 text-[13px] text-neutral-300 flex gap-y-1.5 gap-x-4 flex-wrap">
         <span>{history.length} days</span>
         <span>{total.graded} graded</span>
         <span className="text-text-primary">{total.wins}-{total.losses}{total.pushes ? `-${total.pushes}` : ''}</span>
@@ -64,7 +64,7 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
         <HistoryTable days={history} />
       )}
 
-      <p className="text-[11.5px] text-text-secondary leading-[1.55] max-w-[90ch]" style={{ margin: '14px 2px 0' }}>
+      <p className="text-[12px] text-text-secondary leading-[1.55] max-w-[90ch]" style={{ margin: '14px 2px 0' }}>
         Each day is that day&rsquo;s <Link className="text-link" href="/cheat-sheet">Daily Card</Link>: every official play, no count cap, one row per prop at the best
         book. A play is official when it clears the model-plus-market gate described there; it is logged at the flagged price the first time it qualifies and never
         re-priced afterwards, so this record cannot be edited after the fact. Results are graded at a flat 1 unit; pushes and voids are excluded. NFL, NHL and NBA plays

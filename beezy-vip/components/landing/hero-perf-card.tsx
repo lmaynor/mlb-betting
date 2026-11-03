@@ -14,7 +14,7 @@ export function HeroPerfCard({ headline, curve }: { headline: EvHeadline | null;
       <div className="flex items-start justify-between gap-2.5">
         <div>
           <div className="ui-heading mb-2 text-text-secondary">PUBLIC LEDGER GROWTH (1/4 KELLY)</div>
-          <div className="mono text-[30px] font-bold leading-none text-text-primary">
+          <div className="mono text-[30px] font-semibold leading-none text-text-primary">
             {headline ? fmtMoney(headline.kelly_ending_bankroll) : '--'}
           </div>
           <div className="mt-1.5 text-caption-1-regular text-text-secondary">from {headline ? fmtMoney(headline.bankroll) : '$1,000'} starting bankroll{headline?.flat_roi_pct != null ? ` (${headline.flat_roi_pct > 0 ? '+' : ''}${headline.flat_roi_pct.toFixed(1)}% flat-stake ROI)` : ''}</div>

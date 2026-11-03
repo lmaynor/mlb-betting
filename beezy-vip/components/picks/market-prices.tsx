@@ -48,8 +48,8 @@ export function MarketPrices({ sport, rows, locked = 0, block, confluenceKeys = 
   const confluence = useMemo(() => new Set(confluenceKeys), [confluenceKeys])
   return (
     <div className="grid gap-4">
-      <div role="note" className="border border-[color:rgba(56,189,248,0.30)] bg-[rgba(56,189,248,0.06)] rounded-[10px] py-3 px-3.5 text-[12.5px] text-neutral-300 leading-[1.55]">
-        <strong className="text-link">PREVIEW.</strong> {short} sportsbook and exchange prices beating the consensus of the other books on the same player, stat and line. Not yet tracked in the public results. {sweepStatus(block)}
+      <div role="note" className="border border-[color:rgba(56,189,248,0.30)] bg-[rgba(56,189,248,0.06)] rounded-[10px] py-3 px-3.5 text-[13px] text-neutral-300 leading-[1.55]">
+        <strong className="text-link">Preview.</strong> {short} sportsbook and exchange prices beating the consensus of the other books on the same player, stat and line. Not yet tracked in the public results. {sweepStatus(block)}
         {' '}Kalshi asks are on the <Link className="text-link" href="/ev">Odds Terminal</Link>.
       </div>
       {rows.length === 0
@@ -78,18 +78,18 @@ function OutlierTable({ rows, sport, confluence }: { rows: EvBookOutlierRow[]; s
                   <span className="inline-flex items-center gap-2">
                     <PlayerHeadshot sport={sport} id={headshotOf(sport, r)} name={r.player} size={28} />
                     <span>{r.player} <span className="text-text-secondary font-normal">{point} {propStatLabel(r.stat ?? r.market)}</span></span>
-                    {confluence?.has(confluenceKey(r.player, String(r.stat ?? r.market), String(r.side))) && <span className="ui-heading text-micro text-signal border border-[color:rgba(87,242,135,0.35)] rounded-chip py-[1px] px-[5px] whitespace-nowrap" title="The projection also favors this side">MODEL + MARKET</span>}
+                    {confluence?.has(confluenceKey(r.player, String(r.stat ?? r.market), String(r.side))) && <span className="ui-heading text-micro text-signal border border-[color:rgba(87,242,135,0.35)] rounded-chip py-[1px] px-[5px] whitespace-nowrap" title="The projection also favors this side">Model + market</span>}
                   </span>
                 </td>
                 <td className="mono py-2.5 px-3 text-neutral-300">{(r.game_key ?? '').split(':')[2]}</td>
                 <td className="py-2.5 px-3 text-neutral-300">{String(r.side).toUpperCase()}</td>
                 <td className="py-2.5 px-3">
-                  <span className="text-mini font-bold py-[3px] px-2" style={{ color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px' }}>{b.label}</span>
+                  <span className="text-mini font-semibold py-[3px] px-2" style={{ color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px' }}>{b.label}</span>
                 </td>
                 <td className="mono py-2.5 px-3">{formatOdds(r.american)}</td>
                 <td className="mono py-2.5 px-3">{r.p_fair != null ? `${(r.p_fair * 100).toFixed(1)}%` : '--'}</td>
                 <td className="mono py-[10px] px-3" style={{ color: r.n_books >= 3 ? 'var(--color-neutral-300)' : 'var(--warn)' }}>{r.n_books}</td>
-                <td className="mono py-[10px] px-3 font-bold" style={{ color: r.ev >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r.ev >= 0 ? '+' : ''}{(r.ev * 100).toFixed(1)}%</td>
+                <td className="mono py-[10px] px-3 font-semibold" style={{ color: r.ev >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r.ev >= 0 ? '+' : ''}{(r.ev * 100).toFixed(1)}%</td>
                 <td className="ui-heading py-[10px] px-3 text-micro" style={{ color: r.flag ? '#f59e0b' : 'var(--color-text-secondary)' }}>{r.flag ? 'FLAGGED' : reasonLabel(r.reason)}</td>
               </tr>
             )

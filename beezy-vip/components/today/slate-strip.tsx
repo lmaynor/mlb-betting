@@ -45,7 +45,7 @@ export async function SlateStrip() {
               </div>
               {hasPick && topPick ? (
                 <div className="flex items-center gap-1.5">
-                  <span className="ui-heading text-micro font-semibold tracking-fine py-[2px] px-[6px]" style={{
+                  <span className="ui-heading text-micro font-semibold py-[2px] px-[6px]" style={{
                     background: `color-mix(in oklab, ${sysColor} 16%, var(--color-background-full))`,
                     color: sysColor,
                     border: `1px solid color-mix(in oklab, ${sysColor} 40%, var(--color-background-full))`,
@@ -53,7 +53,7 @@ export async function SlateStrip() {
                   }}>
                     {topPick.system}
                   </span>
-                  <span className="mono" style={{ fontSize: '11px', fontWeight: 700, color }}>
+                  <span className="mono" style={{ fontSize: '11px', fontWeight: 600, color }}>
                     {score}
                   </span>
                 </div>

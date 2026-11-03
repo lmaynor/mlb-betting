@@ -33,7 +33,7 @@ function PriceChip({ s }: { s: ShopSide }) {
       <BookLogo book={s.book} size={16} />
       <b className="mono font-semibold" style={{ color: s.actionable ? GREEN : 'var(--color-text-primary)' }}>{formatOdds(s.american)}</b>
       {s.actionable && s.ev != null && <span className="mono text-[11px] font-semibold rounded-chip px-1" style={{ color: GREEN, background: 'rgba(87,242,135,0.10)' }}>{signedPct(s.ev)}</span>}
-      {s.suspect && <span className="mono text-[10px] font-semibold tracking-fine text-warn" title="Unusually large against the market fair price: often a stale quote. Check the price at the book.">CHECK</span>}
+      {s.suspect && <span className="mono text-[10px] font-semibold text-warn" title="Unusually large against the market fair price: often a stale quote. Check the price at the book.">Check</span>}
     </span>
   )
 }
@@ -106,7 +106,7 @@ function MarketPane({ g, market, initialLine, bettable }: { g: GameBoardEntry; m
                     borderColor: on ? GREEN : 'var(--color-separator-border)',
                     color: on ? 'var(--color-text-primary)' : r.thin ? 'var(--color-text-tertiary)' : 'var(--color-text-secondary)',
                   }}>
-                  {chip(r.line)}{r.main && <span className="block text-[10px] leading-[8px] tracking-fine -mt-px" style={{ color: GREEN }}>MAIN</span>}
+                  {chip(r.line)}{r.main && <span className="block text-[10px] leading-[8px] -mt-px" style={{ color: GREEN }}>MAIN</span>}
                 </button>
               )
             })}

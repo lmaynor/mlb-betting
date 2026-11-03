@@ -72,7 +72,7 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
 
   return (
     <div>
-      {status && <div className="text-[11.5px] mb-2" role={statusWarn ? 'status' : undefined} style={{ color: statusWarn ? 'var(--warn)' : 'var(--color-text-secondary)' }}>{status}</div>}
+      {status && <div className="text-[12px] mb-2" role={statusWarn ? 'status' : undefined} style={{ color: statusWarn ? 'var(--warn)' : 'var(--color-text-secondary)' }}>{status}</div>}
       <div className="pb-wrap" style={{ ...SURFACE, overflowX: 'auto' }}>
         <table className="pb-table w-full border-collapse text-cozy">
           <thead><tr>{heads.map(h => <th key={h} className={`ui-heading${HIDE_ON_PHONE.has(h) ? ' pb-hide-m' : ''}`} title={HEAD_TIPS[h]} style={TH}>{h}</th>)}</tr></thead>
@@ -90,11 +90,11 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                     {r.score > 0 ? (
                       <div className="inline-flex items-center gap-1.5">
                         {isOfficial ? (
-                          <span className="ui-heading pb-hide-m text-micro text-signal border border-[color:#57F287] rounded-chip bg-[rgba(87,242,135,0.12)]" style={{ padding: '1px 5px' }}>OFFICIAL PLAY</span>
+                          <span className="ui-heading pb-hide-m text-micro text-signal border border-[color:#57F287] rounded-chip bg-[rgba(87,242,135,0.12)]" style={{ padding: '1px 5px' }}>Official play</span>
                         ) : isOutlier ? (
                           <span className="ui-heading pb-hide-m text-micro text-link border border-[color:#38bdf8] rounded-chip bg-[rgba(56,189,248,0.12)]" style={{ padding: '1px 5px' }}>+EV OUTLIER</span>
                         ) : null}
-                        <span className="mono font-bold" style={{ color: isOfficial ? '#57F287' : isOutlier ? '#38bdf8' : 'var(--color-neutral-300)' }}>{r.score}</span>
+                        <span className="mono font-semibold" style={{ color: isOfficial ? '#57F287' : isOutlier ? '#38bdf8' : 'var(--color-neutral-300)' }}>{r.score}</span>
                       </div>
                     ) : <span className="text-text-secondary">--</span>}
                   </td>
@@ -132,8 +132,8 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                   </td>
                   {showModel && (
                     <td className="pb-model" style={TD}>
-                      <span className="mono text-text-primary font-bold">{num(r.proj)}</span>
-                      {r.pModel != null && <span className="mono pb-hide-m ml-2 text-[11.5px] text-neutral-300" title="The model's probability for the listed side">{pct(r.pModel)}</span>}
+                      <span className="mono text-text-primary font-semibold">{num(r.proj)}</span>
+                      {r.pModel != null && <span className="mono pb-hide-m ml-2 text-[12px] text-neutral-300" title="The model's probability for the listed side">{pct(r.pModel)}</span>}
                     </td>
                   )}
                   {showRange && (
@@ -168,14 +168,14 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                   <td className="pb-price" style={TD}>
                     {r.odds == null || !b ? <span className="text-text-secondary">--</span> : (
                       <span className="inline-flex items-center gap-[7px]">
-                        <span className="pb-book text-mini font-bold" data-short={b.short} title={b.label} style={{ color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '2px 7px' }}>{b.label}</span>
+                        <span className="pb-book text-mini font-semibold" data-short={b.short} title={b.label} style={{ color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '2px 7px' }}>{b.label}</span>
                         <span className="mono text-text-primary">{formatOdds(r.odds)}</span>
                       </span>
                     )}
                   </td>
                   <td className="pb-edge" style={TD}>
                     <span className="mono" title="Model probability minus the de-vigged market probability for this side" style={{ color: (r.modelEdge ?? 0) > 0 ? 'var(--signal)' : 'var(--color-text-secondary)' }}>{signed(r.modelEdge)}</span>
-                    {r.confluence && <span className="ui-heading pb-hide-m ml-2 text-micro text-signal border border-[color:rgba(87,242,135,0.35)] rounded-chip" title="The model and the market price both favor this side" style={{ padding: '1px 5px' }}>MODEL + MARKET</span>}
+                    {r.confluence && <span className="ui-heading pb-hide-m ml-2 text-micro text-signal border border-[color:rgba(87,242,135,0.35)] rounded-chip" title="The model and the market price both favor this side" style={{ padding: '1px 5px' }}>Model + market</span>}
                     {r.isPick && <span className="ui-heading pb-hide-m ml-2 text-signal">PICK</span>}
                   </td>
                   {showEv && (
@@ -197,13 +197,13 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
       {rows.length > limit && (
         <button onClick={() => setLimit(limit + PAGE)} className="btn btn-ghost tap-m mt-[10px]">Show {Math.min(PAGE, rows.length - limit)} more</button>
       )}
-      <p className="text-[11.5px] text-text-secondary mt-2.5 leading-[1.55]">
+      <p className="text-[12px] text-text-secondary mt-2.5 leading-[1.55]">
         Model edge is the model&rsquo;s probability minus the market&rsquo;s fair probability: where the model disagrees. Price EV is the best
         price against the market&rsquo;s own fair probability: whether a book is actually off-market. A big edge with a negative EV means only the
         model likes the play. Rows with no line are projections only: prices have not posted.
       </p>
       {visuals && showRange && (
-        <ul className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 p-0 list-none text-[11.5px] text-text-secondary" aria-label="How to read RANGE">
+        <ul className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 p-0 list-none text-[12px] text-text-secondary" aria-label="How to read RANGE">
           {LAMBDA_LEGEND.map(l => (
             <li key={l.label} className="inline-flex items-center gap-1.5"><span aria-hidden className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: l.color }} />{l.label}</li>
           ))}

@@ -116,12 +116,12 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
   return (
     <div>
       <div className="flex items-center gap-y-[6px] gap-x-[14px] flex-wrap min-h-[38px] py-[6px] px-[14px] mb-[10px] bg-background-primary-default text-compact" data-testid="game-prices-strip" style={{ border: `1px solid ${HAIR}`, borderRadius: '8px' }}>
-        <span className="mono font-bold text-text-primary">{sportLabel}</span>
+        <span className="mono font-semibold text-text-primary">{sportLabel}</span>
         <span className="mono text-neutral-300">{visible.length} ROWS</span>
         <span className="mono text-neutral-300" title={active.map(f => f.lines_source).filter(Boolean).join(', ') || undefined}>LINES {ageText(age)} OLD</span>
-        {stale && <span className="mono text-[10.5px] font-bold tracking-fine text-warn border border-[color:#facc1555] rounded-chip py-0 px-[5px]">STALE</span>}
+        {stale && <span className="mono text-[11px] font-semibold text-warn border border-[color:#facc1555] rounded-chip py-0 px-[5px]">Stale</span>}
         <span className="text-neutral-300">
-          <span className="mono text-[10.5px] font-bold tracking-fine text-warn">{GAME_PRICES_LABEL}</span> {GAME_PRICES_NOTE}
+          <span className="mono text-[11px] font-semibold text-warn">{GAME_PRICES_LABEL}</span> {GAME_PRICES_NOTE}
         </span>
       </div>
 
@@ -170,9 +170,9 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
                 <thead>
                   <tr>
                     <th scope="col" className="odds-prop">GAME</th>
-                    <th scope="col" className="odds-ev" title="Best bettable price on the away side (moneyline, spread) or the over (total)">BEST AWAY / OVER</th>
-                    <th scope="col" className="odds-ev" title="Best bettable price on the home side (moneyline, spread) or the under (total)">BEST HOME / UNDER</th>
-                    <th scope="col" className="odds-ev" title="De-vigged fair probability from the reference books, away / over above home / under">FAIR %</th>
+                    <th scope="col" className="odds-ev" title="Best bettable price on the away side (moneyline, spread) or the over (total)">Best away / over</th>
+                    <th scope="col" className="odds-ev" title="Best bettable price on the home side (moneyline, spread) or the under (total)">Best home / under</th>
+                    <th scope="col" className="odds-ev" title="De-vigged fair probability from the reference books, away / over above home / under">Fair %</th>
                     <th scope="col" className="odds-ev" title="EV of each side at its best bettable price against the fair value">EV</th>
                     <th scope="col" title="1/4 Kelly stake on the best +EV side">1/4 KELLY</th>
                     {columns.map(c => (

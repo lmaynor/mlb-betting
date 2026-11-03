@@ -47,21 +47,21 @@ export function MobileCompareSheet({
         {item.type === 'ev' && (
           <div className="grid grid-cols-2 gap-2">
             <div style={{ padding: '8px 10px', background: 'var(--color-background-secondary-default)', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
-              <div className="mono text-micro text-text-secondary uppercase">Consensus Fair</div>
-              <div className="mono text-[14px] font-bold text-text-primary mt-0.5">
+              <div className="mono text-micro text-text-secondary">Consensus Fair</div>
+              <div className="mono text-[14px] font-semibold text-text-primary mt-0.5">
                 {item.row.fairAmerican != null ? (item.row.fairAmerican > 0 ? `+${item.row.fairAmerican}` : `${item.row.fairAmerican}`) : '--'}
               </div>
-              <div className="mono mt-0.5 text-[10.5px] text-text-secondary">
+              <div className="mono mt-0.5 text-[11px] text-text-secondary">
                 {item.row.nRef} reference books
               </div>
             </div>
 
             <div style={{ padding: '8px 10px', background: 'var(--color-background-secondary-default)', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
-              <div className="mono text-micro text-text-secondary uppercase">Best Odds &middot; {bookDisplay(item.row.bestBook).label}</div>
-              <div className="mono" style={{ fontSize: '14px', fontWeight: 700, color: GREEN, marginTop: '2px' }}>
+              <div className="mono text-micro text-text-secondary">Best Odds &middot; {bookDisplay(item.row.bestBook).label}</div>
+              <div className="mono" style={{ fontSize: '14px', fontWeight: 600, color: GREEN, marginTop: '2px' }}>
                 {item.row.side} {formatOdds(item.row.bestAmerican)}
               </div>
-              <div className="mono" style={{ fontSize: '10.5px', color: GREEN, marginTop: '2px' }}>
+              <div className="mono" style={{ fontSize: '11px', color: GREEN, marginTop: '2px' }}>
                 {item.row.ev != null ? `${signed(item.row.ev * 100)}% EV` : '--'}
               </div>
             </div>
@@ -69,7 +69,7 @@ export function MobileCompareSheet({
         )}
 
         <div>
-          <div className="ui-heading text-micro text-text-secondary mb-2 tracking-head">
+          <div className="ui-heading text-micro text-text-secondary mb-2">
             ALL REPORTING BOOKS ({row.books.length})
           </div>
           <div className="flex flex-col gap-1.5">
@@ -102,16 +102,16 @@ export function MobileCompareSheet({
 
                   <div className="flex items-center gap-3">
                     <div className="text-right">
-                      <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: isBest && item.type === 'ev' && item.row.side === 'OVER' ? GREEN : 'var(--color-text-primary)' }}>
+                      <span className="mono" style={{ fontSize: '12px', fontWeight: 600, color: isBest && item.type === 'ev' && item.row.side === 'OVER' ? GREEN : 'var(--color-text-primary)' }}>
                         O {q.over != null ? formatOdds(q.over) : '--'}
                       </span>
                       <span style={{ margin: '0 4px', color: 'var(--color-text-secondary)' }}>/</span>
-                      <span className="mono" style={{ fontSize: '12px', fontWeight: 700, color: isBest && item.type === 'ev' && item.row.side === 'UNDER' ? GREEN : 'var(--color-text-primary)' }}>
+                      <span className="mono" style={{ fontSize: '12px', fontWeight: 600, color: isBest && item.type === 'ev' && item.row.side === 'UNDER' ? GREEN : 'var(--color-text-primary)' }}>
                         U {q.under != null ? formatOdds(q.under) : '--'}
                       </span>
                     </div>
                     {isBest && (
-                      <span className="mono" style={{ fontSize: '10px', fontWeight: 700, color: GREEN, padding: '1px 5px', borderRadius: '3px', background: 'rgba(87, 242, 135, 0.15)' }}>
+                      <span className="mono" style={{ fontSize: '10px', fontWeight: 600, color: GREEN, padding: '1px 5px', borderRadius: '3px', background: 'rgba(87, 242, 135, 0.15)' }}>
                         BEST
                       </span>
                     )}

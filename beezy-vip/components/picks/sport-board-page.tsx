@@ -81,14 +81,14 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
             <span className="ui-heading text-micro py-[2px] px-2" title={pillar.description} style={{ color: pillar.accent, border: `1px solid ${pillar.accent}66`, borderRadius: '6px' }}>{STATUS_LABEL[pillar.status]}</span>
             {!tracked && (
               <span className="ui-heading text-micro text-warn border border-[color:rgba(245,158,11,0.45)] rounded-[6px] py-0.5 px-2" title="NFL, NHL and NBA projections are model output with no tested edge against prices. They are not tracked in the public results."
-               >UNVALIDATED</span>
+               >Unvalidated</span>
             )}
           </div>
           <span className="mono text-compact text-text-secondary">{rows.length} {rows.length === 1 ? 'row' : 'rows'}{filtered ? ' after filters' : ''} &middot; {copy.sub}</span>
         </div>
         {view === 'picks' && (
           <div className="flex items-center gap-1.5 mb-3.5 flex-wrap">
-            <span className="mono text-mini text-text-secondary tracking-head">TIER:</span>
+            <span className="mono text-mini text-text-secondary">TIER:</span>
             {[
               { id: 'all', label: 'All Actionable' },
               { id: 'official', label: 'Official Plays Only' },
@@ -118,7 +118,7 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
         <LockedNotice locked={board.locked} shown={rows.length} what={`${pillar.shortName} ${copy.what}`} plan={`The full board is on the ${pillar.shortName} Pass or All-Access Pro.`} />
         {!tracked && view === 'picks' && f.day === 'today' && (
           <>
-            <h2 className="text-[15px] font-bold text-text-primary" style={{ margin: '32px 0 10px' }}>Market prices</h2>
+            <h2 className="text-[15px] font-semibold text-text-primary" style={{ margin: '32px 0 10px' }}>Market prices</h2>
             <MarketPrices sport={sport as ProjectionSport} rows={prices} locked={board.lockedPrices} block={board.block} confluenceKeys={board.confluenceKeys} />
           </>
         )}

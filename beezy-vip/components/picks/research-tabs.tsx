@@ -12,7 +12,7 @@ export function ResearchTabs({ active }: { active: ResearchView }) {
   return (
     <nav aria-label="Prop research views" className="inline-flex gap-0.5 p-[3px] bg-background-secondary-default border border-separator-border rounded-control">
       {TABS.map(t => (
-        <Link className="text-compact font-bold tracking-[0.05em] py-[7px] px-[13px] no-underline whitespace-nowrap" key={t.id} href={t.href} title={t.title} aria-current={active === t.id ? 'page' : undefined}
+        <Link className="text-compact font-semibold py-[7px] px-[13px] no-underline whitespace-nowrap" key={t.id} href={t.href} title={t.title} aria-current={active === t.id ? 'page' : undefined}
           style={{
             borderRadius: '6px',
             color: active === t.id ? '#ffffff' : 'var(--color-neutral-300)',

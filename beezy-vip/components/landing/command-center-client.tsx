@@ -13,7 +13,7 @@ import { readableNotes } from '@/lib/bet-notes'
 import { PlayerHeadshot } from '@/components/ui/sport-assets'
 import type { HeadshotSport } from '@/lib/sport-assets'
 
-const TH = 'sticky top-0 border-b border-separator-border bg-background-secondary-default px-3 py-2 text-left text-micro font-semibold uppercase tracking-caps text-text-secondary'
+const TH = 'sticky top-0 border-b border-separator-border bg-background-secondary-default px-3 py-2 text-left text-micro font-semibold text-text-secondary'
 const TD = 'border-b border-border-table px-3 py-2.5 align-middle'
 
 export function CommandCenterClient({ bets, headshots }: { bets: Bet[]; headshots: Record<number, { sport: HeadshotSport; id: number | string | null }> }) {

@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 }
 
 const CARD = 'rounded-xl border border-separator-border bg-background-primary-default'
-const LBL = 'ui-heading tracking-label text-text-secondary'
+const LBL = 'ui-heading text-text-secondary'
 
 const PILL = SYSTEM_PILL
 
@@ -62,7 +62,7 @@ function SportSection({ sport, open, children }: { sport: SportSlug; open: boole
   )
 }
 
-const TH = 'mono whitespace-nowrap border-b border-separator-border bg-background-secondary-default px-3 py-[9px] text-left text-micro uppercase tracking-label text-text-secondary'
+const TH = 'mono whitespace-nowrap border-b border-separator-border bg-background-secondary-default px-3 py-[9px] text-left text-micro text-text-secondary'
 const TD = 'border-b border-border-table p-3 align-top'
 
 /** NFL / NHL / NBA: every system with its engine and live accuracy against the last-5 average, linking to its model page. */
@@ -83,7 +83,7 @@ function ProjectionSportTable({ sport }: { sport: ProjectionSport }) {
               return (
                 <tr key={sys.key} className="transition-colors hover:bg-background-primary-hover">
                   <td className={TD}>
-                    <span className="mono inline-block whitespace-nowrap rounded-full px-2 py-[3px] text-micro font-bold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{sys.shortName}</span>
+                    <span className="mono inline-block whitespace-nowrap rounded-full px-2 py-[3px] text-micro font-semibold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{sys.shortName}</span>
                   </td>
                   <td className={cx(TD, 'text-caption-1-regular text-text-secondary')}>
                     <div className="mb-0.5 font-semibold text-text-primary">{sys.name}</div>
@@ -118,13 +118,13 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
       <div className={cx(CARD, 'mono mb-5.5 flex min-h-[38px] flex-wrap items-center gap-x-5.5 gap-y-1.5 px-3.5 py-2 text-caption-1-regular text-text-secondary shadow-card')}>
         <span><span className="text-text-tertiary">MLB</span> XGBoost + count-model sims</span>
         <span><span className="text-text-tertiary">NFL / NHL / NBA</span> empirical projections</span>
-        <span><span className="text-text-tertiary">VALIDATION</span> walk-forward, no future data</span>
-        <span><span className="text-text-tertiary">SAMPLE</span> 200 bets per MLB system, paper</span>
-        {stats.length > 0 && <span><span className="text-text-tertiary">RECORDS AS OF</span> {asOfLabel()}</span>}
+        <span><span className="text-text-tertiary">Validation</span> walk-forward, no future data</span>
+        <span><span className="text-text-tertiary">Sample</span> 200 bets per MLB system, paper</span>
+        {stats.length > 0 && <span><span className="text-text-tertiary">Records as of</span> {asOfLabel()}</span>}
       </div>
 
       <section className={cx(CARD, 'mb-6 p-5')}>
-        <div className="ui-heading mb-3 tracking-label text-text-secondary">Training Methodology</div>
+        <div className="ui-heading mb-3 text-text-secondary">Training Methodology</div>
         {[
           'Trained models use walk-forward validation: trained on prior seasons and validated on the next season so the model never sees future data.',
           'An MLB pick has to clear model probability, implied probability, edge threshold, and Kelly-positive checks before it reaches the card. NFL, NHL and NBA run projection systems that are shown beside the market but not tracked in the public results.',
@@ -140,7 +140,7 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
         <div className={cx(CARD, 'models-table-desktop overflow-hidden')}>
           <div className="grid border-b border-separator-border bg-background-secondary-default" style={{ gridTemplateColumns: '110px 1fr 88px 88px 72px' }}>
             {['System', 'What it prices', 'Metric', 'Training', 'Detail'].map(h => (
-              <div key={h} className="mono px-3 py-[9px] text-micro uppercase tracking-label text-text-secondary">{h}</div>
+              <div key={h} className="mono px-3 py-[9px] text-micro text-text-secondary">{h}</div>
             ))}
           </div>
           {ACTIVE_MODELS.map((model, i) => {
@@ -150,14 +150,14 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
             return (
               <div key={model.system} className={cx('grid items-center transition-colors hover:bg-background-primary-hover', i < ACTIVE_MODELS.length - 1 && 'border-b border-border-table')} style={{ gridTemplateColumns: '110px 1fr 88px 88px 72px' }}>
                 <div className="p-3">
-                  <span className="mono mb-1 inline-block rounded-full px-2 py-[3px] text-micro font-bold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{model.system}</span>
+                  <span className="mono mb-1 inline-block rounded-full px-2 py-[3px] text-micro font-semibold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{model.system}</span>
                   <div className="mono text-micro text-text-secondary">{model.version}</div>
                 </div>
                 <div className="p-3 text-caption-1-regular text-text-secondary">{model.desc}</div>
                 <div className="p-3">
                   <div className="mono text-headline-bold text-text-primary">{model.metric}</div>
-                  <div className="mono text-micro uppercase tracking-head text-text-secondary">{model.metricLabel}</div>
-                  {roi !== null && <div className="mono mt-0.5 text-micro font-bold" style={{ color: roi >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{roi >= 0 ? '+' : ''}{roi.toFixed(1)}% live ROI</div>}
+                  <div className="mono text-micro text-text-secondary">{model.metricLabel}</div>
+                  {roi !== null && <div className="mono mt-0.5 text-micro font-semibold" style={{ color: roi >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{roi >= 0 ? '+' : ''}{roi.toFixed(1)}% live ROI</div>}
                 </div>
                 <div className="mono p-3 text-mini text-text-secondary">{model.range}</div>
                 <div className="p-3">
@@ -176,13 +176,13 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
             return (
               <Link key={model.system} href={model.href} className="mb-2.5 block rounded-2lg border border-separator-border bg-background-primary-default p-[13px] no-underline">
                 <div className="mb-[9px] flex justify-between gap-3">
-                  <span className="mono rounded-full px-2 py-[3px] text-micro font-extrabold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{model.system}</span>
+                  <span className="mono rounded-full px-2 py-[3px] text-micro font-semibold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{model.system}</span>
                   <span className="mono text-micro text-text-secondary">{model.metricLabel}: <strong className="text-text-primary">{model.metric}</strong></span>
                 </div>
                 <p className="mb-2.5 text-caption-1-regular text-text-secondary">{model.desc}</p>
                 <div className="mono flex justify-between gap-2.5 text-micro text-text-secondary">
                   <span>{model.version} / {model.range}</span>
-                  {roi !== null && <span className="font-extrabold" style={{ color: roi >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{roi >= 0 ? '+' : ''}{roi.toFixed(1)}% ROI</span>}
+                  {roi !== null && <span className="font-semibold" style={{ color: roi >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{roi >= 0 ? '+' : ''}{roi.toFixed(1)}% ROI</span>}
                 </div>
               </Link>
             )
@@ -198,7 +198,7 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
             const slug = getModelSpec(model.system.toLowerCase().replace(/_/g, '-'))?.slug
             const body = (
               <>
-                <span className="mono mb-[9px] inline-block rounded-full px-2 py-[3px] text-micro font-extrabold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{model.system}</span>
+                <span className="mono mb-[9px] inline-block rounded-full px-2 py-[3px] text-micro font-semibold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{model.system}</span>
                 <div className="mb-[5px] text-body-2-bold text-text-primary">{model.label}</div>
                 <p className="text-caption-2-regular text-text-secondary">{model.note}</p>
                 {slug && <div className="times mt-2 text-caption-1-semibold text-link">Detail &rarr;</div>}
@@ -231,7 +231,7 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
           { name: 'ParlayAPI + BettingPros', desc: 'Sportsbook and exchange prices behind every line, consensus and +EV flag.' },
         ].map((src, i) => (
           <div key={src.name} className={cx('p-3.5', i % 4 !== 3 && 'border-r border-separator-border', i < 4 && 'border-b border-separator-border')}>
-            <div className="mono mb-1 text-mini font-bold text-text-primary">{src.name}</div>
+            <div className="mono mb-1 text-mini font-semibold text-text-primary">{src.name}</div>
             <div className="text-caption-2-regular text-text-secondary">{src.desc}</div>
           </div>
         ))}

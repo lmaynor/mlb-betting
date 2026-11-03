@@ -8,7 +8,7 @@ import { kellyStake, americanToImpliedProb, formatProb } from '@/lib/odds'
 const B = '1px solid var(--color-separator-border)'
 const B_INNER = '1px solid var(--color-separator-border)'
 const inputStyle: React.CSSProperties = { width: '100%', background: 'var(--slate)', border: B, color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono, monospace)', fontSize: '14px', padding: '11px 14px', outline: 'none', borderRadius: 'var(--radius)' }
-const labelStyle: React.CSSProperties = { fontFamily: 'var(--font-text), sans-serif', fontSize: '10px', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '8px' }
+const labelStyle: React.CSSProperties = { fontFamily: 'var(--font-text), sans-serif', fontSize: '10px', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '8px' }
 
 export default function KellyCalculatorPage() {
   // Shared with the +EV terminal: editing it here updates the stake sizing there (stored per browser).
@@ -55,13 +55,13 @@ export default function KellyCalculatorPage() {
         <div className="border border-separator-border rounded-control bg-background-primary-default overflow-hidden">
           <div className="grid grid-cols-2" style={{ borderBottom: B_INNER }}>
             <div className="p-5" style={{ borderRight: B_INNER }}>
-              <div className="ui-heading text-micro tracking-label text-text-secondary mb-2">Full Kelly</div>
-              <div className="mono text-[28px] font-bold text-signal">{result.fullKelly}%</div>
+              <div className="ui-heading text-micro text-text-secondary mb-2">Full Kelly</div>
+              <div className="mono text-[28px] font-semibold text-signal">{result.fullKelly}%</div>
               <div className="mono text-cozy text-signal mt-1">${result.stakeFullDollars.toFixed(2)}</div>
             </div>
             <div className="p-5">
-              <div className="ui-heading text-micro tracking-label text-text-secondary mb-2">Half Kelly</div>
-              <div className="mono text-[28px] font-bold text-text-primary">{result.halfKelly}%</div>
+              <div className="ui-heading text-micro text-text-secondary mb-2">Half Kelly</div>
+              <div className="mono text-[28px] font-semibold text-text-primary">{result.halfKelly}%</div>
               <div className="mono text-cozy text-text-secondary mt-1">${result.stakeHalfDollars.toFixed(2)}</div>
             </div>
           </div>

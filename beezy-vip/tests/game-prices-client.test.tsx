@@ -41,7 +41,7 @@ describe('GamePricesClient (the /ev/games PRICES view)', () => {
     expect(screen.queryByText('STALE')).toBeNull()
     const table = screen.getByRole('table')
     const heads = within(table).getAllByRole('columnheader').map(h => h.textContent)
-    expect(heads).toEqual(expect.arrayContaining(['GAME', 'BEST AWAY / OVER', 'BEST HOME / UNDER', 'FAIR %', 'EV', 'DRAFTKIN', 'FANDUEL', 'BETMGM', 'CAESARS']))
+    expect(heads).toEqual(expect.arrayContaining(['GAME', 'Best away / over', 'Best home / under', 'Fair %', 'EV', 'DRAFTKIN', 'FANDUEL', 'BETMGM', 'CAESARS']))
     expect(table.querySelectorAll('[data-matchup="BOS @ MIA"]').length).toBe(3)
     expect(table.querySelector('[data-matchup="TOR @ MTL"]')).not.toBeNull()
     expect(table.textContent).toMatch(/MIA -3\.5/)
@@ -91,8 +91,8 @@ describe('GamePricesClient (the /ev/games PRICES view)', () => {
 
   it('flags a stale feed', () => {
     render(<GamePricesClient feeds={{ nba: { ...nba, stale: true, age_minutes: 200 }, nhl: null }} sport="nba" />)
-    expect(screen.getByText('STALE')).toBeInTheDocument()
-    expect(screen.getByTestId('game-prices-strip').textContent).toMatch(/LINES 3\.3 H OLD/)
+    expect(screen.getByText('Stale')).toBeInTheDocument()
+    expect(screen.getByTestId('game-prices-strip').textContent).toMatch(/Lines 3\.3 h old/i)
   })
 
   it('says prices are not published when the feeds are missing or unavailable', () => {

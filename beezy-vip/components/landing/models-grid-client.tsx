@@ -57,7 +57,7 @@ function SystemTile({ s }: { s: SystemCard }) {
         className="flex w-full cursor-pointer items-center justify-between gap-2 border-none bg-transparent px-4 pb-0 pt-3.5 text-left [font:inherit] [color:inherit]"
       >
         <span className="flex min-w-0 items-center gap-2">
-          <span className="ui-heading rounded-full px-2 py-[3px] tracking-[0.05em]" style={{ background: pill.bg, color: pill.color, border: pill.border }}>
+          <span className="ui-heading rounded-full px-2 py-[3px]" style={{ background: pill.bg, color: pill.color, border: pill.border }}>
             {s.system}
           </span>
         </span>
@@ -91,7 +91,7 @@ function SystemTile({ s }: { s: SystemCard }) {
                 ['Sample', gateCleared ? '200+ bets' : s.total_bets + '/200 bets', gateCleared ? 'var(--color-text-primary)' : 'var(--color-text-secondary)'] as const,
               ].map(([label, val, color]) => (
                 <div key={label}>
-                  <div className="ui-heading mb-1 tracking-label text-text-secondary">{label}</div>
+                  <div className="ui-heading mb-1 text-text-secondary">{label}</div>
                   <div className="mono text-caption-1-semibold" style={{ color }}>{val}</div>
                 </div>
               ))}

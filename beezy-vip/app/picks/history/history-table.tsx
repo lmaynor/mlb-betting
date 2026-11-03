@@ -45,7 +45,7 @@ export function HistoryTable({ days }: { days: HistoryDay[] }) {
                   <td className="mono" style={{ ...TD, textAlign: 'right', color: 'var(--color-text-primary)' }}>
                     {r.graded === 0 ? <span className="text-text-secondary">{r.pending > 0 ? 'pending' : '--'}</span> : `${r.wins}-${r.losses}${r.pushes ? `-${r.pushes}` : ''}`}
                   </td>
-                  <td className="mono" style={{ ...TD, textAlign: 'right', fontWeight: 700, color: r.graded === 0 ? 'var(--color-text-secondary)' : r.units >= 0 ? 'var(--signal)' : 'var(--loss)' }}>
+                  <td className="mono" style={{ ...TD, textAlign: 'right', fontWeight: 600, color: r.graded === 0 ? 'var(--color-text-secondary)' : r.units >= 0 ? 'var(--signal)' : 'var(--loss)' }}>
                     {r.graded === 0 ? '--' : `${r.units >= 0 ? '+' : ''}${r.units.toFixed(2)}u`}
                   </td>
                   <td className="mono" style={{ ...TD, textAlign: 'right', color: roi == null ? 'var(--color-text-secondary)' : roi >= 0 ? 'var(--signal)' : 'var(--loss)' }}>

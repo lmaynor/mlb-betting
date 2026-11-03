@@ -128,12 +128,12 @@ describe('Game Lines view: badge, header and highlight', () => {
   it('renders MODEL DIFF headers (not EDGE) and no green on an unvalidated difference', () => {
     const data = buildGameLinesData({ nba: feed({ validated: false }) }, FILTERS)
     const { container, unmount } = render(<GameCard game={data.pricedGames[0]} />)
-    expect(screen.getByText('MODEL DIFF')).toBeInTheDocument()
+    expect(screen.getByText('Model diff')).toBeInTheDocument()
     expect(screen.queryByText('EDGE')).not.toBeInTheDocument()
     expect(container.innerHTML).not.toContain('87, 242, 135') // jsdom normalises #57F287 / rgba(87,242,135,..)
     unmount()
     const t = render(<GameLinesTable rows={data.rows} limit={10} />)
-    expect(screen.getByText('MODEL DIFF')).toBeInTheDocument()
+    expect(screen.getByText('Model diff')).toBeInTheDocument()
     expect(t.container.innerHTML).not.toContain('87, 242, 135')
   })
   it('highlights green only when the feed is validated', () => {

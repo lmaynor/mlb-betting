@@ -6,7 +6,7 @@ import { americanToImpliedProb, removeVig, probToAmerican, formatProb, formatOdd
 
 const B = '1px solid var(--color-separator-border)'
 const inputStyle: React.CSSProperties = { width: '100%', background: 'var(--slate)', border: B, color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono, monospace)', fontSize: '13px', padding: '10px 14px', outline: 'none', borderRadius: 'var(--radius)' }
-const labelStyle: React.CSSProperties = { fontFamily: 'var(--font-mono, monospace)', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }
+const labelStyle: React.CSSProperties = { fontFamily: 'var(--font-mono, monospace)', fontSize: '10px', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '6px' }
 
 export default function OddsCalculatorPage() {
   const [odds1, setOdds1] = useState('-110')
@@ -34,8 +34,8 @@ export default function OddsCalculatorPage() {
       {result && (
         <div className="border border-separator-border rounded-control bg-background-primary-default overflow-hidden mb-4">
           <div className="grid grid-cols-[repeat(3,1fr)] bg-background-secondary-default" style={{ borderBottom: B }}>
-            <div /><div className="mono py-[9px] px-3 text-micro tracking-label uppercase text-text-secondary">Side 1</div>
-            <div className="mono py-[9px] px-3 text-micro tracking-label uppercase text-text-secondary">Side 2</div>
+            <div /><div className="mono py-[9px] px-3 text-micro text-text-secondary">Side 1</div>
+            <div className="mono py-[9px] px-3 text-micro text-text-secondary">Side 2</div>
           </div>
           {[
             { label: 'Input Odds',   v1: formatOdds(o1),                          v2: formatOdds(o2) },
@@ -57,7 +57,7 @@ export default function OddsCalculatorPage() {
       )}
 
       <div className="border border-separator-border rounded-control bg-background-primary-default p-5">
-        <div className="mono text-micro tracking-label uppercase text-text-secondary mb-2.5">How it works</div>
+        <div className="mono text-micro text-text-secondary mb-2.5">How it works</div>
         <p className="times text-compact text-text-secondary leading-[1.6] mb-2">Books build a margin (vig) into their lines. Removing the vig reveals the true probability each side wins.</p>
         <p className="times text-compact text-text-secondary leading-[1.6]">If your model assigns a higher probability than the fair probability, you have an edge. Use the <a href="/tools/kelly-calculator" className="text-link underline">Kelly Calculator</a> to size your stake.</p>
       </div>

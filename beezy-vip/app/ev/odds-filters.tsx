@@ -17,7 +17,7 @@ export function MobileFilterBar({ odds }: { odds: OddsScreen }) {
           return (
             <Pill key={m.key} active={mode === m.key} onClick={() => switchMode(m.key)}>
               {m.label}
-              <span className="mono" style={{ marginLeft: '6px', fontSize: '10.5px', color: hot ? GREEN : 'var(--color-text-secondary)' }}>{n ?? '\u00b7'}</span>
+              <span className="mono" style={{ marginLeft: '6px', fontSize: '11px', color: hot ? GREEN : 'var(--color-text-secondary)' }}>{n ?? '\u00b7'}</span>
             </Pill>
           )
         })}
@@ -38,7 +38,7 @@ export function MobileFilterBar({ odds }: { odds: OddsScreen }) {
                 style={{
                   fontFamily: 'var(--font-mono), monospace',
                   fontSize: '11px',
-                  fontWeight: 700,
+                  fontWeight: 600,
                   padding: '5px 8px',
                   borderRadius: '4px',
                   border: `1px solid ${selected ? 'var(--color-border-button-hover)' : HAIR}`,
@@ -65,7 +65,7 @@ export function MobileFilterBar({ odds }: { odds: OddsScreen }) {
             borderRadius: '6px',
             height: '32px',
             padding: '0 8px',
-            fontSize: '11.5px',
+            fontSize: '12px',
             flex: 1,
             minWidth: '80px',
           }}
@@ -77,7 +77,7 @@ export function MobileFilterBar({ odds }: { odds: OddsScreen }) {
           className="btn btn-ghost"
           style={{
             padding: '5px 10px',
-            fontSize: '11.5px',
+            fontSize: '12px',
             height: '32px',
             flexShrink: 0,
             display: 'inline-flex',
@@ -97,7 +97,7 @@ export function MobileFilterBar({ odds }: { odds: OddsScreen }) {
                 color: GREEN,
                 padding: '1px 5px',
                 borderRadius: '10px',
-                fontWeight: 700,
+                fontWeight: 600,
               }}
             >
               {activeFilterCount}
@@ -121,7 +121,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
             return (
               <Pill key={m.key} active={mode === m.key} onClick={() => switchMode(m.key)}>
                 {m.label}
-                <span className="mono" style={{ marginLeft: '7px', fontSize: '10.5px', color: hot ? GREEN : 'var(--color-text-secondary)' }}>{n ?? '\u00b7'}</span>
+                <span className="mono" style={{ marginLeft: '7px', fontSize: '11px', color: hot ? GREEN : 'var(--color-text-secondary)' }}>{n ?? '\u00b7'}</span>
               </Pill>
             )
           })}
@@ -169,10 +169,10 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
             align="right"
             header={
               <div className="flex gap-2 items-center">
-                <span className="ui-heading text-micro text-text-secondary">DEVIG</span>
+                <span className="ui-heading text-micro text-text-secondary">Devig</span>
                 <PillGroup>
-                  <Pill active={method === 'proportional'} onClick={() => setMethod('proportional')} title="Remove the vig in proportion to each side's implied probability">PROPORTIONAL</Pill>
-                  <Pill active={method === 'power'} onClick={() => setMethod('power')} title="Raise both implied probabilities to the power that sums them to 1 (shifts less to the favourite)">POWER</Pill>
+                  <Pill active={method === 'proportional'} onClick={() => setMethod('proportional')} title="Remove the vig in proportion to each side's implied probability">Proportional</Pill>
+                  <Pill active={method === 'power'} onClick={() => setMethod('power')} title="Raise both implied probabilities to the power that sums them to 1 (shifts less to the favourite)">Power</Pill>
                 </PillGroup>
               </div>
             }

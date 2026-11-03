@@ -251,8 +251,8 @@ h2 {
   font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  text-transform: none;
+  letter-spacing: 0;
 }
 /* Table headers read as terminal column labels. 10px is the floor for any text in the app. */
 th {

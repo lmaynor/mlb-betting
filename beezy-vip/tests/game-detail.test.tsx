@@ -231,7 +231,7 @@ describe('the selected line: best vs the rest', () => {
   it('Pinnacle is a SHARP reference row but can never be the best price', () => {
     detail(feeds())
     const pin = bvr().getAllByTestId('bvr-row').find(r => r.getAttribute('data-book') === 'pinnacle')!
-    expect(pin.textContent).toMatch(/SHARP/)
+    expect(pin.textContent).toMatch(/Sharp/)
     expect(pin.textContent).not.toMatch(/BEST/)
   })
   it('"Every book" opens the full list, with the long tail still folded', () => {

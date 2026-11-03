@@ -35,7 +35,7 @@ describe('GamePicksTable', () => {
     expect(rows).toHaveLength(1)
     expect(rows[0].textContent).toMatch(/DET/)
     expect(rows[0].textContent).toMatch(/FLA ML/)
-    expect(rows[0].textContent).toMatch(/UNVALIDATED/)
+    expect(rows[0].textContent).toMatch(/Unvalidated/)
     expect(rows[0].textContent).toMatch(/70\.0%/)
   })
   it('a row opens the same deep-dive as the game board, and a second click closes it', () => {

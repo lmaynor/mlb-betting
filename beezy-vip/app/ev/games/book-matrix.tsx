@@ -90,8 +90,8 @@ export function BookMatrix({ rung, row, side, sideLabel, otherLabel }: { rung: L
               <span className="flex items-center gap-1.5 min-w-0">
                 <BookLogo book={d.book} size={20} />
                 <span className="text-compact font-medium overflow-hidden text-ellipsis whitespace-nowrap" style={{ color: d.offshore ? 'var(--color-text-secondary)' : 'var(--color-text-primary)' }}>{meta.label}</span>
-                {sharp && <span className="mono text-[10px] font-semibold tracking-fine text-text-secondary border border-[color:var(--color-separator-border)] rounded-chip px-1">SHARP</span>}
-                {d.best && <span className="mono text-[10px] font-semibold tracking-fine rounded-chip px-1" style={{ color: GREEN, background: 'rgba(87,242,135,0.10)' }}>BEST</span>}
+                {sharp && <span className="mono text-[10px] font-semibold text-text-secondary border border-[color:var(--color-separator-border)] rounded-chip px-1">Sharp</span>}
+                {d.best && <span className="mono text-[10px] font-semibold rounded-chip px-1" style={{ color: GREEN, background: 'rgba(87,242,135,0.10)' }}>BEST</span>}
               </span>
               <span className="relative block h-full">
                 <span className="absolute top-1/2 -mt-[6px] h-3 rounded-[3px]" data-testid="matrix-bar"

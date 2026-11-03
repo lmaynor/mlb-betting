@@ -9,7 +9,7 @@ import { addDaysToDateKey } from '@/lib/dates'
 const B = '1px solid var(--color-separator-border)'
 const SEG: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'baseline', gap: '8px', padding: '6px 14px', border: B, background: 'var(--color-background-primary-default)', color: 'var(--color-neutral-300)',
-  fontFamily: 'var(--font-mono)', fontSize: '11px', letterSpacing: '0.04em', textDecoration: 'none', whiteSpace: 'nowrap',
+  fontFamily: 'var(--font-mono)', fontSize: '11px', textDecoration: 'none', whiteSpace: 'nowrap',
 }
 const ON: React.CSSProperties = { borderColor: 'var(--win-border)', background: 'var(--win-wash)', color: 'var(--signal)', fontWeight: 600 }
 

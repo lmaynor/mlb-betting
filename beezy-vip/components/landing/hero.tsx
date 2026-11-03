@@ -12,7 +12,7 @@ export async function Hero() {
       <div className="hero-grid overflow-hidden rounded-xl border border-separator-border bg-background-primary-default shadow-card">
 
         <div className="hero-left flex flex-col justify-center border-r border-separator-border p-9">
-          <span className="mono mb-4 self-start rounded-full border border-[rgba(87,242,135,0.35)] px-2.5 py-1 text-micro font-semibold tracking-head text-signal">
+          <span className="mono mb-4 self-start rounded-full border border-[rgba(87,242,135,0.35)] px-2.5 py-1 text-micro font-semibold text-signal">
             NFL &middot; NBA &middot; NHL &middot; MLB
           </span>
 

@@ -74,11 +74,11 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
               {system.market === 'game' ? 'GAME' : 'PROP'} / {system.gap ? 'DATA GAP' : tracked ? (pillar.markets.find(m => m.system === system.key)?.status ?? 'PAPER').toUpperCase() : 'UNVALIDATED'}
             </span>
           </div>
-          <Link className="text-[12.5px] text-link" href={`/picks/${sport}/systems`}>&larr; All {pillar.shortName} systems</Link>
+          <Link className="text-[13px] text-link" href={`/picks/${sport}/systems`}>&larr; All {pillar.shortName} systems</Link>
         </div>
 
         {!system.gap && (
-          <div className="mono" style={{ ...SURFACE, padding: '9px 14px', marginBottom: '16px', fontSize: '12.5px', color: 'var(--color-neutral-300)', display: 'flex', gap: '6px 16px', flexWrap: 'wrap' }}>
+          <div className="mono" style={{ ...SURFACE, padding: '9px 14px', marginBottom: '16px', fontSize: '13px', color: 'var(--color-neutral-300)', display: 'flex', gap: '6px 16px', flexWrap: 'wrap' }}>
             {tracked ? (
               <>
                 <span>{n} settled</span>
@@ -109,17 +109,17 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
             <LockedNotice locked={board.locked} shown={rows.length} what={`${pillar.shortName} ${system.shortName} rows`} plan={`The full board is on the ${pillar.shortName} Pass or All-Access Pro.`} />
             {!tracked && f.day === 'today' && (
               <>
-                <h2 className="text-[15px] font-bold text-text-primary" style={{ margin: '32px 0 10px' }}>Market prices</h2>
+                <h2 className="text-[15px] font-semibold text-text-primary" style={{ margin: '32px 0 10px' }}>Market prices</h2>
                 <MarketPrices sport={sport as ProjectionSport} rows={prices} locked={0} block={board.block} confluenceKeys={board.confluenceKeys} />
               </>
             )}
           </>
         )}
-        {system.gap && <div role="note" style={{ ...SURFACE, padding: '14px 16px', fontSize: '13px', color: 'var(--color-neutral-300)', lineHeight: 1.55 }}><strong className="text-gold">DATA GAP.</strong> {system.gap}</div>}
+        {system.gap && <div role="note" style={{ ...SURFACE, padding: '14px 16px', fontSize: '13px', color: 'var(--color-neutral-300)', lineHeight: 1.55 }}><strong className="text-gold">Data gap.</strong> {system.gap}</div>}
 
-        <h2 className="text-[15px] font-bold text-text-primary" style={{ margin: '32px 0 10px' }}>Methodology</h2>
+        <h2 className="text-[15px] font-semibold text-text-primary" style={{ margin: '32px 0 10px' }}>Methodology</h2>
         <SystemMethodology system={system} />
-        <p className="text-[11.5px] text-text-secondary leading-[1.55] max-w-[90ch]" style={{ margin: '14px 2px 0' }}>{system.description}</p>
+        <p className="text-[12px] text-text-secondary leading-[1.55] max-w-[90ch]" style={{ margin: '14px 2px 0' }}>{system.description}</p>
       </div>
     </div>
   )

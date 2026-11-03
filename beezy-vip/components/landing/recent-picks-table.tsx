@@ -12,7 +12,7 @@ import { playerIdByName } from '@/lib/sport-assets.server'
 import { SectionHeader } from './section-header'
 import type { Bet } from '@/lib/types'
 
-const TH = 'sticky top-0 border-b border-separator-border bg-background-secondary-default px-3 py-2 text-left text-micro font-semibold uppercase tracking-caps text-text-secondary'
+const TH = 'sticky top-0 border-b border-separator-border bg-background-secondary-default px-3 py-2 text-left text-micro font-semibold text-text-secondary'
 const TD = 'border-b border-border-table px-3 py-2.5 align-middle'
 
 function units(profit: number | null, stake: number | null) {
@@ -81,7 +81,7 @@ export async function RecentPicksTable() {
                       </span>
                     </td>
                     <td className={cx(TD, 'whitespace-nowrap text-right')}>
-                      <span className="mono mr-2 text-micro font-bold" style={{ color: res.color }}>{res.label}</span>
+                      <span className="mono mr-2 text-micro font-semibold" style={{ color: res.color }}>{res.label}</span>
                       <span className="mono text-body-2-bold" style={{ color: (b.profit ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>{units(b.profit, b.stake)}</span>
                     </td>
                   </tr>

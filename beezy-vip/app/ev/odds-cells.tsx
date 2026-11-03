@@ -13,14 +13,14 @@ export function SgpBadges({ r }: { r: SgpProxyRow }) {
   const badgeFg = r.archetype === 'nba_reb_ast_10_10' ? '#c084fc' : r.archetype.includes('vs_') ? '#60a5fa' : '#facc15'
   return (
     <>
-      <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px', background: badgeBg, color: badgeFg, letterSpacing: '0.03em', flexShrink: 0 }}>
+      <span style={{ fontSize: '10px', fontWeight: 600, padding: '1px 5px', borderRadius: '4px', background: badgeBg, color: badgeFg, flexShrink: 0 }}>
         {r.archetypeLabel}
       </span>
-      <span className="mono text-micro font-bold py-[1px] px-[5px] rounded-chip border border-border-button-hover text-warn tracking-fine shrink-0" title={r.label}>
+      <span className="mono text-micro font-semibold py-[1px] px-[5px] rounded-chip border border-border-button-hover text-warn shrink-0" title={r.label}>
         UNVALIDATED
       </span>
       {r.modelArtifact && (
-        <span className="mono" title={`EV above ${SGP_ARTIFACT_EV_PCT}% is almost certainly an artifact of the assumed correlation and hold`} style={{ fontSize: '10px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px', border: '1px solid rgba(255,90,79,0.5)', color: '#ff5a4f', letterSpacing: '0.04em', flexShrink: 0 }}>
+        <span className="mono" title={`EV above ${SGP_ARTIFACT_EV_PCT}% is almost certainly an artifact of the assumed correlation and hold`} style={{ fontSize: '10px', fontWeight: 600, padding: '1px 5px', borderRadius: '4px', border: '1px solid rgba(255,90,79,0.5)', color: '#ff5a4f', flexShrink: 0 }}>
           MODEL ARTIFACT?
         </span>
       )}
@@ -41,9 +41,9 @@ export function PriceCell({ top, bottom, topState, bottomState, tint, best }: {
   // Two inline-block prices split by a newline (white-space: pre-line) instead of a div per line: three elements per cell, not five.
   const price = (state: CellState, main: boolean) => cx(
     'mono inline-block rounded-[3px] px-1 outline-offset-1',
-    main ? 'text-[12.5px]' : 'text-[10.5px]',
+    main ? 'text-[13px]' : 'text-[11px]',
     'leading-[1.3]',
-    state ? 'font-extrabold text-signal' : main ? 'font-semibold text-text-primary' : 'font-normal text-text-secondary',
+    state ? 'font-semibold text-signal' : main ? 'font-semibold text-text-primary' : 'font-normal text-text-secondary',
     state === 'arb' ? 'outline outline-1 outline-signal' : 'outline-none',
   )
   return (
@@ -65,7 +65,7 @@ export function TierPill({ alt, modalPoint }: { alt: boolean; modalPoint?: numbe
     : 'The main line'
   return (
     <span className="mono" title={tip}
-      style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em', padding: '0 5px', borderRadius: '4px', border: `1px solid ${alt ? 'var(--color-border-button-hover)' : HAIR}`, color: alt ? 'var(--color-neutral-400)' : 'var(--color-text-secondary)' }}>
+      style={{ fontSize: '10px', fontWeight: 600, padding: '0 5px', borderRadius: '4px', border: `1px solid ${alt ? 'var(--color-border-button-hover)' : HAIR}`, color: alt ? 'var(--color-neutral-400)' : 'var(--color-text-secondary)' }}>
       {alt ? '[ALT]' : 'MAIN'}
     </span>
   )
@@ -92,7 +92,7 @@ export function PropCells({ row, label }: { row: BoardRow; label: string }) {
         </div>
       </td>
       <td>
-        <div className="mono text-[11.5px] text-neutral-300">{row.away} @ {row.home}</div>
+        <div className="mono text-[12px] text-neutral-300">{row.away} @ {row.home}</div>
         <div className="mono odds-sub">{startLabel(row.commence)}</div>
       </td>
     </>
@@ -103,7 +103,7 @@ export function BookTag({ book, size = 16 }: { book: string; size?: number }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       <BookLogo book={book} size={size} />
-      <span className="text-[11.5px] text-neutral-300">{bookDisplay(book).label}</span>
+      <span className="text-[12px] text-neutral-300">{bookDisplay(book).label}</span>
     </span>
   )
 }

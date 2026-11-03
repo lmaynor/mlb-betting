@@ -19,8 +19,8 @@ import {
 } from 'recharts'
 
 const CARD = 'rounded-xl border border-separator-border bg-background-primary-default shadow-card'
-const LBL = 'mono text-micro uppercase tracking-label text-text-secondary'
-const PILLBTN = 'button-press-motion cursor-pointer rounded-full border px-3 py-1.5 text-mini uppercase tracking-fine'
+const LBL = 'mono text-micro text-text-secondary'
+const PILLBTN = 'button-press-motion cursor-pointer rounded-full border px-3 py-1.5 text-mini '
 const COL = '80px 65px 180px 1fr 80px 70px 60px 80px 70px 70px'
 const PILL = SYSTEM_COLOR
 
@@ -56,7 +56,7 @@ function Chip({ label, active, color, onClick }: {
   const activeColor = color ?? 'var(--color-neutral-300)'
   return (
     <button onClick={onClick}
-      className={cx('mono', PILLBTN, active ? 'font-bold' : 'border-separator-border bg-background-primary-default font-medium text-text-secondary hover:bg-background-primary-hover')}
+      className={cx('mono', PILLBTN, active ? 'font-semibold' : 'border-separator-border bg-background-primary-default font-medium text-text-secondary hover:bg-background-primary-hover')}
       style={active ? { borderColor: activeColor, color: activeColor, background: `color-mix(in oklab, ${activeColor} 16%, var(--color-background-full))` } : undefined}>
       {label}
     </button>
@@ -228,7 +228,7 @@ function ResultBetCard({ bet }: { bet: Bet }) {
         ].map(item => (
           <div key={item.label} className="min-w-0">
             <div className={cx(LBL, 'mb-[3px]')}>{item.label}</div>
-            <div className="mono truncate text-xs font-bold" style={{ color: item.color }}>{item.value}</div>
+            <div className="mono truncate text-xs font-semibold" style={{ color: item.color }}>{item.value}</div>
           </div>
         ))}
         <div>
@@ -339,7 +339,7 @@ export function ResultsClient({
 
       {/* One inline metric strip: models and +EV alerts are summarised separately. */}
       <div className={cx('mono mb-5 flex min-h-[38px] flex-wrap items-center gap-x-5.5 gap-y-1.5 px-3.5 py-2 text-xs text-text-secondary', CARD)}>
-        <span><span className="text-text-tertiary">MODELS</span> {models.bets.toLocaleString()} bets &middot; {models.winRate}% win &middot; <span style={{ color: models.pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{money(models.pnl)}</span> at paper stakes</span>
+        <span><span className="text-text-tertiary">Models</span> {models.bets.toLocaleString()} bets &middot; {models.winRate}% win &middot; <span style={{ color: models.pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{money(models.pnl)}</span> at paper stakes</span>
         <span><span className="text-text-tertiary">+EV ALERTS</span> {ev.bets.toLocaleString()} graded &middot; {ev.winRate}% win &middot; <span style={{ color: ev.pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{money(ev.pnl)}</span> flat $100</span>
       </div>
 
@@ -504,8 +504,8 @@ export function ResultsClient({
                       return (
                         <div key={s.system} className={cx('px-[13px] py-3', CARD)}>
                           <div className="mb-2.5 flex items-center justify-between gap-3">
-                            <span className="mono text-xs font-extrabold" style={{ color: pc }}>{s.system}</span>
-                            <span className="mono text-mini font-extrabold" style={{ color: r == null ? 'var(--color-text-secondary)' : r >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r == null ? '-- ROI' : `${r >= 0 ? '+' : ''}${r.toFixed(1)}% ROI`}</span>
+                            <span className="mono text-xs font-semibold" style={{ color: pc }}>{s.system}</span>
+                            <span className="mono text-mini font-semibold" style={{ color: r == null ? 'var(--color-text-secondary)' : r >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r == null ? '-- ROI' : `${r >= 0 ? '+' : ''}${r.toFixed(1)}% ROI`}</span>
                           </div>
                           <div className="grid grid-cols-4 gap-2.5">
                             {[
@@ -516,7 +516,7 @@ export function ResultsClient({
                             ].map(([label, value, color]) => (
                               <div key={label}>
                                 <div className={cx(LBL, 'mb-[3px]')}>{label}</div>
-                                <div className="mono text-mini font-bold" style={{ color }}>{value}</div>
+                                <div className="mono text-mini font-semibold" style={{ color }}>{value}</div>
                               </div>
                             ))}
                           </div>
@@ -584,7 +584,7 @@ export function ResultsClient({
             </label>
             <span className="mono text-micro text-text-secondary">{filtered.length} bets</span>
             {filtered.length > 0 && (
-              <button onClick={() => exportCSV(filtered)} className="mono button-press-motion cursor-pointer rounded-full border border-separator-border bg-background-primary-default px-2.5 py-1 text-micro uppercase tracking-[0.05em] text-text-secondary hover:bg-background-primary-hover">Export CSV</button>
+              <button onClick={() => exportCSV(filtered)} className="mono button-press-motion cursor-pointer rounded-full border border-separator-border bg-background-primary-default px-2.5 py-1 text-micro text-text-secondary hover:bg-background-primary-hover">Export CSV</button>
             )}
           </div>
         </div>

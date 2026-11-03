@@ -8,7 +8,7 @@ export function BookLogo({ book, size, style }: { book: string; size: number; st
   const [missing, setMissing] = useState(false)
   const meta = bookDisplay(book)
   if (missing) {
-    return <span style={{ fontSize: '10.5px', fontWeight: 700, color: meta.color, background: meta.bg, border: `1px solid ${meta.color}55`, borderRadius: '6px', padding: '1px 6px', ...style }}>{meta.short}</span>
+    return <span style={{ fontSize: '11px', fontWeight: 600, color: meta.color, background: meta.bg, border: `1px solid ${meta.color}55`, borderRadius: '6px', padding: '1px 6px', ...style }}>{meta.short}</span>
   }
   return (
     // eslint-disable-next-line @next/next/no-img-element

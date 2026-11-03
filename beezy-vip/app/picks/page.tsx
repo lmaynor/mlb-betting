@@ -45,7 +45,7 @@ export default async function TopPicksPage({ searchParams }: { searchParams: Pro
           <div>
             <h1 className="text-title-2-bold text-text-primary">Top Signals</h1>
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-              <span className="mono text-caption-2-medium uppercase tracking-wider text-text-secondary">Tier</span>
+              <span className="mono text-caption-2-medium text-text-secondary">Tier</span>
               {[
                 { id: 'all', label: 'All Actionable' },
                 { id: 'official', label: 'Official Plays Only' },

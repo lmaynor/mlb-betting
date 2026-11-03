@@ -21,7 +21,7 @@ const TOOLS: { href: string; title: string; description: string; access: Access 
 
 const ACCESS_COLOR: Record<Access, string> = { Free: 'var(--signal)', Pro: 'var(--lilac)', 'Coming soon': 'var(--color-text-secondary)' }
 
-const TH = 'border-b border-separator-border bg-background-secondary-default px-3 py-2.5 text-left font-semibold tracking-head text-text-secondary'
+const TH = 'border-b border-separator-border bg-background-secondary-default px-3 py-2.5 text-left font-semibold text-text-secondary'
 const TD = 'border-b border-border-table p-3 align-middle'
 
 export default function ToolsPage() {
@@ -34,7 +34,7 @@ export default function ToolsPage() {
       <div className="overflow-x-auto rounded-xl border border-separator-border bg-background-primary-default shadow-card">
         <table className="w-full min-w-[560px] border-collapse">
           <thead>
-            <tr><th className={TH}>TOOL</th><th className={TH}>WHAT IT DOES</th><th className={TH}>ACCESS</th></tr>
+            <tr><th className={TH}>TOOL</th><th className={TH}>What it does</th><th className={TH}>Access</th></tr>
           </thead>
           <tbody>
             {TOOLS.map(t => (

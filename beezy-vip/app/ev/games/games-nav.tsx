@@ -47,7 +47,7 @@ export function GamesNav({ view, sport }: { view: GamesView; sport: GameSport })
             href={gamesHref(t.key, sport)}
             title={t.title}
             aria-current={view === t.key ? 'page' : undefined}
-            className="mono text-[11.5px] font-semibold tracking-[0.03em] py-[5px] px-[11px] no-underline"
+            className="mono text-[12px] font-semibold py-[5px] px-[11px] no-underline"
             style={{
               borderRadius: '6px',
               color: view === t.key ? '#ffffff' : 'var(--color-neutral-300)',
@@ -57,7 +57,7 @@ export function GamesNav({ view, sport }: { view: GamesView; sport: GameSport })
           >{t.label}</Link>
         ))}
       </nav>
-      {view === 'table' && <nav aria-label="Game lines sport" className="flex gap-3.5 text-[12.5px]">
+      {view === 'table' && <nav aria-label="Game lines sport" className="flex gap-3.5 text-[13px]">
         {SPORT_TABS.map(t => (
           <Link className="no-underline"
             key={t.key}

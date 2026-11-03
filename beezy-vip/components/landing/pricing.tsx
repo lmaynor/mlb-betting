@@ -56,9 +56,9 @@ function Plan({ name, price, period, note, featured, children }: {
 }) {
   return (
     <div className={cx(CARD, 'flex flex-col px-4.5 pb-5 pt-4.5', featured && 'border-[rgba(87,242,135,0.55)]')}>
-      <div className={cx('ui-heading mb-2.5 text-mini tracking-head', featured ? 'text-signal' : 'text-text-secondary')}>{name.toUpperCase()}</div>
+      <div className={cx('ui-heading mb-2.5 text-mini ', featured ? 'text-signal' : 'text-text-secondary')}>{name.toUpperCase()}</div>
       <div className="mb-1 flex items-baseline gap-[5px]">
-        <span className="mono text-[34px] font-bold leading-none text-text-primary">{price}</span>
+        <span className="mono text-[34px] font-semibold leading-none text-text-primary">{price}</span>
         <span className="text-body-2-regular text-text-secondary">{period}</span>
       </div>
       <div className="mb-3.5 min-h-[18px] text-caption-1-regular text-text-secondary">{note ?? ''}</div>
@@ -89,7 +89,7 @@ export function PricingSection() {
       <div className={cx(CARD, 'mb-5 flex flex-wrap items-center justify-between gap-4 border-l-[3px] border-l-[var(--signal)] px-4.5 py-3.5')}>
         <div>
           <div className="flex items-center gap-2">
-            <span className="ui-heading text-mini tracking-caps text-signal">EXPLORER TIER</span>
+            <span className="ui-heading text-mini text-signal">EXPLORER TIER</span>
             <span className="mono text-body-2-bold text-text-primary">$0 / Free Forever</span>
           </div>
           <div className="mt-[3px] text-body-2-regular text-text-secondary">

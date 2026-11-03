@@ -65,7 +65,7 @@ describe('unified projections board', () => {
     expect(t.getByText('FanDuel')).toBeInTheDocument()
     expect(t.getByText('+8.0%')).toBeInTheDocument()
     expect(t.getByText('+5.0%')).toBeInTheDocument()
-    expect(t.getByText('MODEL + MARKET')).toBeInTheDocument()
+    expect(t.getByText('Model + market')).toBeInTheDocument()
     expect(document.querySelectorAll('thead').length).toBe(1)
     expect(screen.getAllByRole('columnheader').map(h => h.textContent)).toEqual(
       ['SCORE', 'PLAYER', 'TEAM', 'MARKET & LINE', 'MODEL', 'MARKET FAIR', 'FORM', 'BEST PRICE', 'MODEL EDGE', 'PRICE EV'])
@@ -101,7 +101,7 @@ describe('unified projections board', () => {
     expect(rot.getByText('(no line yet)')).toBeInTheDocument()
     expect(rot.getByText(/L10 avg 26\.0/)).toBeInTheDocument()
     expect(rot.getByText(/szn 25\.1/)).toBeInTheDocument()
-    expect(rot.queryByText('MODEL + MARKET')).toBeNull()
+    expect(rot.queryByText('Model + market')).toBeNull()
     expect(rot.queryByText(/%/)).toBeNull()
   })
 
@@ -164,7 +164,7 @@ const outlier = (player: string, stat = 'sog') => ({
 describe('market prices', () => {
   it.each(['nfl', 'nhl', 'nba'] as const)('%s has one layout: a preview note and either the outlier table or the same empty state', sport => {
     const { unmount } = render(<MarketPrices sport={sport} rows={[]} block={null} />)
-    expect(screen.getByText('PREVIEW.')).toBeInTheDocument()
+    expect(screen.getByText('Preview.')).toBeInTheDocument()
     expect(screen.getByText('No prices beating the market')).toBeInTheDocument()
     unmount()
     render(<MarketPrices sport={sport} rows={[outlier('Pat Mahomes')]} block={null} />)

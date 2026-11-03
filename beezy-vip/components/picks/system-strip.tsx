@@ -6,7 +6,7 @@ import { SYSTEM_COLOR } from '@/lib/tokens'
 const B = '1px solid var(--color-separator-border)'
 const CHIP: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: '7px', padding: '6px 12px', border: B, borderRadius: 'var(--radius)', background: 'var(--color-background-primary-default)',
-  color: 'var(--color-neutral-300)', fontFamily: 'var(--font-mono)', fontSize: '11px', letterSpacing: '0.04em', textDecoration: 'none', whiteSpace: 'nowrap', flex: '0 0 auto',
+  color: 'var(--color-neutral-300)', fontFamily: 'var(--font-mono)', fontSize: '11px', textDecoration: 'none', whiteSpace: 'nowrap', flex: '0 0 auto',
 }
 const ON: React.CSSProperties = { borderColor: 'var(--color-border-button-active)', background: 'var(--slate)', color: 'var(--color-text-primary)' }
 
@@ -21,7 +21,7 @@ export function SystemStrip({ sport, active }: { sport: SportSlug; active: strin
   const systems = current && !listed.includes(current) ? [...listed, current] : listed
   return (
     <nav className="flex gap-[6px] overflow-x-auto py-[10px] px-4 bg-background-full" aria-label={`${SPORT_PILLARS[sport].shortName} systems`} style={{ borderBottom: B }}>
-      <Link href={`/picks/${sport}/systems`} aria-current={active == null ? 'page' : undefined} style={{ ...CHIP, ...(active == null ? ON : {}) }}>ALL SYSTEMS</Link>
+      <Link href={`/picks/${sport}/systems`} aria-current={active == null ? 'page' : undefined} style={{ ...CHIP, ...(active == null ? ON : {}) }}>All systems</Link>
       {systems.map(s => {
         const on = s.key === active
         return (

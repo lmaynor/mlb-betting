@@ -96,7 +96,7 @@ describe('Edges now', () => {
     const chip = screen.getByTestId('edge-chip')
     expect(chip).toHaveAttribute('data-outlier', 'true')
     expect(chip.textContent).toMatch(/\+525/)
-    expect(chip.textContent).toMatch(/CHECK/)
+    expect(chip.textContent).toMatch(/Check/)
     expect(screen.queryByTestId('edges-none')).toBeNull()
   })
   it('the edges are small cards: the game, the line, the price at its book and the EV', () => {

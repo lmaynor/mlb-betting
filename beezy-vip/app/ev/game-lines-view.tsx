@@ -25,7 +25,7 @@ function BookTag({ book, size = 16 }: { book: string; size?: number }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       <BookLogo book={book} size={size} />
-      <span className="text-[11.5px] text-neutral-300">{bookDisplay(book).label}</span>
+      <span className="text-[12px] text-neutral-300">{bookDisplay(book).label}</span>
     </span>
   )
 }
@@ -41,7 +41,7 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
     <div style={{ ...SURFACE_CARD, padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
       <div className="flex justify-between items-center gap-2 flex-wrap">
         <div className="flex items-center gap-2">
-          <span className="mono text-mini font-bold py-[2px] px-[7px]" style={{
+          <span className="mono text-mini font-semibold py-[2px] px-[7px]" style={{
             borderRadius: '4px',
             background: isNba ? 'rgba(249,115,22,0.15)' : 'rgba(56,189,248,0.15)',
             color: isNba ? '#f97316' : '#38bdf8',
@@ -49,7 +49,7 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
           }}>
             {sport.toUpperCase()}
           </span>
-          <span className="text-[15px] font-bold text-text-primary">
+          <span className="text-[15px] font-semibold text-text-primary">
             <Matchup sport={sport} away={game.away_team} home={game.home_team} size={22} />
           </span>
         </div>
@@ -62,20 +62,20 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
         {isNba && (
           <>
             <div>
-              <div className="ui-heading text-text-secondary">MODEL MARGIN</div>
-              <div className="mono text-cozy font-bold text-text-primary mt-0.5">
+              <div className="ui-heading text-text-secondary">Model margin</div>
+              <div className="mono text-cozy font-semibold text-text-primary mt-0.5">
                 {expMargin ?? '--'}
               </div>
             </div>
             <div>
-              <div className="ui-heading text-text-secondary">MODEL TOTAL</div>
-              <div className="mono text-cozy font-bold text-text-primary mt-0.5">
+              <div className="ui-heading text-text-secondary">Model total</div>
+              <div className="mono text-cozy font-semibold text-text-primary mt-0.5">
                 {game.mu_total != null ? `${game.mu_total.toFixed(1)} pts` : '--'}
               </div>
             </div>
             <div>
-              <div className="ui-heading text-text-secondary">EXPECTED PACE</div>
-              <div className="mono text-cozy font-bold mt-[2px]" style={{ color: SKY }}>
+              <div className="ui-heading text-text-secondary">Expected pace</div>
+              <div className="mono text-cozy font-semibold mt-[2px]" style={{ color: SKY }}>
                 {game.exp_pace != null ? `${game.exp_pace.toFixed(1)} poss` : '--'}
               </div>
             </div>
@@ -84,22 +84,22 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
         {isNhl && (
           <>
             <div>
-              <div className="ui-heading text-text-secondary">EXPECTED GOALS</div>
-              <div className="mono text-cozy font-bold text-text-primary mt-0.5">
+              <div className="ui-heading text-text-secondary">Expected goals</div>
+              <div className="mono text-cozy font-semibold text-text-primary mt-0.5">
                 {game.lambda_a != null && game.lambda_h != null
                   ? `${game.away_team} ${game.lambda_a.toFixed(1)} - ${game.home_team} ${game.lambda_h.toFixed(1)}`
                   : '--'}
               </div>
             </div>
             <div>
-              <div className="ui-heading text-text-secondary">MODEL TOTAL</div>
-              <div className="mono text-cozy font-bold text-text-primary mt-0.5">
+              <div className="ui-heading text-text-secondary">Model total</div>
+              <div className="mono text-cozy font-semibold text-text-primary mt-0.5">
                 {game.exp_total != null ? `${game.exp_total.toFixed(2)} goals` : '--'}
               </div>
             </div>
             <div>
-              <div className="ui-heading text-text-secondary">DISPERSION</div>
-              <div className="mono text-cozy font-bold mt-[2px]" style={{ color: SKY }}>
+              <div className="ui-heading text-text-secondary">Dispersion</div>
+              <div className="mono text-cozy font-semibold mt-[2px]" style={{ color: SKY }}>
                 {game.sigma_total != null ? `\u03c3 ${game.sigma_total.toFixed(1)}` : '--'}
               </div>
             </div>
@@ -116,12 +116,12 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
         <table className="w-full border-collapse text-compact">
           <thead>
             <tr className="text-text-secondary text-micro" style={{ borderBottom: `1px solid ${HAIR}` }}>
-              <th scope="col" className="text-left py-1.5 px-2 font-semibold">MARKET / SIDE</th>
+              <th scope="col" className="text-left py-1.5 px-2 font-semibold">Market / side</th>
               <th scope="col" className="text-right py-1.5 px-2 font-semibold">LINE</th>
-              <th scope="col" className="text-right py-1.5 px-2 font-semibold">MODEL %</th>
-              <th scope="col" className="text-right py-1.5 px-2 font-semibold">MKT FAIR</th>
-              <th scope="col" className="text-right py-1.5 px-2 font-semibold">MODEL DIFF</th>
-              <th scope="col" className="text-right py-1.5 px-2 font-semibold">BEST PRICE</th>
+              <th scope="col" className="text-right py-1.5 px-2 font-semibold">Model %</th>
+              <th scope="col" className="text-right py-1.5 px-2 font-semibold">Mkt fair</th>
+              <th scope="col" className="text-right py-1.5 px-2 font-semibold">Model diff</th>
+              <th scope="col" className="text-right py-1.5 px-2 font-semibold">Best price</th>
             </tr>
           </thead>
           <tbody>
@@ -144,13 +144,13 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
                   <td className="mono text-right p-2 text-text-secondary">
                     {m.p_fair != null ? `${(m.p_fair * 100).toFixed(1)}%` : '--'}
                   </td>
-                  <td className="mono text-right p-2 font-bold" style={{ color: hasEdge ? GREEN : (m.model_edge != null && m.model_edge < 0 ? '#ff5a4f' : 'var(--color-neutral-300)') }}>
+                  <td className="mono text-right p-2 font-semibold" style={{ color: hasEdge ? GREEN : (m.model_edge != null && m.model_edge < 0 ? '#ff5a4f' : 'var(--color-neutral-300)') }}>
                     {m.model_edge != null ? `${m_edge(m.model_edge)}` : '--'}
                   </td>
                   <td className="text-right p-2">
                     {m.best_odds != null ? (
                       <div className="inline-flex items-center gap-1.5 justify-end">
-                        <span className="mono text-compact font-bold" style={{ color: hasEdge ? GREEN : 'var(--color-text-primary)' }}>
+                        <span className="mono text-compact font-semibold" style={{ color: hasEdge ? GREEN : 'var(--color-text-primary)' }}>
                           {formatOdds(m.best_odds)}
                         </span>
                         {m.best_book && <BookTag book={m.best_book} size={15} />}
@@ -175,14 +175,14 @@ export function GameLinesTable({ rows, limit }: { rows: GameRowView[]; limit: nu
       <table className="odds-table w-full border-collapse">
         <thead>
           <tr className="bg-[#0d0f15]" style={{ borderBottom: `1px solid ${HAIR}` }}>
-            <th scope="col" className="text-left min-w-[70px] py-2.5 px-3">SPORT</th>
-            <th scope="col" className="text-left min-w-[180px] py-2.5 px-3">MATCHUP</th>
-            <th scope="col" className="text-left min-w-[120px] py-2.5 px-3">MARKET</th>
-            <th scope="col" className="text-left min-w-[140px] py-2.5 px-3">SELECTION / LINE</th>
-            <th scope="col" className="text-right min-w-[100px] py-2.5 px-3">MODEL PROB</th>
-            <th scope="col" className="text-right min-w-[100px] py-2.5 px-3">MKT FAIR</th>
-            <th scope="col" className="text-right min-w-[100px] py-2.5 px-3">MODEL DIFF</th>
-            <th scope="col" className="text-right min-w-[100px] py-2.5 px-3">MKT EV</th>
+            <th scope="col" className="text-left min-w-[70px] py-2.5 px-3">Sport</th>
+            <th scope="col" className="text-left min-w-[180px] py-2.5 px-3">Matchup</th>
+            <th scope="col" className="text-left min-w-[120px] py-2.5 px-3">Market</th>
+            <th scope="col" className="text-left min-w-[140px] py-2.5 px-3">Selection / line</th>
+            <th scope="col" className="text-right min-w-[100px] py-2.5 px-3">Model prob</th>
+            <th scope="col" className="text-right min-w-[100px] py-2.5 px-3">Mkt fair</th>
+            <th scope="col" className="text-right min-w-[100px] py-2.5 px-3">Model diff</th>
+            <th scope="col" className="text-right min-w-[100px] py-2.5 px-3">Mkt EV</th>
             <th scope="col" className="text-right min-w-[160px] py-2.5 px-3">BEST ODDS &amp; BOOK</th>
           </tr>
         </thead>
@@ -198,7 +198,7 @@ export function GameLinesTable({ rows, limit }: { rows: GameRowView[]; limit: nu
             return (
               <tr key={`${r.game_key}-${r.system}-${r.side}-${idx}`} data-row="odds">
                 <td className="py-[9px] px-3">
-                  <span className="mono text-[10.5px] font-bold py-[2px] px-[6px]" style={{
+                  <span className="mono text-[11px] font-semibold py-[2px] px-[6px]" style={{
                     borderRadius: '4px',
                     background: isNba ? 'rgba(249,115,22,0.15)' : 'rgba(56,189,248,0.15)',
                     color: isNba ? '#f97316' : '#38bdf8',
@@ -209,7 +209,7 @@ export function GameLinesTable({ rows, limit }: { rows: GameRowView[]; limit: nu
                 </td>
                 <td className="py-[9px] px-3 font-semibold text-text-primary">
                   {r.player}
-                  <div className="mono text-[10.5px] text-text-secondary font-normal">
+                  <div className="mono text-[11px] text-text-secondary font-normal">
                     {startLabel(r.commence)}
                   </div>
                 </td>
@@ -225,7 +225,7 @@ export function GameLinesTable({ rows, limit }: { rows: GameRowView[]; limit: nu
                 <td className="mono text-right py-[9px] px-3 text-text-secondary">
                   {r.p_mkt_side != null ? `${(r.p_mkt_side * 100).toFixed(1)}%` : '--'}
                 </td>
-                <td className="mono text-right py-[9px] px-3 font-bold" style={{ color: hasEdge ? GREEN : (r.model_edge != null && r.model_edge < 0 ? '#ff5a4f' : 'var(--color-neutral-300)') }}>
+                <td className="mono text-right py-[9px] px-3 font-semibold" style={{ color: hasEdge ? GREEN : (r.model_edge != null && r.model_edge < 0 ? '#ff5a4f' : 'var(--color-neutral-300)') }}>
                   {r.model_edge != null ? `${m_edge(r.model_edge)}` : '--'}
                 </td>
                 <td className="mono text-right py-[9px] px-3" style={{ color: highlightModelDiff(r.market_ev, r.validated, 0.0000001) ? GREEN : 'var(--color-text-secondary)' }}>
@@ -234,7 +234,7 @@ export function GameLinesTable({ rows, limit }: { rows: GameRowView[]; limit: nu
                 <td className="text-right py-[9px] px-3">
                   {bestOdds != null ? (
                     <div className="inline-flex items-center gap-1.5 justify-end">
-                      <span className="mono text-compact font-bold" style={{ color: hasEdge ? GREEN : 'var(--color-text-primary)' }}>
+                      <span className="mono text-compact font-semibold" style={{ color: hasEdge ? GREEN : 'var(--color-text-primary)' }}>
                         {formatOdds(bestOdds)}
                       </span>
                       {bestBook && <BookTag book={bestBook} size={15} />}
@@ -260,7 +260,7 @@ function m_edge(edge: number): string {
 export function GameLinesNotice({ label, validated }: { label: string; validated: boolean }) {
   return (
     <div role="note" style={{ ...SURFACE_CARD, padding: '8px 12px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px 12px', flexWrap: 'wrap', borderLeft: `3px solid ${validated ? GREEN : '#facc15'}` }}>
-      <span className="mono text-[10.5px] font-bold tracking-fine" data-testid="game-lines-label" style={{ color: validated ? GREEN : '#facc15' }}>{label.toUpperCase()}</span>
+      <span className="mono text-[11px] font-semibold" data-testid="game-lines-label" style={{ color: validated ? GREEN : '#facc15' }}>{label.toUpperCase()}</span>
       <span className="text-compact text-neutral-300">
         MODEL DIFF is the model&apos;s probability minus the market&apos;s fair probability. It is not an edge until a backtest supports it.
       </span>

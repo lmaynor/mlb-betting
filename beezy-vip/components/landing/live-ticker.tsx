@@ -41,7 +41,7 @@ export async function LiveTicker() {
           <span
             key={i}
             className={clsx(
-              'mono text-xs font-semibold tracking-wide whitespace-nowrap px-6 flex items-center gap-2',
+              'mono text-xs font-semibold whitespace-nowrap px-6 flex items-center gap-2',
               t.result === 'W' ? 'text-win' : t.result === 'L' ? 'text-loss' : 'text-muted'
             )}
           >

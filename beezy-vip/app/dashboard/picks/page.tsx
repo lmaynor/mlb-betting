@@ -16,7 +16,7 @@ function ProbBar({ modelProb, marketProb }: { modelProb: number; marketProb: num
       <div className="flex justify-between font-mono text-micro">
         <span className="text-signal">{modelPct}% model</span>
         <span className="text-text-secondary">{marketPct}% implied</span>
-        <span className="font-bold text-signal">+{edgePct}%</span>
+        <span className="font-semibold text-signal">+{edgePct}%</span>
       </div>
     </div>
   )
@@ -57,7 +57,7 @@ export default async function DashboardPicksPage() {
 
       {/* Pending picks */}
       <div className="flex items-center gap-3 mb-4">
-        <h2 className="text-sm font-extrabold uppercase tracking-wide">Today&apos;s Picks</h2>
+        <h2 className="text-sm font-semibold">Today&apos;s Picks</h2>
         <LiveDot />
       </div>
 
@@ -73,7 +73,7 @@ export default async function DashboardPicksPage() {
             style={{ gridTemplateColumns: '60px 0.8fr 1.2fr 1fr 0.7fr 1.8fr 0.8fr 1fr' }}
           >
             {['Score', 'System', 'Game', 'Pick', 'Line', 'Win Probability', 'Half Kelly', 'Stake ($1k)'].map(h => (
-              <div key={h} className="px-3 py-3 mono text-xs uppercase tracking-widest text-text-secondary">{h}</div>
+              <div key={h} className="px-3 py-3 mono text-xs text-text-secondary">{h}</div>
             ))}
           </div>
 
@@ -96,11 +96,11 @@ export default async function DashboardPicksPage() {
                 <div className="px-3 py-4">
                   <ProbBar modelProb={pick.model_prob} marketProb={pick.market_prob} />
                 </div>
-                <div className="px-3 py-4 mono text-sm font-bold text-text-primary">
+                <div className="px-3 py-4 mono text-sm font-semibold text-text-primary">
                   {kelly.halfKelly}%
                 </div>
                 <div className="px-3 py-4 flex items-center gap-2">
-                  <span className="mono text-sm font-bold text-win">
+                  <span className="mono text-sm font-semibold text-win">
                     ${kelly.stakeHalfDollars.toFixed(2)}
                   </span>
                   <CopyBetButton
@@ -116,14 +116,14 @@ export default async function DashboardPicksPage() {
       {/* Today's settled */}
       {settled.length > 0 && (
         <>
-          <h2 className="text-sm font-extrabold uppercase tracking-wide mb-4">Settled Today</h2>
+          <h2 className="text-sm font-semibold mb-4">Settled Today</h2>
           <div className="overflow-x-auto rounded-xl border border-separator-border bg-background-primary-default shadow-card">
             <div
               className="grid min-w-[700px] border-b border-border-table bg-background-secondary-default"
               style={{ gridTemplateColumns: '0.8fr 1.2fr 1fr 0.8fr 0.8fr 0.8fr' }}
             >
               {['System', 'Game', 'Pick', 'Line', 'Result', 'P&L'].map(h => (
-                <div key={h} className="px-3 py-3 mono text-xs uppercase tracking-widest text-text-secondary">{h}</div>
+                <div key={h} className="px-3 py-3 mono text-xs text-text-secondary">{h}</div>
               ))}
             </div>
             {settled.map((pick, i) => (

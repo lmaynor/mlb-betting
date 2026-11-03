@@ -17,7 +17,7 @@ const CONTROL: React.CSSProperties = {
   color: 'var(--color-text-primary)',
 }
 // each labelled control grows to share the row, so on a phone they stack two or one to a row instead of ragged wraps
-const LABEL: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '10px', fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)', letterSpacing: '0.08em', flex: '1 1 150px', minWidth: 0 }
+const LABEL: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '10px', fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)', flex: '1 1 150px', minWidth: 0 }
 const SELECT: React.CSSProperties = { flex: '1 1 auto', minWidth: 0 }
 
 /**
@@ -97,7 +97,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
         >
           <span>Filters</span>
           {active > 0 && (
-            <span className="text-micro text-signal py-[1px] px-[5px] rounded-[10px] font-bold"
+            <span className="text-micro text-signal py-[1px] px-[5px] rounded-[10px] font-semibold"
               style={{ background: 'var(--win-wash)' }}
             >
               {active}
@@ -145,7 +145,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
           <div className="flex flex-col gap-3.5">
             {sport === 'all' ? (
               <div>
-                <div className="ui-heading text-micro text-text-secondary mb-1.5 tracking-head">SPORT</div>
+                <div className="ui-heading text-micro text-text-secondary mb-1.5">Sport</div>
                 <div className="flex gap-1 bg-background-secondary-default p-[3px]" style={{ borderRadius: '8px', border: B }}>
                   {[{ slug: 'all', shortName: 'ALL' }, ...sportsInSeason()].map(s => {
                     const isActive = sportParam === s.slug
@@ -156,7 +156,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                         onClick={() => set('sport', s.slug, 'all')}
                         style={{
                           borderRadius: '6px',
-                          fontSize: '11.5px',
+                          fontSize: '12px',
                           fontFamily: 'var(--font-mono)',
                           fontWeight: 600,
                           border: isActive ? '1px solid var(--color-border-button-hover)' : '1px solid transparent',
@@ -173,7 +173,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
             ) : !fixedMarket && (
               <div className="flex flex-col gap-[6px] bg-background-secondary-default p-[10px]" style={{ borderRadius: '8px', border: B }}>
                 <div className="flex items-center justify-between">
-                  <span className="ui-heading text-micro text-text-secondary tracking-head">MARKET / SYSTEM</span>
+                  <span className="ui-heading text-micro text-text-secondary">Market / system</span>
                   <button
                     type="button"
                     className="btn btn-ghost py-[3px] px-2 text-mini min-h-[26px]"
@@ -200,7 +200,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                       >
                         +EV alerts
                       </button>
-                      <button className="tracking-fine py-[3px] px-[7px] min-h-[26px] cursor-pointer shrink-0"
+                      <button className="py-[3px] px-[7px] min-h-[26px] cursor-pointer shrink-0"
                         type="button"
                         title="Select only +EV alerts"
                         aria-label="Only +EV alerts"
@@ -208,7 +208,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                         style={{
                           fontSize: '10px',
                           fontFamily: 'var(--font-mono)',
-                          fontWeight: 700,
+                          fontWeight: 600,
                           borderRadius: '4px',
                           border: market === 'EV' ? '1px solid var(--signal)' : `1px solid var(--color-separator-border)`,
                           background: market === 'EV' ? 'var(--win-wash)' : 'transparent',
@@ -238,7 +238,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                         >
                           {SYSTEM_LABEL_SHORT[s.key] ?? s.shortName}
                         </button>
-                        <button className="tracking-fine py-[3px] px-[7px] min-h-[26px] cursor-pointer shrink-0"
+                        <button className="py-[3px] px-[7px] min-h-[26px] cursor-pointer shrink-0"
                           type="button"
                           title={`Select only ${SYSTEM_LABEL_SHORT[s.key] ?? s.shortName}`}
                           aria-label={`Only ${SYSTEM_LABEL_SHORT[s.key] ?? s.shortName}`}
@@ -246,7 +246,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                           style={{
                             fontSize: '10px',
                             fontFamily: 'var(--font-mono)',
-                            fontWeight: 700,
+                            fontWeight: 600,
                             borderRadius: '4px',
                             border: isActive ? '1px solid var(--signal)' : `1px solid var(--color-separator-border)`,
                             background: isActive ? 'var(--win-wash)' : 'transparent',
@@ -263,7 +263,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
             )}
 
             <div>
-              <div className="ui-heading text-micro text-text-secondary mb-1.5 tracking-head">SHOW</div>
+              <div className="ui-heading text-micro text-text-secondary mb-1.5">SHOW</div>
               <div className="flex flex-wrap gap-1 bg-background-secondary-default p-1" style={{ borderRadius: '8px', border: B }}>
                 {[{ value: 'all', label: 'Everything' }, ...SIGNAL_OPTIONS].map(o => {
                   const isActive = signal.toLowerCase() === o.value.toLowerCase()
@@ -291,7 +291,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
 
             <div className="flex flex-col gap-[6px] bg-background-secondary-default p-[10px]" style={{ borderRadius: '8px', border: B }}>
               <div className="flex items-center justify-between">
-                <span className="ui-heading text-micro text-text-secondary tracking-head">BOOK</span>
+                <span className="ui-heading text-micro text-text-secondary">BOOK</span>
                 <div className="flex gap-1">
                   <button
                     type="button"
@@ -348,7 +348,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                       >
                         {b}
                       </button>
-                      <button className="tracking-fine py-[3px] px-[7px] min-h-[26px] cursor-pointer shrink-0"
+                      <button className="py-[3px] px-[7px] min-h-[26px] cursor-pointer shrink-0"
                         type="button"
                         title={`Select only ${b}`}
                         aria-label={`Only ${b}`}
@@ -363,7 +363,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                         style={{
                           fontSize: '10px',
                           fontFamily: 'var(--font-mono)',
-                          fontWeight: 700,
+                          fontWeight: 600,
                           borderRadius: '4px',
                           border: isSelected ? '1px solid var(--signal)' : `1px solid var(--color-separator-border)`,
                           background: isSelected ? 'var(--win-wash)' : 'transparent',
@@ -380,18 +380,18 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
 
             {showResult && (
               <div>
-                <div className="ui-heading text-micro text-text-secondary mb-1.5 tracking-head">RESULT</div>
+                <div className="ui-heading text-micro text-text-secondary mb-1.5">Result</div>
                 <div className="flex gap-1 bg-background-secondary-default p-[3px]" style={{ borderRadius: '8px', border: B }}>
                   {['all', 'win', 'loss', 'pending'].map(r => {
                     const isActive = result.toLowerCase() === r
                     return (
-                      <button className="flex-1 min-h-9 uppercase cursor-pointer"
+                      <button className="flex-1 min-h-9 cursor-pointer"
                         key={r}
                         type="button"
                         onClick={() => set('result', r, 'all')}
                         style={{
                           borderRadius: '6px',
-                          fontSize: '11.5px',
+                          fontSize: '12px',
                           fontFamily: 'var(--font-mono)',
                           fontWeight: 600,
                           border: isActive ? '1px solid var(--color-border-button-hover)' : '1px solid transparent',
@@ -408,7 +408,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
             )}
 
             <div>
-              <div className="ui-heading text-micro text-text-secondary mb-1.5 tracking-head">SORT BY</div>
+              <div className="ui-heading text-micro text-text-secondary mb-1.5">Sort by</div>
               <div className="flex flex-wrap gap-1 bg-background-secondary-default p-1 mb-[6px]" style={{ borderRadius: '8px', border: B }}>
                 {sortOptions.map(o => {
                   const isActive = sort === o.value

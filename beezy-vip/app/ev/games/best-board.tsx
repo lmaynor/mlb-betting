@@ -161,8 +161,8 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen, nav }: { 
                       <span className="text-[12px] text-text-secondary truncate">{e.game.away} @ {e.game.home}</span>
                       <span className="mono text-[11px] font-semibold rounded-chip px-1.5 whitespace-nowrap" style={{ color: e.outlier ? '#facc15' : GREEN, background: e.outlier ? 'rgba(250,204,21,0.10)' : 'rgba(87,242,135,0.10)' }}>{signedPct(e.shop.ev!)}</span>
                     </span>
-                    <span className="mt-1 flex items-center gap-1.5 text-compact font-semibold text-text-primary">{e.shop.label}{e.alt && <span className="mono text-[10px] font-semibold tracking-fine text-text-tertiary">ALT</span>}</span>
-                    <span className="mt-1 flex items-center gap-1.5"><BookLogo book={e.shop.book!} size={16} /><b className="mono text-[18px] font-semibold" style={{ color: e.outlier ? '#facc15' : GREEN }}>{formatOdds(e.shop.american!)}</b>{e.outlier && <span className="mono text-[10px] font-semibold tracking-fine text-warn" title="Far better than the market fair price: often a stale quote. Confirm the price at the book.">CHECK</span>}</span>
+                    <span className="mt-1 flex items-center gap-1.5 text-compact font-semibold text-text-primary">{e.shop.label}{e.alt && <span className="mono text-[10px] font-semibold text-text-tertiary">ALT</span>}</span>
+                    <span className="mt-1 flex items-center gap-1.5"><BookLogo book={e.shop.book!} size={16} /><b className="mono text-[18px] font-semibold" style={{ color: e.outlier ? '#facc15' : GREEN }}>{formatOdds(e.shop.american!)}</b>{e.outlier && <span className="mono text-[10px] font-semibold text-warn" title="Far better than the market fair price: often a stale quote. Confirm the price at the book.">Check</span>}</span>
                   </button>
                 ))}
               </div>

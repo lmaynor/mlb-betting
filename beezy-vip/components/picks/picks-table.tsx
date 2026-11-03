@@ -35,7 +35,7 @@ function ResultPill({ result }: { result: string | null }) {
   const r = result?.toLowerCase() ?? ''
   const c = cfg[r] ?? { label: 'PENDING', color: 'var(--link)', bg: 'color-mix(in oklab, var(--link) 14%, var(--color-background-full))', border: '1px solid color-mix(in oklab, var(--link) 38%, var(--color-background-full))' }
   return (
-    <span className="ui-heading inline-flex items-center py-[3px] px-2 text-micro tracking-head" style={{
+    <span className="ui-heading inline-flex items-center py-[3px] px-2 text-micro" style={{
       borderRadius: 'var(--radius-pill)',
       color: c.color,
       background: c.bg,
@@ -53,7 +53,7 @@ function PnL({ profit, result, stake }: { profit: number | null; result: string 
   const units = (profit / (stake != null && stake > 0 ? stake : 10)).toFixed(2)
   const pos = profit >= 0
   return (
-    <span className="mono text-compact font-bold" style={{ color: pos ? 'var(--signal)' : 'var(--loss)' }}>
+    <span className="mono text-compact font-semibold" style={{ color: pos ? 'var(--signal)' : 'var(--loss)' }}>
       {pos ? '+' : ''}{units}u
     </span>
   )
@@ -69,11 +69,11 @@ function CompactScore({ bet, align = 'left' }: { bet: Bet; align?: 'left' | 'cen
 
   return (
     <div className="flex flex-col gap-[2px]" title={explainScore(bet)} style={{ alignItems: align === 'center' ? 'center' : 'flex-start' }}>
-      <span className="mono text-[16px] font-extrabold leading-[1]" style={{ color: badgeColor ?? 'var(--color-neutral-300)' }}>
+      <span className="mono text-[16px] font-semibold leading-[1]" style={{ color: badgeColor ?? 'var(--color-neutral-300)' }}>
         {score}
       </span>
       {badgeLabel && badgeColor && (
-        <span className="ui-heading text-micro tracking-head py-[2px] px-[5px] whitespace-nowrap" style={{
+        <span className="ui-heading text-micro py-[2px] px-[5px] whitespace-nowrap" style={{
           borderRadius: '4px',
           border: `1px solid ${badgeColor}`,
           background: `color-mix(in oklab, ${badgeColor} 14%, var(--color-background-full))`,
@@ -160,7 +160,7 @@ function TableRow({ bet }: { bet: Bet }) {
       </div>
 
       <div className="py-2.5 px-1.5">
-        <span className="ui-heading inline-flex max-w-[96px] py-[3px] px-2 text-micro tracking-head overflow-hidden text-ellipsis whitespace-nowrap" style={{
+        <span className="ui-heading inline-flex max-w-[96px] py-[3px] px-2 text-micro overflow-hidden text-ellipsis whitespace-nowrap" style={{
           borderRadius: 'var(--radius-pill)',
           color: pill.color,
           background: pill.bg,
@@ -202,10 +202,10 @@ function TableRow({ bet }: { bet: Bet }) {
       </div>
 
       <div className="py-2.5 px-1.5">
-        <div className="mono text-compact font-bold text-text-primary">{fmtOdds(bet.odds)}</div>
+        <div className="mono text-compact font-semibold text-text-primary">{fmtOdds(bet.odds)}</div>
         <div className="mono text-micro text-text-secondary mt-0.5">{impliedLabel(bet.odds)}</div>
       </div>
-      <div className="mono py-2.5 px-1.5 text-mini font-bold text-signal">
+      <div className="mono py-2.5 px-1.5 text-mini font-semibold text-signal">
         {fmtEdge(bet.edge)}
       </div>
       <div className="mono py-2.5 px-1.5 text-mini text-neutral-300 overflow-hidden text-ellipsis">
@@ -233,7 +233,7 @@ function BetCard({ bet }: { bet: Bet }) {
       <div className="flex flex-col gap-2.5 p-3.5">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="ui-heading py-[3px] px-2 text-micro tracking-head" style={{
+          <span className="ui-heading py-[3px] px-2 text-micro" style={{
             borderRadius: 'var(--radius-pill)',
             color: pill.color,
             background: pill.bg,
@@ -251,7 +251,7 @@ function BetCard({ bet }: { bet: Bet }) {
       <div>
         {hasProp && bet.player ? (
           <div className="flex flex-col gap-1">
-            <span className="text-[15px] font-extrabold text-text-primary">{bet.player}</span>
+            <span className="text-[15px] font-semibold text-text-primary">{bet.player}</span>
             <span className="mono text-compact text-neutral-300 leading-[1.45]">
               {description}
             </span>
@@ -282,7 +282,7 @@ function BetCard({ bet }: { bet: Bet }) {
           { label: 'BOOK', value: bet.book ? bookText(bet.book) : '--' },
         ].map(({ label: l, value, strong, color, sub }) => (
           <div key={l}>
-            <div className="mono text-micro text-text-secondary tracking-caps mb-0.5">{l}</div>
+            <div className="mono text-micro text-text-secondary mb-0.5">{l}</div>
             <div className="mono overflow-hidden text-ellipsis" style={{ fontSize: '13px', color: color ?? (strong ? 'var(--color-text-primary)' : 'var(--color-neutral-300)'), fontWeight: strong ? 700 : 500 }}>{value}</div>
             {sub && <div className="mono text-micro text-text-secondary mt-0.5">{sub}</div>}
           </div>
@@ -361,7 +361,7 @@ export function PicksTable({ bets, sort: initSort = 'score', dir: initDir = 'des
         <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
           <div className="grid bg-background-secondary-default" style={{ gridTemplateColumns: TABLE_GRID, borderBottom: B, minWidth: TABLE_MIN_WIDTH }}>
             {COLS.map(c => c.sortKey ? (
-              <button className="py-2 px-[10px] tracking-label bg-transparent bg-none border-0 cursor-pointer text-left" key={c.label} onClick={() => handleSort(c.sortKey!)} style={{
+              <button className="py-2 px-[10px] bg-transparent bg-none border-0 cursor-pointer text-left" key={c.label} onClick={() => handleSort(c.sortKey!)} style={{
                 fontSize: '10px',
                 fontFamily: 'var(--font-mono)',
                 color: sortKey === c.sortKey ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
@@ -369,7 +369,7 @@ export function PicksTable({ bets, sort: initSort = 'score', dir: initDir = 'des
                 {c.label}{sortIndicator(c.sortKey)}
               </button>
             ) : (
-              <div key={c.label} className="mono py-2 px-2.5 text-micro tracking-label text-text-secondary">{c.label}</div>
+              <div key={c.label} className="mono py-2 px-2.5 text-micro text-text-secondary">{c.label}</div>
             ))}
           </div>
           {visible.map(bet => <TableRow key={bet.id} bet={bet} />)}

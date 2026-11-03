@@ -64,6 +64,18 @@ describe('design-system debt guards', () => {
     expect(hits).toEqual([])
   })
 
+  it('keeps font sizes on the type scale: no half-pixel sizes outside the OG cards and /edge', () => {
+    const half = /(?:text-\[|fontSize: *'?)\d+\.5/
+    const hits = sources().filter(([f, src]) => !/api[\\/]og|app[\\/]edge/.test(f) && half.test(src)).map(([f]) => f)
+    expect(hits).toEqual([])
+  })
+
+  it('has no tracked all-caps labels in work-surface components (sentence case, no letter-spaced uppercase)', () => {
+    const tracked = /\buppercase\b|textTransform: *'uppercase'|tracking-(label|caps|head|fine|wide|wider|widest)\b/
+    const hits = sources().filter(([f, src]) => /\.tsx$/.test(f) && !/api[\\/]og|app[\\/]edge|brand-mark/.test(f) && tracked.test(src)).map(([f]) => f)
+    expect(hits).toEqual([])
+  })
+
   it('renders no text below the 10px floor', () => {
     const small = /(?:fontSize: *'?|font-size: *|fontSize=["{])(?:[0-9]|[0-9]\.[0-9]+)(?:px)?['"}]?\s*[,;} \n]/
     const hits = sources().filter(([, src]) => small.test(src)).map(([f]) => f)

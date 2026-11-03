@@ -205,7 +205,7 @@ export function MobileBottomSheet({
               {title && (
                 <div
                  
-                 className="text-[14px] font-bold text-text-primary leading-[1.3] overflow-hidden text-ellipsis whitespace-nowrap">
+                 className="text-[14px] font-semibold text-text-primary leading-[1.3] overflow-hidden text-ellipsis whitespace-nowrap">
                   {title}
                 </div>
               )}

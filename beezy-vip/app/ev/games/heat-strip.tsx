@@ -74,8 +74,8 @@ function HeatRow({ h, on, books, sel }: { h: HeatRung; on: boolean; books: strin
         style={{ fontWeight: on ? 600 : 500, color: r.thin ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)' }}>
         <span className="w-[3px] h-4 rounded-[2px]" style={{ background: on ? GREEN : 'transparent' }} />
         <span className="whitespace-nowrap">{h.label}</span>
-        {h.main && <span className="mono text-[10px] font-semibold tracking-fine" style={{ color: GREEN }}>MAIN</span>}
-        {r.thin && <span className="mono text-[10px] font-semibold tracking-fine text-warn">THIN</span>}
+        {h.main && <span className="mono text-[10px] font-semibold" style={{ color: GREEN }}>MAIN</span>}
+        {r.thin && <span className="mono text-[10px] font-semibold text-warn">THIN</span>}
       </button>
       {books.map(b => {
         const d = r.dots.find(x => x.book === b)

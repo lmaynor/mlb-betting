@@ -73,7 +73,7 @@ export function GamePicksTable({ feeds }: { feeds: { odds: Record<string, GameOd
                       </span>
                       <span className="mono block text-[11px] text-text-secondary">{g.sport.toUpperCase()} &middot; {startLabel(g.start)}</span>
                     </td>
-                    <td className="px-3 py-2 text-left whitespace-nowrap font-semibold text-text-primary">{lean.label}<span className="mono block text-[10px] font-semibold tracking-fine text-warn">UNVALIDATED</span></td>
+                    <td className="px-3 py-2 text-left whitespace-nowrap font-semibold text-text-primary">{lean.label}<span className="mono block text-[10px] font-semibold text-warn">Unvalidated</span></td>
                     <td className="mono px-3 py-2 text-right" style={{ color: SKY }}>{pct(lean.pModel)}</td>
                     <td className="mono px-3 py-2 text-right text-text-secondary hidden sm:table-cell">{pct(lean.pMarket)}</td>
                     <td className="mono px-3 py-2 text-right font-semibold" style={{ color: SKY }}>{signedPct(lean.gap)}</td>

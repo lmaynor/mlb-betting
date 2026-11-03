@@ -9,7 +9,7 @@ function Metric({ label, value, tone, sub }: { label: string; value: React.React
   return (
     <div className="py-[10px] px-[18px] grid gap-[3px] min-w-0" style={{ borderRight: `1px solid ${HAIR}`, alignContent: 'center' }}>
       <span className="ui-heading text-text-secondary">{label}</span>
-      <span className="mono text-[16px] font-bold leading-[1.1] whitespace-nowrap" style={{ color: tone ?? 'var(--color-text-primary)' }}>{value}</span>
+      <span className="mono text-[16px] font-semibold leading-[1.1] whitespace-nowrap" style={{ color: tone ?? 'var(--color-text-primary)' }}>{value}</span>
       {sub != null && <span className="mono text-mini text-text-secondary whitespace-nowrap">{sub}</span>}
     </div>
   )
@@ -30,7 +30,7 @@ export function LedgerStrip({ h }: { h: EvHeadline | null }) {
         <Metric label="FLAT STAKES" value={fmtMoney(h.flat_pnl_dollars, true)} tone={tone(h.flat_roi_pct)} sub={`${roi(h.flat_roi_pct)} ROI`} />
         <Metric label="1/4 KELLY" value={fmtMoney(h.kelly_ending_bankroll)} tone={tone(h.kelly_roi_pct)} sub={`from ${fmtMoney(h.bankroll)} \u00b7 ${roi(h.kelly_roi_pct)} ROI`} />
         <details style={{ marginLeft: 'auto', padding: '10px 18px', alignSelf: 'center', flex: '1 1 260px', minWidth: 0 }}>
-          <summary style={{ fontSize: '11.5px', color: 'var(--color-neutral-300)', cursor: 'pointer', textAlign: 'right' }}>Methodology &amp; audit notes</summary>
+          <summary style={{ fontSize: '12px', color: 'var(--color-neutral-300)', cursor: 'pointer', textAlign: 'right' }}>Methodology &amp; audit notes</summary>
           <p className="times text-compact text-neutral-300 leading-[1.6]" style={{ margin: '10px 0 0' }}>
             Paper results only: no slippage, limits or line movement, and the same prop flagged at several books counts several
             times ({h.unique_props_graded.toLocaleString()} unique props behind {h.graded.toLocaleString()} graded alerts). Voids are excluded

@@ -12,7 +12,7 @@ import { OddsScreen } from './use-odds-screen'
 function SgpNotice({ extremeCount, includeExtreme, onToggle }: { extremeCount: number; includeExtreme: boolean; onToggle: () => void }) {
   return (
     <div role="note" className="mb-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-separator-border border-l-[3px] border-l-[#facc15] bg-background-primary-default px-3 py-2 shadow-card">
-      <span className="mono text-[10.5px] font-bold tracking-fine text-warn">UNVALIDATED</span>
+      <span className="mono text-[11px] font-semibold text-warn">Unvalidated</span>
       <span className="min-w-[240px] flex-1 text-caption-1-regular text-text-secondary">
         {SGP_UNVALIDATED_LABEL}. Correlation and book hold are assumed constants, so a gap here is a place to look, not an edge.
       </span>
@@ -177,7 +177,7 @@ function SgpTableView({ odds }: { odds: OddsScreen }) {
             <tr style={{ borderBottom: `1px solid ${HAIR}`, background: '#0d0f15' }}>
               <th scope="col" className="text-left min-w-[220px] py-2.5 px-3.5">PLAYER &amp; MATCHUP</th>
               <th scope="col" className="text-left min-w-[280px] py-2.5 px-3.5">SGP LEGS (SAME BOOK)</th>
-              <th scope="col" className="text-left min-w-[150px] py-2.5 px-3.5">ASSUMED-CORRELATION FAIR</th>
+              <th scope="col" className="text-left min-w-[150px] py-2.5 px-3.5">Assumed-correlation fair</th>
               <th scope="col" className="text-left min-w-[220px] py-2.5 px-3.5">MODELLED SGP PRICE (NOT QUOTED)</th>
               <th scope="col" className="text-right min-w-[170px] py-2.5 px-3.5">MODEL EV &amp; ACTION</th>
             </tr>
@@ -206,37 +206,37 @@ function PropTableView({ odds }: { odds: OddsScreen }) {
             <th scope="col" className="text-left">GAME</th>
             {mode === 'ev' && (
               <>
-                <th scope="col" className="odds-ev" title="Fair price of this side from the reference books">FAIR ODDS</th>
-                <th scope="col" className="odds-ev" title="EV of the best bettable price against the fair value">BEST EDGE</th>
-                <th scope="col" title="Quarter Kelly at your bankroll, edge shrunk the way the +EV Terminal sizes" className="text-right">KELLY / LINE</th>
+                <th scope="col" className="odds-ev" title="Fair price of this side from the reference books">Fair odds</th>
+                <th scope="col" className="odds-ev" title="EV of the best bettable price against the fair value">Best edge</th>
+                <th scope="col" title="Quarter Kelly at your bankroll, edge shrunk the way the +EV Terminal sizes" className="text-right">Kelly / line</th>
               </>
             )}
             {mode === 'outliers' && (
               <>
-                <th scope="col" className="odds-ev" title="Average price across all peer books quoting this side">MARKET AVG</th>
-                <th scope="col" className="odds-ev" title="The single book hanging a number off the market">OUTLIER BOOK</th>
-                <th scope="col" title="Payout premium above peer average, and de-vigged EV" className="text-right">DISLOCATION</th>
+                <th scope="col" className="odds-ev" title="Average price across all peer books quoting this side">Market avg</th>
+                <th scope="col" className="odds-ev" title="The single book hanging a number off the market">Outlier book</th>
+                <th scope="col" title="Payout premium above peer average, and de-vigged EV" className="text-right">Dislocation</th>
               </>
             )}
             {mode === 'middles' && (
               <>
-                <th scope="col" className="odds-ev" title="Width of the window between the two lines, and what a miss and a hit pay">MIDDLE</th>
+                <th scope="col" className="odds-ev" title="Width of the window between the two lines, and what a miss and a hit pay">Middle</th>
                 <th scope="col" className="odds-ev">LEGS</th>
                 <th scope="col" className="odds-ev">STAKE SPLIT ({usd(outlay).replace('.00', '')})</th>
               </>
             )}
             {mode === 'arb' && (
               <>
-                <th scope="col" className="odds-ev" title="Margin on the outlay with the best over and under at two different books, net of Kalshi's fee">ARB / HOLD</th>
-                <th scope="col" className="odds-ev">HEDGE LEGS</th>
+                <th scope="col" className="odds-ev" title="Margin on the outlay with the best over and under at two different books, net of Kalshi's fee">Arb / hold</th>
+                <th scope="col" className="odds-ev">Hedge legs</th>
                 <th scope="col" className="odds-ev">STAKE SPLIT ({usd(outlay).replace('.00', '')})</th>
               </>
             )}
             {mode === 'longshots' && (
               <>
-                <th scope="col" className="odds-ev" title="Fair over / under price: the reference books' consensus, or the player's curve when they are too few">FAIR ANCHOR</th>
-                <th scope="col" className="odds-ev" title="The side with the higher EV">BEST ACTION</th>
-                <th scope="col" title="Implied probability of the best price against the fair probability, for the best action's side" className="text-right">IMPLIED / TRUE</th>
+                <th scope="col" className="odds-ev" title="Fair over / under price: the reference books' consensus, or the player's curve when they are too few">Fair anchor</th>
+                <th scope="col" className="odds-ev" title="The side with the higher EV">Best action</th>
+                <th scope="col" title="Implied probability of the best price against the fair probability, for the best action's side" className="text-right">Implied / true</th>
               </>
             )}
             {columns.map(c => {

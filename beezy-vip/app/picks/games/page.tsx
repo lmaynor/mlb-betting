@@ -46,7 +46,7 @@ export default async function GamePicksPage({ searchParams }: { searchParams: Pr
         <div className="flex items-baseline justify-between gap-y-2 gap-x-4 flex-wrap mb-3">
           {offseason
             ? <h1 className="text-[20px] font-bold text-text-primary m-0">Game Picks</h1>
-            : <h2 className="text-[20px] font-bold text-text-primary m-0">NBA and NHL model picks</h2>}
+            : <h2 className="text-[20px] font-semibold text-text-primary m-0">NBA and NHL model picks</h2>}
           <Link className="text-link text-compact" href="/ev/games">Every game and line &rarr;</Link>
         </div>
         <GamePicksTable feeds={{ odds, proj }} />

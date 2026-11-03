@@ -261,7 +261,7 @@ function Books({ data, system, setSystem }: { data: AnalyticsDeepDive; system: s
                 const b = bookDisplay(r.book)
                 return (
                   <tr key={r.book} className={cx('border-b border-border-table transition-colors hover:bg-background-primary-hover', r.n < 100 && 'opacity-60')} title={r.n < 100 ? 'Under 100 bets: too few to read' : undefined}>
-                    <Td><span className="text-[11.5px] font-bold py-[3px] px-2" style={{ color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px' }}>{r.book === 'unknown' ? 'Model (no book)' : b.label}</span>{b.isExchange && <span className="ml-2 text-micro text-text-secondary">exchange</span>}</Td>
+                    <Td><span className="text-[12px] font-semibold py-[3px] px-2" style={{ color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px' }}>{r.book === 'unknown' ? 'Model (no book)' : b.label}</span>{b.isExchange && <span className="ml-2 text-micro text-text-secondary">exchange</span>}</Td>
                     <Td mono>{r.n.toLocaleString()}</Td>
                     <Td mono>{r.hit_rate != null ? `${r.hit_rate.toFixed(1)}%` : '--'}</Td>
                     <Td mono color={r.roi_pct == null ? undefined : r.roi_pct >= 0 ? 'var(--signal)' : 'var(--loss)'}>{r.roi_pct != null ? `${r.roi_pct > 0 ? '+' : ''}${r.roi_pct.toFixed(2)}%` : '--'}</Td>
@@ -304,7 +304,7 @@ function Health({ stats }: { stats: SystemStats[] }) {
               const statusColor = isEv || logOnly.has(s.system) || n < GATE ? 'var(--color-text-secondary)' : roi != null && roi < 0 ? 'var(--loss)' : 'var(--color-neutral-300)'
               return (
                 <tr key={s.system} className="border-b border-border-table transition-colors hover:bg-background-primary-hover">
-                  <Td><span style={{ color, fontWeight: 700 }}>{labelOf(s.system)}</span></Td>
+                  <Td><span style={{ color, fontWeight: 600 }}>{labelOf(s.system)}</span></Td>
                   <Td><span style={{ color: statusColor }}>{status}</span></Td>
                   <Td mono>{n.toLocaleString()}</Td>
                   <Td mono color={roi == null ? undefined : roi >= 0 ? 'var(--signal)' : 'var(--loss)'}>{roi == null ? '--' : `${roi > 0 ? '+' : ''}${roi.toFixed(1)}%`}</Td>

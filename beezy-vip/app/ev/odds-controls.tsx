@@ -25,7 +25,7 @@ export function Select({ id, value, onChange, options }: { id: string; value: st
 export function Pill({ children, active, onClick, title }: { children: React.ReactNode; active: boolean; onClick: () => void; title?: string }) {
   return (
     <button onClick={onClick} title={title} aria-pressed={active}
-      className={cx('button-press-motion cursor-pointer rounded-md border px-[11px] py-1.5 text-caption-1-semibold tracking-[0.03em]',
+      className={cx('button-press-motion cursor-pointer rounded-md border px-[11px] py-1.5 text-caption-1-semibold ',
         active ? 'border-border-button-hover bg-background-tertiary-default text-text-primary' : 'border-transparent bg-transparent text-text-secondary hover:bg-background-primary-hover')}>
       {children}
     </button>
@@ -67,7 +67,7 @@ export function BookPicker({ label, books, selected, onChange, presets, note, em
 
   return (
     <div ref={box} className="relative">
-      <button onClick={() => setOpen(v => !v)} aria-expanded={open} className="btn btn-ghost" style={{ padding: '6px 11px', fontSize: '11.5px', height: '34px' }}>{label}</button>
+      <button onClick={() => setOpen(v => !v)} aria-expanded={open} className="btn btn-ghost" style={{ padding: '6px 11px', fontSize: '12px', height: '34px' }}>{label}</button>
       {open && (
         <div role="group" aria-label={label} style={{ position: 'absolute', zIndex: 30, top: '38px', ...(align === 'right' ? { right: 0 } : { left: 0 }), width: '290px', ...SURFACE_CARD, padding: '10px', display: 'grid', gap: '8px' }}>
           {header}
@@ -98,7 +98,7 @@ export function BookPicker({ label, books, selected, onChange, presets, note, em
                     <input type="checkbox" checked={on.has(b.key)} onChange={() => toggle(b.key)} style={{ cursor: 'pointer', accentColor: 'var(--signal)' }} />
                     <span className="min-w-6 inline-flex justify-center"><BookLogo book={b.key} size={22} /></span>
                     <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{meta.label}{b.offshore ? ' (offshore)' : ''}</span>
-                    <span className="mono text-[10.5px] text-text-secondary mr-0.5">{b.n}</span>
+                    <span className="mono text-[11px] text-text-secondary mr-0.5">{b.n}</span>
                   </label>
                   <button
                     type="button"
@@ -113,7 +113,6 @@ export function BookPicker({ label, books, selected, onChange, presets, note, em
                       fontSize: '10px',
                       fontFamily: 'var(--font-mono)',
                       fontWeight: 600,
-                      letterSpacing: '0.04em',
                       padding: '2px 6px',
                       borderRadius: '4px',
                       border: isOnly ? '1px solid var(--signal)' : `1px solid ${HAIR}`,
@@ -180,7 +179,7 @@ export function MobileBookChecklist({
             textAlign: 'left',
           }}
         >
-          <span className="ui-heading text-mini text-text-primary tracking-head">
+          <span className="ui-heading text-mini text-text-primary">
             {title} ({countLabel})
           </span>
           <span className="mono text-micro text-text-secondary">
@@ -261,7 +260,7 @@ export function MobileBookChecklist({
                       display: 'flex',
                       alignItems: 'center',
                       gap: '10px',
-                      fontSize: '12.5px',
+                      fontSize: '13px',
                       color: checked ? 'var(--color-text-primary)' : 'var(--color-neutral-300)',
                       cursor: 'pointer',
                       flex: 1,
@@ -298,8 +297,7 @@ export function MobileBookChecklist({
                     style={{
                       fontSize: '10px',
                       fontFamily: 'var(--font-mono)',
-                      fontWeight: 700,
-                      letterSpacing: '0.04em',
+                      fontWeight: 600,
                       padding: '4px 8px',
                       minHeight: '30px',
                       minWidth: '46px',

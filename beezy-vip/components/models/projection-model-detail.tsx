@@ -15,7 +15,7 @@ const maeDigits = (x: number) => (x >= 10 ? 1 : 3)
 function StatBlock({ label, value, sub, accent, last }: { label: string; value: string; sub?: string; accent?: boolean; last?: boolean }) {
   return (
     <div className="p-[18px]" style={{ borderRight: last ? undefined : B }}>
-      <div className="mono text-micro tracking-label text-text-secondary mb-[6px]" style={{ textTransform: 'uppercase' as const }}>{label}</div>
+      <div className="mono text-micro text-text-secondary mb-[6px]" style={{ }}>{label}</div>
       <div className="mono text-[20px] font-semibold leading-[1] mb-1" style={{ color: accent ? 'var(--signal)' : 'var(--color-text-primary)' }}>{value}</div>
       {sub && <div className="times text-mini text-text-secondary">{sub}</div>}
     </div>
@@ -65,7 +65,7 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
       <div className="flex items-center gap-2 mb-6 flex-wrap">
         <Link href="/models" className="times text-cozy text-link no-underline">Models</Link>
         <span className="mono text-mini text-text-secondary">&middot;</span>
-        <span className="mono text-compact font-bold" style={{ color: pillar.accent }}>{pillar.shortName}</span>
+        <span className="mono text-compact font-semibold" style={{ color: pillar.accent }}>{pillar.shortName}</span>
         <span className="mono text-mini text-text-secondary">&middot;</span>
         <SystemBadge system={system.key} />
       </div>
@@ -84,7 +84,7 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
 
       {gap && (
         <div role="note" className="border border-[color:rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.06)] rounded-[var(--radius-lg)] py-3.5 px-4.5 mb-7 text-cozy text-neutral-300 leading-[1.6]">
-          <strong className="text-gold">DATA GAP.</strong> {system.gap}
+          <strong className="text-gold">Data gap.</strong> {system.gap}
         </div>
       )}
 
@@ -118,7 +118,7 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
 
         <div className="bg-background-primary-default p-5" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
           <div className="flex items-baseline gap-2 mb-4">
-            <span className="text-compact font-semibold tracking-head text-text-primary" style={{ textTransform: 'uppercase' as const }}>Accuracy</span>
+            <span className="text-compact font-semibold text-text-primary" style={{ }}>Accuracy</span>
             <span className="mono text-micro text-text-secondary">model vs baseline, shorter bar is better</span>
           </div>
           {live && <VersusBar label="Live engine MAE vs last-5 average" model={live.mae} baseline={live.baselineMae} color={color} />}
@@ -136,28 +136,28 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
 
       <div className="bg-background-primary-default overflow-hidden mb-7" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
         <div className="py-[14px] px-[18px] bg-background-secondary-default" style={{ borderBottom: B }}>
-          <div className="text-compact font-semibold tracking-head text-text-primary" style={{ textTransform: 'uppercase' as const }}>Feature List</div>
+          <div className="text-compact font-semibold text-text-primary" style={{ }}>Feature List</div>
           <div className="mono text-micro text-text-secondary mt-[3px]">{system.features.length} live-board inputs &middot; {spec.features.length} research-model inputs</div>
         </div>
         <div className="grid bg-background-secondary-default" style={{ gridTemplateColumns: '120px 1fr', borderBottom: B }}>
-          {['Used by', 'Feature'].map(h => <div key={h} className="mono text-micro tracking-label text-text-secondary py-[9px] px-[14px]" style={{ textTransform: 'uppercase' as const }}>{h}</div>)}
+          {['Used by', 'Feature'].map(h => <div key={h} className="mono text-micro text-text-secondary py-[9px] px-[14px]" style={{ }}>{h}</div>)}
         </div>
         {[...system.features.map(f => ({ f, used: 'Live board' })), ...(gap ? [] : spec.features.map(f => ({ f, used: 'Research model' })))].map(({ f, used }, i, arr) => (
           <div className="grid items-center" key={`${used}-${f}`} style={{ gridTemplateColumns: '120px 1fr', borderBottom: i < arr.length - 1 ? B : undefined }}>
             <div className="py-2.5 px-3.5">
               <span className="mono text-micro font-semibold py-[3px] px-2" style={{ borderRadius: 'var(--radius-pill)', color: used === 'Live board' ? 'var(--signal)' : 'var(--color-text-secondary)', border: `1px solid ${used === 'Live board' ? 'var(--win-border)' : 'var(--color-border-button-default)'}`, background: used === 'Live board' ? 'var(--win-wash)' : 'transparent' }}>{used}</span>
             </div>
-            <div className="text-[11.5px] text-neutral-300 py-2.5 px-3.5">{f}</div>
+            <div className="text-[12px] text-neutral-300 py-2.5 px-3.5">{f}</div>
           </div>
         ))}
       </div>
 
-      <div className="bg-background-primary-default py-[18px] px-5 mb-7 grid gap-[10px] text-[12.5px] text-neutral-300 leading-[1.6]" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
+      <div className="bg-background-primary-default py-[18px] px-5 mb-7 grid gap-[10px] text-[13px] text-neutral-300 leading-[1.6]" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
         <div><strong className="text-text-primary">What the live board runs.</strong> {gap ? 'Nothing: this stat is not projected.' : LIVE_ENGINE.summary}</div>
         {model && <div><strong className="text-text-primary">Research model result.</strong> {model.verdict}</div>}
         <div><strong className="text-text-primary">Against prices.</strong> {model?.trained ? spec.marketVerdict : 'No study has compared this stat with prices.'}</div>
         <div><strong className="text-text-primary">Record.</strong> No graded history is published for {pillar.shortName} projections: they are not logged to the public ledger, so there is no win rate or ROI to show. Paper mode.</div>
-        <div className="text-text-secondary text-[11.5px]">Source: {spec.sources} Baselines are the best trailing-average forecaster in each study. The live board does not run the research model.</div>
+        <div className="text-text-secondary text-[12px]">Source: {spec.sources} Baselines are the best trailing-average forecaster in each study. The live board does not run the research model.</div>
       </div>
 
       <div className="flex justify-between items-center flex-wrap gap-2">

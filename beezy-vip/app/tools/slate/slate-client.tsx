@@ -37,7 +37,7 @@ function Chip({ label, active, color, onClick }: {
   label: string; active: boolean; color?: string; onClick: () => void
 }) {
   return (
-    <button className="py-[5px] px-[11px] cursor-pointer tracking-fine" onClick={onClick} style={{
+    <button className="py-[5px] px-[11px] cursor-pointer" onClick={onClick} style={{
       fontSize: '10px',
       fontFamily: 'var(--font-mono), monospace',
       fontWeight: active ? 600 : 500,
@@ -45,7 +45,6 @@ function Chip({ label, active, color, onClick }: {
       border: `1px solid ${active ? (color ?? 'var(--color-neutral-300)') : 'var(--color-separator-border)'}`,
       background: active ? `color-mix(in oklab, ${color ?? 'var(--color-neutral-300)'} 16%, var(--color-background-full))` : 'var(--color-background-primary-default)',
       color: active ? (color ?? 'var(--color-neutral-300)') : 'var(--color-neutral-300)',
-      textTransform: 'uppercase' as const,
       transition: 'all var(--dur) var(--ease-out)',
     }}>{label}</button>
   )
@@ -54,7 +53,7 @@ function Chip({ label, active, color, onClick }: {
 function SystemPill({ system, edgePct }: { system: string; edgePct: number }) {
   const p = SYSTEM_PILL[system] ?? SYSTEM_PILL['ALL']
   return (
-    <span className="inline-flex items-center gap-[5px] py-[3px] px-2 tracking-head" style={{
+    <span className="inline-flex items-center gap-[5px] py-[3px] px-2" style={{
       background: p.bg,
       border: p.border,
       fontSize: '10px',
@@ -225,7 +224,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
               Updated {new Date(slateData.as_of).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago' })} CT
             </span>
           )}
-          <button className="tracking-head uppercase py-[6px] px-[14px] bg-transparent"
+          <button className="py-[6px] px-[14px] bg-transparent"
             onClick={() => void refresh()}
             disabled={refreshing}
             style={{ fontSize: '10px', fontFamily: 'var(--font-mono), monospace', border: B, color: refreshing ? 'var(--color-border-button-active)' : 'var(--color-text-secondary)', cursor: refreshing ? 'default' : 'pointer' }}
@@ -254,13 +253,13 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
               transition: 'left 0.15s',
             }} />
           </span>
-          <span className="mono text-micro text-text-secondary tracking-[0.05em] uppercase select-none">Picks only</span>
+          <span className="mono text-micro text-text-secondary select-none">Picks only</span>
         </label>
 
         <div  className="w-[0.5px] bg-separator-border h-5 shrink-0"/>
 
         <div className="flex gap-1 flex-wrap items-center">
-          <span className="mono text-micro text-text-secondary mr-1 tracking-caps uppercase">System</span>
+          <span className="mono text-micro text-text-secondary mr-1">System</span>
           <Chip label="All" active={systemFilter === null} onClick={() => setSystemFilter(null)} />
           {ALL_FILTER_SYSTEMS.map(sys => (
             <Chip
@@ -290,10 +289,10 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
         <div style={{ border: B }}>
           {/* Column headers */}
           <div className="grid py-2 px-4 bg-background-primary-default" style={{ gridTemplateColumns: '1fr auto', borderBottom: B }}>
-            <span className="mono text-micro tracking-label uppercase text-text-secondary">
+            <span className="mono text-micro text-text-secondary">
               Game -- Starters -- Picks
             </span>
-            <span className="mono text-micro tracking-label uppercase text-text-secondary">
+            <span className="mono text-micro text-text-secondary">
               {filtered.length} games
             </span>
           </div>

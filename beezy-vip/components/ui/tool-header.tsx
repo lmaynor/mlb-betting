@@ -29,7 +29,7 @@ export function ToolHeader({ title, hint, current }: { title: string; hint?: str
             ))}
           </nav>
         )}
-        <Link className="text-[12.5px] text-link no-underline" href="/tools">All tools &rarr;</Link>
+        <Link className="text-[13px] text-link no-underline" href="/tools">All tools &rarr;</Link>
       </span>
     </div>
   )

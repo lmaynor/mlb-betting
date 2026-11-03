@@ -52,8 +52,8 @@ export function BestVsRest({ rung, row, side, sideLabel, otherLabel }: { rung: L
         <span className="flex items-center gap-1.5 min-w-0">
           <BookLogo book={d.book} size={20} />
           <span className="text-compact overflow-hidden text-ellipsis whitespace-nowrap" style={{ fontWeight: d.best ? 600 : 500, color: muted ? 'var(--color-text-secondary)' : 'var(--color-text-primary)' }}>{bookDisplay(d.book).label}</span>
-          {d.best && <span className="mono text-[10px] font-semibold tracking-fine rounded-chip px-1" style={{ color: GREEN, background: 'rgba(87,242,135,0.10)' }}>BEST</span>}
-          {muted && <span className="mono text-[10px] font-semibold tracking-fine text-text-secondary border border-[color:var(--color-separator-border)] rounded-chip px-1">SHARP</span>}
+          {d.best && <span className="mono text-[10px] font-semibold rounded-chip px-1" style={{ color: GREEN, background: 'rgba(87,242,135,0.10)' }}>BEST</span>}
+          {muted && <span className="mono text-[10px] font-semibold text-text-secondary border border-[color:var(--color-separator-border)] rounded-chip px-1">Sharp</span>}
         </span>
         <span className="relative block h-full">
           <span className="absolute top-1/2 -mt-[4px] h-2 rounded-[2px]" data-testid="bvr-bar" style={{ left: pc(left), width: pc(Math.max(0.006, right - left)), background: ev != null && ev > LADDER_SUSPECT_EV ? '#facc15' : beats ? GREEN : '#7d8596', opacity: d.best ? 0.95 : beats ? 0.55 : 0.3 }} />

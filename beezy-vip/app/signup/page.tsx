@@ -25,7 +25,7 @@ export default async function SignupPage() {
     return (
       <div className="flex min-h-[70vh] items-center justify-center px-4 py-16">
         <div className="w-full max-w-[440px] text-center">
-          <p className="ui-heading mb-4 tracking-[0.12em] text-text-secondary">Pre-Launch</p>
+          <p className="ui-heading mb-4 text-text-secondary">Pre-Launch</p>
           <h1 className="ui-display mb-4 text-[30px]">
             Join the waitlist
           </h1>
@@ -43,7 +43,7 @@ export default async function SignupPage() {
 
           {/* Live gate progress */}
           <div className="rounded-2xl border border-separator-border bg-background-primary-default p-5.5 text-left shadow-md">
-            <p className="ui-heading mb-4.5 tracking-label text-text-secondary">
+            <p className="ui-heading mb-4.5 text-text-secondary">
               200-Bet Gate Progress
             </p>
             {SYSTEMS.map(s => {
