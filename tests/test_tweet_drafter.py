@@ -539,11 +539,12 @@ def test_generate_reply_fodder_skips_driver_note_without_a_projection(monkeypatc
     assert "driver_note" not in td.generate_reply_fodder([play])[0]["variants"]
 
 
-def test_generate_reply_fodder_is_one_batched_call_and_prompt_carries_only_given_facts(monkeypatch):
+def test_generate_reply_fodder_batched_call_first_and_prompt_carries_only_given_facts(monkeypatch):
+    """The first Gemini call is ONE batched call for all plays (2026-11-03: a per-play repair call may follow for
+    plays whose drafts were rejected -- see test_rejected_reply_gets_a_repair_call_with_the_reason)."""
     seen = []
     monkeypatch.setattr(td, "_gemini_json_text", lambda system, user, max_tokens=0: seen.append((system, user, max_tokens)) or "{}")
     td.generate_reply_fodder([_play(), _play(player="Jayson Tatum", player_norm="jayson tatum")])
-    assert len(seen) == 1
     system, user, _ = seen[0]
     assert system == td.REPLY_SYSTEM_PROMPT
     assert "[0] NBA\nPick: Luka Doncic Over 32.5 Points at DraftKings +115" in user and "[1] NBA\nPick: Jayson Tatum" in user
@@ -955,6 +956,96 @@ def test_reply_prompt_says_never_call_the_market_an_average():
     assert 'never an "average"' in td.REPLY_SYSTEM_PROMPT
 
 
+# -- Value-add reply fix (2026-11-03): the bet365 number-guard bug, the insight gate, context, and the repair loop -----------
+
+def _bet365_play(**kw):
+    """The 2026-11-02 screenshot shape: a bet365 price gap with no projection behind it."""
+    c = {"sport": "nfl", "player": "D'Andre Swift", "player_norm": "d'andre swift", "stat": "receptions",
+         "stat_label": "Receptions", "point": 3.5, "side": "OVER", "book": "bet365", "american": 135,
+         "p_fair": 0.44, "ev": 0.035, "n_books": 7, "mins_to_kick": 120.0, "all_books": None}
+    c.update(kw)
+    return {**c, "proj_mean": None, "proj_minutes": None, "engine": None}
+
+
+def test_bet365_in_a_reply_is_not_mistaken_for_the_number_365():
+    """Regression: _NUM_RE extracted "365" from the book name "bet365" and the number guard rejected it, so EVERY
+    Gemini draft naming bet365 failed -- and price_check is required to name the book. Both plays in the
+    2026-11-02 screenshot were bet365 plays, and both posted replies were the deterministic fallback verbatim."""
+    f = _bet365_play()
+    draft = ("That over is +135 at bet365 while the other 7 books sit near +127, "
+             "so the price stands out even with no projection behind it.")
+    assert td.reply_variant_reject_reason(draft, f, "price_check") is None
+    assert td.reply_variant_ok(draft, f, "price_check")
+    # an invented price for the same play is still caught, with a reason
+    reason = td.reply_variant_reject_reason(
+        "That over is +999 at bet365 while the other 7 books sit near +127, so the price stands out here.", f, "price_check")
+    assert reason and "999" in reason
+
+
+def test_bet365_fallback_snippet_does_not_open_on_a_lowercase_book_name():
+    f = _bet365_play(player="Roschon Johnson", point=0.5, side="UNDER", american=155, p_fair=0.4115, n_books=4)
+    text = td.build_reply_snippet(f)
+    assert text == "Still +155 at bet365 for the Under 0.5 receptions while the other 4 books are near +143."
+    assert td.reply_variant_ok(text, f, "price_check")
+
+
+def test_reply_ammo_drops_price_only_plays_with_a_small_gap():
+    """No projection, no engine context, and a 3.5% price gap is an odds-screen fact, not a reply: it is dropped.
+    The same shape at a big price gap (or with a projection) is kept."""
+    feed = _feed(nfl=[_outlier(sport="nfl", player="D'Andre Swift", player_norm="d'andre swift", stat="receptions",
+                               point=3.5, american=135, p_fair=0.44, ev=0.035, n_books=7, book="bet365")])
+    assert td.build_reply_ammo(feed) == []
+    feed_big = _feed(nfl=[_outlier(sport="nfl", player="D'Andre Swift", player_norm="d'andre swift", stat="receptions",
+                                   point=3.5, american=135, p_fair=0.44, ev=0.12, n_books=7, book="bet365")])
+    assert len(td.build_reply_ammo(feed_big)) == 1
+
+
+def test_insight_score_ranks_a_driver_led_play_above_a_bigger_price_only_gap():
+    feed = _feed(nba=[_outlier(ev=0.12),
+                      _outlier(player="Jayson Tatum", player_norm="jayson tatum", ev=0.09)])
+    rows = {"nba": {"rows": [{"player_norm": "jayson tatum", "stat": "points", "proj_mean": 40.0,
+                              "usage_proj": 36.0, "usage_label": "Minutes", "szn_avg": 31.0}]}}
+    plays = td.build_reply_ammo(feed, rows)
+    assert plays[0]["player"] == "Jayson Tatum"          # projection gap + usage outrank the bigger raw EV
+    assert td.insight_score(plays[0]["facts"]) > td.insight_score(plays[1]["facts"])
+
+
+def test_hidden_mean_still_leaves_quotable_context():
+    """A projection on the wrong side of the line hides the mean, not the whole engine: the season average, usage
+    and range stay in the dossier (labelled unquotable-mean) and stay legal for the validator to accept."""
+    feed = _feed(nba=[_outlier()])
+    rows = {"nba": {"rows": [{"player_norm": "luka doncic", "stat": "points", "proj_mean": 30.0,
+                              "usage_proj": 35.6, "usage_label": "Minutes", "szn_avg": 31.0,
+                              "proj_p10": 26.0, "proj_p90": 42.0}]}}
+    play = td.build_reply_ammo(feed, rows)[0]
+    assert play["facts"]["proj_mean"] is None and play["facts"]["context_ok"]
+    block = td._fodder_facts(play["facts"], "nba")
+    assert "Season average is 31.0." in block and "No quotable projection mean" in block and "30.0" not in block
+    draft = ("His 31.0 season average sits under this 32.5 line while the other 8 books price the over near -108, "
+             "so the +115 at DraftKings is the number to shop.")
+    assert td.reply_variant_ok(draft, play["facts"], "pushback")
+    # but a draft that quotes the hidden mean is still rejected
+    assert not td.reply_variant_ok(
+        "We project 30.0 against this 32.5 line while the other 8 books price the over near -108 at DraftKings +115.",
+        play["facts"], "pushback")
+
+
+def test_rejected_reply_gets_a_repair_call_with_the_reason(monkeypatch):
+    calls = []
+
+    def fake_gemini(system, user, max_tokens=0):
+        calls.append(user)
+        if len(calls) == 1:
+            return json.dumps({"0": {**GOOD, "price_check":
+                "DraftKings is hanging +999 on the over while the other 8 books are near -108, because the price is off."}})
+        return json.dumps({"0": {"price_check": GOOD["price_check"]}})
+
+    monkeypatch.setattr(td, "_gemini_json_text", fake_gemini)
+    variants = td.generate_reply_fodder([_play()])[0]["variants"]
+    assert variants == GOOD
+    assert len(calls) == 2 and "invented odds +999" in calls[1] and "price_check" in calls[1]
+
+
 def test_projection_is_quoted_to_one_decimal_never_three():
     f = dict(_play()["facts"], proj_mean=1.442, point=1.5, side="UNDER")
     assert td.reply_variant_ok("We project 1.4 shots against a 1.5 line, so DraftKings +115 is worth a shop.", f)
@@ -1116,17 +1207,21 @@ def test_caveats_come_from_the_range_the_season_average_and_the_sample():
     assert td.reply_caveats(_eplay(szn_avg=33.0, proj_p10=33.0, proj_p90=40.0, n_games=8)["facts"]) == ["it rests on only 8 games of history"]
 
 
-def test_engine_numbers_are_quotable_only_next_to_a_projection_that_supports_the_pick():
+def test_engine_context_is_quotable_without_a_supporting_projection_but_the_hidden_mean_is_not():
     f = _eplay()["facts"]
     short = "Season average is 31.0, but on 36 projected minutes we have him closer to 34.1 with DraftKings at +115."
     assert td.reply_variant_ok(short, f)
     for n in ("31.0", "26.0", "42.0", "36.2", "36", "+1.3", "1.3"):
         assert n in td._allowed_numbers(f), n
-    hidden = _eplay(proj_mean=31.0, proj_raw=32.0)["facts"]       # the projection sits against the Over: engine numbers stay private
+    hidden = _eplay(proj_mean=31.0, proj_raw=32.0)["facts"]       # the projection sits against the Over
     assert hidden["proj_mean"] is None and hidden["engine"]["szn_avg"] == 31.0
-    assert not {"31.0", "26.0", "42.0", "36.2"} & td._allowed_numbers(hidden)
-    assert td.build_dossier(hidden) is None and "No projection." in td._fodder_prompt([dict(_eplay(), facts=hidden)])
-    assert not td.reply_variant_ok(short, hidden)
+    # 2026-11-03 doctrine change: the hidden MEAN stays private, but the engine context around it (season average,
+    # usage, range) is quotable -- it is the mechanism a reply can reason from, and withholding it left Gemini only
+    # the two prices. (The old rule asserted here kept all engine numbers private next to a hidden mean.)
+    assert hidden["context_ok"] and {"31.0", "26.0", "42.0", "36.2"} <= td._allowed_numbers(hidden)
+    assert "Our projection is" not in td._fodder_prompt([dict(_eplay(), facts=hidden)])
+    assert "No quotable projection mean" in td._fodder_prompt([dict(_eplay(), facts=hidden)])
+    assert not td.reply_variant_ok(short, hidden)                 # "closer to 34.1" still claims a mean this play does not have
 
 
 def test_plays_without_an_engine_row_still_get_price_math_and_no_dossier():

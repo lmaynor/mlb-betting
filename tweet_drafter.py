@@ -15,9 +15,12 @@ Modes (--mode or TWEET_MODE env; the env var is what the Cloud Run Jobs set):
   settlement       Deterministic #GamblingX receipt post for the last settled slate: tweet text +
                    /api/og/settlement-card PNG + celebration GIF -> Discord (DISCORD_WEBHOOK_TWEETS,
                    falling back to DISCORD_WEBHOOK_OPS) for a 1-tap post on X. No Gemini.
-  reply_ammo       Link-free replies for the day's top book-vs-consensus price gaps (all sports): ONE batched Gemini call
-                   writes three angles per play (price_check / pushback / driver_note) from the play's price math and, for
-                   NFL/NHL/NBA, its projection facts; each is validated, with a deterministic price_check as the fallback.
+  reply_ammo       Link-free VALUE-ADD replies for the day's best plays (all sports): plays are gated and ranked by
+                   insight_score (a play with no projection, no engine context and only a small price gap is dropped --
+                   no ammo beats ticker spam); ONE batched Gemini call writes three angles per play
+                   (price_check / pushback / driver_note) leading with the mechanism and giving the price second, then
+                   one repair call per play feeds the validator's rejection reasons back to Gemini for the missing
+                   angles; a deterministic price_check remains as the last-resort fallback.
                    Two X live-search links per play (big tweets, betting threads) -> Discord #tweet-queue.
   steam            NOT BUILT: needs a public per-bet closing-line endpoint that does not exist yet.
 
@@ -509,7 +512,9 @@ def _gemini_json_text(system_prompt, user_prompt, max_tokens=4096, schema=None):
         # JSON mode makes Gemini emit parseable JSON; the larger budget stops it being cut off mid-string. Both were real
         # failures on 2026-10-19: picks died on "Expecting value" and recap's first attempt on "Unterminated string" -- the
         # reply was truncated because thinking tokens ate the 1536-token budget.
-        "generationConfig": {"temperature": 0.8, "maxOutputTokens": max_tokens, "responseMimeType": "application/json"},
+        # 0.6 (was 0.8): the reply validator rejects any draft containing a number that was not given, so extra
+        # sampling variance mostly produced rejected drafts, not variety. Lower temperature = fewer invented numbers.
+        "generationConfig": {"temperature": 0.6, "maxOutputTokens": max_tokens, "responseMimeType": "application/json"},
     }
     if schema:
         payload["generationConfig"]["responseSchema"] = schema
@@ -1290,8 +1295,16 @@ def build_reply_snippet(c, proj_mean=None, engine=None):
         if len(enriched) <= REPLY_SNIPPET_MAX and is_link_free(enriched) and not violates_voice(enriched):
             return enriched
 
-    core = (f"{_book_name(c)} is still hanging {_odds(c['american'])} on {_bet_phrase(c)} if you shop around; "
-            f"the other {c['n_books']} books are near {_odds(fair)}")
+    book = _book_name(c)
+    if book[:1].islower():
+        # A sentence that opens on a lowercase book name ("bet365 is still hanging...") reads as a bot ticker and,
+        # worse, was the ONLY thing that ever posted for bet365 plays (see reply_variant_reject_reason: the digits
+        # in the book's own name used to fail the number guard, so every Gemini draft for those plays was rejected).
+        core = (f"Still {_odds(c['american'])} at {book} for {_bet_phrase(c)} while "
+                f"the other {c['n_books']} books are near {_odds(fair)}")
+    else:
+        core = (f"{book} is still hanging {_odds(c['american'])} on {_bet_phrase(c)} if you shop around; "
+                f"the other {c['n_books']} books are near {_odds(fair)}")
     model = f", and we have him closer to {proj_mean:.1f}" if proj_mean is not None else ""
     for text in (f"{core}{model}.", f"{core}."):
         if len(text) <= REPLY_SNIPPET_MAX and is_link_free(text) and not violates_voice(text):
@@ -1305,7 +1318,11 @@ REPLY_LABELS = {"price_check": "price check", "pushback": "pushback", "driver_no
 
 REPLY_SYSTEM_PROMPT = PERSONA + """
 You write short REPLIES to post under other people's tweets about a player. The tweet already names the player and the prop, so
-never restate them as a header. Hard rules for every reply:
+never restate them as a header. The reply has one job: teach the thread one thing it did not already have -- a projection, a
+usage fact, a matchup fact, a range, or where the price is wrong -- so a reader who has never heard of us wants to check the
+profile. A reply that only repeats a price is an odds-screen screenshot in words, and readers scroll past those.
+
+Hard rules for every reply:
 - 240 characters or fewer, one or two sentences
 - NO link, NO site name, NO @handle, NO hashtag, NO emoji
 - use ONLY the numbers and facts given for that play, written as given; invent nothing. No injury, pace, weather or recent-form talk, and
@@ -1314,17 +1331,22 @@ never restate them as a header. Hard rules for every reply:
 - describe the other books as "around +109" or "sitting near +109": it is a de-vigged consensus price, never an "average". You are
   only given the market's price for OUR side, so never quote a price for the other side
 - you have no line-movement data: never say a line "steamed", "moved" or "dropped"
+- when a play says "No quotable projection mean", do not state a projected total for it and do not say "we project"; reason from
+  the usage, the season average and the range you are given instead
 
-How it should read (this is what separates a person from a bot):
+How a value-add reply is built (this is what separates a person from a bot):
+- Lead with the fact the parent tweet missed (the mechanism), then give the price as the evidence. Price first is the bot order.
 - NEVER open with the player's name or with "<Player> <Over/Under> <line>:". Open mid-thought, on the book, on a number, or on
   a stat fact from the play
 - no colons anywhere, and no choppy four-word sentences
 - tie the price to the reason with connective words: because, while, when, even with, though, given, or a semicolon
 - when the play lists a caveat, weave it into the sentence ("even with ...", "though ...") instead of leaving it out
+- if a play gives you no mechanism at all, keep it to one sentence, name the reference books you are given instead of just
+  "the other books" when they are listed, and do not pad it with a second sentence that restates the price
 
 Three angles per play; the operator picks the one that fits the tweet being answered:
-- price_check -- for a tweet that agrees with our side. Help its readers get a better number without contradicting the pick: name
-  the book and its price against where the other books sit, and tie it to the volume or matchup reason.
+- price_check -- for a tweet that agrees with our side. Add the driver its readers have not seen, then help them get a better
+  number without contradicting the pick: name the book and its price against where the other books sit, tied to that driver.
   Example: "DraftKings is still hanging +115 on the over if you shop around; consensus sits near -108 and his 36-minute projection supports the volume."
 - pushback -- for a tweet on the other side. Respectful friction: where the other books price our side, plus one mechanism from the play
   (projection, efficiency rate, usage, season average, range) that makes the tweet's side harder.
@@ -1332,6 +1354,10 @@ Three angles per play; the operator picks the one that fits the tweet being answ
 - driver_note -- deep-dive decomposition and caveat in two connected clauses: our projection against the line, its main mechanism
   (workload, efficiency rate, matchup note), the price, and the caveat. Skip this key for a play that says "no projection".
   Example: "We project 34.1 points against 32.5 based on 36 projected minutes, though the line still sits inside his 26-42 distribution window; DraftKings hanging +115 is the outlier."
+
+Bad reply, never write this shape (it is the old price-ticker fallback, not analysis): a sentence that only says one book is
+hanging a price "if you shop around" while the other books are near another price, with no projection, usage, matchup or range
+fact in it. If that is all you can write for a play, write it in one sentence and move on; never dress it up as analysis.
 
 Return ONLY JSON: {"<play id>": {"price_check": "...", "pushback": "...", "driver_note": "..."}, ...}
 """
@@ -1398,11 +1424,15 @@ def _usage_phrase(e):
 
 
 def _engine_numbers(f):
-    """The engine numbers a reply may quote. They are public only alongside a projection that supports the pick (the public
-    copy never cites a projection on the wrong side of the line, and the season average / range would give it away)."""
+    """The engine numbers a reply may quote. With a supporting projection they are public alongside it. When the mean
+    is hidden because it sits on the other side of the line (context_ok, set in build_reply_ammo), the season average,
+    usage and range are STILL quotable -- they are the mechanism a reply can reason from without quoting the mean
+    itself (the mean's value is never added here, so the number guard still rejects any draft that states it). The
+    old rule returned nothing in that case, which left Gemini exactly two numbers (our price, the fair price) and
+    made a price-only reply the best draft it could legally write."""
     out = set()
     e = f.get("engine") or {}
-    if f.get("proj_mean") is None:
+    if f.get("proj_mean") is None and not f.get("context_ok"):
         return out
     for k in ("szn_avg", "proj_p10", "proj_p90"):
         if e.get(k) is not None:
@@ -1487,44 +1517,92 @@ def reads_like_a_template(text, f):
     return len(sentences) > REPLY_MAX_SENTENCES or any(len(s.split()) < REPLY_MIN_SENTENCE_WORDS for s in sentences)
 
 
-def reply_variant_ok(text, f, style=None):
-    """A Gemini reply is usable only if it is link-free, in voice, short, reads like a person (reads_like_a_template), quotes a real
-    price for this play, and passes targeted price and fact verification. A price_check must name the book and its price."""
+def _scan_text_for_numbers(text, f=None):
+    """`text` with book names blanked out, for number extraction. Book names can contain digits -- "bet365" is the
+    standing example -- and the number guard used to extract "365" from the book's own name and reject EVERY reply
+    that named it. price_check is required to name the book, so for bet365 plays no Gemini draft could ever pass:
+    the 2026-11-02 Discord screenshot is two bet365 plays where both posted replies are the deterministic fallback
+    verbatim. Strip every known book label (and this play's book, raw and display) before scanning for numbers."""
+    out = text
+    names = set(_BOOK_SHORT.values()) | set(_BOOK_SHORT.keys())
+    if f:
+        names.add(_book_name(f))
+        if f.get("book"):
+            names.add(str(f["book"]))
+    for n in sorted((n for n in names if n), key=len, reverse=True):
+        out = re.sub(re.escape(n), " book ", out, flags=re.IGNORECASE)
+    return out
+
+
+def _number_token_ok(tok, text, allowed):
+    """One extracted number token against the allow-list, with the standing context exceptions (cents, regulation
+    minutes, 3-pointers, ordinals, small counts, percentages -- percentages are range-checked separately)."""
+    if tok in allowed or tok.lstrip("+-") in allowed:
+        return True
+    if re.search(rf"\b{re.escape(tok)}\s*-?\s*cents?\b", text, re.IGNORECASE):
+        return True
+    if tok in ("40", "48", "60") and re.search(rf"\b{re.escape(tok)}\s*min", text, re.IGNORECASE):
+        return True
+    if tok == "3" and re.search(r"\b3\s*-?\s*(?:pointers?|pts?|s)\b", text, re.IGNORECASE):
+        return True
+    if re.search(rf"\b{re.escape(tok)}\s*(?:st|nd|rd|th)\b", text, re.IGNORECASE):
+        return True
+    try:
+        if tok.isdigit() and 0 <= int(tok) <= 10:
+            return True
+    except ValueError:
+        pass
+    if re.search(rf"\b{re.escape(tok)}\s*%", text):
+        return True
+    return False
+
+
+# A draft may not claim a projection mean the play does not have. Quoting the hidden mean's VALUE is already caught by
+# the number guard (it is never in _allowed_numbers when proj_mean is hidden); this catches value-free claims.
+_MEAN_CLAIM_RE = re.compile(r"\b(?:closer to|we have him|we project|our projection)\b", re.IGNORECASE)
+
+
+def reply_variant_reject_reason(text, f, style=None):
+    """Why a Gemini reply is unusable, or None when it is usable. reply_variant_ok() is the boolean wrapper; the
+    reason exists so generate_reply_fodder can log it and feed it back to Gemini in a repair call -- a bare False
+    used to make every rejection invisible, which is how the bet365 bug survived: drafts were dying, the fallback
+    posted, and nothing anywhere said why."""
     if not isinstance(text, str):
-        return False
+        return "not a string"
     text = text.strip()
-    if not text or len(text) < 25 or len(text) > REPLY_SNIPPET_MAX or not is_link_free(text) or violates_voice(text):
-        return False
+    if not text or len(text) < 25 or len(text) > REPLY_SNIPPET_MAX:
+        return f"length {len(text)} outside 25-{REPLY_SNIPPET_MAX}"
+    if not is_link_free(text):
+        return "not link-free (url, brand or @)"
+    if violates_voice(text):
+        return "violates the voice rules (banned phrase or emoji)"
     if reads_like_a_template(text, f):
-        return False
+        return "reads like a template (colon, player-name opener, no connective, or choppy / too many sentences)"
+
+    if re.search(r"\b\d+\.\d{3,}\b", text):
+        return "false precision (3+ decimal places)"
+
+    # Invented odds are checked before the real-price check so the reason names the bad token (repair feedback).
+    known_odds = _known_american_odds(f)
+    for tok in re.findall(r"([+-]\d{3,4})\b", _scan_text_for_numbers(text, f)):
+        try:
+            if int(tok) not in known_odds:
+                return f"invented odds {tok}"
+        except ValueError:
+            return f"unparseable odds {tok}"
 
     fair = prob_to_american(f.get("p_fair"))
     prices = {_odds(f.get("american"))} | ({_odds(fair)} if fair is not None and style != "price_check" else set())
     if not any(p in text for p in prices if p is not None):
-        return False
+        return "quotes no real price for this play"
     if style == "price_check" and _book_name(f) not in text:
-        return False
+        return "price_check does not name the book"
 
-    # False precision: reject >= 3 decimal places (e.g. 1.442)
-    if re.search(r"\b\d+\.\d{3,}\b", text):
-        return False
-
-    # Signed 3-4 digit odds tokens ([+-]\d{3,4}\b) must be in known American prices
-    known_odds = _known_american_odds(f)
-    for tok in re.findall(r"([+-]\d{3,4})\b", text):
-        try:
-            val = int(tok)
-            if val not in known_odds:
-                return False
-        except ValueError:
-            return False
-
-    # Percentages in text must not be hallucinated win rates
     known_pcts = set()
     for fn in (breakeven_pct, market_pct):
-        p = fn(f)
-        if p is not None:
-            known_pcts.update({round(p), round(p, 1)})
+        pv = fn(f)
+        if pv is not None:
+            known_pcts.update({round(pv), round(pv, 1)})
     if f.get("ev") is not None:
         ev_p = f["ev"] * 100
         known_pcts.update({round(ev_p), round(ev_p, 1)})
@@ -1532,23 +1610,23 @@ def reply_variant_ok(text, f, style=None):
         try:
             pval = float(pct_match)
             if not any(abs(pval - kp) <= 1.5 for kp in known_pcts):
-                return False
+                return f"invented percentage {pct_match}%"
         except ValueError:
-            return False
+            return f"unparseable percentage {pct_match}"
 
-    # If proj_mean is missing/hidden, projection and engine facts must stay private
+    scan = _scan_text_for_numbers(text, f)
+    allowed = _allowed_numbers(f)
+
     if f.get("proj_mean") is None:
         if style == "driver_note":
-            return False
-        if re.search(r"\b(?:closer to|project(?:ed|ion)?|have him|season avg|szn avg)\b", text, re.IGNORECASE):
-            return False
-        allowed = _allowed_numbers(f)
-        for tok in _NUM_RE.findall(text):
-            if tok not in allowed and tok.lstrip("+-") not in allowed:
-                return False
-        return True
+            return "driver_note needs a projection this play does not have"
+        if _MEAN_CLAIM_RE.search(text):
+            return "claims a projection mean this play does not have"
+        for tok in _NUM_RE.findall(scan):
+            if not _number_token_ok(tok, text, allowed):
+                return f"number {tok} was not given for this play"
+        return None
 
-    # 2.2 Require analytical substance in driver_note and pushback when proj_mean is present
     if style == "driver_note":
         has_substance = False
         e = f.get("engine") or {}
@@ -1568,7 +1646,7 @@ def reply_variant_ok(text, f, style=None):
         if not has_substance and re.search(r"\b(?:percentile|range|floor|ceiling|window)\b", text, re.IGNORECASE):
             has_substance = True
         if not has_substance:
-            return False
+            return "driver_note has no analytical substance (no projection, usage, matchup, season average or range)"
 
     if style == "pushback":
         has_pushback = False
@@ -1577,38 +1655,18 @@ def reply_variant_ok(text, f, style=None):
         if not has_pushback and re.search(r"\b(?:project(?:ed|ion)?|closer to|average|baseline|minutes?)\b", text, re.IGNORECASE):
             has_pushback = True
         if not has_pushback:
-            return False
+            return "pushback has no market or mechanism content"
 
-    # Targeted Number Validation: allow quant specifics and context numbers
-    allowed = _allowed_numbers(f)
-    for tok in _NUM_RE.findall(text):
-        if tok in allowed or tok.lstrip("+-") in allowed:
-            continue
-        # Cents: "15 cents", "18-cent"
-        if re.search(rf"\b{re.escape(tok)}\s*-?\s*cents?\b", text, re.IGNORECASE):
-            continue
-        # Standard game minutes: 40, 48, 60
-        if tok in ("40", "48", "60") and re.search(rf"\b{re.escape(tok)}\s*min", text, re.IGNORECASE):
-            continue
-        # 3-pointers: 3
-        if tok == "3" and re.search(r"\b3\s*-?\s*(?:pointers?|pts?|s)\b", text, re.IGNORECASE):
-            continue
-        # Ordinals: 1st, 2nd, 3rd, 4th
-        if re.search(rf"\b{re.escape(tok)}\s*(?:st|nd|rd|th)\b", text, re.IGNORECASE):
-            continue
-        # Small integer count <= 10
-        try:
-            if tok.isdigit() and 0 <= int(tok) <= 10:
-                continue
-        except ValueError:
-            pass
-        # Percentage token (validated earlier)
-        if re.search(rf"\b{re.escape(tok)}\s*%", text):
-            continue
-        return False
+    for tok in _NUM_RE.findall(scan):
+        if not _number_token_ok(tok, text, allowed):
+            return f"number {tok} was not given for this play"
+    return None
 
-    return True
 
+def reply_variant_ok(text, f, style=None):
+    """A Gemini reply is usable only if it is link-free, in voice, short, reads like a person (reads_like_a_template), quotes a real
+    price for this play, and passes targeted price and fact verification. A price_check must name the book and its price."""
+    return reply_variant_reject_reason(text, f, style) is None
 
 # -- reply_ammo dossier: the engine's numbers in betting words ------------------------------------------------------------------
 # One batched Gemini call writes all three reply angles per play, so the prompt carries the whole picture: the price math and, for a
@@ -1676,6 +1734,29 @@ def build_dossier(f, sport=None):
             if named:
                 lines.append(f"Market reference books: {named}.")
             return {"text": "\n".join(lines), "driver": None, "caveats": [], "inside": None, "gap": None}
+        e = f.get("engine") or {}
+        if e:
+            # Context without a quotable mean (the mean sits on the other side of the line, or none was matched):
+            # the usage / season average / range are still real analysis a reply can be built on. Withholding them
+            # too -- the old behavior -- left Gemini nothing but the two prices.
+            lines = []
+            if e.get("szn_avg") is not None:
+                lines.append(f"Season average is {e['szn_avg']:.1f}.")
+            usage = _usage_phrase(e)
+            if usage:
+                lines.append(f"{usage[0].upper()}{usage[1:]}.")
+            if e.get("proj_p10") is not None and e.get("proj_p90") is not None:
+                lines.append(f"Our 10th to 90th percentile range is {e['proj_p10']:.1f} to {e['proj_p90']:.1f}.")
+            m = _matchup(e)
+            if m:
+                lines.append(f"Matchup note: {m[0]}.")
+            named = format_named_reference_books(f, max_books=3)
+            if named:
+                lines.append(f"Market reference books: {named}.")
+            if lines:
+                lines.append("No quotable projection mean for this play: do not state a projected total; reason from "
+                             "the usage, season average and range above.")
+                return {"text": "\n".join(lines), "driver": None, "caveats": [], "inside": None, "gap": None}
         return None
 
     if line is None:
@@ -1755,7 +1836,13 @@ def _fodder_facts(f, sport=None):
     lines = [f"Pick: {_play_head(f)} at {_book_name(f)} {_odds(f['american'])}, which needs {breakeven_pct(f):.0f}% to break even.",
              f"The other {f['n_books']} books are around {_odds(fair)} (they imply {market_pct(f):.0f}%)."]
     d = build_dossier(f, sport)
-    lines.append(d["text"] if d else "No projection.")
+    if d:
+        lines.append(d["text"])
+    else:
+        named = format_named_reference_books(f, max_books=3)
+        if named:
+            lines.append(f"Market reference books: {named}.")
+        lines.append("No projection.")
     return "\n".join(lines)
 
 
@@ -1764,28 +1851,99 @@ def _fodder_prompt(plays):
     return "Plays:\n\n" + "\n\n".join(blocks) + "\n\nWrite the replies."
 
 
+def _expected_reply_styles(p):
+    """The angles a play should get: driver_note only with a quotable projection mean."""
+    return [s for s in REPLY_VARIANTS if not (s == "driver_note" and p["facts"].get("proj_mean") is None)]
+
+
 def generate_reply_fodder(plays):
     """Add `variants` ({angle: reply}) to every play. ONE batched Gemini call asks for price_check / pushback / driver_note per
-    play from the play's full dossier; each reply must pass reply_variant_ok. driver_note is skipped for a play without a
-    projection. A play with no usable price_check (or the whole call failing) gets its deterministic snippet as the price_check,
-    so reply_ammo never goes out empty-handed because Gemini had a bad day."""
+    play from the play's full dossier; each reply must pass reply_variant_ok. Then ONE repair call per play that is
+    still missing an angle: it gets the rejection reasons for its own drafts and rewrites only the missing angles.
+    The old flow had no second chance and no reason logging -- a rejected draft silently became the deterministic
+    snippet, so the operator saw ticker copy in Discord with no sign Gemini had written anything at all.
+    driver_note is skipped for a play without a projection. A play with no usable price_check after the repair
+    (or the calls failing) gets its deterministic snippet as the price_check, so reply_ammo never goes out
+    empty-handed because Gemini had a bad day."""
     out = [dict(p, variants={}) for p in plays]
     try:
         data = json.loads(_gemini_json_text(REPLY_SYSTEM_PROMPT, _fodder_prompt(plays), max_tokens=6144))
     except Exception as e:  # noqa: BLE001 -- fall back to deterministic snippets
         print(f"  Gemini reply variants failed ({e}); using deterministic snippets")
         data = {}
+    rejected = {}
     for i, p in enumerate(out):
         mine = data.get(str(i)) if isinstance(data, dict) else None
-        for style in REPLY_VARIANTS:
+        for style in _expected_reply_styles(p):
             text = mine.get(style) if isinstance(mine, dict) else None
-            if style == "driver_note" and p["facts"].get("proj_mean") is None:
-                continue
-            if reply_variant_ok(text, p["facts"], style):
+            reason = reply_variant_reject_reason(text, p["facts"], style)
+            if reason is None:
                 p["variants"][style] = text.strip()
+            elif isinstance(text, str) and text.strip():
+                rejected.setdefault(i, {})[style] = (text.strip(), reason)
+                print(f"  reply rejected [{p['player']} / {style}]: {reason} -- {text.strip()[:90]!r}")
+    for i, p in enumerate(out):
+        missing = [s for s in _expected_reply_styles(p) if s not in p["variants"]]
+        if not missing:
+            continue
+        notes = "; ".join(
+            f"{s} was rejected because it {rejected[i][s][1]} (draft: {rejected[i][s][0]!r})"
+            for s in missing if s in rejected.get(i, {}))
+        repair_prompt = (
+            f"One play:\n\n[0] {p['sport'].upper()}\n{_fodder_facts(p['facts'], p['sport'])}\n\n"
+            + (f"Fixes needed: {notes}. " if notes else "")
+            + f"Write only these angles: {', '.join(missing)}. Use only the numbers given above, written as given. "
+              f'Return ONLY JSON: {{"0": {{{", ".join(f"{chr(34)}{s}{chr(34)}: {chr(34)}...{chr(34)}" for s in missing)}}}}}'
+        )
+        try:
+            fixed = json.loads(_gemini_json_text(REPLY_SYSTEM_PROMPT, repair_prompt, max_tokens=2048))
+        except Exception as e:  # noqa: BLE001 -- the fallback below covers this play
+            print(f"  Gemini reply repair failed for {p['player']} ({e})")
+            continue
+        mine = fixed.get("0") if isinstance(fixed, dict) else None
+        for style in missing:
+            text = mine.get(style) if isinstance(mine, dict) else None
+            reason = reply_variant_reject_reason(text, p["facts"], style)
+            if reason is None:
+                p["variants"][style] = text.strip()
+            elif isinstance(text, str) and text.strip():
+                print(f"  reply rejected after repair [{p['player']} / {style}]: {reason} -- {text.strip()[:90]!r}")
+    for p in out:
         if "price_check" not in p["variants"]:
             p["variants"] = {"price_check": p["snippet"], **p["variants"]}
     return out
+
+
+# A price-only play (no projection, no engine context) is only worth a reply when the price gap is large enough to
+# be the story by itself. Below this EV the old pipeline happily posted "bet365 is still hanging +135 ... the other
+# 7 books are near +127" -- a 1.4-point implied gap on a prop nobody was tweeting about (2026-11-02 screenshot).
+REPLY_BIG_PRICE_EV = 0.08
+
+
+def insight_score(f):
+    """How much a reply about this play can actually say, beyond the price: the price edge, plus the projection gap
+    relative to the line, plus a point each for a usage projection and a matchup effect, plus a half point for
+    engine context without a quotable mean. Used to rank the final plays: the old order was raw EV alone, which
+    systematically promoted obscure coin-flip props (a backup RB under 0.5 receptions at +155 vs +143 fair) over
+    plays with a real driver a big account's thread would care about."""
+    score = (f.get("ev") or 0) * 100.0
+    mu, point = f.get("proj_mean"), f.get("point")
+    if mu is not None and point:
+        score += min(abs(mu - point) / max(abs(point), 1.0), 0.6) * 20.0
+    e = f.get("engine") or {}
+    if e.get("usage_proj") is not None:
+        score += 1.0
+    if e and _matchup(e):
+        score += 1.0
+    if f.get("context_ok"):
+        score += 0.5
+    return score
+
+
+def has_reply_insight(f):
+    """True when a reply about this play can add something a reader could not get from an odds screen: a supporting
+    projection, any engine context (usage / season average / range), or a price gap big enough to be the story."""
+    return f.get("proj_mean") is not None or bool(f.get("engine")) or (f.get("ev") or 0) >= REPLY_BIG_PRICE_EV
 
 
 def build_reply_ammo(feed, projections=None):
@@ -1871,14 +2029,21 @@ def build_reply_ammo(feed, projections=None):
         if not proj_supports_side(proj_mean, c.get("point"), c.get("side")):
             proj_mean, minutes = None, None          # do not cite a projection that sits against the pick (see proj_supports_side)
 
+        facts = {**c, "proj_mean": proj_mean, "proj_minutes": minutes, "engine": engine,
+                 # The mean is hidden, but the engine's usage / season average / range stay quotable context
+                 # (see _engine_numbers / build_dossier) instead of leaving the play with only two prices.
+                 "context_ok": bool(engine) and proj_mean is None}
+        if not has_reply_insight(facts):
+            continue            # no analysis to add and the price gap is small: no ammo beats ticker spam
         snippet = build_reply_snippet(c, proj_mean)
         if snippet:
             plays.append({"sport": c["sport"], "player": c["player"], "snippet": snippet,
-                          "facts": {**c, "proj_mean": proj_mean, "proj_minutes": minutes, "engine": engine},
+                          "facts": facts,
                           "search_url": build_x_search_url(f"{c['player']} min_faves:{REPLY_MIN_FAVES}"),
                           "thread_url": build_x_search_url(
                               f'"{c["player"]}" ({c["point"]:g} OR prop OR over OR under OR line) '
                               f'min_faves:{REPLY_THREAD_MIN_FAVES} -filter:retweets')})
+    plays.sort(key=lambda p: -insight_score(p["facts"]))
     return plays
 
 
@@ -1889,9 +2054,11 @@ def post_reply_ammo_to_discord(plays):
     hook = webhook_for("tweets")
     if not hook:
         return "  Discord post SKIPPED: neither DISCORD_WEBHOOK_TWEETS nor DISCORD_WEBHOOK_OPS is set"
-    messages = [{"content": f"**reply ammo** {date.today()} -- price check: the tweet agrees with our side. pushback: it takes the "
-                            "other side. driver note: adds our projection and the caveat. NFL/NHL/NBA projections have no tracked "
-                            "record against prices: state the price, not a pick."}]
+    messages = [{"content": f"**reply ammo** {date.today()} -- every reply leads with a fact the parent tweet missed "
+                            "(projection, usage, matchup or range) and gives the price second. price check: the tweet agrees "
+                            "with our side. pushback: it takes the other side. driver note: the full decomposition with the "
+                            "caveat. NFL/NHL/NBA projections have no tracked record against prices, so the replies state "
+                            "the projection and its driver, never a pick record."}]
     for p in plays:
         links = f"[big tweets]({p['search_url']})"
         if p.get("thread_url"):
