@@ -8,7 +8,10 @@ Field meanings:
   parlay_key        ParlayAPI sport key (the odds feed's own naming; coverage verified by scripts/probe_soccer_odds.py)
   fd_code           football-data.co.uk CSV stem (mmz4281/{season}/{fd_code}.csv); UCL has no per-season mmz4281
                     file, so its fd_code is a label and the UCL closing-odds pull is best-effort (see ingest)
-  understat_league  Understat league slug for the matchesData page
+  understat_league  Understat league slug for the matchesData page, or None when the league has NO Understat page
+                    (UCL: Understat only publishes domestic leagues). A None league gets its ratings from the
+                    pooled Big-5 domestic fit plus the ClubElo fallback (soccer.game.run_daily), never from a
+                    per-league Understat pull -- understat.com/league/UCL/{year} is a 404.
   kalshi_prefix     Kalshi series prefix for the league (futures series verified live 2026-11-03; the GAME/TOTAL
                     suffix grammar is the repo's standard adapter grammar and is re-verified by the probe)
   name              display name
@@ -37,7 +40,7 @@ SOCCER_LEAGUES: dict[str, dict] = {
     "ucl": {
         "parlay_key": "soccer_uefa_champs_league",
         "fd_code": "UCL",
-        "understat_league": "UCL",
+        "understat_league": None,
         "kalshi_prefix": "KXUCL",
         "name": "Champions League",
     },
@@ -73,6 +76,16 @@ SOCCER_LEAGUES: dict[str, dict] = {
 }
 
 ACTIVE_SOCCER_LEAGUES: tuple[str, ...] = ("epl", "ucl")
+
+# The domestic leagues Understat actually publishes (its only coverage: no UCL, no cups). These are the rating
+# pool for every league whose understat_league is None: UCL clubs earn their attack/defense ratings in their
+# domestic league, and ClubElo (one cross-European scale) anchors the pool so a Spanish and an English club's
+# ratings are comparable in a UCL fixture.
+DOMESTIC_UNDERSTAT_LEAGUES: tuple[str, ...] = ("epl", "laliga", "bundesliga", "seriea", "ligue1")
+
+# Home advantage in a cross-league European fixture is real but smaller than in a domestic league (travel,
+# unfamiliar ground, no weekly home crowd edge): UCL expected goals scale the fitted domestic gamma by this.
+UCL_HFA_SCALE = 0.85
 
 # Phase 1 market set, in board order. Player props are Phase 2 (soccer.props, gated OFF).
 SOCCER_MARKETS: tuple[str, ...] = ("ml", "total", "btts", "dc")

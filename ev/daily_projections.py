@@ -1958,6 +1958,22 @@ def _run_game_board(sport: str, now: datetime) -> bool:
         return False
 
 
+def _run_soccer_game_predictions(now: datetime) -> bool:
+    """Refresh the soccer game-line payload + per-book board (EVSweep/soccer_games/predictions_latest.json and
+    odds_board_latest.json, the latter inside the soccer runner). Soccer has no props board in this module, so the
+    scheduled --all --write-gcs run is its ONLY refresh: without this hook the soccer files would never be written
+    in production. The runner itself refreshes ev.game_odds_board for "soccer" from the banked league snapshots
+    (soccer_epl / soccer_uefa_champs_league, banked by the odds-bank game_lines jobs). Failures are logged WITH
+    the traceback and never fail the other sports. (Tests neutralise this hook in tests/conftest.py.)"""
+    try:
+        from soccer.game.run_daily import run_soccer_predictions
+        run_soccer_predictions(now=now, write=True)
+        return True
+    except Exception:                                                                  # noqa: BLE001
+        log.exception("soccer game predictions run failed")
+        return False
+
+
 def _load_nba_tracking(now: datetime):
     """Prior-season tracking tables from the NBA/tracking mirror (nba.data.tracking), or None when nothing is mirrored. Only
     the prior COMPLETED season is read. (Tests neutralise this hook in tests/conftest.py.)"""
@@ -2320,6 +2336,10 @@ def main(argv=None) -> int:
               f"gamelog_latest={p['gamelog_latest']} summary={json.dumps(p['summary'], default=str)}")
         if p["status"] == "unavailable":
             failed.append(sp)
+    if everything and not a.no_write:
+        # soccer has no props board above; the full scheduled run is its only predictions + board refresh
+        if _run_soccer_game_predictions(datetime.now(timezone.utc)):
+            print("soccer: game predictions + odds board refreshed")
     return 1 if failed else 0
 
 

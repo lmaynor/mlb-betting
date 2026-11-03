@@ -370,3 +370,255 @@ def test_soccer_adapter_registered_fail_closed_spread():
     adapter = ADAPTERS["soccer"]
     assert "ARS" in adapter.codes and "RMA" in adapter.codes
     assert "spread" in adapter.disabled
+
+
+# ---------------------------------------------------------------- pre-merge fixes: UCL pool, sanity guard, board
+
+import json  # noqa: E402
+
+from soccer.config import DOMESTIC_UNDERSTAT_LEAGUES, SOCCER_LEAGUES  # noqa: E402
+
+
+def test_ucl_has_no_understat_page_and_domestic_pool_is_the_big5():
+    # Understat publishes domestic leagues only; /league/UCL/{year} is a 404, so the config must not claim one.
+    assert SOCCER_LEAGUES["ucl"]["understat_league"] is None
+    assert DOMESTIC_UNDERSTAT_LEAGUES == ("epl", "laliga", "bundesliga", "seriea", "ligue1")
+    assert all(SOCCER_LEAGUES[l]["understat_league"] for l in DOMESTIC_UNDERSTAT_LEAGUES)
+    with pytest.raises(ValueError):
+        ingest.fetch_understat_matches("ucl", 2026, fetch=lambda url: pytest.fail("must not fetch a UCL page"))
+
+
+def test_hfa_scale_damps_home_lambda():
+    base = dixon_coles.Ratings(mu0=0.3, gamma=0.30, rho=0.0, alpha={"AAA": 0.2, "BBB": 0.0},
+                               beta={"AAA": 0.0, "BBB": 0.1}, as_of=date(2026, 1, 1), n_matches=10,
+                               teams=("AAA", "BBB"))
+    european = dixon_coles.Ratings(mu0=0.3, gamma=0.30, rho=0.0, alpha=dict(base.alpha), beta=dict(base.beta),
+                                   as_of=date(2026, 1, 1), n_matches=10, teams=("AAA", "BBB"), hfa_scale=0.85)
+    assert european.expected_goals("AAA", "BBB")[0] < base.expected_goals("AAA", "BBB")[0]
+    assert european.expected_goals("AAA", "BBB")[1] == base.expected_goals("AAA", "BBB")[1]   # away lambda unscaled
+
+
+def test_ratings_with_elo_fallback_covers_unseen_club_but_not_unrated_one():
+    matches = _synthetic_matches(date(2025, 8, 1))
+    ratings = dixon_coles.fit_ratings(matches, date(2026, 1, 1), iterations=800)
+    elo = {"PSV": 1750.0, "AAA": 1900.0, "BBB": 1700.0}          # ZZZ has no ClubElo entry anywhere
+    extended = dixon_coles.ratings_with_elo_fallback(ratings, ("PSV", "ZZZ"), elo)
+    assert extended.expected_goals("PSV", "AAA") is not None     # Elo fallback: priced, not dropped
+    assert extended.expected_goals("ZZZ", "AAA") is None         # no Elo either: still fail closed
+    assert ratings.expected_goals("PSV", "AAA") is None          # the input ratings are not mutated
+    # a stronger Elo fallback club prices stronger than a weaker one (same anchors, only PSV's Elo moves:
+    # priors are relative to the pool mean, so the comparison must hold the rest of the dict fixed)
+    weaker = dixon_coles.ratings_with_elo_fallback(ratings, ("PSV",), {**elo, "PSV": 1500.0})
+    assert extended.expected_goals("PSV", "FFF")[0] > weaker.expected_goals("PSV", "FFF")[0]
+
+
+def test_elo_only_ratings_from_priors():
+    ratings = dixon_coles.elo_only_ratings(("AAA", "BBB"), {"AAA": 1900.0, "BBB": 1600.0}, date(2026, 1, 1))
+    assert ratings.n_matches == 0
+    assert ratings.expected_goals("AAA", "BBB")[0] > ratings.expected_goals("BBB", "AAA")[0]
+    with pytest.raises(ValueError):
+        dixon_coles.elo_only_ratings(("AAA",), {}, date(2026, 1, 1))
+
+
+def _us_page(matches: list[dict]) -> str:
+    return "<html><script>var matchesData = JSON.parse('" + json.dumps(matches) + "');</script></html>"
+
+
+def _us_match(home: str, away: str, dt: str, hg=None, ag=None, xh=None, xa=None) -> dict:
+    played = hg is not None
+    return {"id": "1", "isResult": played, "h": {"id": "1", "title": home}, "a": {"id": "2", "title": away},
+            "goals": {"h": hg, "a": ag}, "xG": {"h": xh, "a": xa}, "datetime": dt}
+
+
+_CLUBELO_CSV = """Rank,Club,Country,Level,Elo,From,To
+1,Man City,ENG,1,1950.0,2026-01-01,2026-12-31
+2,Real Madrid,ESP,1,2000.0,2026-01-01,2026-12-31
+3,Barcelona,ESP,1,1980.0,2026-01-01,2026-12-31
+4,Liverpool,ENG,1,1920.0,2026-01-01,2026-12-31
+5,Arsenal,ENG,1,1900.0,2026-01-01,2026-12-31
+6,Bayern,GER,1,1960.0,2026-01-01,2026-12-31
+7,Chelsea,ENG,1,1850.0,2026-01-01,2026-12-31
+8,Tottenham,ENG,1,1800.0,2026-01-01,2026-12-31
+9,Newcastle,ENG,1,1780.0,2026-01-01,2026-12-31
+10,Dortmund,GER,1,1820.0,2026-01-01,2026-12-31
+11,Atletico,ESP,1,1880.0,2026-01-01,2026-12-31
+12,PSV,NED,1,1720.0,2026-01-01,2026-12-31
+13,Celtic,SCO,1,1650.0,2026-01-01,2026-12-31
+"""
+
+
+def _run_daily_fetch(url: str) -> str:
+    """Offline fetch for the full scorer run: ClubElo + Understat domestic pages (EPL carries a future fixture;
+    La Liga / Bundesliga carry played matches for the UCL pool; every other page is an empty season)."""
+    if "api.clubelo.com" in url:
+        return _CLUBELO_CSV
+    if "/EPL/2026" in url:
+        return _us_page([
+            _us_match("Arsenal", "Chelsea", "2026-08-15 17:30:00", 2, 1, 1.9, 0.9),
+            _us_match("Liverpool", "Manchester City", "2026-08-16 16:30:00", 1, 1, 1.4, 1.5),
+            _us_match("Tottenham", "Newcastle United", "2026-08-22 15:00:00", 0, 2, 0.8, 1.7),
+            _us_match("Chelsea", "Liverpool", "2026-09-12 17:30:00", 1, 2, 1.1, 1.8),
+            _us_match("Manchester City", "Arsenal", "2026-09-19 17:30:00", 2, 2, 2.0, 1.9),
+            _us_match("Newcastle United", "Tottenham", "2026-10-03 15:00:00", 1, 0, 1.3, 0.7),
+            _us_match("Arsenal", "Chelsea", "2026-11-08 16:30:00"),          # the EPL fixture to price
+        ])
+    if "/La_liga/2026" in url:
+        return _us_page([
+            _us_match("Real Madrid", "Barcelona", "2026-08-23 20:00:00", 2, 1, 2.1, 1.2),
+            _us_match("Atletico Madrid", "Real Madrid", "2026-09-26 20:00:00", 1, 1, 1.0, 1.4),
+            _us_match("Barcelona", "Atletico Madrid", "2026-10-17 20:00:00", 3, 1, 2.4, 0.9),
+        ])
+    if "/Bundesliga/2026" in url:
+        return _us_page([
+            _us_match("Bayern Munich", "Borussia Dortmund", "2026-08-28 19:30:00", 3, 1, 2.6, 1.0),
+            _us_match("Borussia Dortmund", "Bayern Munich", "2026-10-24 17:30:00", 1, 2, 1.2, 1.9),
+        ])
+    return _us_page([])
+
+
+def test_run_soccer_predictions_prices_epl_and_ucl(monkeypatch):
+    """The blocker regression: UCL has no Understat page, so its ratings must come from the pooled domestic fit
+    + ClubElo fallback and its fixtures from the banked odds slate -- and both competitions must price."""
+    from ev import game_odds_board
+    from nba.game import odds_feed
+
+    board = {"status": "live", "rows": [
+        {"key": "soccer:2026-11-08:BAY@RMA|ml|ml", "sport": "soccer", "game_key": "soccer:2026-11-08:BAY@RMA",
+         "market": "ml", "line": None, "books": [
+             {"book": "draftkings", "a": 150, "b": 130, "draw": 240},
+             {"book": "fanduel", "a": 145, "b": 135, "draw": 235}]},
+    ], "games": [], "books": ["draftkings", "fanduel"]}
+    monkeypatch.setattr(game_odds_board, "run", lambda sport, now=None, write=True: board)
+
+    def fake_banked(key, now=None, **kw):
+        if key == "soccer_uefa_champs_league":
+            return ([
+                {"commence_time": "2026-11-08T20:00:00Z", "home_team": "Real Madrid", "away_team": "Bayern Munich",
+                 "bookmakers": []},
+                {"commence_time": "2026-11-08T20:00:00Z", "home_team": "Celtic", "away_team": "PSV Eindhoven",
+                 "bookmakers": []},
+            ], {"ok": True})
+        return None, {"ok": False, "reason": "no snapshot in test"}
+
+    monkeypatch.setattr(odds_feed, "read_banked_game_lines", fake_banked)
+    now = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
+    payload = run_daily.run_soccer_predictions(now=now, write=False, fetch=_run_daily_fetch)
+    by_league: dict[str, list[dict]] = {}
+    for g in payload["priced_games"]:
+        by_league.setdefault(g["league"], []).append(g)
+    assert {g["home"] for g in by_league["epl"]} == {"ARS"}                       # Understat fixture, priced
+    ucl_pairs = {(g["away"], g["home"]) for g in by_league["ucl"]}
+    assert ("BAY", "RMA") in ucl_pairs                                           # pooled-fit clubs, priced
+    assert ("PSV", "CEL") in ucl_pairs                                           # NEITHER club has a domestic
+    # Understat row in this run: both were rated by the ClubElo fallback alone, and the match still priced.
+    assert all(g["validated"] is False for g in payload["priced_games"])
+    assert payload["count"] == len(payload["priced_games"]) >= 3
+
+
+def test_elo_sanity_trips_on_away_and_draw_divergence():
+    # home agrees everywhere; the AWAY leg is blown up vs both references -> must trip (the old guard missed it)
+    model = (0.40, 0.25, 0.35)
+    guarded, warn = dixon_coles.elo_sanity(model, (0.40, 0.27, 0.10), (0.42, 0.26, 0.12))
+    assert warn == "ELO_DIVERGENCE" and abs(sum(guarded) - 1.0) < 1e-12
+    # the DRAW leg blown up vs both references -> trips too
+    _, warn = dixon_coles.elo_sanity((0.45, 0.45, 0.10), (0.50, 0.24, 0.26), (0.48, 0.25, 0.27))
+    assert warn == "ELO_DIVERGENCE"
+    # only ONE reference diverges on the away leg -> no trip (a model may disagree with a single source)
+    assert dixon_coles.elo_sanity(model, (0.40, 0.27, 0.10), (0.41, 0.25, 0.34)) == (model, None)
+
+
+def test_build_predictions_guard_trip_updates_draw_no_bet():
+    from soccer.game.matrix_pricer import price_match
+    matches = _synthetic_matches(date(2025, 8, 1))
+    real = {"AAA": "ARS", "BBB": "CHE", "CCC": "LIV", "DDD": "MCI", "EEE": "TOT", "FFF": "NEW"}
+    matches = [{**m, "home": real[m["home"]], "away": real[m["away"]]} for m in matches]
+    ratings = dixon_coles.fit_ratings(matches, date(2026, 1, 1), iterations=800)
+    fixtures = [{"league": "epl", "date": date(2026, 1, 3), "datetime": datetime(2026, 1, 3, 15, 0),
+                 "home": "ARS", "away": "CHE"}]
+    gk = run_daily.game_key(date(2026, 1, 3), "CHE", "ARS")
+    # Elo and the market both say ARS is weak here; the fitted model rates ARS strongest -> the guard trips.
+    payload = run_daily.build_predictions(fixtures, {"epl": ratings}, elo={"ARS": 1500.0, "CHE": 2050.0},
+                                          market_probs={gk: (0.20, 0.30, 0.50)},
+                                          now=datetime(2026, 1, 1, tzinfo=timezone.utc))
+    g = payload["priced_games"][0]
+    assert g["sanity_warn"] == "ELO_DIVERGENCE"
+    # DNB must be re-derived from the GUARDED triple, not left at the raw matrix values
+    lam = ratings.expected_goals("ARS", "CHE")
+    _, raw = price_match(lam[0], lam[1], ratings.rho)
+    assert g["p_home_dnb"] == pytest.approx(g["p_home"] / (g["p_home"] + g["p_away"]))
+    assert g["p_home_dnb"] != pytest.approx(raw["p_home_dnb"])
+
+
+def test_game_odds_board_two_leg_quote_never_overwrites_three_way():
+    from ev.game_odds_board import build_game_board
+    now = datetime(2026, 11, 3, 12, 0, tzinfo=timezone.utc)
+    ev = {"home_team": "Arsenal", "away_team": "Chelsea", "commence_time": "2026-11-07T17:30:00Z",
+          "bookmakers": [
+              {"key": "draftkings", "markets": [
+                  {"key": "h2h", "outcomes": [{"name": "Arsenal", "price": -140}, {"name": "Draw", "price": 260},
+                                              {"name": "Chelsea", "price": 300}]}]},
+              {"key": "fanduel", "markets": [
+                  {"key": "h2h", "outcomes": [{"name": "Arsenal", "price": -135}, {"name": "Draw", "price": 250},
+                                              {"name": "Chelsea", "price": 290}]}]},
+          ]}
+    # the BestBook crawl is FRESHER but carries no draw leg: under the old two-leg completeness count it would
+    # replace the whole quote and erase the draw price.
+    bb = [{"home_team": "Arsenal", "away_team": "Chelsea", "commence_time": "2026-11-07T17:30:00Z",
+           "quotes": [{"book": "draftkings", "market": "ml", "a": 310, "b": -150, "line": None}]}]
+    board = build_game_board("soccer", [ev], now, meta={"snapshot_ts": "2026-11-03T10:00:00+00:00"},
+                             bb_games=bb, bb_meta={"fetched_at": "2026-11-03T11:00:00+00:00"})
+    ml = next(r for r in board["rows"] if r["market"] == "ml")
+    dk = next(b for b in ml["books"] if b["book"] == "draftkings")
+    assert dk["draw"] == 260 and dk["a"] == 300 and dk["b"] == -140     # the complete 3-way quote survived
+
+
+def test_drop_flipped_books_skips_soccer_ml_only():
+    from ev.game_odds_board import _drop_flipped_books
+    flipped = {"book": "flip", "a": 130, "b": -150, "d": 260}
+    normal = {"book": "norm", "a": -150, "b": 130, "d": 250}
+    soccer_row = {"key": "g|ml|ml", "market": "ml",
+                  "books": {"flip": dict(flipped), "n1": dict(normal), "n2": dict(normal), "n3": dict(normal)}}
+    assert _drop_flipped_books("soccer", soccer_row) == 0
+    assert soccer_row["books"]["flip"]["a"] == 130                       # plus-money both sides is normal in 1X2
+    nba_row = {"key": "g|ml|ml", "market": "ml",
+               "books": {"flip": {"book": "flip", "a": 130, "b": -150},
+                         "n1": {"book": "n1", "a": -150, "b": 130},
+                         "n2": {"book": "n2", "a": -150, "b": 130},
+                         "n3": {"book": "n3", "a": -150, "b": 130}}}
+    assert _drop_flipped_books("nba", nba_row) == 1                      # the two-way guard itself still works
+    assert nba_row["books"]["flip"]["a"] is None
+
+
+def test_daily_projections_soccer_hook_is_wired_and_fail_safe(monkeypatch):
+    import inspect
+
+    from ev import daily_projections as dp
+    from soccer.game import run_daily as srd
+
+    real_hook = inspect.unwrap(dp._run_soccer_game_predictions)
+    calls: list = []
+    monkeypatch.setattr(srd, "run_soccer_predictions",
+                        lambda now=None, write=False: calls.append((now, write)))
+    now = datetime(2026, 11, 3, 12, 0, tzinfo=timezone.utc)
+    assert real_hook(now) is True and calls == [(now, True)]
+
+    def boom(now=None, write=False):
+        raise RuntimeError("understat down")
+
+    monkeypatch.setattr(srd, "run_soccer_predictions", boom)
+    assert real_hook(now) is False                                       # a soccer failure never propagates
+
+
+def test_soccer_game_lines_banking_is_configured(monkeypatch):
+    # the guard refuses any sport with no budget: both soccer keys need one, sized in nba/config.py like the rest
+    for env in ("ODDS_BANK_BUDGET_SOCCER_EPL", "ODDS_BANK_BUDGET_SOCCER_UEFA_CHAMPS_LEAGUE"):
+        monkeypatch.delenv(env, raising=False)
+    from nba.odds.credit_ledger import monthly_budget
+    assert monthly_budget("soccer_epl") > 0
+    assert monthly_budget("soccer_uefa_champs_league") > 0
+    from nba.config import parlay_budget_total, PARLAY_MONTHLY_QUOTA, PARLAY_RESERVE_FLOOR
+    assert parlay_budget_total() + PARLAY_RESERVE_FLOOR <= PARLAY_MONTHLY_QUOTA   # the pool still fits the plan
+    script = open("deploy/setup_odds_banking.sh", encoding="utf-8").read()
+    assert '"epl|soccer_epl|game_lines|' in script
+    assert '"ucl|soccer_uefa_champs_league|game_lines|' in script
+    assert "ODDS_BANK_BUDGET_SOCCER_UEFA_CHAMPS_LEAGUE=${BUDGET_SOCCER_UCL}" in script

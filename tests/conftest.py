@@ -31,6 +31,8 @@ def _daily_projections_never_reach_gcs(monkeypatch):
         _load_env_lines itself), it returns {} without touching storage.
       * _run_game_models refreshes the NBA/NHL game payload (history replay + GCS writes): a no-op by default. A test that
         wants the real function gets it via inspect.unwrap(dp._run_game_models).
+      * _run_soccer_game_predictions refreshes the soccer game payload + board (Understat pulls + GCS writes): a no-op
+        by default, same as the other game hooks.
     Only active for tests that have imported ev.daily_projections."""
     dp = sys.modules.get("ev.daily_projections")
     if dp is None:
@@ -47,9 +49,15 @@ def _daily_projections_never_reach_gcs(monkeypatch):
         return False
 
     no_game_models.__wrapped__ = dp._run_game_models
+
+    def no_soccer_predictions(now):
+        return False
+
+    no_soccer_predictions.__wrapped__ = dp._run_soccer_game_predictions
     monkeypatch.setattr(dp, "_load_env_lines", guarded_env_lines)
     monkeypatch.setattr(dp, "_run_game_models", no_game_models)
     monkeypatch.setattr(dp, "_run_game_board", lambda sport, now: False)
+    monkeypatch.setattr(dp, "_run_soccer_game_predictions", no_soccer_predictions)
     monkeypatch.setattr(dp, "_load_nba_spreads", lambda now: {})
     monkeypatch.setattr(dp, "_load_nba_tracking", lambda now: None)
     yield

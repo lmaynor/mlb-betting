@@ -4,9 +4,11 @@ Sources (licenses in docs/DATA_LICENSES.md):
   * football-data.co.uk season CSVs: results + shots + Pinnacle opening/closing 1X2 and 2.5-totals odds. This is
     the backtest's ground truth: closing columns PSCH/PSCD/PSCA and PC>2.5 / PC<2.5, opening PSH/PSD/PSA and
     P>2.5 / P<2.5, market max/average MaxCH.. / AvgCH...
-  * Understat league pages: match-level xG for the Big 5 + UCL (xg_variant "understat_shot_v1", the ONE xG
-    definition this vertical uses). The league matchesData payload carries xG and goals only; npxG / PPDA are
-    match-page and team-season level on Understat, so they are returned as None, never scraped per match here.
+  * Understat league pages: match-level xG for the Big 5 DOMESTIC leagues only (xg_variant "understat_shot_v1",
+    the ONE xG definition this vertical uses). Understat has no UCL page (understat.com/league/UCL/{year} 404s);
+    UCL ratings come from the pooled domestic fit (soccer.game.run_daily). The league matchesData payload carries
+    xG and goals only; npxG / PPDA are match-page and team-season level on Understat, so they are returned as
+    None, never scraped per match here.
   * ClubElo daily CSV API: team Elo ratings, the ratings prior and sanity anchor.
 
 Every loader takes an injectable `fetch(url) -> str` so tests run 100% offline against fixtures; the default fetch
@@ -158,6 +160,9 @@ def fetch_understat_matches(league: str, season, fetch=None) -> list[dict]:
     variant "understat_shot_v1" (soccer.config.XG_VARIANT).
     """
     cfg = SOCCER_LEAGUES[league]
+    if cfg["understat_league"] is None:
+        raise ValueError(f"league {league!r} has no Understat page (understat_league is None); "
+                         "its ratings come from the pooled domestic fit, not a per-league pull")
     year = str(season)[:4]
     url = f"{UNDERSTAT_BASE}/{cfg['understat_league']}/{year}"
     html = (fetch or _default_fetch)(url)

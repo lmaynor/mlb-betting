@@ -39,7 +39,7 @@ HALF_LIFE_DAYS = 110.0
 ELO_LOG_GOALS = 0.9             # log-goal supremacy per 400 Elo points, split evenly attack / defense
 DEFAULT_ELO_SHRINKAGE = 3.0     # L2 pull toward the ClubElo prior, in pseudo-observation units
 RHO_GRID = tuple(round(-0.25 + 0.01 * i, 2) for i in range(51))
-SANITY_THRESHOLD = 0.18         # p_home divergence vs BOTH references that trips the Elo sanity guard
+SANITY_THRESHOLD = 0.18         # worst-outcome 1X2 divergence vs BOTH references that trips the Elo sanity guard
 
 
 def effective_goals(match: dict) -> tuple[float, float]:
@@ -65,13 +65,17 @@ class Ratings:
     as_of: date
     n_matches: int
     teams: tuple[str, ...] = field(default_factory=tuple)
+    # Multiplier on gamma when PRICING with these ratings (1.0 = the competition the ratings were fit on).
+    # The UCL pool is fit on domestic matches but prices cross-league fixtures, so run_daily sets 0.85
+    # (soccer.config.UCL_HFA_SCALE): home advantage is smaller in Europe. The fit itself always runs at 1.0.
+    hfa_scale: float = 1.0
 
     def expected_goals(self, home: str, away: str) -> tuple[float, float] | None:
         """(lambda_home, lambda_away) for a fixture, or None when either club is unrated (fail closed: the
         caller skips the fixture rather than pricing a league-average stand-in)."""
         if home not in self.alpha or away not in self.alpha:
             return None
-        lh = math.exp(self.mu0 + self.gamma + self.alpha[home] - self.beta[away])
+        lh = math.exp(self.mu0 + self.gamma * self.hfa_scale + self.alpha[home] - self.beta[away])
         la = math.exp(self.mu0 + self.alpha[away] - self.beta[home])
         return lh, la
 
@@ -174,16 +178,57 @@ def _fit_rho(hist: list[dict], ratings: Ratings) -> float:
     return float(best_rho)
 
 
+def ratings_with_elo_fallback(ratings: Ratings, club_codes, elo: dict[str, float] | None) -> Ratings:
+    """Extend a fitted Ratings with ClubElo-prior ratings for clubs the match sample never covered.
+
+    This is how a UCL club with no domestic Understat rows in the pool (a Celtic, a PSV: their leagues are not
+    on Understat) still gets priced: its (alpha, beta) are initialized from its ClubElo rating through the same
+    _elo_priors path the fit itself starts from, so the fallback rating is on the fitted scale. A club with NO
+    ClubElo entry either stays unrated -- fail closed, expected_goals returns None and the fixture is skipped --
+    rather than being priced as a league-average stand-in. Returns a NEW Ratings; the input is not mutated."""
+    missing = [c for c in club_codes if c not in ratings.alpha and elo and c in elo]
+    if not missing:
+        return ratings
+    universe = sorted(set(ratings.teams) | set(missing))
+    a_prior, b_prior = _elo_priors(universe, elo)
+    prior = {t: (float(a_prior[i]), float(b_prior[i])) for i, t in enumerate(universe)}
+    alpha = {**ratings.alpha, **{c: prior[c][0] for c in missing}}
+    beta = {**ratings.beta, **{c: prior[c][1] for c in missing}}
+    log.info("dixon_coles: Elo fallback ratings for %d clubs outside the match sample: %s",
+             len(missing), ", ".join(sorted(missing)))
+    return Ratings(mu0=ratings.mu0, gamma=ratings.gamma, rho=ratings.rho, alpha=alpha, beta=beta,
+                   as_of=ratings.as_of, n_matches=ratings.n_matches,
+                   teams=tuple(sorted(alpha)), hfa_scale=ratings.hfa_scale)
+
+
+def elo_only_ratings(club_codes, elo: dict[str, float] | None, as_of: date) -> Ratings:
+    """Ratings built purely from ClubElo priors (no match sample at all): the last-resort pool when every
+    domestic Understat pull failed, so UCL fixtures between Elo-known clubs still price instead of the whole
+    competition going dark. mu0 / gamma sit at the fit's own starting point (a league-average scoring level);
+    rho is 0.0 (no low-score sample to fit it on). Clubs without a ClubElo entry stay unrated (fail closed)."""
+    codes = sorted(c for c in club_codes if elo and c in elo)
+    if not codes:
+        raise ValueError("elo_only_ratings: no club has a ClubElo entry")
+    a_prior, b_prior = _elo_priors(codes, elo)
+    alpha = {t: float(a_prior[i]) for i, t in enumerate(codes)}
+    beta = {t: float(b_prior[i]) for i, t in enumerate(codes)}
+    return Ratings(mu0=math.log(1.35), gamma=0.25, rho=0.0, alpha=alpha, beta=beta,
+                   as_of=as_of, n_matches=0, teams=tuple(codes))
+
+
 def elo_sanity(p_model: tuple[float, float, float], p_elo: tuple[float, float, float] | None,
                p_market: tuple[float, float, float] | None, threshold: float = SANITY_THRESHOLD
                ) -> tuple[tuple[float, float, float], str | None]:
-    """The Elo sanity guard. When the model's p_home diverges from BOTH the ClubElo prior and the market
-    consensus by more than `threshold` at once, the model is presumed wrong (a ratings blow-up, a missing
-    star, a bad join): shrink 50% toward ClubElo and flag the row ELO_DIVERGENCE. With only one reference
-    available the guard cannot trip -- a model is allowed to disagree with a single source."""
+    """The Elo sanity guard. When the model diverges from BOTH the ClubElo prior and the market consensus by
+    more than `threshold` at once -- on ANY of the three outcomes, not just p_home: a blown-up draw or away
+    leg is the same ratings failure -- the model is presumed wrong (a ratings blow-up, a missing star, a bad
+    join): shrink 50% toward ClubElo and flag the row ELO_DIVERGENCE. With only one reference available the
+    guard cannot trip -- a model is allowed to disagree with a single source."""
     if p_elo is None or p_market is None:
         return p_model, None
-    if abs(p_model[0] - p_elo[0]) > threshold and abs(p_model[0] - p_market[0]) > threshold:
+    div_elo = max(abs(m - e) for m, e in zip(p_model, p_elo))
+    div_mkt = max(abs(m - k) for m, k in zip(p_model, p_market))
+    if div_elo > threshold and div_mkt > threshold:
         blended = tuple(0.5 * m + 0.5 * e for m, e in zip(p_model, p_elo))
         s = sum(blended)
         return tuple(v / s for v in blended), "ELO_DIVERGENCE"

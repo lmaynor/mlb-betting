@@ -175,6 +175,10 @@ def _devig_a(a_p: Optional[int], b_p: Optional[int]) -> Optional[float]:
 
 def _drop_flipped_books(sport: str, row: dict) -> int:
     """Remove (both sides of) every book whose two-way quote favours the opposite side to the consensus. Returns how many."""
+    if sport == "soccer" and row.get("market") == "ml":
+        # A soccer 1X2 is THREE-way: in a competitive match the draw holds ~28% and BOTH teams are legitimately
+        # plus-money, so a two-way "opposite favourite" test on a/b alone would read a correct book as swapped.
+        return 0
     probs = {name: _devig_a(b["a"], b["b"]) for name, b in row["books"].items()}
     probs = {n: p for n, p in probs.items() if p is not None}
     if len(probs) < FLIP_MIN_BOOKS:
@@ -216,9 +220,19 @@ def _put(rows: Dict[str, dict], sport: str, gk: str, away: str, home: str, start
         if old.get("d") is None:
             old["d"] = d_p
         return True
-    if wins and sum(p is not None for p in (a_p, b_p)) >= sum(p is not None for p in (old["a"], old["b"])):
-        old.update(a=a_p, b=b_p, d=d_p, _src=src)
-        return True
+    if wins:
+        # Completeness is judged on the legs the market actually has: a soccer 1X2 quote is complete only with
+        # all three prices, so a two-legged quote (a feed carrying no draw) must never overwrite a complete
+        # three-way (home, draw, away) quote under the fresher-source rule.
+        if sport == "soccer" and market == "ml":
+            new_legs = (a_p, b_p, d_p)
+            old_legs = (old["a"], old["b"], old.get("d"))
+        else:
+            new_legs = (a_p, b_p)
+            old_legs = (old["a"], old["b"])
+        if sum(p is not None for p in new_legs) >= sum(p is not None for p in old_legs):
+            old.update(a=a_p, b=b_p, d=d_p, _src=src)
+            return True
     return False
 
 

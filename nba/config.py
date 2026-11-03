@@ -180,6 +180,10 @@ DFS_BOOKS = frozenset({"sleeper", "underdog", "prizepicks", "dabble", "betr", "f
 #   historical pulls (nba.odds.parlay_historical) .................. PARLAY_HISTORICAL_MONTHLY_BUDGET (planning figure)
 # Owner decision 2026-11-01 (rebalanced same day after the NFL sweep went to 10 markets/event: NBA/NHL were pacing to ~20k each): NBA 35k, NHL 35k, NFL sweep 29k = 99k committed to the three live winter sports, plus 500 kept
 # for testing (historical pulls; owner decision 2026-11-01).
+# Rebalance 2026-11-03 (soccer vertical): EPL + UCL GAME-LINES banking added at 600/mo per league -- game_lines costs
+# 3 credits per checkpoint (h2h/spreads/totals) x 6 checkpoints/day, a measured max of ~558/mo, so 600 is the honest
+# size, not a round guess. Funded by trimming the NBA and NHL accumulator caps 35k -> 34.4k each (both pace ~20k
+# against the cap), so the committed total below is unchanged. Soccer props are Phase 2 and have NO budget here.
 # That is 99.5k, and the PARLAY_RESERVE_FLOOR (500) is the last 0.5k. The MLB snapshot ceiling is NOT in the winter total: MLB is
 # paused for the offseason (deploy/pause_mlb_offseason.sh, resumes Mar 20). When it resumes, NFL is over (its 29k is free) and
 # NBA + NHL + MLB = 89.5k fits, but check the ledgers first: re-balance with ODDS_BANK_BUDGET_<SPORTKEY> BEFORE running resume_mlb_season.sh.
@@ -191,9 +195,11 @@ NFL_SWEEP_MONTHLY_BUDGET = 29_000
 NFL_SWEEP_LEDGER_SPORT = "americanfootball_nfl_sweep"     # OddsAccum/{this}/_credits/{month}.json
 PARLAY_HISTORICAL_MONTHLY_BUDGET = 500
 ODDS_BANK_DEFAULT_BUDGET = {
-    "icehockey_nhl": 35000,
-    "basketball_nba": 35000,
+    "icehockey_nhl": 34400,
+    "basketball_nba": 34400,
     "americanfootball_nfl": 0,          # accumulator ledger only (no NFL banker job exists); manual probes use the 500 test budget
+    "soccer_epl": 600,                  # game_lines banking only (soccer vertical, 2026-11-03; see the rebalance note above)
+    "soccer_uefa_champs_league": 600,   # game_lines banking only (soccer vertical, 2026-11-03)
 }
 # Never spend the shared pool below this many remaining credits (read from x-requests-remaining). ONE floor for the ledger,
 # the MLB snapshot job and the historical puller (was 500 / none / 2500).

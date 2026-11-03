@@ -8,7 +8,7 @@
  * backend until the Pinnacle-close backtest and forward CLV clear the promotion bar.
  */
 import { americanToImpliedProb } from '@/lib/odds'
-import { devigThreeWay, type DevigThreeWayMethod } from '@/lib/ev-math'
+import { americanToDecimal, devigThreeWay, type DevigThreeWayMethod } from '@/lib/ev-math'
 import type { GameOddsFeed, GameOddsRow } from '@/lib/game-odds'
 
 export interface SoccerTotalLine {
@@ -109,4 +109,59 @@ export function gameRows(feed: GameOddsFeed | null, gameKey: string): { ml?: Gam
     totals: rows.filter(r => r.market === 'total').sort((x, y) => (x.line ?? 0) - (y.line ?? 0)),
     btts: rows.find(r => r.market === 'btts'),
   }
+}
+
+export type ThreeWayLeg = 'home' | 'draw' | 'away'
+export interface BestPrice { book: string; price: number }
+
+/** The best (highest-payout) price per 1X2 leg across the consensus books; ties keep every tied book's price
+ *  equal, so the caller highlights all books whose price matches the best for the leg. */
+export function bestThreeWayPrices(consensus: ThreeWayConsensus): Record<ThreeWayLeg, BestPrice | null> {
+  const best: Record<ThreeWayLeg, BestPrice | null> = { home: null, draw: null, away: null }
+  for (const b of consensus.books) {
+    for (const leg of ['home', 'draw', 'away'] as ThreeWayLeg[]) {
+      const cur = best[leg]
+      if (cur == null || americanToDecimal(b[leg]) > americanToDecimal(cur.price)) best[leg] = { book: b.book, price: b[leg] }
+    }
+  }
+  return best
+}
+
+/** Expected value of a price against a fair probability: fair * decimal - 1 (0.032 = +3.2%). */
+export function evVsFair(price: number, fairProb: number): number {
+  return fairProb * americanToDecimal(price) - 1
+}
+
+/** Best OVER / UNDER book prices for one totals line out of a game's total rows (a = over, b = under). */
+export function bestTotalPrices(totals: GameOddsRow[], line: number): { over: BestPrice | null; under: BestPrice | null } {
+  const row = totals.find(r => r.line != null && Math.abs(r.line - line) < 1e-9)
+  let over: BestPrice | null = null
+  let under: BestPrice | null = null
+  for (const b of row?.books ?? []) {
+    if (b.a != null && (over == null || americanToDecimal(b.a) > americanToDecimal(over.price))) over = { book: b.book, price: b.a }
+    if (b.b != null && (under == null || americanToDecimal(b.b) > americanToDecimal(under.price))) under = { book: b.book, price: b.b }
+  }
+  return { over, under }
+}
+
+export interface OddsOnlyGame {
+  game_key: string
+  away: string
+  home: string
+  start: string
+  consensus: ThreeWayConsensus
+}
+
+/** Fallback board when the model has priced no fixtures yet but the odds feed has live soccer rows: one entry
+ *  per odds game with a 1X2 row, carrying its three-way consensus, so /ev/games?sport=soccer still shows the
+ *  live book prices instead of an empty state. */
+export function oddsOnlyGames(feed: GameOddsFeed | null): OddsOnlyGame[] {
+  if (!feed) return []
+  const out: OddsOnlyGame[] = []
+  for (const g of feed.games ?? []) {
+    const rows = gameRows(feed, g.game_key)
+    if (!rows.ml) continue
+    out.push({ game_key: g.game_key, away: g.away, home: g.home, start: g.start, consensus: threeWayConsensus(rows.ml, 'power') })
+  }
+  return out.sort((x, y) => (x.start < y.start ? -1 : x.start > y.start ? 1 : 0))
 }
