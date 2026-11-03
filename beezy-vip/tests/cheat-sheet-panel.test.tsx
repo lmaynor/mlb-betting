@@ -114,7 +114,7 @@ describe('POST TO X panel', () => {
     expect(buttons).toHaveLength(SHEETS.length + 1)
     fireEvent.click(buttons[1])
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(SHEETS[1].text))
-    await waitFor(() => expect(within(mobile).getByRole('button', { name: 'COPIED' })).toBeInTheDocument())
+    await waitFor(() => expect(within(mobile).getByRole('button', { name: 'Copied' })).toBeInTheDocument())
     fireEvent.click(buttons[buttons.length - 1])
     await waitFor(() => expect(writeText).toHaveBeenLastCalledWith(LINK_REPLY))
   })

@@ -13,8 +13,8 @@ export function SportTabs({ sport, active }: { sport: SportSlug; active: SportVi
   const pillar = SPORT_PILLARS[sport]
   const n = getSystemsBySport(sport).length
   const tabs: { id: SportView; label: string; href: string }[] = [
-    { id: 'picks', label: 'PICKS & +EV', href: `/picks/${sport}` },
-    { id: 'systems', label: 'SYSTEMS', href: `/picks/${sport}/systems` },
+    { id: 'picks', label: 'Picks & +EV', href: `/picks/${sport}` },
+    { id: 'systems', label: 'Systems', href: `/picks/${sport}/systems` },
   ]
   return (
     <nav className="border-b border-b-[color:var(--color-separator-border)] bg-background-secondary-default" aria-label={`${pillar.shortName} views`}>

@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import type { TodaySlate, SlateGame, SlatePick } from '@/lib/types'
-import { B, SYSTEM_COLOR, SYSTEM_PILL, pickLabel } from '@/lib/tokens'
+import { B, SYSTEM_COLOR, SYSTEM_PILL, pickLabel, systemLabel } from '@/lib/tokens'
 import { ResultPill } from '@/components/ui/primitives'
 
 // ---- constants ---------------------------------------------------------------
@@ -264,7 +264,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
           {ALL_FILTER_SYSTEMS.map(sys => (
             <Chip
               key={sys}
-              label={sys}
+              label={systemLabel(sys)}
               active={systemFilter === sys}
               color={SYSTEM_COLOR[sys]}
               onClick={() => setSystemFilter(systemFilter === sys ? null : sys)}

@@ -188,7 +188,7 @@ export function isSportSlug(s: string): s is SportSlug {
 
 export const STATUS_LABEL: Record<SportStatus, string> = {
   live: 'LIVE',
-  shadow: 'PREVIEW',
-  data_only: 'COMING SOON',
-  planned: 'COMING SOON',
+  shadow: 'Preview',
+  data_only: 'Coming soon',
+  planned: 'Coming soon',
 }

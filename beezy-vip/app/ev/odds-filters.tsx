@@ -126,7 +126,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
             )
           })}
         </PillGroup>
-          <Field label="SPORT">
+          <Field label="Sport">
             <PillGroup>
               {(['all', ...sportOptions] as SportFilter[]).map(s => (
                 <Pill key={s} active={sport === s} onClick={() => { setSport(s); setStat('all'); setGame('all'); setLimit(PAGE) }}>{s.toUpperCase()}</Pill>
@@ -183,7 +183,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
       <div style={{ padding: '8px 14px', borderTop: `1px solid ${HAIR}`, display: 'flex', gap: '10px 18px', flexWrap: 'wrap', alignItems: 'center' }}>
         {mode === 'ev' && (
           <>
-            <Field label="LINES">
+            <Field label="Lines">
               <PillGroup>
                 <Pill active={lines === 'main'} onClick={() => setLines('main')} title="Standard over/under line quoted by most sportsbooks">Main Lines</Pill>
                 <Pill active={lines === 'all'} onClick={() => setLines('all')} title="Includes alternate milestone rungs and shifted lines">Main + Alt Ladders</Pill>
@@ -194,7 +194,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
                 {(['both', 'over', 'under'] as SideFilter[]).map(s => <Pill key={s} active={side === s} onClick={() => setSide(s)}>{s === 'both' ? 'BOTH' : s === 'over' ? 'OVER' : 'UNDER'}</Pill>)}
               </PillGroup>
             </Field>
-            <Field label="MIN EV">
+            <Field label="Min EV">
               <PillGroup>
                 {MIN_EV.map(m => <Pill key={m.v} active={minEv === m.v} onClick={() => setMinEv(m.v)}>{m.label}</Pill>)}
               </PillGroup>
@@ -206,7 +206,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
         )}
         {mode === 'outliers' && (
           <>
-            <Field label="MIN GAP">
+            <Field label="Min gap">
               <PillGroup>
                 {OUTLIER_GAP_OPTIONS.map(g => (
                   <Pill key={g.v} active={outlierGap === g.v} onClick={() => { setOutlierGap(g.v); setLimit(PAGE) }}>
@@ -215,13 +215,13 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
                 ))}
               </PillGroup>
             </Field>
-            <Field label="REQUIRE +EV">
+            <Field label="Require +EV">
               <PillGroup>
                 <Pill active={!outlierReqEv} onClick={() => { setOutlierReqEv(false); setLimit(PAGE) }}>All Outliers</Pill>
                 <Pill active={outlierReqEv} onClick={() => { setOutlierReqEv(true); setLimit(PAGE) }} title="Require verified positive EV against reference books or player curve">Verified +EV Only</Pill>
               </PillGroup>
             </Field>
-            <Field label="ODDS BAND">
+            <Field label="Odds band">
               <PillGroup>
                 {OUTLIER_ODDS_OPTIONS.map(b => (
                   <Pill key={b.v} active={outlierOddsBand === b.v} onClick={() => { setOutlierOddsBand(b.v); setLimit(PAGE) }}>
@@ -230,7 +230,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
                 ))}
               </PillGroup>
             </Field>
-            <Field label="MIN BOOKS">
+            <Field label="Min books">
               <PillGroup>
                 {OUTLIER_MIN_BOOKS.map(b => (
                   <Pill key={b.v} active={outlierMinBooks === b.v} onClick={() => { setOutlierMinBooks(b.v); setLimit(PAGE) }}>
@@ -255,12 +255,12 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
                 <Pill active={arbView === 'near'} onClick={() => { setArbView('near'); setLimit(PAGE) }} title="Within 1.5% of break-even: bonus-bet conversion and near zero-hold line shopping">NEAR ARBS (&gt; -1.5%)</Pill>
               </PillGroup>
             </Field>
-            <Field label="EXCHANGES">
+            <Field label="Exchanges">
               <PillGroup>
                 <Pill active={exchanges} onClick={() => setExchanges(v => !v)} title="Kalshi, Novig and ProphetX quotes. Kalshi's taker fee is taken off its leg; Novig charges none before the game.">INCLUDE KALSHI / NOVIG (FEE-ADJUSTED)</Pill>
               </PillGroup>
             </Field>
-            <Field label="OUTLAY" htmlFor="odds-outlay">
+            <Field label="Outlay" htmlFor="odds-outlay">
               <span className="inline-flex items-center gap-1">
                 <span className="mono text-text-secondary text-compact">$</span>
                 <input
@@ -273,7 +273,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
         )}
         {mode === 'middles' && (
           <>
-            <Field label="MAX COST">
+            <Field label="Max cost">
               <PillGroup>
                 {MID_COST.map(c => <Pill key={c} active={midCost === c} onClick={() => { setMidCost(c); setLimit(PAGE) }} title="The most a miss may cost, as a share of the outlay">{`${c}%`}</Pill>)}
               </PillGroup>
@@ -288,12 +288,12 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
                 {MID_GAP.map(g => <Pill key={g.v} active={midGap === g.v} onClick={() => { setMidGap(g.v); setLimit(PAGE) }} title="Narrowest gap between the two lines, in points">{g.label}</Pill>)}
               </PillGroup>
             </Field>
-            <Field label="EXCHANGES">
+            <Field label="Exchanges">
               <PillGroup>
                 <Pill active={exchanges} onClick={() => setExchanges(v => !v)} title="Kalshi, Novig and ProphetX quotes. Kalshi's taker fee is taken off its leg; Novig charges none before the game.">INCLUDE KALSHI / NOVIG (FEE-ADJUSTED)</Pill>
               </PillGroup>
             </Field>
-            <Field label="OUTLAY" htmlFor="odds-outlay-mid">
+            <Field label="Outlay" htmlFor="odds-outlay-mid">
               <span className="inline-flex items-center gap-1">
                 <span className="mono text-text-secondary text-compact">$</span>
                 <input
@@ -306,24 +306,24 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
         )}
         {mode === 'longshots' && (
           <>
-            <Field label="STRATEGY">
+            <Field label="Strategy">
               <PillGroup>
                 <Pill active={longSub === 'all'} onClick={() => { setLongSub('all'); setLimit(PAGE) }} title="Every alt line and every over paying +200 or more, with both angles priced">All Tail Lines</Pill>
                 <Pill active={longSub === 'plus_ev_over'} onClick={() => { setLongSub('plus_ev_over'); setLimit(PAGE) }} title="Longshot Over/Yes price pays more than its true fair probability">Buy Over (+EV Milestone)</Pill>
                 <Pill active={longSub === 'fade_under'} onClick={() => { setLongSub('fade_under'); setLimit(PAGE) }} title="House-side play: fade an overpriced retail milestone by buying Under or Exchange NO">Lay the Longshot (Buy Under / NO)</Pill>
               </PillGroup>
             </Field>
-            <Field label="MIN PAYOUT">
+            <Field label="Min payout">
               <PillGroup>
                 {ODDS_MIN.map(m => <Pill key={m.v} active={oddsMin === m.v} onClick={() => { setOddsMin(m.v); setLimit(PAGE) }}>{m.label}</Pill>)}
               </PillGroup>
             </Field>
-            <Field label="MIN EV">
+            <Field label="Min EV">
               <PillGroup>
                 {MIN_EV.map(m => <Pill key={m.v} active={minEv === m.v} onClick={() => setMinEv(m.v)}>{m.label}</Pill>)}
               </PillGroup>
             </Field>
-            <Field label="FAIR SOURCE">
+            <Field label="Fair source">
               <PillGroup>
                 <Pill active={useCurve} onClick={() => setUseCurve(true)} title="Uses exact multi-book de-vigged fair odds when available, or interpolates from the player's main-line curve when fewer than 2 books price an alt rung">Multi-Book + Player Curve</Pill>
                 <Pill active={!useCurve} onClick={() => setUseCurve(false)} title="Requires at least 2 reference books quoting this exact alternate line">Exact Books Only</Pill>
@@ -333,7 +333,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
         )}
         {mode === 'sgp' && (
           <>
-            <Field label="ARCHETYPE">
+            <Field label="Archetype">
               <PillGroup>
                 {SGP_ARCHETYPE_OPTIONS.map(a => (
                   <Pill key={a.v} active={sgpArch === a.v} onClick={() => { setSgpArch(a.v); setLimit(PAGE) }}>
@@ -342,7 +342,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
                 ))}
               </PillGroup>
             </Field>
-            <Field label="MIN EV">
+            <Field label="Min EV">
               <PillGroup>
                 {SGP_MIN_EV_OPTIONS.map(e => (
                   <Pill key={e.v} active={sgpMinEv === e.v} onClick={() => { setSgpMinEv(e.v); setLimit(PAGE) }}>
@@ -362,7 +362,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
                 ]}
               />
             </Field>
-            <Field label="FAIR SOURCE">
+            <Field label="Fair source">
               <PillGroup>
                 <Pill active={useCurve} onClick={() => setUseCurve(true)} title="Uses multi-book de-vigged fair probabilities with monotone curve fallback">Multi-Book + Curve</Pill>
                 <Pill active={!useCurve} onClick={() => setUseCurve(false)} title="Requires at least 2 reference books quoting each leg">Exact Books Only</Pill>

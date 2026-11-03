@@ -72,7 +72,7 @@ export function ArbTableRow({ r, columns, outlay, copied, onCopy }: {
           title={a.feeLeg ? `Gross ${signed(a.arbPct, 2)}%, net of Kalshi's taker fee ${signed(a.netArbPct, 2)}%` : `${signed(a.netArbPct, 2)}%, no fee on either leg`}>
           {signed(a.netArbPct, 2)}% {live ? 'ARB' : 'HOLD'}
         </div>
-        <div className="mono odds-sub">{a.feeLeg ? 'NET OF KALSHI FEE' : '\u00a0'}</div>
+        <div className="mono odds-sub">{a.feeLeg ? 'Net of Kalshi fee' : '\u00a0'}</div>
       </td>
       <td className="odds-ev">
         <div className="flex items-center gap-2">
@@ -269,7 +269,7 @@ export function OutlierTableRow({
           +{r.payoutPremiumPct.toFixed(1)}% MKT
         </div>
         <div className="mono odds-sub" style={{ color: r.trueEvPct != null && r.trueEvPct > 0 ? GREEN : 'var(--color-text-secondary)' }}>
-          {r.trueEvPct != null ? `${signed(r.trueEvPct)}% EV` : 'NO FAIR EV'}
+          {r.trueEvPct != null ? `${signed(r.trueEvPct)}% EV` : 'No fair EV'}
         </div>
       </td>
       {columns.map(c => {

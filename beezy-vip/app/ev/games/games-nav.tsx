@@ -9,8 +9,8 @@ export const SPORT_TABS: { key: GameSport; label: string }[] = [
   { key: 'nhl', label: 'NHL' },
 ]
 const VIEW_TABS: { key: GamesView; label: string; title: string }[] = [
-  { key: 'board', label: 'BOARD', title: 'One row per game with the best price at every market; double-click a game for its card' },
-  { key: 'table', label: 'ALL LINES', title: 'Every game, market and line in one table, with a column per book' },
+  { key: 'board', label: 'Board', title: 'One row per game with the best price at every market; double-click a game for its card' },
+  { key: 'table', label: 'All lines', title: 'Every game, market and line in one table, with a column per book' },
 ]
 
 /** `table` (and the old `prices` links) open the all-lines table; everything else, including the retired `model` and `analysis` views, is the board. */

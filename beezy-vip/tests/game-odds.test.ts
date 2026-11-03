@@ -43,8 +43,8 @@ describe('labels and the spread line sign', () => {
     expect(lineLabel(row({ books: [] }))).toBe('ML')
   })
   it('formats the age', () => {
-    expect(ageText(12)).toBe('12 MIN')
-    expect(ageText(150)).toBe('2.5 H')
+    expect(ageText(12)).toBe('12 min')
+    expect(ageText(150)).toBe('2.5 h')
     expect(ageText(null)).toBe('--')
   })
 })

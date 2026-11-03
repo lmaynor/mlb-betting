@@ -171,7 +171,7 @@ function PostToX({ sheets }: { sheets: Sheet[] }) {
               <span className="ui-heading text-mini text-text-primary">{sh.label}</span>
               <span className="mono text-micro text-border-button-active">{n}/{POST_LIMIT}</span>
               <div  className="flex-1"/>
-              <button onClick={() => copy(sh.id, sh.text)} className="mono" style={copyBtn(copied === sh.id)}>{copied === sh.id ? 'COPIED' : 'COPY'}</button>
+              <button onClick={() => copy(sh.id, sh.text)} className="mono" style={copyBtn(copied === sh.id)}>{copied === sh.id ? 'Copied' : 'COPY'}</button>
             </div>
             <textarea readOnly value={sh.text} rows={sh.lines + 2} onFocus={e => e.currentTarget.select()} aria-label={`${sh.label} post`} className="mono" style={field} />
             {sh.lines < sh.offered && <p className="text-mini text-text-secondary" style={{ margin: '4px 0 0' }}>Showing {sh.lines} of {sh.offered}: the lowest-ranked {sh.offered - sh.lines === 1 ? 'pick was' : 'picks were'} cut so the post fits {POST_LIMIT}.</p>}
@@ -182,7 +182,7 @@ function PostToX({ sheets }: { sheets: Sheet[] }) {
         <div className="flex items-center gap-2.5 mb-1.5">
           <span className="ui-heading text-mini text-text-primary">Reply</span>
           <div  className="flex-1"/>
-          <button onClick={() => copy('reply', LINK_REPLY)} className="mono" style={copyBtn(copied === 'reply')}>{copied === 'reply' ? 'COPIED' : 'COPY'}</button>
+          <button onClick={() => copy('reply', LINK_REPLY)} className="mono" style={copyBtn(copied === 'reply')}>{copied === 'reply' ? 'Copied' : 'COPY'}</button>
         </div>
         <textarea readOnly value={LINK_REPLY} rows={3} onFocus={e => e.currentTarget.select()} aria-label="Link reply" className="mono" style={field} />
       </div>
@@ -247,6 +247,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
 
   return (
     <div className="bg-background-full flex flex-col items-center pt-4.5 px-3 pb-10">
+      <h1 className="sr-only">Daily Card</h1>
       <div className="cheat-sheet-layout">
         <div className="w-full max-w-[390px] border border-separator-border bg-background-full rounded-[var(--radius)] overflow-hidden shrink-0">
           {/* Header */}
@@ -275,7 +276,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
               </div>
               <button onClick={() => setExpanded(allExpanded ? new Set() : new Set(shown.map(p => p.key)))} className="mono text-micro bg-transparent py-1 px-[7px] cursor-pointer whitespace-nowrap"
                 style={{ color: allExpanded ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', border: `1px solid ${allExpanded ? 'var(--color-border-button-active)' : 'var(--color-separator-border)'}` }}>
-                {allExpanded ? 'COLLAPSE' : 'EXPAND'}
+                {allExpanded ? 'Collapse' : 'Expand'}
               </button>
             </div>
 
@@ -306,7 +307,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
               ) : (
                 <>
                   <div className="mono text-micro text-text-secondary mb-3.5 text-center">
-                    NO OFFICIAL PLAYS YET. A PLAY POSTS ONLY WHEN IT CLEARS THE GATE, SO SOME DAYS HAVE NONE.
+                    No official plays yet. A play posts only when it clears the gate, so some days have none.
                   </div>
                   {yesterday.length > 0 && (
                     <>
@@ -330,7 +331,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
           <div className="border-t border-t-[color:var(--color-separator-border)] py-[11px] px-4 flex items-center gap-2.5 bg-background-full">
             <button onClick={handleShare} className="ui-heading text-micro py-[6px] px-3 text-black border border-separator-border rounded-[var(--radius)] cursor-pointer whitespace-nowrap"
               style={{ background: 'var(--signal)' }}>
-              {copied ? 'COPIED' : 'SHARE CARD'}
+              {copied ? 'Copied' : 'Share card'}
             </button>
             <div  className="flex-1"/>
             <BrandWordmark size="sm" />
@@ -376,7 +377,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
         </aside>
       </div>
 
-      <Link href="/picks" className="mono cheat-sheet-picks-link mt-4 text-micro text-text-secondary no-underline">ALL PICKS &rarr;</Link>
+      <Link href="/picks" className="mono cheat-sheet-picks-link mt-4 text-micro text-text-secondary no-underline">All picks &rarr;</Link>
     </div>
   )
 }

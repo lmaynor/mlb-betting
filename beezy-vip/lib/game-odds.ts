@@ -57,7 +57,7 @@ export const GAME_ODDS_MARKETS = ['ml', 'spread', 'total'] as const
 export const GAME_ODDS_MAX_LIMIT = 5000
 /** Fewest reference books behind a fair value (the Odds Terminal's MIN_REF): below it a row shows prices only. */
 export const GAME_MIN_REF = 3
-export const GAME_PRICES_LABEL = 'UNVALIDATED'
+export const GAME_PRICES_LABEL = 'Unvalidated'
 export const GAME_PRICES_NOTE = 'market prices, not a tested edge'
 
 // ------------------------------------------------------------------------------------------------------ query validation
@@ -175,7 +175,7 @@ export function freshnessBin(mins: number | null | undefined, stale = false): Fr
 
 export function ageText(mins: number | null | undefined): string {
   if (mins == null || !isFinite(mins)) return '--'
-  return mins < 90 ? `${Math.max(1, Math.round(mins))} MIN` : mins < 2880 ? `${(mins / 60).toFixed(1)} H` : `${Math.round(mins / 1440)} D`
+  return mins < 90 ? `${Math.max(1, Math.round(mins))} min` : mins < 2880 ? `${(mins / 60).toFixed(1)} h` : `${Math.round(mins / 1440)} d`
 }
 
 // ----------------------------------------------------------------------------------------------------------- view model

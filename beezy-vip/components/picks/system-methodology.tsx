@@ -63,10 +63,10 @@ export function SystemMethodology({ system }: { system: PickSystem }) {
         <div>
           <div className="ui-heading text-micro mb-2" style={{ color: pillar.accent }}>Live board accuracy</div>
           <div className="flex gap-y-2.5 gap-x-7 flex-wrap">
-            <Stat label="SAMPLE" value={live.sample} />
+            <Stat label="Sample" value={live.sample} />
             <Stat label="PLAYER-GAMES" value={live.n.toLocaleString('en-US')} />
             <Stat label="MAE (ENGINE VS L5)" value={pair(live.mae, live.baselineMae, live.mae >= 10 ? 1 : 3)} title="Mean absolute error of the projection on past games, using only earlier games; L5 is the player's average over the last five. Lower is better." />
-            <Stat label="MAE CHANGE" value={`${live.dMae <= 0 ? '' : '+'}${((live.dMae / live.baselineMae) * 100).toFixed(1)}% (se ${((live.dMaeSe / live.baselineMae) * 100).toFixed(1)}%)`} title="Paired over the same games, as a share of the L5 error; negative means the engine is more accurate." />
+            <Stat label="MAE change" value={`${live.dMae <= 0 ? '' : '+'}${((live.dMae / live.baselineMae) * 100).toFixed(1)}% (se ${((live.dMaeSe / live.baselineMae) * 100).toFixed(1)}%)`} title="Paired over the same games, as a share of the L5 error; negative means the engine is more accurate." />
           </div>
           <div className="mt-2 text-text-secondary text-[12px]">{live.method}. Accuracy of the projection only; it says nothing about beating a price.</div>
         </div>
@@ -74,10 +74,10 @@ export function SystemMethodology({ system }: { system: PickSystem }) {
       <div>
         <div className="ui-heading text-micro mb-2" style={{ color: pillar.accent }}>Research model validation</div>
         <div className="flex gap-y-2.5 gap-x-7 flex-wrap">
-          <Stat label="SAMPLE" value={v?.sample ?? '--'} />
+          <Stat label="Sample" value={v?.sample ?? '--'} />
           <Stat label="MAE (MODEL VS BASELINE)" value={v ? pair(v.mae, v.baselineMae, 3) : '--'} title="Lower is better; the baseline is the best trailing-average forecaster in the study" />
           <Stat label="CRPS (MODEL VS BASELINE)" value={v ? pair(v.crps, v.baselineCrps, 3) : '--'} />
-          <Stat label="BRIER" value={fmt(v?.brier, 4)} />
+          <Stat label="Brier" value={fmt(v?.brier, 4)} />
           <Stat label="ECE" value={fmt(v?.ece, 4)} />
           <Stat label="BLEND c (t)" value={model?.blend ? `${model.blend.c >= 0 ? '+' : ''}${model.blend.c.toFixed(2)} (${model.blend.t >= 0 ? '+' : ''}${model.blend.t.toFixed(1)})` : '--'} title="c > 0 with a large t: the trained research model adds information beyond the market. It does not say the information is tradable." />
         </div>

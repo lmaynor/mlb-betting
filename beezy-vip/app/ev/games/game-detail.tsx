@@ -107,7 +107,7 @@ export function GameDetail({ game, bettable, ageLabel, embedded = false }: { gam
             <div className="mono text-[12px] text-text-secondary">{game.sport.toUpperCase()} &middot; {startLabel(game.start)}</div>
           </div>
         </div>
-        <span className="mono text-[11px] font-semibold text-warn border border-[color:#facc1555] rounded-chip py-0 px-[6px]" title="Prices are market data; the model is an estimate with no tested edge.">{m ? 'UNVALIDATED MODEL ESTIMATE' : GAME_PRICES_LABEL}</span>
+        <span className="mono text-[11px] font-semibold text-warn border border-[color:#facc1555] rounded-chip py-0 px-[6px]" title="Prices are market data; the model is an estimate with no tested edge.">{m ? 'Unvalidated model estimate' : GAME_PRICES_LABEL}</span>
       </header>}
 
       <dl className="mono grid m-0 border-y border-separator-border text-compact" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }} data-testid="detail-strip">

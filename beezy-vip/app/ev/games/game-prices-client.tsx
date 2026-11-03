@@ -117,8 +117,8 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
     <div>
       <div className="flex items-center gap-y-[6px] gap-x-[14px] flex-wrap min-h-[38px] py-[6px] px-[14px] mb-[10px] bg-background-primary-default text-compact" data-testid="game-prices-strip" style={{ border: `1px solid ${HAIR}`, borderRadius: '8px' }}>
         <span className="mono font-semibold text-text-primary">{sportLabel}</span>
-        <span className="mono text-neutral-300">{visible.length} ROWS</span>
-        <span className="mono text-neutral-300" title={active.map(f => f.lines_source).filter(Boolean).join(', ') || undefined}>LINES {ageText(age)} OLD</span>
+        <span className="mono text-neutral-300">{visible.length} rows</span>
+        <span className="mono text-neutral-300" title={active.map(f => f.lines_source).filter(Boolean).join(', ') || undefined}>Lines {ageText(age)} old</span>
         {stale && <span className="mono text-[11px] font-semibold text-warn border border-[color:#facc1555] rounded-chip py-0 px-[5px]">Stale</span>}
         <span className="text-neutral-300">
           <span className="mono text-[11px] font-semibold text-warn">{GAME_PRICES_LABEL}</span> {GAME_PRICES_NOTE}
@@ -140,7 +140,7 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
               {MARKETS.map(m => <Pill key={m.key} active={market === m.key} onClick={() => { setMarket(m.key); reset() }}>{m.label}</Pill>)}
             </PillGroup>
             <Select id="gp-game" label="GAME" value={game} onChange={v => { setGame(v); reset() }} options={[{ v: 'all', l: 'All games' }, ...games.map(g => ({ v: g.key, l: g.label }))]} />
-            <Select id="gp-minev" label="MIN EV" value={String(minEv)} onChange={v => { setMinEv(Number(v)); reset() }} options={MIN_EV} />
+            <Select id="gp-minev" label="Min EV" value={String(minEv)} onChange={v => { setMinEv(Number(v)); reset() }} options={MIN_EV} />
             <BookPicker label={refs.length ? `Reference books (${refs.length})` : 'Reference books (all)'} books={bookList} selected={refs} onChange={setRefs} presets={refPresets} emptyMeansAll
               note="The fair value is the average of each reference book's own de-vigged price, leaving out the book you would bet at. It needs 3 reference books on the line. Default: every book." />
             <BookPicker label={`Books shown (${columns.length})`} books={bookList} selected={shown ?? defaultShown} onChange={setShown} presets={shownPresets}

@@ -68,7 +68,7 @@ describe('unified projections board', () => {
     expect(t.getByText('Model + market')).toBeInTheDocument()
     expect(document.querySelectorAll('thead').length).toBe(1)
     expect(screen.getAllByRole('columnheader').map(h => h.textContent)).toEqual(
-      ['SCORE', 'PLAYER', 'TEAM', 'MARKET & LINE', 'MODEL', 'MARKET FAIR', 'FORM', 'BEST PRICE', 'MODEL EDGE', 'PRICE EV'])
+      ['Score', 'Player', 'Team', 'Market & line', 'Model', 'Market fair', 'Form', 'Best price', 'Model edge', 'Price EV'])
   })
 
   it('the team column falls back to the matchup only when the feed does not name the player\'s team', () => {
@@ -107,15 +107,15 @@ describe('unified projections board', () => {
 
   it('leaves out a column nothing fills instead of printing a column of dashes', () => {
     render(board([rotation]))
-    expect(screen.getAllByRole('columnheader').map(h => h.textContent)).not.toContain('MARKET FAIR')
+    expect(screen.getAllByRole('columnheader').map(h => h.textContent)).not.toContain('Market fair')
     expect(screen.getAllByRole('columnheader').map(h => h.textContent)).not.toContain('RESULT')
-    expect(screen.getAllByRole('columnheader').map(h => h.textContent)).toContain('FORM')
+    expect(screen.getAllByRole('columnheader').map(h => h.textContent)).toContain('Form')
   })
 
   it('shows a RESULT column when a settled pick is on the board', () => {
     const rows = fromSportProjections([row()]).map(r => ({ ...r, result: 'win' as const }))
     render(<SportProjectionsBoard sport="nba" rows={rows} />)
-    expect(screen.getByRole('columnheader', { name: 'RESULT' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Result' })).toBeInTheDocument()
     expect(screen.getByText('WIN')).toBeInTheDocument()
   })
 
@@ -145,11 +145,11 @@ describe('sport tabs', () => {
     render(<SportTabs sport={sport} active="picks" />)
     expect(screen.getByText(SPORT_PILLARS[sport].shortName)).toBeInTheDocument()
     expect(screen.getByText(new RegExp(`${getSystemsBySport(sport).length} Systems`))).toBeInTheDocument()
-    expect(screen.getAllByRole('link').map(a => a.textContent)).toEqual(['PICKS & +EV', 'SYSTEMS'])
-    expect(screen.getByRole('link', { name: 'PICKS & +EV' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.queryByRole('link', { name: 'ALL PROJECTIONS' })).toBeNull()
-    expect(screen.getByRole('link', { name: 'PICKS & +EV' })).toHaveAttribute('href', `/picks/${sport}`)
-    expect(screen.getByRole('link', { name: 'SYSTEMS' })).toHaveAttribute('href', `/picks/${sport}/systems`)
+    expect(screen.getAllByRole('link').map(a => a.textContent)).toEqual(['Picks & +EV', 'Systems'])
+    expect(screen.getByRole('link', { name: 'Picks & +EV' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByRole('link', { name: 'All projections' })).toBeNull()
+    expect(screen.getByRole('link', { name: 'Picks & +EV' })).toHaveAttribute('href', `/picks/${sport}`)
+    expect(screen.getByRole('link', { name: 'Systems' })).toHaveAttribute('href', `/picks/${sport}/systems`)
   })
   it('the header counts match the specified systems per sport', () => {
     expect(['mlb', 'nfl', 'nhl', 'nba'].map(s => getSystemsBySport(s as 'mlb').length)).toEqual([10, 10, 7, 10])
@@ -230,7 +230,7 @@ describe('pricing', () => {
     expect(ANNUAL_SAVINGS_PCT).toBe(36)
     expect(ANNUAL_PER_MONTH.toFixed(2)).toBe('24.92')
     expect(screen.getByText(/save 36%/)).toBeInTheDocument()
-    expect(screen.getByText(/HOW THE DUAL-ENGINE TERMINAL WORKS/)).toBeInTheDocument()
+    expect(screen.getByText(/How the dual-engine terminal works/)).toBeInTheDocument()
     expect(screen.getByText(/STRONG \(70\+\)/)).toBeInTheDocument()      // the published v2 cut, not the old 65
   })
   it('the single-sport league picker changes the plan copy and exposes four leagues', () => {

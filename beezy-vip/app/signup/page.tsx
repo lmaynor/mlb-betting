@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { apiGetStats } from '@/lib/betting-api'
-import { SYSTEM_COLOR } from '@/lib/tokens'
+import { SYSTEM_COLOR, systemLabel } from '@/lib/tokens'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Join beezy.fyi' }
@@ -53,7 +53,7 @@ export default async function SignupPage() {
               return (
                 <div key={s.system} className="mb-3.5">
                   <div className="mb-1.5 flex justify-between">
-                    <span className="mono text-mini font-semibold" style={{ color: s.color }}>{s.system}</span>
+                    <span className="mono text-mini font-semibold" style={{ color: s.color }}>{systemLabel(s.system)}</span>
                     <span className="mono text-micro text-text-secondary">{count >= 200 ? `200+ (${count.toLocaleString()})` : `${count}/200`}</span>
                   </div>
                   <div className="h-[7px] overflow-hidden rounded-full bg-chart-track">

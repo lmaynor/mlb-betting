@@ -7,7 +7,7 @@ import { getModelSpec } from '@/lib/model-specs'
 import { getSystemsBySport } from '@/lib/pick-systems'
 import { liveAccuracy } from '@/lib/prop-model-specs'
 import { SPORT_PILLARS, STATUS_LABEL, type ProjectionSport, type SportSlug } from '@/lib/sports'
-import { SYSTEM_PILL } from '@/lib/tokens'
+import { SYSTEM_PILL, systemLabel } from '@/lib/tokens'
 import { asOfLabel } from '@/lib/seo'
 import { cx } from '@/utils/cx'
 
@@ -150,7 +150,7 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
             return (
               <div key={model.system} className={cx('grid items-center transition-colors hover:bg-background-primary-hover', i < ACTIVE_MODELS.length - 1 && 'border-b border-border-table')} style={{ gridTemplateColumns: '110px 1fr 88px 88px 72px' }}>
                 <div className="p-3">
-                  <span className="mono mb-1 inline-block rounded-full px-2 py-[3px] text-micro font-semibold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{model.system}</span>
+                  <span className="mono mb-1 inline-block rounded-full px-2 py-[3px] text-micro font-semibold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{systemLabel(model.system)}</span>
                   <div className="mono text-micro text-text-secondary">{model.version}</div>
                 </div>
                 <div className="p-3 text-caption-1-regular text-text-secondary">{model.desc}</div>
@@ -176,7 +176,7 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
             return (
               <Link key={model.system} href={model.href} className="mb-2.5 block rounded-2lg border border-separator-border bg-background-primary-default p-[13px] no-underline">
                 <div className="mb-[9px] flex justify-between gap-3">
-                  <span className="mono rounded-full px-2 py-[3px] text-micro font-semibold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{model.system}</span>
+                  <span className="mono rounded-full px-2 py-[3px] text-micro font-semibold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{systemLabel(model.system)}</span>
                   <span className="mono text-micro text-text-secondary">{model.metricLabel}: <strong className="text-text-primary">{model.metric}</strong></span>
                 </div>
                 <p className="mb-2.5 text-caption-1-regular text-text-secondary">{model.desc}</p>
@@ -198,7 +198,7 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
             const slug = getModelSpec(model.system.toLowerCase().replace(/_/g, '-'))?.slug
             const body = (
               <>
-                <span className="mono mb-[9px] inline-block rounded-full px-2 py-[3px] text-micro font-semibold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{model.system}</span>
+                <span className="mono mb-[9px] inline-block rounded-full px-2 py-[3px] text-micro font-semibold" style={{ background: pill.bg, color: pill.color, border: pill.border }}>{systemLabel(model.system)}</span>
                 <div className="mb-[5px] text-body-2-bold text-text-primary">{model.label}</div>
                 <p className="text-caption-2-regular text-text-secondary">{model.note}</p>
                 {slug && <div className="times mt-2 text-caption-1-semibold text-link">Detail &rarr;</div>}

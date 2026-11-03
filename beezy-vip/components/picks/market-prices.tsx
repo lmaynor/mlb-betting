@@ -90,7 +90,7 @@ function OutlierTable({ rows, sport, confluence }: { rows: EvBookOutlierRow[]; s
                 <td className="mono py-2.5 px-3">{r.p_fair != null ? `${(r.p_fair * 100).toFixed(1)}%` : '--'}</td>
                 <td className="mono py-[10px] px-3" style={{ color: r.n_books >= 3 ? 'var(--color-neutral-300)' : 'var(--warn)' }}>{r.n_books}</td>
                 <td className="mono py-[10px] px-3 font-semibold" style={{ color: r.ev >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{r.ev >= 0 ? '+' : ''}{(r.ev * 100).toFixed(1)}%</td>
-                <td className="ui-heading py-[10px] px-3 text-micro" style={{ color: r.flag ? '#f59e0b' : 'var(--color-text-secondary)' }}>{r.flag ? 'FLAGGED' : reasonLabel(r.reason)}</td>
+                <td className="ui-heading py-[10px] px-3 text-micro" style={{ color: r.flag ? '#f59e0b' : 'var(--color-text-secondary)' }}>{r.flag ? 'Flagged' : reasonLabel(r.reason)}</td>
               </tr>
             )
           })}

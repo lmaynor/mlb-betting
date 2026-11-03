@@ -3,8 +3,8 @@ import Link from 'next/link'
 export type ResearchView = 'cockpit' | 'projections'
 
 const TABS: { id: ResearchView; label: string; href: string; title: string }[] = [
-  { id: 'cockpit', label: 'PROP COCKPIT', href: '/edge', title: 'Flagged lines with last-10 game logs and every book price' },
-  { id: 'projections', label: 'ALL PROJECTIONS', href: '/ev/projections', title: 'The model number for every player prop on the slate, priced or not' },
+  { id: 'cockpit', label: 'Prop cockpit', href: '/edge', title: 'Flagged lines with last-10 game logs and every book price' },
+  { id: 'projections', label: 'All projections', href: '/ev/projections', title: 'The model number for every player prop on the slate, priced or not' },
 ]
 
 /** The two halves of Prop Research: the flagged-line cockpit, and the model's projection for every player prop. */

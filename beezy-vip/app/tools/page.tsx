@@ -34,7 +34,7 @@ export default function ToolsPage() {
       <div className="overflow-x-auto rounded-xl border border-separator-border bg-background-primary-default shadow-card">
         <table className="w-full min-w-[560px] border-collapse">
           <thead>
-            <tr><th className={TH}>TOOL</th><th className={TH}>What it does</th><th className={TH}>Access</th></tr>
+            <tr><th className={TH}>Tool</th><th className={TH}>What it does</th><th className={TH}>Access</th></tr>
           </thead>
           <tbody>
             {TOOLS.map(t => (
@@ -43,7 +43,7 @@ export default function ToolsPage() {
                   <Link href={t.href} className="text-body-semibold text-text-primary no-underline">{t.title}</Link>
                 </td>
                 <td className={`${TD} text-body-2-regular text-text-secondary`}>{t.description}</td>
-                <td className={`mono ${TD} whitespace-nowrap text-caption-2-semibold`} style={{ color: ACCESS_COLOR[t.access] }}>{t.access.toUpperCase()}</td>
+                <td className={`mono ${TD} whitespace-nowrap text-caption-2-semibold`} style={{ color: ACCESS_COLOR[t.access] }}>{t.access}</td>
               </tr>
             ))}
           </tbody>

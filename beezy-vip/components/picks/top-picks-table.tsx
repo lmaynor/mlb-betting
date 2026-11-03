@@ -86,7 +86,7 @@ export function TopPicksTable({ picks, showResult = false, startRank = 1 }: { pi
                   )}
                 </td>
                 {showResult && (
-                  <td className={cx('ui-heading', TD)} style={{ color: res?.color ?? 'var(--link)' }}>{res?.label ?? 'PENDING'}</td>
+                  <td className={cx('ui-heading', TD)} style={{ color: res?.color ?? 'var(--link)' }}>{res?.label ?? 'Pending'}</td>
                 )}
               </tr>
             )

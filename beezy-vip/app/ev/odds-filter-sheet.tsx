@@ -73,7 +73,7 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
             <div>
               <div className="ui-heading mb-1.5 text-micro text-text-secondary">O/U</div>
               <PillGroup>
-                {(['both', 'over', 'under'] as SideFilter[]).map(s => <Pill key={s} active={side === s} onClick={() => setSide(s)}>{s.toUpperCase()}</Pill>)}
+                {(['both', 'over', 'under'] as SideFilter[]).map(s => <Pill key={s} active={side === s} onClick={() => setSide(s)}>{s.charAt(0).toUpperCase() + s.slice(1)}</Pill>)}
               </PillGroup>
             </div>
             <div>
@@ -316,7 +316,7 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
           </div>
 
         <MobileBookChecklist
-          title="SPORTSBOOKS"
+          title="Sportsbooks"
           subtitle="Columns shown and books you can bet at. Offshore books show price but never count as best."
           books={bookList}
           selected={[...shownSet]}
@@ -330,7 +330,7 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
         />
 
         <MobileBookChecklist
-          title="REFERENCE BOOKS"
+          title="Reference books"
           subtitle={`Fair value is the equal-weight average of these books' de-vigged lines. None selected uses every book. ${refsNote}`}
           books={bookList}
           selected={refs}

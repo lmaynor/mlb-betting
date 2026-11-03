@@ -260,7 +260,7 @@ function m_edge(edge: number): string {
 export function GameLinesNotice({ label, validated }: { label: string; validated: boolean }) {
   return (
     <div role="note" style={{ ...SURFACE_CARD, padding: '8px 12px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px 12px', flexWrap: 'wrap', borderLeft: `3px solid ${validated ? GREEN : '#facc15'}` }}>
-      <span className="mono text-[11px] font-semibold" data-testid="game-lines-label" style={{ color: validated ? GREEN : '#facc15' }}>{label.toUpperCase()}</span>
+      <span className="mono text-[11px] font-semibold" data-testid="game-lines-label" style={{ color: validated ? GREEN : '#facc15' }}>{label}</span>
       <span className="text-compact text-neutral-300">
         MODEL DIFF is the model&apos;s probability minus the market&apos;s fair probability. It is not an edge until a backtest supports it.
       </span>

@@ -39,7 +39,7 @@ describe('/ev/games view and sport routing (server-side)', () => {
     expect(projMock.mock.calls.map(c => c[0]).sort()).toEqual(['nba', 'nhl'])
     expect(screen.getByTestId('best-board')).toBeInTheDocument()
     expect(screen.getAllByTestId('board-row').length).toBeGreaterThan(0)
-    expect(screen.getByRole('link', { name: 'BOARD' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Board' })).toHaveAttribute('aria-current', 'page')
     expect(screen.queryByTestId('game-popup')).toBeNull()
   })
   it('an analysis link opens that game\'s card straight on its Analysis tab', async () => {
@@ -66,12 +66,12 @@ describe('/ev/games view and sport routing (server-side)', () => {
     expect(oddsMock.mock.calls.map(c => c[0])).toEqual(['nba'])
     expect(projMock).not.toHaveBeenCalled()
     expect(screen.getByTestId('game-prices-strip')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'ALL LINES' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'All lines' })).toHaveAttribute('aria-current', 'page')
   })
   it('cuts the price feed on the server for a free viewer before it reaches the client', async () => {
     getViewerMock.mockResolvedValue({ tier: 'public', sport: null })
     render(await page({ view: 'table', sport: 'nba' }))
-    expect(screen.getByTestId('game-prices-strip').textContent).toMatch(/5 ROWS/)
+    expect(screen.getByTestId('game-prices-strip').textContent).toMatch(/5 rows/)
     expect(screen.getByRole('note').textContent).toMatch(/3/)
   })
 })

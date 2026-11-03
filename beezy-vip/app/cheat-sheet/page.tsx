@@ -43,7 +43,7 @@ function logoUrl(abbrev: string | null): string | null {
 }
 
 function dateLabel(): string {
-  return formatCentralDate(new Date(), { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()
+  return formatCentralDate(new Date(), { weekday: 'long', month: 'long', day: 'numeric' })
 }
 
 // bets.sport is mlb unless a row says otherwise (lib/sport-assets handles nhl / nba logos)

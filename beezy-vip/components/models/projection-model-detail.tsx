@@ -74,7 +74,7 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
         <div className="flex items-center gap-3 mb-2.5 flex-wrap">
           <h1 className="ui-display text-[30px] text-text-primary">{pillar.shortName} {system.name}</h1>
           <span className="mono text-mini text-neutral-300 py-[3px] px-[10px]" style={{ border: B, borderRadius: 'var(--radius-pill)' }}>empirical_ewm_v2</span>
-          <span className="ui-heading" style={{ fontSize: '10px', color, border: `1px solid ${color}66`, borderRadius: '6px', padding: '2px 8px' }}>{gap ? 'DATA GAP' : 'UNVALIDATED'}</span>
+          <span className="ui-heading" style={{ fontSize: '10px', color, border: `1px solid ${color}66`, borderRadius: '6px', padding: '2px 8px' }}>{gap ? 'Data gap' : 'Unvalidated'}</span>
         </div>
         <p className="text-cozy text-neutral-300 leading-[1.65] max-w-[640px] mb-2.5">{system.description}</p>
         <Link href={`/picks/${sport}/${system.slug}`} className="times text-cozy text-link no-underline">

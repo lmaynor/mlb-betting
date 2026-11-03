@@ -6,7 +6,7 @@ import {
   Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea,
 } from 'recharts'
 import type { CLVDataPoint } from '@/lib/types'
-import { B, SYSTEM_COLOR } from '@/lib/tokens'
+import { B, SYSTEM_COLOR, systemLabel } from '@/lib/tokens'
 
 // ---- constants ---------------------------------------------------------------
 
@@ -214,7 +214,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
         {ALL_SYSTEMS.map(sys => (
           <Chip
             key={sys}
-            label={sys}
+            label={systemLabel(sys)}
             color={SYSTEM_COLOR[sys]}
             active={activeSystems.length === 0 || activeSystems.includes(sys)}
             onClick={() => toggleSystem(sys)}

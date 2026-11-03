@@ -127,7 +127,7 @@ function NavShell({ isSignedIn, userButton, signIn }: {
               <>
                 {signIn}
                 <Link href="/pricing" className="whitespace-nowrap rounded-md bg-signal px-3 py-2 text-caption-1-bold text-background-secondary-default no-underline hover:bg-[#7bf5a4]">
-                  {PRE_LAUNCH ? 'JOIN WAITLIST' : 'UPGRADE TO PRO'}
+                  {PRE_LAUNCH ? 'Join waitlist' : 'Upgrade to Pro'}
                 </Link>
               </>
             )}
@@ -165,7 +165,7 @@ function NavShell({ isSignedIn, userButton, signIn }: {
                 <>
                   {signIn}
                   <Link href="/pricing" className="rounded-lg bg-signal text-caption-1-bold text-background-secondary-default no-underline">
-                    {PRE_LAUNCH ? 'JOIN WAITLIST' : 'UPGRADE TO PRO'}
+                    {PRE_LAUNCH ? 'Join waitlist' : 'Upgrade to Pro'}
                   </Link>
                 </>
               )}

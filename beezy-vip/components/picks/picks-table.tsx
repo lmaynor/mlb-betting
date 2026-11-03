@@ -33,7 +33,7 @@ function ResultPill({ result }: { result: string | null }) {
     void: { label: 'VOID', color: 'var(--color-text-secondary)',    bg: 'var(--slate)',     border: '1px solid var(--color-border-button-default)' },
   }
   const r = result?.toLowerCase() ?? ''
-  const c = cfg[r] ?? { label: 'PENDING', color: 'var(--link)', bg: 'color-mix(in oklab, var(--link) 14%, var(--color-background-full))', border: '1px solid color-mix(in oklab, var(--link) 38%, var(--color-background-full))' }
+  const c = cfg[r] ?? { label: 'Pending', color: 'var(--link)', bg: 'color-mix(in oklab, var(--link) 14%, var(--color-background-full))', border: '1px solid color-mix(in oklab, var(--link) 38%, var(--color-background-full))' }
   return (
     <span className="ui-heading inline-flex items-center py-[3px] px-2 text-micro" style={{
       borderRadius: 'var(--radius-pill)',
@@ -65,7 +65,7 @@ function CompactScore({ bet, align = 'left' }: { bet: Bet; align?: 'left' | 'cen
   const isOfficial = edge >= 0.03 && edge <= 0.10 && score >= 68 && bet.validated !== false
   const isOutlier = edge >= 0.025 && edge <= 0.15 && !isOfficial && bet.system === 'EV'
   const badgeColor = isOfficial ? '#57F287' : isOutlier ? '#38bdf8' : undefined
-  const badgeLabel = isOfficial ? 'OFFICIAL PLAY' : isOutlier ? '+EV OUTLIER' : null
+  const badgeLabel = isOfficial ? 'Official play' : isOutlier ? '+EV OUTLIER' : null
 
   return (
     <div className="flex flex-col gap-[2px]" title={explainScore(bet)} style={{ alignItems: align === 'center' ? 'center' : 'flex-start' }}>
@@ -341,14 +341,14 @@ export function PicksTable({ bets, sort: initSort = 'score', dir: initDir = 'des
 
   const COLS: { label: string; sortKey?: SortKey }[] = [
     { label: 'DATE', sortKey: 'date' },
-    { label: 'SCORE', sortKey: 'score' },
-    { label: 'SYSTEM' },
+    { label: 'Score', sortKey: 'score' },
+    { label: 'System' },
     { label: 'GAME' },
     { label: 'PICK' },
     { label: 'ODDS', sortKey: 'odds' },
     { label: 'EDGE', sortKey: 'edge' },
     { label: 'BOOK' },
-    { label: 'RESULT' },
+    { label: 'Result' },
     { label: 'P&L' },
   ]
 

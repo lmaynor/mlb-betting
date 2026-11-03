@@ -15,15 +15,15 @@ const TH = { ...TABLE_TH, textAlign: 'left', position: 'sticky', top: 0, whiteSp
 const TD = { ...TABLE_TD, verticalAlign: 'middle', whiteSpace: 'nowrap' } as const
 const PAGE = 80
 /** columns a phone drops from the row (they move into the tap-to-open detail line): the table keeps SCORE, PLAYER, PICK, MODEL, BEST PRICE and EDGE */
-const HIDE_ON_PHONE = new Set(['TEAM', 'MARKET FAIR', 'FORM', 'PRICE EV', 'RESULT', 'RANGE', 'MODEL VS MARKET'])
+const HIDE_ON_PHONE = new Set(['Team', 'Market fair', 'Form', 'Price EV', 'Result', 'Range', 'Model vs market'])
 const TAP_PX = 44
 const HEAD_TIPS: Record<string, string> = {
   SCORE: 'Beezy Score, 0-100: how strong the play is. Not a win probability.',
-  'MARKET FAIR': 'The books\' consensus probability for this side with the vig removed.',
+  'Market fair': 'The books\' consensus probability for this side with the vig removed.',
   RANGE: 'The model\'s expected value (the bright tick, lambda) against the book line (the amber rule), inside the model\'s own 10th-90th percentile range. Not a validated interval.',
-  'MODEL VS MARKET': 'The model\'s probability for the listed side over the market\'s de-vigged fair probability. The gap between the bars is the model edge.',
-  'MODEL EDGE': 'Model probability minus market fair probability. It says where the model disagrees with the market. It is not a profit estimate.',
-  'PRICE EV': 'Return on a 1 unit bet at the best price IF the market fair probability is right. Positive means the best price beats the market\'s own fair price.',
+  'Model vs market': 'The model\'s probability for the listed side over the market\'s de-vigged fair probability. The gap between the bars is the model edge.',
+  'Model edge': 'Model probability minus market fair probability. It says where the model disagrees with the market. It is not a profit estimate.',
+  'Price EV': 'Return on a 1 unit bet at the best price IF the market fair probability is right. Positive means the best price beats the market\'s own fair price.',
 }
 
 const pct = (x: number | null | undefined, d = 0) => (x == null ? '--' : `${(x * 100).toFixed(d)}%`)
@@ -66,9 +66,9 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
   const showEv = rows.some(r => r.marketEv != null)
   const showModel = rows.some(r => r.proj != null || r.pModel != null)
   const showRange = visuals && rows.some(r => r.proj != null)
-  const heads = ['SCORE', 'PLAYER', 'TEAM', 'MARKET & LINE', ...(showModel ? ['MODEL'] : []), ...(showRange ? ['RANGE'] : []),
-    ...(showFair ? [visuals ? 'MODEL VS MARKET' : 'MARKET FAIR'] : []),
-    ...(showForm ? ['FORM'] : []), 'BEST PRICE', 'MODEL EDGE', ...(showEv ? ['PRICE EV'] : []), ...(showResult ? ['RESULT'] : [])]
+  const heads = ['Score', 'Player', 'Team', 'Market & line', ...(showModel ? ['Model'] : []), ...(showRange ? ['Range'] : []),
+    ...(showFair ? [visuals ? 'Model vs market' : 'Market fair'] : []),
+    ...(showForm ? ['Form'] : []), 'Best price', 'Model edge', ...(showEv ? ['Price EV'] : []), ...(showResult ? ['Result'] : [])]
 
   return (
     <div>
@@ -184,7 +184,7 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                     </td>
                   )}
                   {showResult && (
-                    <td className="ui-heading pb-hide-m" style={{ ...TD, fontSize: '10px', color: r.result ? RESULT_COLOR[r.result] : 'var(--color-text-secondary)' }}>{r.result ? r.result.toUpperCase() : 'PENDING'}</td>
+                    <td className="ui-heading pb-hide-m" style={{ ...TD, fontSize: '10px', color: r.result ? RESULT_COLOR[r.result] : 'var(--color-text-secondary)' }}>{r.result ? r.result.toUpperCase() : 'Pending'}</td>
                   )}
                 </tr>
                 {isOpen && <DetailRow r={r} span={heads.length} showResult={showResult} visuals={visuals} />}
@@ -227,17 +227,17 @@ function DetailRow({ r, span, showResult, visuals = false }: { r: BoardRow; span
     <tr className="pb-detail">
       <td colSpan={span} style={{ ...TABLE_TD, background: '#0e1016', padding: '10px 12px' }}>
         <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '6px 14px' }}>
-          {item('GAME', r.matchup || '--')}
-          {r.team && item('TEAM', r.team)}
-          {r.pModel != null && item('MODEL', `${pct(r.pModel)} ${r.side === 'under' ? 'under' : 'over'}`)}
-          {visuals && r.proj != null && item('RANGE', <LambdaBar mean={r.proj} p10={r.p10} p90={r.p90} line={r.hasLine ? r.line : null} side={r.side} />)}
-          {r.pFair != null && item('MARKET FAIR', `${pct(r.pFair)}${fair != null ? ` ${formatOdds(fair)}` : ''}${r.nBooks != null ? ` \u00b7 ${r.nBooks} bk` : ''}`)}
-          {(r.l5 != null || r.l10 != null) && item('FORM', `L5 ${pct(r.l5)} \u00b7 L10 ${pct(r.l10)}`)}
+          {item('Game', r.matchup || '--')}
+          {r.team && item('Team', r.team)}
+          {r.pModel != null && item('Model', `${pct(r.pModel)} ${r.side === 'under' ? 'under' : 'over'}`)}
+          {visuals && r.proj != null && item('Range', <LambdaBar mean={r.proj} p10={r.p10} p90={r.p90} line={r.hasLine ? r.line : null} side={r.side} />)}
+          {r.pFair != null && item('Market fair', `${pct(r.pFair)}${fair != null ? ` ${formatOdds(fair)}` : ''}${r.nBooks != null ? ` \u00b7 ${r.nBooks} bk` : ''}`)}
+          {(r.l5 != null || r.l10 != null) && item('Form', `L5 ${pct(r.l5)} \u00b7 L10 ${pct(r.l10)}`)}
           {r.l5 == null && r.l10 == null && (r.avg10 != null || r.avgSzn != null) && item('AVG', `L10 ${num(r.avg10)} \u00b7 szn ${num(r.avgSzn)}`)}
-          {r.marketEv != null && item('PRICE EV', signed(r.marketEv))}
-          {r.confluence && item('SIGNAL', 'Model + market agree')}
-          {showResult && r.result && item('RESULT', r.result.toUpperCase())}
-          {r.engine && item('ENGINE', r.engine)}
+          {r.marketEv != null && item('Price EV', signed(r.marketEv))}
+          {r.confluence && item('Signal', 'Model + market agree')}
+          {showResult && r.result && item('Result', r.result.toUpperCase())}
+          {r.engine && item('Engine', r.engine)}
         </dl>
         {r.sport !== 'mlb' && <div className="mt-2 text-mini text-warn">Unvalidated model output. Paper only, not in the public results.</div>}
       </td>
