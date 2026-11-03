@@ -588,7 +588,7 @@ a { color: inherit; }
   .cockpit-detail,
   .cockpit-detail.is-open {
     display: block; position: sticky; inset: auto; top: calc(146px + env(safe-area-inset-top, 0px)); z-index: auto; background: transparent;
-    padding: 0; max-height: calc(100vh - 162px); overflow-y: auto;
+    padding: 0; max-height: calc(100dvh - 162px); overflow-y: auto;
   }
   .cockpit-close { display: none !important; }
 }
