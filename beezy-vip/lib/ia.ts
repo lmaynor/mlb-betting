@@ -17,13 +17,13 @@
  */
 import type { SportSlug } from '@/lib/sports'
 
-export interface SectionTab { label: string; href: string; /** extra path prefixes that keep this tab active */ also?: string[] }
+export interface SectionTab { label: string; /** shorter label for a phone, where up to four tabs share the row without scrolling */ short?: string; href: string; /** extra path prefixes that keep this tab active */ also?: string[] }
 export interface Section { id: 'scanner' | 'picks' | 'results'; prefixes: string[]; /** paths that belong to the section only when they match exactly */ exact?: string[]; tabs: SectionTab[] }
 
 export const SECTIONS: Section[] = [
   {
     id: 'scanner', prefixes: ['/ev', '/edge'],
-    tabs: [{ label: 'Odds Terminal', href: '/ev' }, { label: 'Projections', href: '/ev/projections' }, { label: 'Game Lines', href: '/ev/games' }, { label: 'Prop Research', href: '/edge' }],
+    tabs: [{ label: 'Odds Terminal', short: 'Odds', href: '/ev' }, { label: 'Projections', href: '/ev/projections' }, { label: 'Game Lines', href: '/ev/games' }, { label: 'Prop Research', short: 'Props', href: '/edge' }],
   },
   {
     // The tab strip is for the all-sports views only; MLB and the other sports are chosen in the ribbon and have their own headers.

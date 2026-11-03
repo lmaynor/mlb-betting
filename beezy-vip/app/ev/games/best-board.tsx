@@ -129,7 +129,7 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen, nav }: { 
     <div>
       <div className="flex items-center justify-between flex-wrap gap-y-2 gap-x-4 mb-3">
         <h1 className="text-[20px] font-semibold text-text-primary m-0 sr-only md:not-sr-only">Game Lines</h1>
-        <div className="flex items-center flex-wrap gap-x-4 gap-y-2" data-testid="game-board-strip">
+        <div className="flex w-full md:w-auto items-center justify-between flex-wrap gap-x-4 gap-y-2" data-testid="game-board-strip">
           {nav}
           <span className="inline-flex items-center gap-x-3 text-[12px] text-text-tertiary">
             <Stoplight bin={freshnessBin(age, stale)} text={age == null ? 'Update time unknown' : `${ageText(age).toLowerCase()} ago`} />
