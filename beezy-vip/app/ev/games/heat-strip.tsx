@@ -21,11 +21,15 @@ export function heatBooks(rungs: readonly { rung: LadderRung }[]): string[] {
   return [...n.keys()].sort((a, b) => rank(a) - rank(b) || (n.get(b)! - n.get(a)!) || a.localeCompare(b))
 }
 
-/** One cell's fill: green for a price that beats the market fair value (stronger = bigger), grey for one that does not, amber for a suspiciously large one. */
-export function heatFill(ev: number): { background: string; color: string; suspect: boolean } {
-  if (ev > LADDER_SUSPECT_EV) return { background: 'rgba(250,204,21,0.7)', color: '#422006', suspect: true }
-  if (ev > 0) return { background: `rgba(87,242,135,${Math.min(0.9, 0.16 + ev * 9).toFixed(2)})`, color: '#0b2e17', suspect: false }
-  return { background: `rgba(125,133,150,${Math.min(0.5, 0.08 + -ev * 7).toFixed(2)})`, color: 'var(--color-text-secondary)', suspect: false }
+/**
+ * One cell's look. Only a price that beats the market fair price carries colour and a number (stronger green = bigger); an unusually
+ * large one is amber and marked "?". A price that does not beat fair is a quiet blank tile (its EV is in the tooltip): how much worse
+ * a book is than fair is not a decision, so it gets no ink.
+ */
+export function heatFill(ev: number): { background: string; color: string; suspect: boolean; show: boolean } {
+  if (ev > LADDER_SUSPECT_EV) return { background: 'rgba(250,204,21,0.22)', color: '#facc15', suspect: true, show: true }
+  if (ev > 0) return { background: `rgba(87,242,135,${Math.min(0.85, 0.18 + ev * 9).toFixed(2)})`, color: '#0b2e17', suspect: false, show: true }
+  return { background: 'rgba(255,255,255,0.04)', color: 'var(--color-text-secondary)', suspect: false, show: false }
 }
 
 /**
@@ -75,22 +79,21 @@ function HeatRow({ h, on, books, sel }: { h: HeatRung; on: boolean; books: strin
       </button>
       {books.map(b => {
         const d = r.dots.find(x => x.book === b)
-        if (!d) return <div key={b} className="h-[30px] rounded-[5px] border border-dashed border-[color:var(--color-separator-border)] opacity-40" />
+        if (!d) return <div key={b} className="h-[28px]" />
         const ev = r.pMarket != null ? r.pMarket * d.decimal - 1 : null
         const fill = ev != null ? heatFill(ev) : null
         const isBest = !d.offshore && b === bestBook
         return (
           <button key={b} type="button" onClick={sel} data-testid={`heat-cell-${h.line ?? 'ml'}-${canonBook(b)}`} data-ev={ev ?? ''} data-best={isBest || undefined} data-suspect={fill?.suspect || undefined}
             title={`${bookDisplay(b).label} on ${h.label}: ${formatOdds(d.american)}${ev != null ? ` (${ev >= 0 ? '+' : ''}${(ev * 100).toFixed(1)}% vs fair)` : ' (no fair value on this line)'}`}
-            className="mono h-[30px] rounded-[5px] border-0 text-[10.5px] font-medium cursor-pointer"
+            className="mono h-[28px] rounded-[5px] border-0 text-[10.5px] font-semibold cursor-pointer"
             style={{
-              background: fill?.background ?? 'var(--color-background-secondary-default)',
-              color: fill?.color ?? 'var(--color-text-secondary)',
-              outline: isBest ? '2px solid var(--color-text-primary)' : on ? '1px solid rgba(87,242,135,0.35)' : 'none',
-              outlineOffset: isBest ? '-2px' : '0',
-              opacity: r.thin ? 0.7 : 1,
+              background: fill?.background ?? 'rgba(255,255,255,0.04)',
+              color: fill?.color ?? 'var(--color-text-tertiary)',
+              outline: isBest && ev != null && ev > 0 ? '1.5px solid var(--color-text-primary)' : 'none',
+              outlineOffset: '-1.5px',
             }}>
-            {ev != null ? `${(ev * 100).toFixed(1)}${fill?.suspect ? '?' : ''}` : formatOdds(d.american)}
+            {ev == null ? formatOdds(d.american) : fill?.show ? `${(ev * 100).toFixed(1)}${fill.suspect ? '?' : ''}` : ''}
           </button>
         )
       })}

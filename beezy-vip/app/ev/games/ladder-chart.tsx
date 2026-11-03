@@ -114,9 +114,6 @@ export function LadderChart({ rungs, selected, onSelect, sideLabel }: { rungs: C
           )
         })}
       </svg>
-      <div className="text-[11.5px] text-text-tertiary mt-0.5">
-        Chance of covering on each line; the green dot is the best price&apos;s break-even (lower is a better price). The number under a line is its best EV against the market fair price; &ldquo;thin&rdquo; = under 3 books, &ldquo;?&rdquo; = unusually large gap.
-      </div>
     </div>
   )
 }

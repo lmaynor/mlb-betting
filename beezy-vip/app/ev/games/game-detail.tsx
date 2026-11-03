@@ -161,7 +161,7 @@ export function GameDetail({ game, bettable, ageLabel }: { game: GameBoardEntry;
       <div className="px-4 pt-4 pb-2">
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-2">
           <span className="text-compact font-semibold text-text-primary">Every line against every book</span>
-          <span className="text-[11.5px] text-text-tertiary">Green beats the market fair price, grey does not, amber is an unusually large gap. White outline is the best bettable price. Click a cell to open that line.</span>
+          <span className="text-[11.5px] text-text-tertiary">Green = beats the market fair price (EV %), amber = unusually large, check it. Click to open a line.</span>
         </div>
         <HeatStrip rungs={heatRungs} selected={selected} onSelect={line => setPicked(p => ({ ...p, [market]: line }))} />
         {market !== 'ml' && (allChart.length > chartRungs.length || wide) && (
@@ -183,12 +183,9 @@ export function GameDetail({ game, bettable, ageLabel }: { game: GameBoardEntry;
               {sel.r.arbLive && sel.r.arb && <span className="text-[10px] font-semibold tracking-fine text-warn border border-[color:#facc1555] rounded-chip px-1" title={gameArbHedgeText(sel.r, 100) ?? 'Arbitrage'}>ARB {sel.r.arb.netArbPct.toFixed(1)}%</span>}
             </div>
             {[
-              { k: 'Books', v: String(sel.rung.nBooks) },
               hasModel ? { k: 'Model', v: `${pctOf(sel.rung.pModel)} ${fairOdds(sel.rung.pModel)}`, c: SKY } : null,
-              { k: 'Market fair', v: `${pctOf(sel.rung.pMarket)} ${fairOdds(sel.rung.pMarket)}` },
-              { k: 'EV vs market', v: sel.rung.evMarket != null ? signedPct(sel.rung.evMarket) : '--', c: sel.rung.thin || sel.rung.suspect ? '#facc15' : (sel.rung.evMarket ?? 0) > 0 ? GREEN : undefined },
               hasModel ? { k: 'Model EV', v: sel.rung.evModel != null ? signedPct(sel.rung.evModel) : '--', c: SKY } : null,
-              { k: '1/4 Kelly', v: (side === 'a' ? sel.r.a : sel.r.b).stake > 0 ? usd((side === 'a' ? sel.r.a : sel.r.b).stake) : '--' },
+              (side === 'a' ? sel.r.a : sel.r.b).stake > 0 ? { k: '1/4 Kelly', v: usd((side === 'a' ? sel.r.a : sel.r.b).stake) } : null,
             ].filter((c): c is { k: string; v: string; c?: string } => c != null).map(c => (
               <div key={c.k} className="flex items-baseline gap-1.5"><dt className="text-[10.5px] tracking-fine uppercase text-text-tertiary">{c.k}</dt><dd className="m-0 font-semibold" style={{ color: c.c ?? 'var(--color-text-primary)' }}>{c.v}</dd></div>
             ))}
@@ -196,9 +193,8 @@ export function GameDetail({ game, bettable, ageLabel }: { game: GameBoardEntry;
           <BestVsRest rung={sel.rung} row={sel.r.row} side={side} sideLabel={sideLabel} otherLabel={otherLabel} />
         </div>
       )}
-      <p className="text-[11.5px] text-text-secondary leading-[1.5] px-4 py-3 m-0">
-        Green is always against the market fair value (de-vigged from the reference books); blue is our model and is unvalidated. Offshore books other than Pinnacle are not shown, and Pinnacle is a reference only, never a place to bet.
-        Lines move or limit quickly: check the price at the book. Not financial advice.
+      <p className="text-[11.5px] text-text-tertiary leading-[1.5] px-4 py-3 m-0">
+        Green is against the market fair price; blue is our model and is unvalidated. Pinnacle is a reference, never a place to bet. Lines move: check the price at the book.
       </p>
     </section>
   )

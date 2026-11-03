@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { BookLogo } from '@/components/ui/book-logo'
-import { bookX, edgePos, edgeScale, type LadderDot, type LadderRung } from '@/lib/game-ladder'
+import { bookX, edgePos, edgeScale, LADDER_SUSPECT_EV, type LadderDot, type LadderRung } from '@/lib/game-ladder'
 import { SHARP_BOOKS, type GameOddsRow } from '@/lib/game-odds'
 import { formatOdds } from '@/lib/odds'
 import { bookDisplay } from '@/lib/tokens'
@@ -56,7 +56,7 @@ export function BestVsRest({ rung, row, side, sideLabel, otherLabel }: { rung: L
           {muted && <span className="mono text-[9.5px] font-semibold tracking-fine text-text-secondary border border-[color:var(--color-separator-border)] rounded-chip px-1">SHARP</span>}
         </span>
         <span className="relative block h-full">
-          <span className="absolute top-1/2 -mt-[6px] h-3 rounded-[3px]" data-testid="bvr-bar" style={{ left: pc(left), width: pc(Math.max(0.006, right - left)), background: beats ? GREEN : '#7d8596', opacity: d.best ? 1 : beats ? 0.7 : 0.4 }} />
+          <span className="absolute top-1/2 -mt-[4px] h-2 rounded-[2px]" data-testid="bvr-bar" style={{ left: pc(left), width: pc(Math.max(0.006, right - left)), background: ev != null && ev > LADDER_SUSPECT_EV ? '#facc15' : beats ? GREEN : '#7d8596', opacity: d.best ? 0.95 : beats ? 0.55 : 0.3 }} />
         </span>
         <span className="mono text-right text-compact whitespace-nowrap">
           <b className="font-semibold" style={{ color: d.best ? GREEN : 'var(--color-text-primary)' }}>{formatOdds(d.american)}</b>
@@ -97,11 +97,7 @@ export function BestVsRest({ rung, row, side, sideLabel, otherLabel }: { rung: L
         {rest.length > 0 && (
           <div data-testid="bvr-rest" className={`relative grid ${COLS} items-center gap-x-3 h-[30px] border-t border-t-[color:var(--color-separator-border)]`}>
             <span className="text-compact text-text-secondary">{rest.length} other {rest.length === 1 ? 'book' : 'books'}</span>
-            <span className="relative block h-full">
-              {hasFair
-                ? <span className="absolute top-1/2 -mt-1 h-2 rounded-[4px]" style={{ left: pc(edgePos(restLo, scale)), width: pc(Math.max(0.006, edgePos(restHi, scale) - edgePos(restLo, scale))), background: '#7d8596', opacity: 0.45 }} />
-                : null}
-            </span>
+            <span />
             <span className="mono text-right text-compact text-text-secondary whitespace-nowrap">
               {hasFair ? `${sp(restLo)} to ${sp(restHi)}` : `${formatOdds(rest[0].american)} to ${formatOdds(rest[rest.length - 1].american)}`}
             </span>
