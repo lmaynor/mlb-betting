@@ -1,6 +1,7 @@
 'use client'
 
 import { BookLogo } from '@/components/ui/book-logo'
+import { ExpectedScoreBar } from '@/components/picks/lambda-bar'
 import { Matchup } from '@/components/ui/sport-assets'
 import { formatOdds } from '@/lib/odds'
 import { bookDisplay, SURFACE_CARD } from '@/lib/tokens'
@@ -105,6 +106,11 @@ export function GameCard({ game }: { game: GamePricedGameView }) {
           </>
         )}
       </div>
+
+      {isNhl && <ExpectedScoreBar away={game.away_team} home={game.home_team} awayMean={game.lambda_a} homeMean={game.lambda_h} digits={2} />}
+      {isNba && game.mu_total != null && game.mu_margin != null && (
+        <ExpectedScoreBar away={game.away_team} home={game.home_team} awayMean={(game.mu_total - game.mu_margin) / 2} homeMean={(game.mu_total + game.mu_margin) / 2} />
+      )}
 
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-compact">

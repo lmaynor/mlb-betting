@@ -11,7 +11,7 @@ import { ScoreLegend } from '@/components/ui/score-legend'
 import { EdgeEvLegend } from '@/components/ui/edge-ev-legend'
 import { getViewer } from '@/lib/auth'
 import { withCounts } from '@/lib/board-games'
-import { applyPickFilters, pickRows } from '@/lib/board-rows'
+import { applyPickFilters, isOfficialRow, isOutlierRow, pickRows } from '@/lib/board-rows'
 import { siteDateKey } from '@/lib/dates'
 import type { PickKind } from '@/lib/pick-systems'
 import { activeFilterCount, parsePickFilters } from '@/lib/picks-filters'
@@ -40,23 +40,18 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
   const copy = COPY[view]
   const today = siteDateKey()
 
-  const isRowOfficial = (r: import('@/lib/board-rows').BoardRow) =>
-    (r.marketEv ?? 0) >= 0.03 && (r.marketEv ?? 0) <= 0.10 && r.score >= 68 && (r.sport === 'mlb' ? r.isPick !== false : (!!r.confluence && (r.nBooks == null || r.nBooks >= 4) && (r.modelEdge == null || r.modelEdge >= 0.015)))
-  const isRowOutlier = (r: import('@/lib/board-rows').BoardRow) =>
-    (r.marketEv ?? 0) >= 0.025 && (r.marketEv ?? 0) <= 0.15 && (r.nBooks == null || r.nBooks >= 3) && !isRowOfficial(r)
-
   // In picks view, default to actionable rows (Official + EV Outliers) sorted with Official first
   let base = view === 'picks' && !tracked ? pickRows(board.rows) : board.rows
   if (view === 'picks') {
-    const actionable = base.filter(r => isRowOfficial(r) || isRowOutlier(r))
+    const actionable = base.filter(r => isOfficialRow(r) || isOutlierRow(r))
     if (tierParam === 'official') {
-      base = base.filter(isRowOfficial)
+      base = base.filter(isOfficialRow)
     } else if (tierParam === 'outliers') {
-      base = base.filter(isRowOutlier)
+      base = base.filter(isOutlierRow)
     } else if (actionable.length > 0) {
       base = actionable
     }
-    base = [...base].sort((a, b) => (Number(isRowOfficial(b)) - Number(isRowOfficial(a))) || (b.score - a.score))
+    base = [...base].sort((a, b) => (Number(isOfficialRow(b)) - Number(isOfficialRow(a))) || (b.score - a.score))
   }
 
   const rows = applyPickFilters(base, f)
@@ -66,7 +61,7 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
 
   const emptyBody = base.length === 0
     ? (view === 'picks' && !tracked && board.rows.length > 0
-      ? `No ${pillar.shortName} prop lines are banked for these games yet, so there is nothing to price a pick against. Every projection is on the Projections tab; picks appear here once lines post.`
+      ? `No ${pillar.shortName} prop lines are banked for these games yet, so there is nothing to price a pick against. Every projection is in the Odds Terminal's Projections tab; picks appear here once lines post.`
       : board.emptyBody)
     : 'No rows match these filters. Clear a filter, or pick another game.'
 
@@ -76,12 +71,6 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
       <SportTabs sport={sport} active={tab} />
       <AlignedBar style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap' }}>
         <DayToggle today={today} yesterday={board.yesterday} days={board.days} selected={board.date} pinDates={!tracked} />
-        {tracked && view === 'picks' && (
-          <nav aria-label="Pick type" className="flex gap-3.5 text-[12.5px]">
-            <Link className="no-underline" href="/picks/mlb" aria-current={kind !== 'game' ? 'page' : undefined} style={{ color: kind !== 'game' ? 'var(--color-text-primary)' : 'var(--link)', fontWeight: kind !== 'game' ? 600 : 400 }}>Player picks</Link>
-            <Link className="no-underline" href="/picks/games" aria-current={kind === 'game' ? 'page' : undefined} style={{ color: kind === 'game' ? 'var(--color-text-primary)' : 'var(--link)', fontWeight: kind === 'game' ? 600 : 400 }}>Game picks</Link>
-          </nav>
-        )}
       </AlignedBar>
       <GamesStrip games={games} selected={f.game} today={today} total={base.length} />
       <FilterBar sport={sport} kind={kind} showResult={tracked && f.day === 'yesterday'} />

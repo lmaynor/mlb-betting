@@ -13,7 +13,7 @@
  * line says "edge", and the "+EV" in the header appears only when every listed line is an EV.
  *
  * Hard 280 cap: a sheet is never longer than POST_LIMIT. If it does not fit, the wording is condensed step by step (initials, no pipe,
- * shorter book names, no numbering) so all five picks stay; only if that is still too long are the lowest-ranked lines dropped. The main post carries no link; the link is in LINK_REPLY.
+ * shorter book names, no numbering) so every offered pick stays; only if that is still too long are the lowest-ranked lines dropped. The main post carries no link; the link is in LINK_REPLY.
  */
 import { SPORT_PILLARS, SPORT_SLUGS, type SportSlug } from '@/lib/sports'
 import { bookDisplay } from '@/lib/tokens'
@@ -32,7 +32,8 @@ export interface Sheet {
   offered: number
 }
 
-export const SHEET_SIZE = 5
+/** The most plays a sheet is offered. Not a card limit (the card has none): the 280-character cap below is what actually trims a sheet. */
+export const SHEET_SIZE = 12
 /** X's post limit. A hard cap: no sheet is ever longer. */
 export const POST_LIMIT = 280
 

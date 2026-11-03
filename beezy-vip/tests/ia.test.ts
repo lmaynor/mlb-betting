@@ -38,11 +38,14 @@ describe('information architecture', () => {
     expect(sectionFor('/tools')).toBeNull()
   })
 
-  it('Scanner tabs: Odds Terminal (props), Game Lines (NBA / NHL, unvalidated estimates) and Prop Research; each is exactly one tab', () => {
+  it('Scanner tabs: Odds Terminal (props), Projections (lambda for props and game lines), Game Lines (NBA / NHL prices) and Prop Research; each is exactly one tab', () => {
     const scanner = SECTIONS.find(x => x.id === 'scanner')!
-    expect(scanner.tabs.map(t => t.label)).toEqual(['Odds Terminal', 'Game Lines', 'Prop Research'])
+    expect(scanner.tabs.map(t => t.label)).toEqual(['Odds Terminal', 'Projections', 'Game Lines', 'Prop Research'])
     expect(sectionFor('/ev/games')?.id).toBe('scanner')
-    const [terminal, games, research] = scanner.tabs
+    expect(sectionFor('/ev/projections')?.id).toBe('scanner')
+    const [terminal, projections, games, research] = scanner.tabs
+    expect(tabActive('/ev/projections', null, projections)).toBe(true)
+    expect(tabActive('/ev/projections', null, terminal)).toBe(false)
     expect(tabActive('/ev', null, terminal)).toBe(true)
     expect(tabActive('/ev/games', null, terminal)).toBe(false)   // /ev/games must not also light the Odds Terminal tab
     expect(tabActive('/ev/games', null, games)).toBe(true)
@@ -58,11 +61,11 @@ describe('information architecture', () => {
     expect(tabActive('/analytics', 'books', bankroll)).toBe(false)
   })
 
-  it('Picks tabs are the all-sports views only: Daily Card, Top Signals, Game Picks (MLB, tracked), Graded History', () => {
+  it('Picks tabs are the all-sports views only: Daily Card, Top Signals, Graded History (Game Picks is hidden)', () => {
     const picks = SECTIONS.find(x => x.id === 'picks')!
-    expect(picks.tabs.map(t => t.label)).toEqual(['Daily Card', 'Top Signals', 'Game Picks', 'Graded History'])
+    expect(picks.tabs.map(t => t.label)).toEqual(['Daily Card', 'Top Signals', 'Graded History'])
     expect(sectionFor('/picks')?.id).toBe('picks')
-    expect(sectionFor('/picks/games')?.id).toBe('picks')
+    expect(sectionFor('/picks/games')).toBeNull()        // hidden: the page still answers, but it is no tab and lights no section
     expect(sectionFor('/picks/history')?.id).toBe('picks')
     expect(sectionFor('/cheat-sheet')?.id).toBe('picks')
     // MLB and the other sports are chosen in the ribbon and carry their own headers, not the strip
@@ -72,8 +75,7 @@ describe('information architecture', () => {
     expect(tabActive('/cheat-sheet', null, picks.tabs[0])).toBe(true)
     expect(tabActive('/picks', null, picks.tabs[1])).toBe(true)
     expect(tabActive('/picks/history', null, picks.tabs[1])).toBe(false)
-    expect(tabActive('/picks/games', null, picks.tabs[2])).toBe(true)
-    expect(tabActive('/picks/history', null, picks.tabs[3])).toBe(true)
+    expect(tabActive('/picks/history', null, picks.tabs[2])).toBe(true)
   })
 
   it('Picks stays lit in the top nav on MLB and the other sport pages', () => {
@@ -86,7 +88,7 @@ describe('information architecture', () => {
     for (const s of SPORT_SLUGS) {
       expect(sportHref(s)).toBe(`/picks/${s}`)
       expect(routeExists(sportHref(s))).toBe(true)
-      expect(routeExists(`${sportHref(s)}/projections`)).toBe(true)
+      expect(routeExists(`${sportHref(s)}/projections`)).toBe(true)   // a redirect to /ev/projections
     }
     expect(sportActive('/', 'all')).toBe(false)
     expect(sportActive('/picks/history', 'all')).toBe(true)
@@ -110,8 +112,8 @@ describe('scanner tabs', () => {
   const scanner = SECTIONS.find(s => s.id === 'scanner')!
   const terminal = scanner.tabs.find(t => t.href === '/ev')!
   const research = scanner.tabs.find(t => t.href === '/edge')!
-  it('lists the Odds Terminal, Game Lines, then prop research', () => {
-    expect(scanner.tabs.map(t => t.label)).toEqual(['Odds Terminal', 'Game Lines', 'Prop Research'])
+  it('lists the Odds Terminal, Projections, Game Lines, then prop research', () => {
+    expect(scanner.tabs.map(t => t.label)).toEqual(['Odds Terminal', 'Projections', 'Game Lines', 'Prop Research'])
   })
   it('lights exactly one tab on /ev and on /edge', () => {
     expect([tabActive('/ev', null, terminal), tabActive('/ev', null, research)]).toEqual([true, false])

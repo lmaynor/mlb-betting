@@ -131,7 +131,8 @@ describe('top picks: a model PROPS pick is a model basis, labelled unvalidated',
     expect(official.confluence).toBe(true)
     expect(isOfficialCardPlay({ ...tracked, score: 70 })).toBe(false)
     expect(isOfficialCardPlay({ ...official, score: 70 })).toBe(true)
-    expect(isOfficialCardPlay({ ...official, score: 70, nBooks: 3 })).toBe(false)      // the non-MLB gate (4+ books) applies, not the MLB branch
+    expect(official.tier).toBe('official')                                             // the ledger bet's own notes carry the backend's verdict
+    expect(isOfficialCardPlay({ ...official, score: 70, nBooks: 3 })).toBe(true)       // the site does not re-derive the gates: the tier is the verdict
     expect(isEvOutlier({ ...tracked, score: 70 })).toBe(true)
   })
   it('the table says UNVALIDATED / PAPER on a winter pick and nothing extra on an MLB pick', () => {

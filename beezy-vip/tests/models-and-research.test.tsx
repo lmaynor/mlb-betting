@@ -39,7 +39,7 @@ describe('a model page for every listed system', () => {
       expect(container.querySelector('h1')).toHaveTextContent(system.name)
       for (const t of ['Model configuration', 'Accuracy', 'Feature List']) expect(screen.getByText(t)).toBeInTheDocument()
       expect(screen.getByText(/No graded history is published/)).toBeInTheDocument()
-      expect(screen.getByRole('link', { name: /Every .* projection in Prop Research/ })).toHaveAttribute('href', `/edge/projections?league=${system.sport}`)
+      expect(screen.getByRole('link', { name: /Every .* projection in the Odds Terminal/ })).toHaveAttribute('href', `/ev/projections?league=${system.sport}`)
       unmount()
     })
 
@@ -70,19 +70,22 @@ describe('/models by sport', () => {
 })
 
 describe('Prop Research: all projections', () => {
-  it('ResearchTabs links the cockpit and the projections view and marks the active one', () => {
-    render(<ResearchTabs active="projections" />)
-    expect(screen.getByRole('link', { name: 'PROP COCKPIT' })).toHaveAttribute('href', '/edge')
-    expect(screen.getByRole('link', { name: 'ALL PROJECTIONS' })).toHaveAttribute('aria-current', 'page')
+  it('ResearchTabs links the cockpit and the Scanner projections tab and marks the active one', () => {
+    render(<ResearchTabs active="cockpit" />)
+    expect(screen.getByRole('link', { name: 'PROP COCKPIT' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'ALL PROJECTIONS' })).toHaveAttribute('href', '/ev/projections')
   })
 
   it('the cockpit carries the tabs, and the projections page loads every sport\'s unfiltered projection board', () => {
     expect(read('app/edge/edge-client.tsx')).toContain('<ResearchTabs active="cockpit" />')
-    const page = read('app/edge/projections/page.tsx')
+    // the projections page moved to the Scanner's own tab; the old URLs redirect to it
+    const page = read('app/ev/projections/page.tsx')
     expect(page).toContain("view: 'projections'")
     expect(page).toContain('LIVE_SPORTS')
     expect(page).toContain('<SportProjectionsBoard')
-    expect(page).toContain('<ResearchTabs active="projections" />')
+    expect(page).toContain('visuals')
+    expect(read('app/edge/projections/page.tsx')).toContain("permanentRedirect(qs ? `/ev/projections?${qs}` : '/ev/projections')")
+    expect(read('app/picks/[sport]/projections/page.tsx')).toContain("permanentRedirect(`/ev/projections?${sp.toString()}`)")
   })
 })
 
@@ -108,7 +111,7 @@ describe('brand and copy cleanup', () => {
   })
 
   it('the new files are ASCII', () => {
-    for (const f of ['components/models/projection-model-detail.tsx', 'app/models/page.tsx', 'app/models/[slug]/[system]/page.tsx', 'app/edge/projections/page.tsx',
+    for (const f of ['components/models/projection-model-detail.tsx', 'app/models/page.tsx', 'app/models/[slug]/[system]/page.tsx', 'app/ev/projections/page.tsx', 'app/edge/projections/page.tsx', 'components/picks/lambda-bar.tsx',
       'components/picks/research-tabs.tsx', 'components/picks/aligned-bar.tsx', 'components/picks/games-strip.tsx', 'components/picks/day-toggle.tsx', 'lib/board-games.ts', 'lib/board-days.ts', 'lib/sport-board-data.ts', 'scripts/build-brand-kit.mjs']) {
       expect([...read(f)].filter(c => c.charCodeAt(0) > 127)).toEqual([])
     }

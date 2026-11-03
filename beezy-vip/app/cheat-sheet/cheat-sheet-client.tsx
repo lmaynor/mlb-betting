@@ -5,13 +5,13 @@ import Link from 'next/link'
 import { BrandWordmark } from '@/components/ui/brand-mark'
 import { LockedNotice } from '@/components/picks/locked-notice'
 import { HeadshotImg } from '@/components/ui/sport-assets'
-import { LINK_REPLY, POST_LIMIT, postLength, SHEET_SIZE, type Sheet } from '@/lib/cheat-sheet-post'
+import { LINK_REPLY, POST_LIMIT, postLength, type Sheet } from '@/lib/cheat-sheet-post'
 import { sportHref } from '@/lib/ia'
 import { scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
 import { readableNotes } from '@/lib/bet-notes'
 import { SPORT_PILLARS, SPORT_SLUGS, type SportSlug } from '@/lib/sports'
 import { SYSTEM_COLOR, bookText } from '@/lib/tokens'
-import { isOfficialCardPlay, isEvOutlier, type TopPick } from '@/lib/top-picks'
+import type { Record1u, TopPick } from '@/lib/top-picks'
 
 /** A top pick plus the images the card shows. */
 export interface CardPick extends TopPick {
@@ -20,11 +20,8 @@ export interface CardPick extends TopPick {
   homeLogoUrl: string | null
 }
 
-type Mode = 'players' | 'games'
 type SportFilter = 'all' | SportSlug
 
-// the card shows this many picks and each POST TO X sheet is built from the first SHEET_SIZE of the same list: keep them equal
-const DEFAULT_LIMIT = SHEET_SIZE
 const DOT = ' \u00b7 '
 
 const fmtOdds = (o: number | null) => (o == null ? null : o > 0 ? `+${o}` : String(o))
@@ -110,13 +107,21 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
       <div className="min-w-16 flex flex-col items-center justify-center gap-1 py-2 px-[6px]" title={`Beezy Score ${pick.score}. Not a win probability.`}
         style={{ borderLeft: `1px solid ${color}18`, background: `${tierColor}08` }}>
         <span className="mono text-[22px] font-extrabold leading-[1]" style={{ color: tierColor }}>{pick.score}</span>
-        {isOfficialCardPlay(pick) ? (
-          <span className="ui-heading text-micro tracking-fine py-0.5 px-[5px] rounded-chip border border-[color:#57F287] bg-[rgba(87,242,135,0.12)] text-signal whitespace-nowrap">OFFICIAL PLAY</span>
-        ) : isEvOutlier(pick) ? (
-          <span className="ui-heading text-micro tracking-fine py-0.5 px-[5px] rounded-chip border border-[color:#38bdf8] bg-[rgba(56,189,248,0.12)] text-link whitespace-nowrap">+EV OUTLIER</span>
-        ) : null}
+        <span className="ui-heading text-micro tracking-fine py-0.5 px-[5px] rounded-chip border border-[color:#57F287] bg-[rgba(87,242,135,0.12)] text-signal whitespace-nowrap">OFFICIAL PLAY</span>
+        {pick.result && <ResultTag result={pick.result} />}
       </div>
     </div>
+  )
+}
+
+const RESULT_LABEL = { win: 'WIN', loss: 'LOSS', push: 'PUSH', void: 'VOID' } as const
+const RESULT_COLOR = { win: 'var(--signal)', loss: 'var(--loss)', push: 'var(--color-neutral-300)', void: 'var(--color-text-secondary)' } as const
+
+/** A graded play's outcome: the card keeps a play on the list after its game, with the result in place of the clock. */
+function ResultTag({ result }: { result: NonNullable<TopPick['result']> }) {
+  return (
+    <span className="ui-heading text-micro tracking-fine py-0.5 px-[5px] rounded-chip whitespace-nowrap"
+      style={{ color: RESULT_COLOR[result], border: `1px solid ${RESULT_COLOR[result]}` }}>{RESULT_LABEL[result]}</span>
   )
 }
 
@@ -196,34 +201,38 @@ const chip = (on: boolean): React.CSSProperties => ({
 })
 
 /**
- * The shareable Daily Card. It is the free Top 10 player picks (same list as /picks), with a Game picks toggle that follows the
- * game-picks access policy. Players can be narrowed to one sport; sports are never blended inside a sport filter.
+ * The shareable Daily Card: the day's official plays, every one of them. No count cap and no filler: the number of plays is whatever the
+ * gate lets through, and a slate with none says so. A play keeps its place after its game with the result on it, and the record strip
+ * links to Graded History, which is the same plays day by day. Plays can be narrowed to one sport; sports are never blended inside a filter.
  */
-export function CheatSheetClient({ sheets, canPost = false, sportPicks, players, games, gamesLocked, today, yesterday }: {
+export function CheatSheetClient({ sheets, canPost = false, sportPicks, players, locked, today, yesterday, weekRecord }: {
   sheets: Sheet[]
   canPost?: boolean
-  /** the best picks per sport (the overall Top 10 can be all one sport); the sport chips and the POST TO X boxes read these */
+  /** the day's plays per sport; the sport chips and the POST TO X boxes read these */
   sportPicks: Partial<Record<SportSlug, CardPick[]>>
   players: CardPick[]
-  games: CardPick[]
-  gamesLocked: number
+  /** plays withheld by the access policy (0 while tier gating is off) */
+  locked: number
   today: string
   yesterday: CardPick[]
+  /** the last week of graded daily plays: the same record Graded History shows, summed */
+  weekRecord: Record1u & { days: number }
 }) {
-  const [mode, setMode] = useState<Mode>('players')
   const [sport, setSport] = useState<SportFilter>('all')
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [copied, setCopied] = useState(false)
 
   const sports = useMemo(() => (SPORT_SLUGS as readonly SportSlug[]).filter(s => (sportPicks[s]?.length ?? 0) > 0), [sportPicks])
-  const list = mode === 'games' ? games : sport === 'all' ? players : (sportPicks[sport] ?? [])
-  const shown = list.slice(0, DEFAULT_LIMIT)
+  const list = sport === 'all' ? players : (sportPicks[sport] ?? [])
+  const shown = list
   const allExpanded = shown.length > 0 && shown.every(p => expanded.has(p.key))
   const strong = list.filter(p => scoreTier(p.score) === 'strong').length
   const lean = list.filter(p => scoreTier(p.score) === 'lean').length
   const best = list.reduce((m, p) => Math.max(m, (p.edge ?? 0) * 100), 0)
   const ydayWins = yesterday.filter(p => p.result === 'win').length
   const ydayLosses = yesterday.filter(p => p.result === 'loss').length
+  const wk = weekRecord
+  const wkRoi = wk.graded > 0 ? (wk.units / wk.graded) * 100 : null
 
   const toggle = (key: string) => setExpanded(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n })
 
@@ -245,14 +254,24 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
             <div className="flex items-start justify-between mb-2.5 gap-3">
               <div>
                 <BrandWordmark size="lg" />
-                <div className="text-[15px] font-extrabold text-text-primary leading-[1.15] mt-2">{mode === 'players' ? 'Top player picks' : 'Game picks'}</div>
+                <div className="text-[15px] font-extrabold text-text-primary leading-[1.15] mt-2">Daily plays</div>
                 <div className="mono text-micro text-text-secondary tracking-label mt-[5px]">{today}</div>
                 <div className="text-[11.5px] text-neutral-300 leading-[1.45] mt-2">
-                  Strict dual-engine card (1-5 plays/day max). Requires 4+ book consensus, 3-10% sweet-spot EV, and Model + Market confluence.
+                  Every play that clears the gate: the model and the market agree on the side, 4+ books behind the price, a measured edge and a blended EV that survives shrinking toward the market.
                 </div>
                 <div className="text-mini text-signal bg-[rgba(87,242,135,0.08)] border border-[color:rgba(87,242,135,0.22)] rounded-chip py-1.5 px-2.5 mt-2 leading-[1.4]">
-                  <span className="mono font-bold">{shown.length}</span> Official Play{shown.length !== 1 ? 's' : ''} locked for today&apos;s slate (no filler plays added).
+                  <span className="mono font-bold">{shown.length}</span> Official Play{shown.length !== 1 ? 's' : ''} today. No cap and no filler: the number is whatever the gate lets through.
                 </div>
+                {wk.days > 0 && (
+                  <Link href="/picks/history" className="block no-underline mono text-micro text-neutral-300 border border-separator-border rounded-chip py-1.5 px-2.5 mt-2 leading-[1.4]" title="Every past day's plays with their results">
+                    LAST {wk.days} DAYS {wk.graded > 0 ? <>
+                      <span className="text-text-primary">{wk.wins}-{wk.losses}{wk.pushes ? `-${wk.pushes}` : ''}</span>{' \u00b7 '}
+                      <span style={{ color: wk.units >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{wk.units >= 0 ? '+' : ''}{wk.units.toFixed(1)}u flat</span>
+                      {wkRoi != null && <>{' \u00b7 '}<span style={{ color: wkRoi >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{wkRoi >= 0 ? '+' : ''}{wkRoi.toFixed(0)}% ROI</span></>}
+                    </> : <span className="text-text-secondary">{wk.pending > 0 ? `${wk.pending} pending` : 'no graded plays yet'}</span>}
+                    {' '}<span className="text-link">GRADED HISTORY &rarr;</span>
+                  </Link>
+                )}
               </div>
               <button onClick={() => setExpanded(allExpanded ? new Set() : new Set(shown.map(p => p.key)))} className="mono text-micro tracking-caps bg-transparent py-1 px-[7px] cursor-pointer whitespace-nowrap"
                 style={{ color: allExpanded ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', border: `1px solid ${allExpanded ? 'var(--color-border-button-active)' : 'var(--color-separator-border)'}` }}>
@@ -260,11 +279,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
               </button>
             </div>
 
-            <div role="group" aria-label="Pick type" className="flex gap-1.5 mb-2">
-              <button className="mono" aria-pressed={mode === 'players'} onClick={() => { setMode('players'); setExpanded(new Set()) }} style={chip(mode === 'players')}>Player picks</button>
-              <button className="mono" aria-pressed={mode === 'games'} onClick={() => { setMode('games'); setExpanded(new Set()) }} style={chip(mode === 'games')}>Game picks</button>
-            </div>
-            {mode === 'players' && sports.length > 1 && (
+            {sports.length > 1 && (
               <div role="group" aria-label="Sport" className="flex flex-wrap gap-1.5">
                 {(['all', ...sports] as SportFilter[]).map(s => (
                   <button key={s} className="mono" aria-pressed={sport === s} onClick={() => { setSport(s); setExpanded(new Set()) }} style={chip(sport === s)}>
@@ -277,7 +292,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
 
           {list.length > 0 && (
             <div className="py-[7px] px-4 border-b border-b-[color:var(--color-separator-border)] flex flex-wrap gap-2.5 items-center">
-              <span className="mono text-micro text-text-secondary tracking-caps">{list.length > DEFAULT_LIMIT ? `TOP ${DEFAULT_LIMIT} OF ${list.length}` : `${list.length} ${list.length === 1 ? 'PICK' : 'PICKS'}`}</span>
+              <span className="mono text-micro text-text-secondary tracking-caps">{list.length} {list.length === 1 ? 'PLAY' : 'PLAYS'}</span>
               {strong > 0 && <span className="ui-heading text-micro text-signal tracking-head">{strong} STRONG</span>}
               {lean > 0 && <span className="ui-heading text-micro text-signal tracking-head">{lean} LEAN</span>}
               {best > 0 && <span className="ui-heading text-micro text-signal tracking-head">BEST EDGE +{best.toFixed(1)}%</span>}
@@ -286,16 +301,16 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
 
           {list.length === 0 ? (
             <div className="py-5 px-4">
-              {mode === 'games' && gamesLocked > 0 ? (
-                <LockedNotice locked={gamesLocked} what="MLB game picks" plan="Game picks are on the MLB Pass or All-Access Pro." />
+              {locked > 0 ? (
+                <LockedNotice locked={locked} what="official plays" plan="Today's full card is on a sport pass or All-Access Pro." />
               ) : (
                 <>
                   <div className="mono text-micro text-text-secondary tracking-caps mb-3.5 text-center">
-                    NO PICKS ON THE CARD YET. THEY POST WHEN TODAY&apos;S LINES ARE IN.
+                    NO OFFICIAL PLAYS YET. A PLAY POSTS ONLY WHEN IT CLEARS THE GATE, SO SOME DAYS HAVE NONE.
                   </div>
                   {yesterday.length > 0 && (
                     <>
-                      <div className="mono text-micro text-text-secondary tracking-label mb-1.5 text-center">YESTERDAY&apos;S RESULTS</div>
+                      <div className="mono text-micro text-text-secondary tracking-label mb-1.5 text-center">YESTERDAY&apos;S PLAYS</div>
                       {yesterday.map(p => <YesterdayRow key={p.key} pick={p} />)}
                       {ydayWins + ydayLosses > 0 && (
                         <div className="mono text-micro text-text-secondary text-center mt-2.5">{ydayWins}-{ydayLosses} yesterday</div>
@@ -308,12 +323,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
           ) : (
             <>
               {shown.map((p, i) => <PickCard key={p.key} pick={p} rank={i + 1} expanded={expanded.has(p.key)} onToggle={() => toggle(p.key)} />)}
-              {list.length > DEFAULT_LIMIT && (
-                <div className="mono py-2 px-4 text-micro tracking-caps text-text-secondary border-t border-t-[color:var(--color-separator-border)] text-center">
-                  +{list.length - DEFAULT_LIMIT} MORE ON <Link className="text-link" href={mode === 'games' ? '/picks/games' : '/picks'}>THE PICKS PAGE</Link>
-                </div>
-              )}
-              {mode === 'games' && <div className="pt-0 px-3 pb-3"><LockedNotice locked={gamesLocked} shown={games.length} what="MLB game picks" plan="The full set is on the MLB Pass or All-Access Pro." /></div>}
+              {locked > 0 && <div className="pt-0 px-3 pb-3"><LockedNotice locked={locked} shown={shown.length} what="official plays" plan="The full card is on a sport pass or All-Access Pro." /></div>}
             </>
           )}
 
@@ -337,10 +347,10 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
           <div className="border border-separator-border bg-background-primary-default p-4 mb-4 rounded-[var(--radius)]">
             <div className="ui-heading text-micro tracking-[0.12em] text-text-secondary mb-2.5">WHAT IS THIS</div>
             <p className="text-cozy text-neutral-300 leading-[1.6]" style={{ margin: '0 0 10px' }}>
-              The share-ready version of today&apos;s Top 10 player picks across MLB, NFL, NHL and NBA, ranked by Beezy Score. MLB picks are tracked and settled in the public record; NFL, NHL and NBA picks come from the projection engine and are not tracked yet. Game picks are a separate, paid set.
+              Today&apos;s official plays across MLB, NFL, NHL and NBA, ranked by Beezy Score. A play is official when the model and the market both like the same side, at least four books price it, the stat is one where the model has measurably added information beyond the market, and the blended edge is still at least 2.5% after shrinking the model toward the market. Each play is logged at its flagged price the first time it qualifies and graded at a flat 1 unit, so the record cannot be edited afterwards. MLB plays settle in the public record; NFL, NHL and NBA plays are paper and unvalidated.
             </p>
             <p className="text-cozy text-neutral-300 leading-[1.6] m-0">
-              Tap a pick to see why it made the card. Each sport&apos;s systems and record are on its Systems tab:
+              Tap a play to see why it made the card. Past days and results are in <Link className="text-link" href="/picks/history">Graded History</Link>; each sport&apos;s systems are on its Systems tab:
             </p>
             <div className="flex flex-wrap gap-y-1.5 gap-x-3.5 mt-2 text-[12.5px]">
               {SPORT_SLUGS.map(s => <Link className="text-link" key={s} href={`${sportHref(s)}/systems`}>{SPORT_PILLARS[s].shortName}</Link>)}
