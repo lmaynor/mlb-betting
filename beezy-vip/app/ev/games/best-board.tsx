@@ -12,7 +12,7 @@ import { formatOdds } from '@/lib/odds'
 import { useBankroll } from '@/lib/use-bankroll'
 import { useMyBooks } from '@/lib/use-my-books'
 import { GamePopup, type PopupPane } from './game-popup'
-import { GREEN, HAIR, Pill, PillGroup, Select, signedPct } from './game-prices-parts'
+import { GREEN, Pill, PillGroup, Select, signedPct } from './game-prices-parts'
 import { Sparkline } from './sparkline'
 import { useGameFeeds, type GameBoardFeeds } from './use-game-feeds'
 
@@ -107,14 +107,15 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen }: { feeds
 
   return (
     <div>
-      <div className="flex items-center gap-y-[6px] gap-x-[14px] flex-wrap min-h-[40px] py-[6px] px-4 mb-[10px] bg-background-primary-default text-compact" data-testid="game-board-strip" style={{ border: `1px solid ${HAIR}`, borderRadius: '8px' }}>
-        <span className="mono font-semibold text-text-primary hidden md:inline">{activeSport === 'all' ? 'ALL SPORTS' : activeSport.toUpperCase()}</span>
-        <span className="mono text-neutral-300">{games.length} {games.length === 1 ? 'GAME' : 'GAMES'}</span>
-        <span className="mono text-neutral-300">LINES {ageText(age)} OLD</span>
-        {myBooks.enabled && <span className="mono text-neutral-300" title="Best prices are limited to your books">MY BOOKS ({myBooks.books.length})</span>}
-        {stale && <span className="mono text-[11px] font-semibold tracking-fine text-warn border border-[color:#facc1555] rounded-chip py-0 px-[5px]">STALE</span>}
-        <span className="text-neutral-300"><span className="mono text-[11px] font-semibold tracking-fine text-warn">{GAME_PRICES_LABEL}</span> {GAME_PRICES_NOTE}</span>
-      </div>
+      <p className="m-0 mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-text-tertiary" data-testid="game-board-strip">
+        <span className="inline-flex items-center gap-1.5" title="How old the newest prices on this board are">
+          <span aria-hidden className="rounded-full flex-none" style={{ width: 6, height: 6, background: stale ? '#facc15' : GREEN }} />
+          {age == null ? 'Update time unknown' : `Updated ${ageText(age).toLowerCase()} ago`}
+        </span>
+        {stale && <span className="mono text-[11px] font-semibold tracking-fine text-warn">STALE</span>}
+        {myBooks.enabled && <span title="Best prices are limited to your books">My books ({myBooks.books.length})</span>}
+        <span title={`${GAME_PRICES_LABEL.charAt(0)}${GAME_PRICES_LABEL.slice(1).toLowerCase()} ${GAME_PRICES_NOTE}`}>Unvalidated prices</span>
+      </p>
 
       {unavailable ? (
         <div role="status" className="py-6 text-neutral-300 text-cozy">Game-line prices are not published yet. Moneyline, spread and total prices refresh with the odds banker; check back shortly.</div>
