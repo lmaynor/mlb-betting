@@ -13,7 +13,9 @@ import {
 import type { DevigMethod } from '@/lib/odds-screen'
 import { useBankroll } from '@/lib/use-bankroll'
 import { useMyBooks } from '@/lib/use-my-books'
+import { hasMovement, moveForSide, type MoveSummary } from '@/lib/line-move'
 import { GameDetail } from './game-detail'
+import { Sparkline } from './sparkline'
 import { BookPicker, GREEN, HAIR, Pill, PillGroup, SKY, Select, Toggle } from './game-prices-parts'
 
 type LogoSport = Parameters<typeof SportLogo>[0]['sport']
@@ -22,6 +24,15 @@ type LogoSport = Parameters<typeof SportLogo>[0]['sport']
 const POLL_MS = 3 * 60_000
 
 export interface GameBoardFeeds { odds: Record<string, GameOddsFeed | null>; proj: Record<string, GameProjectionsFeed | null> }
+
+/** The one movement a card shows: the spread's (else the total's, else the moneyline's), from the side the card names. */
+function cardMove(g: GameBoardEntry): { m: MoveSummary; market: 'spread' | 'total' | 'ml'; side: 'a' | 'b' } | null {
+  for (const [market, side] of [['spread', 'b'], ['total', 'a'], ['ml', 'b']] as const) {
+    const m = g.move[market]
+    if (hasMovement(m)) return { m, market, side }
+  }
+  return null
+}
 
 function evChip(g: GameBoardEntry): { text: string; color: string } | null {
   if (g.bestEv == null || g.bestEv <= 0.005) return null
@@ -50,6 +61,21 @@ function GameCard({ g, on, onPick }: { g: GameBoardEntry; on: boolean; onPick: (
       <span className="mono block text-[11.5px] text-text-primary mt-1 whitespace-nowrap overflow-hidden text-ellipsis">
         {sp ? `${g.home} ${signedLine(sp.row.line ?? 0)}` : 'No spread'}{to ? ` · ${to.row.line}` : ''}
       </span>
+      {(() => {
+        const mv = cardMove(g)
+        if (!mv) return null
+        const f = moveForSide(mv.m, mv.side)
+        const pts = f.pDelta == null ? null : Math.abs(f.pDelta * 100)
+        const text = mv.m.lineMoved && mv.m.lineOpen != null && mv.m.lineNow != null
+          ? (mv.market === 'total' ? `O/U ${mv.m.lineOpen} \u2192 ${mv.m.lineNow}` : `${g.home} ${signedLine(mv.m.lineOpen)} \u2192 ${signedLine(mv.m.lineNow)}`)
+          : pts != null ? `${f.pDelta! >= 0 ? '\u25b2' : '\u25bc'} ${pts.toFixed(1)} pts` : null
+        return (
+          <span className="flex items-center gap-1.5 mt-1" data-testid="card-move" title={`Since the board first saw this game: ${mv.market === 'ml' ? 'moneyline' : mv.market} ${mv.m.lineMoved ? 'line moved' : 'fair price moved'}. Market data, not a signal.`}>
+            <Sparkline values={f.pSeries.length >= 2 ? f.pSeries : (mv.m.lineSeries.filter((x): x is number => x != null))} w={56} h={18} label={`${g.away} at ${g.home} fair price movement`} />
+            {text && <span className="mono text-[10.5px] text-text-secondary whitespace-nowrap">{text}</span>}
+          </span>
+        )
+      })()}
       <span className="flex flex-wrap gap-1 mt-1.5 min-h-[18px]">
         {ev && <span className="mono text-[10px] font-semibold rounded-chip px-1" style={{ color: ev.color, background: 'rgba(87,242,135,0.08)' }}>{ev.text}</span>}
         {g.arbLive && <span className="mono text-[10px] font-semibold tracking-fine text-warn border border-[color:#facc1555] rounded-chip px-1">ARB</span>}

@@ -134,15 +134,18 @@ describe('buildGameBoard', () => {
 })
 
 describe('sortBoard', () => {
-  const mkEntry = (key: string, start: string, bestEv: number | null, modelGap: number | null) =>
-    ({ key, start, bestEv, modelGap, sport: 'nhl', away: 'A', home: 'B', rows: { ml: [], spread: [], total: [] }, main: { ml: null, spread: null, total: null }, nBooks: 3, arbLive: false, model: null })
-  const games = [mkEntry('late', '2026-11-03T03:00:00Z', 0.01, 0.09), mkEntry('early', '2026-11-03T00:00:00Z', null, null), mkEntry('mid', '2026-11-03T01:00:00Z', 0.04, 0.02)]
+  const mkEntry = (key: string, start: string, bestEv: number | null, modelGap: number | null, moveScore = 0) =>
+    ({ key, start, bestEv, modelGap, moveScore, move: { ml: null, spread: null, total: null }, hasHistory: false, sport: 'nhl', away: 'A', home: 'B', rows: { ml: [], spread: [], total: [] }, main: { ml: null, spread: null, total: null }, nBooks: 3, arbLive: false, model: null })
+  const games = [mkEntry('late', '2026-11-03T03:00:00Z', 0.01, 0.09, 0.05), mkEntry('early', '2026-11-03T00:00:00Z', null, null), mkEntry('mid', '2026-11-03T01:00:00Z', 0.04, 0.02, 0.01)]
   it('time is the default order: earliest first', () => {
     expect(sortBoard(games, 'time').map(g => g.key)).toEqual(['early', 'mid', 'late'])
   })
   it('EV and model gap put the biggest first and games with none last', () => {
     expect(sortBoard(games, 'ev').map(g => g.key)).toEqual(['mid', 'late', 'early'])
     expect(sortBoard(games, 'gap').map(g => g.key)).toEqual(['late', 'mid', 'early'])
+  })
+  it('movement puts the biggest mover first and games that have not moved last', () => {
+    expect(sortBoard(games, 'move').map(g => g.key)).toEqual(['late', 'mid', 'early'])
   })
   it('never mutates its input', () => {
     const keys = games.map(g => g.key)
@@ -180,5 +183,23 @@ describe('leanOf: where the model is furthest above the market', () => {
     const [low] = buildGameBoard({ odds: { nhl: oddsFeed(ROWS) }, proj: { nhl: projFeed([pg({ ml: { p_home: 0.01, p_away: 0.01 } })]) } }, base)
     // 0.5 / 0.5 after renormalising is not below a ~58% / ~42% market on both sides
     expect(leanOf(low)?.gap ?? 0).toBeLessThan(0.2)
+  })
+})
+
+describe('buildGameBoard: movement from the feed history', () => {
+  const pt = (min: number, line: number | null, p_a: number | null) => ({ t: new Date(Date.UTC(2026, 10, 3, 14, min)).toISOString(), line, p_a, best_a: -110, best_b: -110, n: 6 })
+  it('attaches the series of each market and scores the game by its biggest mover', () => {
+    const feed = { ...oddsFeed(ROWS), history: { [`${GK}|spread`]: { points: [pt(0, -1.5, 0.42), pt(90, -1.5, 0.47)] }, [`${GK}|total`]: { points: [pt(0, 6.5, 0.5)] } } }
+    const [g] = buildGameBoard({ odds: { nhl: feed }, proj: {} }, base)
+    expect(g.hasHistory).toBe(true)
+    expect(g.move.spread?.pDelta).toBeCloseTo(0.05, 10)
+    expect(g.move.total).toBeNull()      // one point is not a series
+    expect(g.move.ml).toBeNull()
+    expect(g.moveScore).toBeCloseTo(0.05, 10)
+  })
+  it('an older backend with no history says so, and scores zero', () => {
+    const [g] = buildGameBoard({ odds: { nhl: oddsFeed(ROWS) }, proj: {} }, base)
+    expect(g.hasHistory).toBe(false)
+    expect(g.moveScore).toBe(0)
   })
 })

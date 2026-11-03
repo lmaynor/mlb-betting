@@ -13,6 +13,7 @@ import { kellySizing } from '@/lib/ev-math'
 import { formatOdds } from '@/lib/odds'
 import { isOffshore } from '@/lib/offshore'
 import { bookDisplay, canonBook } from '@/lib/tokens'
+import type { MoveSeries } from '@/lib/line-move'
 import { buildScreenRows, computeRowArb, type ArbResult, type BoardRow, type DevigMethod } from '@/lib/odds-screen'
 
 export type GameMarket = 'ml' | 'spread' | 'total'
@@ -45,6 +46,8 @@ export interface GameOddsFeed {
   offshore_books: string[]
   games: GameOddsGame[]
   rows: GameOddsRow[]
+  /** how each game's main line and market fair price moved since the board first saw it: `<game_key>|<market>` -> points (absent on an older backend) */
+  history?: Record<string, MoveSeries>
   /** added by the viewer-gated proxy / page: how many rows the access policy withheld */
   locked?: number
 }

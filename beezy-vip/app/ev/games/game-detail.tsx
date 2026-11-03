@@ -4,12 +4,14 @@ import { useMemo, useState } from 'react'
 import { SportLogo } from '@/components/ui/sport-assets'
 import { modelSideProb, type GameBoardEntry } from '@/lib/game-board'
 import { buildLadderRung, mainLineOf, orderRungs, rungVerdict, selectRung, windowRungs, type LadderSide } from '@/lib/game-ladder'
+import { hasMovement, moveForSide } from '@/lib/line-move'
 import { GAME_PRICES_LABEL, gameArbHedgeText, signedLine, startLabel, type GameMarket } from '@/lib/game-odds'
 import { probToAmerican, formatOdds } from '@/lib/odds'
 import { bookDisplay } from '@/lib/tokens'
 import { BestVsRest } from './best-vs-rest'
 import { HeatStrip, type HeatRung } from './heat-strip'
 import { LadderChart, type ChartRung } from './ladder-chart'
+import { Sparkline } from './sparkline'
 import { GREEN, SKY, signedPct, usd } from './game-prices-parts'
 
 type LogoSport = Parameters<typeof SportLogo>[0]['sport']
@@ -145,6 +147,34 @@ export function GameDetail({ game, bettable, ageLabel }: { game: GameBoardEntry;
         <Seg label="Market" value={market} options={markets.map(t => ({ v: t.key, l: t.label }))} onChange={v => setMarket(v)} />
         <Seg label="Side" value={side} options={sideTabs} onChange={v => setSideByMarket(s => ({ ...s, [market]: v }))} />
       </div>
+
+      {game.hasHistory && (() => {
+        const mv = game.move[market]
+        if (!hasMovement(mv)) return <p className="m-0 px-4 pt-3 text-[12px] text-text-tertiary" data-testid="movement-empty">Movement tracking started recently: not enough snapshots yet to draw how this line has moved.</p>
+        const f = moveForSide(mv, side)
+        const lineWord = market === 'total' ? 'O/U' : game.home
+        const fmtLine = (x: number | null) => (x == null ? '--' : market === 'total' ? String(x) : signedLine(x))
+        const lineSeries = mv.lineSeries.filter((x): x is number => x != null)
+        return (
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-2 px-4 pt-3" data-testid="movement">
+            <span className="mono text-[10.5px] tracking-fine uppercase text-text-tertiary">Movement since {startLabel(mv.since)}</span>
+            {market !== 'ml' && (
+              <span className="inline-flex items-center gap-2 text-compact" data-testid="movement-line">
+                <Sparkline values={lineSeries} step w={72} h={22} color="#9ca3af" label={`${lineWord} line movement`} />
+                <span className="text-text-secondary">Line</span>
+                <span className="mono text-text-primary">{mv.lineMoved ? `${lineWord} ${fmtLine(mv.lineOpen)} \u2192 ${fmtLine(mv.lineNow)}` : `${lineWord} ${fmtLine(mv.lineNow)}, unchanged`}</span>
+              </span>
+            )}
+            <span className="inline-flex items-center gap-2 text-compact" data-testid="movement-fair">
+              <Sparkline values={f.pSeries} w={72} h={22} label={`${sideLabel} fair price movement`} />
+              <span className="text-text-secondary">Fair price{mv.lineMoved ? ' at the new line' : ''}</span>
+              {f.pOpen != null && f.pNow != null && f.pDelta != null
+                ? <span className="mono text-text-primary">{(f.pOpen * 100).toFixed(1)}% &rarr; {(f.pNow * 100).toFixed(1)}% <span className="text-text-secondary">({f.pDelta >= 0 ? '+' : ''}{(f.pDelta * 100).toFixed(1)} pts)</span></span>
+                : <span className="mono text-text-tertiary">not enough comparable snapshots</span>}
+            </span>
+          </div>
+        )
+      })()}
 
       {market !== 'ml' && (
         <div className="px-4 pt-2">

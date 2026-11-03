@@ -9,6 +9,7 @@
  */
 import { orderRungs, mainLineOf, type LadderSide } from '@/lib/game-ladder'
 import type { GameMetadata, GameModelLadder, GamePricedGame, GameProjectionsFeed } from '@/lib/game-lines'
+import { moveScore, summarizeMove, type MoveSummary } from '@/lib/line-move'
 import { buildGamePriceRows, feedRows, sideLabels, type GameMarket, type GameOddsFeed, type GamePriceOptions, type GamePriceRow } from '@/lib/game-odds'
 
 const MARKETS: GameMarket[] = ['ml', 'spread', 'total']
@@ -54,6 +55,11 @@ export interface GameBoardEntry {
   /** largest model-minus-market probability on a main line (UNVALIDATED), null with no model */
   modelGap: number | null
   model: GameModel | null
+  /** movement since the board first saw the game, per market (null = fewer than two snapshots) */
+  move: Record<GameMarket, MoveSummary | null>
+  /** the price feed carries history at all (an older backend does not, and then nothing about movement is shown) */
+  hasHistory: boolean
+  moveScore: number
 }
 
 const near = (a: number, b: number) => Math.abs(a - b) < 1e-6
@@ -173,8 +179,12 @@ export function buildGameBoard(feeds: BoardFeeds, opts: GamePriceOptions): GameB
         if (pm != null && pf != null) gap = Math.max(gap ?? -Infinity, pm - pf)
       }
     }
+    const hist = feeds.odds[sport]?.history
+    const move = { ml: null as MoveSummary | null, spread: null as MoveSummary | null, total: null as MoveSummary | null }
+    for (const m of MARKETS) move[m] = summarizeMove(hist?.[`${key}|${m}`])
     out.push({
       key, sport, away: first.away, home: first.home, start: first.commence, rows: rowsBy, main,
+      move, hasHistory: hist != null, moveScore: moveScore([move.ml, move.spread, move.total]),
       nBooks: Math.max(0, ...mains.map(r => r.row.books.length)),
       bestEv: evs.length ? Math.max(...evs) : null,
       arbLive: list.some(r => r.arbLive),
@@ -185,13 +195,14 @@ export function buildGameBoard(feeds: BoardFeeds, opts: GamePriceOptions): GameB
   return out
 }
 
-export type BoardSort = 'time' | 'ev' | 'arb' | 'gap'
+export type BoardSort = 'time' | 'ev' | 'arb' | 'gap' | 'move'
 
 export const BOARD_SORTS: { v: BoardSort; l: string; title: string }[] = [
   { v: 'time', l: 'Start time', title: 'Earliest game first' },
   { v: 'ev', l: 'Best EV', title: 'Best EV on a main line, against the market fair price' },
   { v: 'arb', l: 'Arbitrage', title: 'Games with a live arbitrage first, biggest locked margin first' },
   { v: 'gap', l: 'Model gap', title: 'Biggest gap between our model and the market fair price (unvalidated)' },
+  { v: 'move', l: 'Movement', title: 'Games whose line or fair price has moved the most since the board first saw them' },
 ]
 
 export function sortBoard(games: GameBoardEntry[], sort: BoardSort): GameBoardEntry[] {
@@ -200,6 +211,7 @@ export function sortBoard(games: GameBoardEntry[], sort: BoardSort): GameBoardEn
   const nullsLast = (a: number | null, b: number | null) => (b ?? -Infinity) - (a ?? -Infinity)
   const arbMargin = (g: GameBoardEntry) => Math.max(0, ...[...g.rows.ml, ...g.rows.spread, ...g.rows.total].filter(r => r.arbLive && r.arb).map(r => r.arb!.netArbPct))
   if (sort === 'ev') out.sort((a, b) => nullsLast(a.bestEv, b.bestEv) || t(a).localeCompare(t(b)))
+  else if (sort === 'move') out.sort((a, b) => b.moveScore - a.moveScore || t(a).localeCompare(t(b)))
   else if (sort === 'gap') out.sort((a, b) => nullsLast(a.modelGap, b.modelGap) || t(a).localeCompare(t(b)))
   else if (sort === 'arb') out.sort((a, b) => arbMargin(b) - arbMargin(a) || t(a).localeCompare(t(b)))
   else out.sort((a, b) => t(a).localeCompare(t(b)) || a.key.localeCompare(b.key))

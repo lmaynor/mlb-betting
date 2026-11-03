@@ -76,7 +76,7 @@ describe('GameBoard: cards across the top, one deep-dive below', () => {
     render(<GameBoard feeds={feeds()} />)
     const sort = screen.getByLabelText('SORT') as HTMLSelectElement
     expect(sort.value).toBe('time')
-    expect(Array.from(sort.options).map(o => o.textContent)).toEqual(['Start time', 'Best EV', 'Arbitrage', 'Model gap'])
+    expect(Array.from(sort.options).map(o => o.textContent)).toEqual(['Start time', 'Best EV', 'Arbitrage', 'Model gap', 'Movement'])
     fireEvent.change(sort, { target: { value: 'gap' } })
     expect(screen.getAllByTestId('game-card')[0].getAttribute('data-game')).toBe(GK)   // only the NHL game has a model
   })
@@ -86,6 +86,56 @@ describe('GameBoard: cards across the top, one deep-dive below', () => {
     first.unmount()
     render(<GameBoard feeds={{ odds: { nhl: oddsFeed('nhl', []), nba: null }, proj: {} }} />)
     expect(screen.getByRole('status').textContent).toMatch(/No book has posted/)
+  })
+})
+
+describe('line movement (flow)', () => {
+  const at = (min: number) => new Date(Date.UTC(2026, 10, 3, 14, 0) + min * 60_000).toISOString()
+  const pt = (min: number, line: number | null, p_a: number | null) => ({ t: at(min), line, p_a, best_a: -110, best_b: -110, n: 6 })
+  const withHistory = (history: Record<string, { points: ReturnType<typeof pt>[] }>) => ({ odds: { nhl: { ...oddsFeed('nhl', rowsNhl), history } }, proj: {} })
+  const moving = { [`${GK}|spread`]: { points: [pt(0, -1.0, 0.50), pt(60, -1.0, 0.52), pt(120, -1.5, 0.44), pt(180, -1.5, 0.46)] }, [`${GK}|total`]: { points: [pt(0, 6.5, 0.5), pt(5, 6.5, 0.5)] } }
+
+  it('a card shows a sparkline and where the line went when it moved', () => {
+    render(<GameBoard feeds={withHistory(moving)} />)
+    const c = within(screen.getAllByTestId('game-card')[0]).getByTestId('card-move')
+    expect(within(c).getByTestId('sparkline')).toBeInTheDocument()
+    expect(c.textContent).toMatch(/FLA -1 \u2192 -1\.5/)
+  })
+  it('a card with a steady line shows the fair-price move in points instead', () => {
+    const steady = { [`${GK}|spread`]: { points: [pt(0, -1.5, 0.40), pt(90, -1.5, 0.43)] } }
+    render(<GameBoard feeds={withHistory(steady)} />)
+    expect(within(screen.getAllByTestId('game-card')[0]).getByTestId('card-move').textContent).toMatch(/\u25bc 3\.0 pts/)   // the card names the home side: away 40% -> 43% is home 60% -> 57%
+  })
+  it('two snapshots minutes apart are not movement: no chip', () => {
+    render(<GameBoard feeds={withHistory({ [`${GK}|spread`]: { points: [pt(0, -1.5, 0.4), pt(5, -1.5, 0.5)] } })} />)
+    expect(screen.queryByTestId('card-move')).toBeNull()
+  })
+  it('the deep-dive draws the line and the fair price at the current line, from the side shown', () => {
+    render(<GameBoard feeds={withHistory(moving)} />)
+    const mv = screen.getByTestId('movement')
+    expect(within(mv).getAllByTestId('sparkline')).toHaveLength(2)
+    expect(screen.getByTestId('movement-line').textContent).toMatch(/FLA -1 \u2192 -1\.5/)
+    // home side: away fair 0.44 -> 0.46 at -1.5 is home 56.0% -> 54.0%
+    expect(screen.getByTestId('movement-fair').textContent).toMatch(/56\.0% \u2192 54\.0% \(-2\.0 pts\)/)
+    fireEvent.click(within(screen.getByRole('group', { name: 'Side' })).getByRole('button', { name: 'DET' }))
+    expect(screen.getByTestId('movement-fair').textContent).toMatch(/44\.0% \u2192 46\.0% \(\+2\.0 pts\)/)
+  })
+  it('says tracking is new when the market has too few snapshots, and says nothing when the backend has no history', () => {
+    const first = render(<GameBoard feeds={withHistory({ [`${GK}|spread`]: { points: [pt(0, -1.5, 0.4)] } })} />)
+    expect(screen.getByTestId('movement-empty').textContent).toMatch(/not enough snapshots/)
+    first.unmount()
+    render(<GameBoard feeds={feeds()} />)
+    expect(screen.queryByTestId('movement')).toBeNull()
+    expect(screen.queryByTestId('movement-empty')).toBeNull()
+    expect(screen.queryByTestId('card-move')).toBeNull()
+  })
+  it('the Movement sort puts the game that moved most first', () => {
+    const other = rowsNhl.map(r => ({ ...r, key: r.key.replace('FLA', 'MTL'), game_key: 'nhl:2026-11-02:TOR@MTL', away: 'TOR', home: 'MTL' }))
+    const hist = { ...moving, ['nhl:2026-11-02:TOR@MTL|spread']: { points: [pt(0, -1.5, 0.50), pt(120, -1.5, 0.505)] } }
+    render(<GameBoard feeds={{ odds: { nhl: { ...oddsFeed('nhl', [...rowsNhl, ...other]), history: hist } }, proj: {} }} />)
+    fireEvent.change(screen.getByLabelText('SORT'), { target: { value: 'move' } })
+    expect(screen.getAllByTestId('game-card')[0].getAttribute('data-game')).toBe(GK)
+    expect(Array.from((screen.getByLabelText('SORT') as HTMLSelectElement).options).map(o => o.textContent)).toContain('Movement')
   })
 })
 
