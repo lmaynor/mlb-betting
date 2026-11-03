@@ -48,12 +48,12 @@ export function BestVsRest({ rung, row, side, sideLabel, otherLabel }: { rung: L
     const right = hasFair ? Math.max(0.5, x) : x
     const opp = other(d.book)
     return (
-      <div data-testid="bvr-row" data-book={d.book} data-x={x} className={`relative grid ${COLS} items-center gap-x-3 h-[30px]`}>
+      <div data-testid="bvr-row" data-book={d.book} data-x={x} className={`relative grid ${COLS} items-center gap-x-3 h-[32px]`}>
         <span className="flex items-center gap-1.5 min-w-0">
           <BookLogo book={d.book} size={20} />
           <span className="text-compact overflow-hidden text-ellipsis whitespace-nowrap" style={{ fontWeight: d.best ? 600 : 500, color: muted ? 'var(--color-text-secondary)' : 'var(--color-text-primary)' }}>{bookDisplay(d.book).label}</span>
-          {d.best && <span className="mono text-[9.5px] font-semibold tracking-fine rounded-chip px-1" style={{ color: GREEN, background: 'rgba(87,242,135,0.10)' }}>BEST</span>}
-          {muted && <span className="mono text-[9.5px] font-semibold tracking-fine text-text-secondary border border-[color:var(--color-separator-border)] rounded-chip px-1">SHARP</span>}
+          {d.best && <span className="mono text-[10px] font-semibold tracking-fine rounded-chip px-1" style={{ color: GREEN, background: 'rgba(87,242,135,0.10)' }}>BEST</span>}
+          {muted && <span className="mono text-[10px] font-semibold tracking-fine text-text-secondary border border-[color:var(--color-separator-border)] rounded-chip px-1">SHARP</span>}
         </span>
         <span className="relative block h-full">
           <span className="absolute top-1/2 -mt-[4px] h-2 rounded-[2px]" data-testid="bvr-bar" style={{ left: pc(left), width: pc(Math.max(0.006, right - left)), background: ev != null && ev > LADDER_SUSPECT_EV ? '#facc15' : beats ? GREEN : '#7d8596', opacity: d.best ? 0.95 : beats ? 0.55 : 0.3 }} />
@@ -72,11 +72,11 @@ export function BestVsRest({ rung, row, side, sideLabel, otherLabel }: { rung: L
 
   return (
     <div data-testid="best-vs-rest" className={`py-3 px-4 ${VARS}`}>
-      <div className="flex flex-wrap items-baseline gap-x-5 gap-y-0.5 mb-1.5 text-[11.5px]" data-testid="matrix-legend">
+      <div className="flex flex-wrap items-baseline gap-x-5 gap-y-0.5 mb-1.5 text-[12px]" data-testid="matrix-legend">
         {hasFair && <span className="inline-flex items-center gap-1.5"><span className="inline-block h-3 w-0" style={{ borderLeft: `2px solid ${MARKET}` }} /><span className="text-text-secondary">Market fair</span><span className="mono text-text-primary">{fairText(pM!)}</span></span>}
         {hasFair && rung.pModel != null && <span className="inline-flex items-center gap-1.5"><span className="inline-block h-3 w-0" style={{ borderLeft: `2px dashed ${SKY}` }} /><span style={{ color: SKY }}>Model fair</span><span className="text-text-tertiary">(unvalidated)</span><span className="mono text-text-primary">{fairText(rung.pModel)}</span></span>}
       </div>
-      <div className={`grid ${COLS} gap-x-3 mb-1 text-[10.5px] text-text-tertiary`}>
+      <div className={`grid ${COLS} gap-x-3 mb-1 text-[11px] text-text-tertiary`}>
         <span>Book</span>
         <span className="flex justify-between"><span className="hidden sm:inline">&larr; worse price</span>{hasFair && <span className="text-text-secondary mx-auto sm:mx-0">fair</span>}<span className="hidden sm:inline">better price &rarr;</span></span>
         <span className="text-right">{sideLabel}<span className="hidden sm:inline"> / {otherLabel}</span></span>
@@ -95,7 +95,7 @@ export function BestVsRest({ rung, row, side, sideLabel, otherLabel }: { rung: L
         {top.map(d => <Row key={d.book} d={d} />)}
         {sharp.map(d => <Row key={d.book} d={d} muted />)}
         {rest.length > 0 && (
-          <div data-testid="bvr-rest" className={`relative grid ${COLS} items-center gap-x-3 h-[30px] border-t border-t-[color:var(--color-separator-border)]`}>
+          <div data-testid="bvr-rest" className={`relative grid ${COLS} items-center gap-x-3 h-[32px] border-t border-t-[color:var(--color-separator-border)]`}>
             <span className="text-compact text-text-secondary">{rest.length} other {rest.length === 1 ? 'book' : 'books'}</span>
             <span />
             <span className="mono text-right text-compact text-text-secondary whitespace-nowrap">

@@ -76,13 +76,13 @@ export function ModelPane({ game }: { game: GameBoardEntry }) {
   return (
     <div className="grid gap-4" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }} data-testid="model-pane">
       <div>
-        <p className="m-0 text-[13.5px] leading-[1.5] text-text-primary" data-testid="model-verdict">{verdict}</p>
+        <p className="m-0 text-[14px] leading-[1.5] text-text-primary" data-testid="model-verdict">{verdict}</p>
         {score && <p className="m-0 mt-1 mono text-[12px] text-text-secondary" data-testid="model-score">Projected score {score}</p>}
       </div>
 
       <table className="w-full border-collapse text-compact" data-testid="model-table">
         <thead>
-          <tr className="text-left text-[10.5px] tracking-fine uppercase text-text-tertiary">
+          <tr className="text-left text-[11px]  text-text-tertiary">
             <th scope="col" className="font-normal py-1 pr-2">Main line</th>
             <th scope="col" className="font-normal py-1 pr-2">Model side</th>
             <th scope="col" className="font-normal py-1 pr-2 text-right">Model</th>
@@ -105,7 +105,7 @@ export function ModelPane({ game }: { game: GameBoardEntry }) {
 
       {m.drivers.length > 0 && (
         <div data-testid="model-drivers">
-          <div className="text-[10.5px] tracking-fine uppercase text-text-tertiary mb-1.5">Why</div>
+          <div className="text-[11px]  text-text-tertiary mb-1.5">Why</div>
           <ul className="m-0 p-0 list-none flex flex-wrap gap-1.5">
             {m.drivers.map(d => (
               <li key={d.label} className="inline-flex flex-wrap items-baseline gap-x-1.5 text-[12px] rounded-control border border-separator-border px-2 py-1">
@@ -123,7 +123,7 @@ export function ModelPane({ game }: { game: GameBoardEntry }) {
             {chartMarkets.length > 1 && <Seg label="Market" value={active} options={chartMarkets.map(k => ({ v: k, l: MARKET_NAME[k] }))} onChange={setMarket} />}
           </div>
           <LadderChart rungs={shown} selected={selected} sideLabel={sideLabel} onSelect={line => setPicked(p => ({ ...p, [active]: line }))} />
-          <p className="m-0 text-[11.5px] text-text-tertiary">Grey is the market fair price, dashed blue is our projection, and a <span style={{ color: GREEN }}>green</span> dot is the best price. Model output is unvalidated.</p>
+          <p className="m-0 text-[12px] text-text-tertiary">Grey is the market fair price, dashed blue is our projection, and a <span style={{ color: GREEN }}>green</span> dot is the best price. Model output is unvalidated.</p>
         </div>
       )}
     </div>

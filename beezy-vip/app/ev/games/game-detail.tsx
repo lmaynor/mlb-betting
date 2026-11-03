@@ -27,7 +27,7 @@ export function Seg<T extends string>({ label, value, options, onChange }: { lab
     <div role="group" aria-label={label} className="inline-flex gap-0.5 p-[3px] bg-background-secondary-default border border-separator-border rounded-control">
       {options.map(o => (
         <button key={o.v} type="button" aria-pressed={value === o.v} onClick={() => onChange(o.v)}
-          className="h-[26px] px-3 text-[12px] font-medium rounded-[7px] border cursor-pointer transition-colors duration-150"
+          className="h-[28px] px-3 text-[12px] font-medium rounded-[7px] border cursor-pointer transition-colors duration-150"
           style={{
             color: value === o.v ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
             background: value === o.v ? 'var(--color-background-tertiary-default)' : 'transparent',
@@ -103,11 +103,11 @@ export function GameDetail({ game, bettable, ageLabel, embedded = false }: { gam
         <div className="flex items-center gap-3">
           <span className="inline-flex items-center gap-1.5"><SportLogo sport={sportLogo} team={game.away} size={28} /><SportLogo sport={sportLogo} team={game.home} size={28} /></span>
           <div>
-            <h2 className="text-[16px] leading-[22px] font-bold text-text-primary m-0">{game.away} @ {game.home}</h2>
+            <h2 className="text-[16px] leading-[22px] font-semibold text-text-primary m-0">{game.away} @ {game.home}</h2>
             <div className="mono text-[12px] text-text-secondary">{game.sport.toUpperCase()} &middot; {startLabel(game.start)}</div>
           </div>
         </div>
-        <span className="mono text-[10.5px] font-bold tracking-fine text-warn border border-[color:#facc1555] rounded-chip py-0 px-[6px]" title="Prices are market data; the model is an estimate with no tested edge.">{m ? 'UNVALIDATED MODEL ESTIMATE' : GAME_PRICES_LABEL}</span>
+        <span className="mono text-[11px] font-semibold tracking-fine text-warn border border-[color:#facc1555] rounded-chip py-0 px-[6px]" title="Prices are market data; the model is an estimate with no tested edge.">{m ? 'UNVALIDATED MODEL ESTIMATE' : GAME_PRICES_LABEL}</span>
       </header>}
 
       <dl className="mono grid m-0 border-y border-separator-border text-compact" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }} data-testid="detail-strip">
@@ -119,23 +119,23 @@ export function GameDetail({ game, bettable, ageLabel, embedded = false }: { gam
           { k: 'Coverage', v: `${game.nBooks} books \u00b7 ${ageLabel}` },
         ].filter((c): c is { k: string; v: string } => c.v != null).map((c, i) => (
           <div key={c.k} className="px-4 py-2.5" style={{ borderLeft: i === 0 ? 'none' : '1px solid var(--color-separator-border)' }}>
-            <dt className="text-[10.5px] tracking-fine uppercase text-text-tertiary">{c.k}</dt>
+            <dt className="text-[11px]  text-text-tertiary">{c.k}</dt>
             <dd className="m-0 font-semibold text-text-primary">{c.v}</dd>
           </div>
         ))}
       </dl>
       {m && m.drivers.length > 0 && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 border-b border-separator-border text-[12px] text-text-secondary" data-testid="model-drivers">
-          <span className="mono text-[10.5px] tracking-fine uppercase text-text-tertiary">Model drivers</span>
+          <span className="mono text-[11px]  text-text-tertiary">Model drivers</span>
           {m.drivers.map(d => <span key={d.label} className="inline-flex items-baseline gap-1.5"><span className="text-text-tertiary">{d.label}</span><span className="mono text-text-primary">{d.value}</span></span>)}
         </div>
       )}
 
       {verdict && (
-        <p className="m-0 px-4 pt-3 text-[13.5px] leading-[1.5] text-text-primary" data-testid="verdict">
+        <p className="m-0 px-4 pt-3 text-[14px] leading-[1.5] text-text-primary" data-testid="verdict">
           {verdict}
           {elsewhere && (
-            <button type="button" className="ml-1.5 text-link text-[12.5px] cursor-pointer bg-transparent border-0 p-0 underline-offset-2 hover:underline"
+            <button type="button" className="ml-1.5 text-link text-[13px] cursor-pointer bg-transparent border-0 p-0 underline-offset-2 hover:underline"
               onClick={() => setPicked(p => ({ ...p, [market]: elsewhere.r.row.line }))}>
               Largest gap nearby: {elsewhere.label} ({signedPct(elsewhere.rung.evMarket ?? 0)})
             </button>
@@ -157,7 +157,7 @@ export function GameDetail({ game, bettable, ageLabel, embedded = false }: { gam
         const lineSeries = mv.lineSeries.filter((x): x is number => x != null)
         return (
           <div className="flex flex-wrap items-center gap-x-8 gap-y-2 px-4 pt-3" data-testid="movement">
-            <span className="mono text-[10.5px] tracking-fine uppercase text-text-tertiary">Movement since {startLabel(mv.since)}</span>
+            <span className="mono text-[11px]  text-text-tertiary">Movement since {startLabel(mv.since)}</span>
             {market !== 'ml' && (
               <span className="inline-flex items-center gap-2 text-compact" data-testid="movement-line">
                 <Sparkline values={lineSeries} step w={72} h={22} color="#9ca3af" label={`${lineWord} line movement`} />
@@ -191,11 +191,11 @@ export function GameDetail({ game, bettable, ageLabel, embedded = false }: { gam
       <div className="px-4 pt-4 pb-2">
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-2">
           <span className="text-compact font-semibold text-text-primary">Every line against every book</span>
-          <span className="text-[11.5px] text-text-tertiary">Green = beats the market fair price (EV %), amber = unusually large, check it. Click to open a line.</span>
+          <span className="text-[12px] text-text-tertiary">Green = beats the market fair price (EV %), amber = unusually large, check it. Click to open a line.</span>
         </div>
         <HeatStrip rungs={heatRungs} selected={selected} onSelect={line => setPicked(p => ({ ...p, [market]: line }))} />
         {market !== 'ml' && (allChart.length > chartRungs.length || wide) && (
-          <button type="button" onClick={() => setWide(w => !w)} data-testid="ladder-wide" className="mt-2 text-[12.5px] text-link cursor-pointer bg-transparent border-0 p-0 hover:underline">
+          <button type="button" onClick={() => setWide(w => !w)} data-testid="ladder-wide" className="mt-2 text-[13px] text-link cursor-pointer bg-transparent border-0 p-0 hover:underline">
             {wide ? 'Show nearby lines only' : `Show all ${allChart.length} lines`}
           </button>
         )}
@@ -206,8 +206,8 @@ export function GameDetail({ game, bettable, ageLabel, embedded = false }: { gam
           <dl className="mono flex flex-wrap items-baseline gap-x-6 gap-y-1.5 m-0 px-4 pt-3 text-compact">
             <div className="flex items-baseline gap-2">
               <dt className="sr-only">Line</dt>
-              <dd className="m-0 font-sans text-[15px] font-semibold text-text-primary">{sel.label}</dd>
-              {sel.r.row.line === mainLine && market !== 'ml' && <span className="text-[9.5px] font-semibold tracking-fine" style={{ color: GREEN }}>MAIN</span>}
+              <dd className="m-0 font-sans text-[16px] font-semibold text-text-primary">{sel.label}</dd>
+              {sel.r.row.line === mainLine && market !== 'ml' && <span className="text-[10px] font-semibold tracking-fine" style={{ color: GREEN }}>MAIN</span>}
               {sel.rung.thin && <span className="text-[10px] font-semibold tracking-fine text-warn" title="Fewer than 3 books quote this line: the price is shown, but no edge is claimed.">THIN</span>}
               {!sel.rung.thin && sel.rung.suspect && <span className="text-[10px] font-semibold tracking-fine text-warn" title="Unusually large against the market fair value: often a stale quote. Check the price at the book.">CHECK</span>}
               {sel.r.arbLive && sel.r.arb && <span className="text-[10px] font-semibold tracking-fine text-warn border border-[color:#facc1555] rounded-chip px-1" title={gameArbHedgeText(sel.r, 100) ?? 'Arbitrage'}>ARB {sel.r.arb.netArbPct.toFixed(1)}%</span>}
@@ -217,13 +217,13 @@ export function GameDetail({ game, bettable, ageLabel, embedded = false }: { gam
               hasModel ? { k: 'Model EV', v: sel.rung.evModel != null ? signedPct(sel.rung.evModel) : '--', c: SKY } : null,
               (side === 'a' ? sel.r.a : sel.r.b).stake > 0 ? { k: '1/4 Kelly', v: usd((side === 'a' ? sel.r.a : sel.r.b).stake) } : null,
             ].filter((c): c is { k: string; v: string; c?: string } => c != null).map(c => (
-              <div key={c.k} className="flex items-baseline gap-1.5"><dt className="text-[10.5px] tracking-fine uppercase text-text-tertiary">{c.k}</dt><dd className="m-0 font-semibold" style={{ color: c.c ?? 'var(--color-text-primary)' }}>{c.v}</dd></div>
+              <div key={c.k} className="flex items-baseline gap-1.5"><dt className="text-[11px]  text-text-tertiary">{c.k}</dt><dd className="m-0 font-semibold" style={{ color: c.c ?? 'var(--color-text-primary)' }}>{c.v}</dd></div>
             ))}
           </dl>
           <BestVsRest rung={sel.rung} row={sel.r.row} side={side} sideLabel={sideLabel} otherLabel={otherLabel} />
         </div>
       )}
-      <p className="text-[11.5px] text-text-tertiary leading-[1.5] px-4 py-3 m-0">
+      <p className="text-[12px] text-text-tertiary leading-[1.5] px-4 py-3 m-0">
         Green is against the market fair price; blue is our model and is unvalidated. Pinnacle is a reference, never a place to bet. Lines move: check the price at the book.
       </p>
     </section>

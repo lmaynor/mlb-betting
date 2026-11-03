@@ -70,12 +70,12 @@ function HeatRow({ h, on, books, sel }: { h: HeatRung; on: boolean; books: strin
   return (
     <>
       <button type="button" onClick={sel} aria-pressed={on} data-testid={`heat-row-${h.line ?? 'ml'}`}
-        className="sticky left-0 z-[1] flex items-center gap-1.5 text-left text-[12.5px] cursor-pointer border-0 pr-2 bg-[color:var(--color-background-primary-default)]"
+        className="sticky left-0 z-[1] flex items-center gap-1.5 text-left text-[13px] cursor-pointer border-0 pr-2 bg-[color:var(--color-background-primary-default)]"
         style={{ fontWeight: on ? 600 : 500, color: r.thin ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)' }}>
         <span className="w-[3px] h-4 rounded-[2px]" style={{ background: on ? GREEN : 'transparent' }} />
         <span className="whitespace-nowrap">{h.label}</span>
-        {h.main && <span className="mono text-[9px] font-semibold tracking-fine" style={{ color: GREEN }}>MAIN</span>}
-        {r.thin && <span className="mono text-[9px] font-semibold tracking-fine text-warn">THIN</span>}
+        {h.main && <span className="mono text-[10px] font-semibold tracking-fine" style={{ color: GREEN }}>MAIN</span>}
+        {r.thin && <span className="mono text-[10px] font-semibold tracking-fine text-warn">THIN</span>}
       </button>
       {books.map(b => {
         const d = r.dots.find(x => x.book === b)
@@ -86,7 +86,7 @@ function HeatRow({ h, on, books, sel }: { h: HeatRung; on: boolean; books: strin
         return (
           <button key={b} type="button" onClick={sel} data-testid={`heat-cell-${h.line ?? 'ml'}-${canonBook(b)}`} data-ev={ev ?? ''} data-best={isBest || undefined} data-suspect={fill?.suspect || undefined}
             title={`${bookDisplay(b).label} on ${h.label}: ${formatOdds(d.american)}${ev != null ? ` (${ev >= 0 ? '+' : ''}${(ev * 100).toFixed(1)}% vs fair)` : ' (no fair value on this line)'}`}
-            className="mono h-[28px] rounded-[5px] border-0 text-[10.5px] font-semibold cursor-pointer"
+            className="mono h-[28px] rounded-[5px] border-0 text-[11px] font-semibold cursor-pointer"
             style={{
               background: fill?.background ?? 'rgba(255,255,255,0.04)',
               color: fill?.color ?? 'var(--color-text-tertiary)',

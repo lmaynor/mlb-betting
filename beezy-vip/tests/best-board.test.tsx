@@ -115,7 +115,7 @@ describe('the card (double-click)', () => {
     render(board(EDGE, { history: { [`${GK}|spread`]: { points: [pt(0, -1.0, 0.50), pt(60, -1.5, 0.45)] } } }))
     fireEvent.doubleClick(screen.getAllByTestId('board-row')[0])
     const cls = screen.getByTestId('game-popup').className
-    expect(cls).toMatch(/\bh-\[88vh\]/)
+    expect(cls).toMatch(/\bh-\[88dvh\]/)
     expect(cls).toMatch(/sm:h-\[680px\]/)
     for (const t of ['tab-total', 'tab-ml', 'tab-move', 'tab-analysis', 'tab-spread']) {
       fireEvent.click(screen.getByTestId(t))

@@ -32,7 +32,7 @@ function PriceChip({ s }: { s: ShopSide }) {
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap" data-testid="price-chip">
       <BookLogo book={s.book} size={16} />
       <b className="mono font-semibold" style={{ color: s.actionable ? GREEN : 'var(--color-text-primary)' }}>{formatOdds(s.american)}</b>
-      {s.actionable && s.ev != null && <span className="mono text-[10.5px] font-semibold rounded-chip px-1" style={{ color: GREEN, background: 'rgba(87,242,135,0.10)' }}>{signedPct(s.ev)}</span>}
+      {s.actionable && s.ev != null && <span className="mono text-[11px] font-semibold rounded-chip px-1" style={{ color: GREEN, background: 'rgba(87,242,135,0.10)' }}>{signedPct(s.ev)}</span>}
       {s.suspect && <span className="mono text-[10px] font-semibold tracking-fine text-warn" title="Unusually large against the market fair price: often a stale quote. Check the price at the book.">CHECK</span>}
     </span>
   )
@@ -44,7 +44,7 @@ function SideButtons({ r }: { r: AltRow }) {
     <div className="grid grid-cols-2 gap-2" data-testid="side-buttons">
       {[r.a, r.b].map(s => (
         <div key={s.label} data-testid="side-button" data-actionable={s.actionable || undefined}
-          className="rounded-xl border px-3 py-2.5 min-w-0 min-h-[116px]" style={{ borderColor: s.actionable ? GREEN : s.suspect ? '#facc1580' : 'var(--color-separator-border)', background: s.actionable ? 'rgba(87,242,135,0.04)' : 'var(--color-background-secondary-default)' }}>
+          className="rounded-xl border border-separator-border px-3 py-2.5 min-w-0 min-h-[116px]" style={{ background: 'var(--color-background-secondary-default)' }}>
           <div className="text-[12px] text-text-secondary truncate">{s.label}</div>
           <div className="mt-1 flex items-center gap-2 flex-wrap">
             {s.american != null && s.book != null ? (
@@ -55,7 +55,7 @@ function SideButtons({ r }: { r: AltRow }) {
               </>
             ) : <span className="text-text-tertiary">no price</span>}
           </div>
-          <div className="mt-1 flex items-center gap-2 flex-wrap min-h-[18px]">
+          <div className="mt-1 flex items-center gap-2 flex-wrap min-h-[20px]">
             {s.actionable && s.ev != null && <span className="mono text-[11px] font-semibold rounded-chip px-1.5" style={{ color: GREEN, background: 'rgba(87,242,135,0.10)' }}>{signedPct(s.ev)} vs fair</span>}
             {s.suspect && s.ev != null && <span className="mono text-[11px] font-semibold rounded-chip px-1.5 text-warn" style={{ background: 'rgba(250,204,21,0.10)' }} title="Far better than the market fair price: often a stale quote, sometimes a mispriced line. Confirm the price at the book.">{signedPct(s.ev)} CHECK</span>}
             {s.others.length > 0 && <span className="mono text-[11px] text-text-tertiary" title="The next best prices at other books">also {s.others.map(o => `${bookDisplay(o.book).short} ${formatOdds(o.american)}`).join(' · ')}</span>}
@@ -100,13 +100,13 @@ function MarketPane({ g, market, initialLine, bettable }: { g: GameBoardEntry; m
               return (
                 <button key={r.row.key} ref={on ? chipRef : undefined} type="button" aria-pressed={on} data-testid={`line-chip-${r.line}`} onClick={() => setLine(r.line)}
                   title={r.thin ? 'Fewer than 3 books quote this line' : undefined}
-                  className="mono flex-none min-w-[54px] h-9 rounded-control border text-[13px] font-semibold cursor-pointer transition-colors duration-150"
+                  className="mono flex-none min-w-[56px] h-9 rounded-control border text-[13px] font-semibold cursor-pointer transition-colors duration-150"
                   style={{
                     background: on ? 'var(--color-background-tertiary-default)' : 'transparent',
                     borderColor: on ? GREEN : 'var(--color-separator-border)',
                     color: on ? 'var(--color-text-primary)' : r.thin ? 'var(--color-text-tertiary)' : 'var(--color-text-secondary)',
                   }}>
-                  {chip(r.line)}{r.main && <span className="block text-[8.5px] leading-[8px] tracking-fine -mt-px" style={{ color: GREEN }}>MAIN</span>}
+                  {chip(r.line)}{r.main && <span className="block text-[10px] leading-[8px] tracking-fine -mt-px" style={{ color: GREEN }}>MAIN</span>}
                 </button>
               )
             })}
@@ -114,7 +114,7 @@ function MarketPane({ g, market, initialLine, bettable }: { g: GameBoardEntry; m
         </div>
       )}
       <SideButtons r={sel} />
-      {sel.thin && <p className="m-0 text-[11.5px] text-text-tertiary">Fewer than 3 books quote this line, so no edge is claimed.</p>}
+      {sel.thin && <p className="m-0 text-[12px] text-text-tertiary">Fewer than 3 books quote this line, so no edge is claimed.</p>}
       {rows.length > 1 && (
         <div data-testid="line-tiles">
           <div className="text-[11px] text-text-tertiary mb-1">All lines</div>
@@ -123,8 +123,8 @@ function MarketPane({ g, market, initialLine, bettable }: { g: GameBoardEntry; m
               [r.a, r.b].map((s, i) => (
                 <button key={`${r.row.key}-${i}`} type="button" onClick={() => setLine(r.line)} data-testid="line-tile" data-line={r.line ?? ''} data-selected={r.line === sel.line || undefined}
                   className="relative text-left rounded-control border px-2.5 py-1.5 cursor-pointer transition-colors duration-150 hover:bg-[color:var(--color-background-primary-hover)]"
-                  style={{ borderColor: s.actionable ? GREEN : s.suspect ? '#facc1580' : r.line === sel.line ? 'var(--color-border-button-hover)' : 'var(--color-separator-border)', background: 'transparent', opacity: r.thin ? 0.75 : 1 }}>
-                  <span className="block text-[11.5px] text-text-secondary truncate">{s.label}</span>
+                  style={{ borderColor: r.line === sel.line ? 'var(--color-border-button-hover)' : 'var(--color-separator-border)', background: 'transparent', opacity: r.thin ? 0.75 : 1 }}>
+                  <span className="block text-[12px] text-text-secondary truncate">{s.label}</span>
                   <b className="mono text-[14px] font-semibold" style={{ color: s.actionable ? GREEN : 'var(--color-text-primary)' }}>{s.american != null ? formatOdds(s.american) : '--'}</b>
                   {s.actionable && s.ev != null && <span className="mono text-[10px] font-semibold ml-1.5" style={{ color: GREEN }}>{signedPct(s.ev)}</span>}
                   {s.book && <span className="absolute right-1.5 bottom-1.5"><BookLogo book={s.book} size={14} /></span>}
@@ -132,18 +132,18 @@ function MarketPane({ g, market, initialLine, bettable }: { g: GameBoardEntry; m
               ))
             ))}
           </div>
-          {rows.length > ALT_WINDOW && <button type="button" onClick={() => setAll(a => !a)} data-testid="alt-all" className="mt-2 text-[12.5px] text-link cursor-pointer bg-transparent border-0 p-0 hover:underline">{all ? 'Show nearby lines only' : `Show all ${rows.length} lines`}</button>}
+          {rows.length > ALT_WINDOW && <button type="button" onClick={() => setAll(a => !a)} data-testid="alt-all" className="mt-2 text-[13px] text-link cursor-pointer bg-transparent border-0 p-0 hover:underline">{all ? 'Show nearby lines only' : `Show all ${rows.length} lines`}</button>}
         </div>
       )}
       <div data-testid="all-books">
-        <button type="button" aria-expanded={books} onClick={() => setBooks(b => !b)} data-testid="all-books-toggle" className="text-[12.5px] text-link cursor-pointer bg-transparent border-0 p-0 hover:underline">
+        <button type="button" aria-expanded={books} onClick={() => setBooks(b => !b)} data-testid="all-books-toggle" className="text-[13px] text-link cursor-pointer bg-transparent border-0 p-0 hover:underline">
           {books ? 'Hide all books' : 'All books, line by line'}
         </button>
         {books && (
           <div className="mt-2 grid gap-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <Seg label="Side" value={bookSide} options={[{ v: 'a', l: sel.a.label }, { v: 'b', l: sel.b.label }]} onChange={setBookSide} />
-              <span className="text-[11.5px] text-text-tertiary">Green beats the market fair price (EV %), amber is a big gap to check.</span>
+              <span className="text-[12px] text-text-tertiary">Green beats the market fair price (EV %), amber is a big gap to check.</span>
             </div>
             <HeatStrip rungs={heatRungs} selected={sel.line} onSelect={l => setLine(l)} />
           </div>
@@ -166,7 +166,7 @@ function MovePane({ g }: { g: GameBoardEntry }) {
         const fmt = (x: number | null) => (x == null ? '--' : market === 'total' ? String(x) : signedLine(x))
         return (
           <section key={market} aria-label={MARKET_NAME[market]} className="grid gap-1" data-testid={`move-${market}`}>
-            <h3 className="m-0 text-[11px] font-semibold tracking-fine uppercase text-text-tertiary">{MARKET_NAME[market]} <span className="normal-case font-normal">since {startLabel(m!.since)}</span></h3>
+            <h3 className="m-0 text-[11px] font-semibold text-text-tertiary">{MARKET_NAME[market]} <span className="normal-case font-normal">since {startLabel(m!.since)}</span></h3>
             <div className="flex flex-wrap items-center gap-x-8 gap-y-1.5 text-compact">
               {market !== 'ml' && (
                 <span className="inline-flex items-center gap-2">
@@ -184,7 +184,7 @@ function MovePane({ g }: { g: GameBoardEntry }) {
           </section>
         )
       })}
-      <p className="m-0 text-[11.5px] text-text-tertiary">Market fair price, de-vigged from the books. Shown, never read as a signal.</p>
+      <p className="m-0 text-[12px] text-text-tertiary">Market fair price, de-vigged from the books. Shown, never read as a signal.</p>
     </div>
   )
 }
@@ -219,18 +219,18 @@ export function GamePopup({ game, initialPane, initialLine, bettable = null, onC
   return (
     <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center bg-black/60" data-testid="game-popup-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
       <div ref={ref} role="dialog" aria-modal="true" aria-label={`${game.away} at ${game.home}`} data-testid="game-popup" tabIndex={-1}
-        className="w-full sm:max-w-[720px] h-[88vh] sm:h-[680px] max-h-[92vh] flex flex-col bg-background-primary-default border border-separator-border rounded-t-xl sm:rounded-xl shadow-card">
+        className="w-full sm:max-w-[720px] h-[88dvh] sm:h-[680px] max-h-[92dvh] flex flex-col bg-background-primary-default border border-separator-border rounded-t-xl sm:rounded-xl shadow-card">
         <header className="flex-none flex items-start justify-between gap-3 px-4 pt-3.5 pb-2">
           <div className="flex items-center gap-3">
             <span className="inline-flex items-center gap-1.5"><SportLogo sport={sport} team={game.away} size={30} /><SportLogo sport={sport} team={game.home} size={30} /></span>
             <div>
-              <h2 className="text-[16px] leading-[22px] font-bold text-text-primary m-0">{game.away} @ {game.home}</h2>
+              <h2 className="text-[16px] leading-[22px] font-semibold text-text-primary m-0">{game.away} @ {game.home}</h2>
               <div className="mono text-[12px] text-text-secondary">{game.sport.toUpperCase()} &middot; {startLabel(game.start)} &middot; {game.nBooks} books</div>
             </div>
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="size-8 rounded-control border border-separator-border bg-transparent text-text-secondary hover:text-text-primary cursor-pointer text-[16px] leading-none">&times;</button>
         </header>
-        <p className="flex-none m-0 px-4 pb-3 text-[13.5px] leading-[1.5] text-text-primary" data-testid="popup-headline">{gameHeadline(game)}</p>
+        <p className="flex-none m-0 px-4 pb-3 text-[14px] leading-[1.5] text-text-primary" data-testid="popup-headline">{gameHeadline(game)}</p>
         <div className="flex-none px-4 border-b border-separator-border overflow-x-auto" role="tablist" aria-label="Card">
           <div ref={tabsRef} className="flex gap-1 min-w-max">
             {tabs.map(t => (

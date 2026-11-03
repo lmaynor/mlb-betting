@@ -23,11 +23,11 @@ type LogoSport = Parameters<typeof SportLogo>[0]['sport']
 function SideCell({ s }: { s: ShopSide }) {
   return (
     <span className="flex items-center gap-1.5 whitespace-nowrap leading-[20px]">
-      <span className="text-[11px] text-text-tertiary min-w-[52px]">{s.label}</span>
+      <span className="text-[11px] text-text-tertiary min-w-[56px]">{s.label}</span>
       {s.american != null && s.book != null ? (
         <>
           <BookLogo book={s.book} size={14} />
-          <b className="mono text-[12.5px] font-semibold" style={{ color: s.actionable ? GREEN : 'var(--color-text-primary)' }}>{formatOdds(s.american)}</b>
+          <b className="mono text-[13px] font-semibold" style={{ color: s.actionable ? GREEN : 'var(--color-text-primary)' }}>{formatOdds(s.american)}</b>
           {s.actionable && s.ev != null && <span className="mono text-[10px] font-semibold rounded-chip px-1" style={{ color: GREEN, background: 'rgba(87,242,135,0.10)' }}>{signedPct(s.ev)}</span>}
         </>
       ) : <span className="text-text-tertiary">--</span>}
@@ -52,7 +52,7 @@ function MoveCell({ g }: { g: GameBoardEntry }) {
   return (
     <span className="inline-flex items-center gap-1.5" data-testid="row-move" title="Since the board first saw this game. Market data, not a signal.">
       <Sparkline values={values} w={48} h={18} label={`${g.away} at ${g.home} movement`} />
-      <span className="mono text-[10.5px] text-text-secondary whitespace-nowrap">{text}</span>
+      <span className="mono text-[11px] text-text-secondary whitespace-nowrap">{text}</span>
     </span>
   )
 }
@@ -64,9 +64,9 @@ function EdgeCell({ g }: { g: GameBoardEntry }) {
   return (
     <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5" data-testid="row-edge">
       <BookLogo book={e.shop.book!} size={14} />
-      <span className="text-[11.5px] text-text-primary">{e.shop.label}{e.alt ? ' (alt)' : ''}</span>
+      <span className="text-[12px] text-text-primary">{e.shop.label}{e.alt ? ' (alt)' : ''}</span>
       <b className="mono text-[12px] font-semibold" style={{ color: e.outlier ? '#facc15' : GREEN }}>{formatOdds(e.shop.american!)}</b>
-      <span className="mono text-[10.5px] font-semibold rounded-chip px-1" style={{ color: e.outlier ? '#facc15' : GREEN, background: e.outlier ? 'rgba(250,204,21,0.10)' : 'rgba(87,242,135,0.10)' }}>{signedPct(e.shop.ev!)}{e.outlier ? ' CHECK' : ''}</span>
+      <span className="mono text-[11px] font-semibold rounded-chip px-1" style={{ color: e.outlier ? '#facc15' : GREEN, background: e.outlier ? 'rgba(250,204,21,0.10)' : 'rgba(87,242,135,0.10)' }}>{signedPct(e.shop.ev!)}{e.outlier ? ' CHECK' : ''}</span>
     </span>
   )
 }
@@ -109,13 +109,13 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen }: { feeds
 
   return (
     <div>
-      <div className="flex items-center gap-y-[6px] gap-x-[14px] flex-wrap min-h-[38px] py-[6px] px-[14px] mb-[10px] bg-background-primary-default text-compact" data-testid="game-board-strip" style={{ border: `1px solid ${HAIR}`, borderRadius: '8px' }}>
-        <span className="mono font-bold text-text-primary">{activeSport === 'all' ? 'ALL SPORTS' : activeSport.toUpperCase()}</span>
+      <div className="flex items-center gap-y-[6px] gap-x-[14px] flex-wrap min-h-[40px] py-[6px] px-4 mb-[10px] bg-background-primary-default text-compact" data-testid="game-board-strip" style={{ border: `1px solid ${HAIR}`, borderRadius: '8px' }}>
+        <span className="mono font-semibold text-text-primary">{activeSport === 'all' ? 'ALL SPORTS' : activeSport.toUpperCase()}</span>
         <span className="mono text-neutral-300">{games.length} {games.length === 1 ? 'GAME' : 'GAMES'}</span>
         <span className="mono text-neutral-300">LINES {ageText(age)} OLD</span>
         {myBooks.enabled && <span className="mono text-neutral-300" title="Best prices are limited to your books">MY BOOKS ({myBooks.books.length})</span>}
-        {stale && <span className="mono text-[10.5px] font-bold tracking-fine text-warn border border-[color:#facc1555] rounded-chip py-0 px-[5px]">STALE</span>}
-        <span className="text-neutral-300"><span className="mono text-[10.5px] font-bold tracking-fine text-warn">{GAME_PRICES_LABEL}</span> {GAME_PRICES_NOTE}</span>
+        {stale && <span className="mono text-[11px] font-semibold tracking-fine text-warn border border-[color:#facc1555] rounded-chip py-0 px-[5px]">STALE</span>}
+        <span className="text-neutral-300"><span className="mono text-[11px] font-semibold tracking-fine text-warn">{GAME_PRICES_LABEL}</span> {GAME_PRICES_NOTE}</span>
       </div>
 
       {unavailable ? (
@@ -127,7 +127,7 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen }: { feeds
           <section aria-label="Edges now" className="mb-3" data-testid="edges-now">
             <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 mb-1.5">
               <span className="text-compact font-semibold text-text-primary whitespace-nowrap">Edges now</span>
-              <span className="text-[11.5px] text-text-tertiary">2%+ vs the market fair price on 3+ books; amber = a big gap to confirm{myBooks.enabled ? ', at your books' : ''}</span>
+              <span className="text-[12px] text-text-tertiary">2%+ vs the market fair price on 3+ books; amber = a big gap to confirm{myBooks.enabled ? ', at your books' : ''}</span>
             </div>
             {edges.length === 0 ? (
               <p className="m-0 rounded-xl border border-separator-border bg-background-primary-default px-3.5 py-3 text-compact text-text-secondary" data-testid="edges-none">Nothing clears the bar right now. The market is tight on every game below.</p>
@@ -135,14 +135,14 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen }: { feeds
               <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollSnapType: 'x proximity' }}>
                 {edges.map((e: EdgeItem) => (
                   <button key={`${e.game.key}-${e.market}-${e.line}-${e.side}`} type="button" data-testid="edge-chip" onClick={() => openCard(e.game.key, e.market, e.line)}
-                    className="flex-none w-[188px] text-left rounded-xl border bg-background-primary-default px-3 py-2.5 cursor-pointer transition-colors duration-150 hover:bg-[color:var(--color-background-primary-hover)]"
-                    data-outlier={e.outlier || undefined} style={{ borderColor: e.outlier ? '#facc1599' : 'rgba(87,242,135,0.45)', scrollSnapAlign: 'start' }}>
+                    className="flex-none w-[188px] text-left rounded-xl border border-separator-border bg-background-primary-default px-3 py-2.5 cursor-pointer transition-colors duration-150 hover:bg-[color:var(--color-background-primary-hover)]"
+                    data-outlier={e.outlier || undefined} style={{ scrollSnapAlign: 'start' }}>
                     <span className="flex items-center justify-between gap-2">
-                      <span className="text-[11.5px] text-text-secondary truncate">{e.game.away} @ {e.game.home}</span>
-                      <span className="mono text-[10.5px] font-semibold rounded-chip px-1.5" style={{ color: e.outlier ? '#facc15' : GREEN, background: e.outlier ? 'rgba(250,204,21,0.10)' : 'rgba(87,242,135,0.10)' }}>{signedPct(e.shop.ev!)}{e.outlier ? ' CHECK' : ''}</span>
+                      <span className="text-[12px] text-text-secondary truncate">{e.game.away} @ {e.game.home}</span>
+                      <span className="mono text-[11px] font-semibold rounded-chip px-1.5 whitespace-nowrap" style={{ color: e.outlier ? '#facc15' : GREEN, background: e.outlier ? 'rgba(250,204,21,0.10)' : 'rgba(87,242,135,0.10)' }}>{signedPct(e.shop.ev!)}</span>
                     </span>
-                    <span className="mt-1 flex items-center gap-1.5 text-compact font-semibold text-text-primary">{e.shop.label}{e.alt && <span className="mono text-[9px] font-semibold tracking-fine text-text-tertiary">ALT</span>}</span>
-                    <span className="mt-1 flex items-center gap-1.5"><BookLogo book={e.shop.book!} size={16} /><b className="mono text-[17px] font-semibold" style={{ color: e.outlier ? '#facc15' : GREEN }}>{formatOdds(e.shop.american!)}</b></span>
+                    <span className="mt-1 flex items-center gap-1.5 text-compact font-semibold text-text-primary">{e.shop.label}{e.alt && <span className="mono text-[10px] font-semibold tracking-fine text-text-tertiary">ALT</span>}</span>
+                    <span className="mt-1 flex items-center gap-1.5"><BookLogo book={e.shop.book!} size={16} /><b className="mono text-[18px] font-semibold" style={{ color: e.outlier ? '#facc15' : GREEN }}>{formatOdds(e.shop.american!)}</b>{e.outlier && <span className="mono text-[10px] font-semibold tracking-fine text-warn" title="Far better than the market fair price: often a stale quote. Confirm the price at the book.">CHECK</span>}</span>
                   </button>
                 ))}
               </div>
@@ -155,7 +155,7 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen }: { feeds
               {available.map(s => <Pill key={s} active={activeSport === s} onClick={() => setSport(s)}>{s.toUpperCase()}</Pill>)}
             </PillGroup>
             <Select id="bb-sort" label="SORT" value={sort} onChange={v => setSort(v as BoardSort)} options={BOARD_SORTS.map(s => ({ v: s.v, l: s.l }))} />
-            <span className="hidden md:inline-flex items-center gap-1.5 text-[12px] text-text-secondary rounded-control border border-separator-border px-2.5 py-1" data-testid="open-hint"><span aria-hidden className="text-[13px] leading-none">&#9755;</span>Double-click any game to open its card</span>
+            <span className="hidden md:inline-flex items-center gap-1.5 text-[12px] text-text-secondary rounded-control border border-separator-border px-2.5 py-1" data-testid="open-hint">Double-click any game to open its card</span>
           </div>
           {quiet.length > 0 && <p className="text-[12px] text-text-secondary m-0 mb-2.5" data-testid="quiet-sports">{quiet.join(' · ')}</p>}
 
