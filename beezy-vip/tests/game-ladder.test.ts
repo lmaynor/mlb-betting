@@ -218,3 +218,20 @@ describe('rungVerdict: one plain sentence', () => {
     expect(rungVerdict(buildLadderRung(row({ books: [q('pinnacle', -150, 125)] }), 'b'), 'FLA -1.5', name)).toMatch(/No book you can bet at/)
   })
 })
+
+import { rungEdgeRange } from '../lib/game-ladder'
+
+describe('rungEdgeRange: where every book sits against the market fair price', () => {
+  it('runs from the worst book to the best, zero being the fair price, and ends at the best price EV', () => {
+    const r = buildLadderRung(MAIN, 'b', { pMarket: 0.435 })
+    const e = rungEdgeRange(r)!
+    expect(e.hi).toBeCloseTo(0.435 * decimalOf(134) - 1, 10)
+    expect(e.lo).toBeCloseTo(0.435 * decimalOf(123) - 1, 10)
+    expect(e.lo).toBeLessThan(e.hi)
+    expect(e.best).toBeCloseTo(e.hi, 10)
+  })
+  it('has no range without a market fair value or without books', () => {
+    expect(rungEdgeRange(buildLadderRung(MAIN, 'b'))).toBeNull()
+    expect(rungEdgeRange(buildLadderRung(row({ books: [] }), 'b', { pMarket: 0.4 }))).toBeNull()
+  })
+})

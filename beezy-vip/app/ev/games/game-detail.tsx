@@ -153,7 +153,7 @@ export function GameDetail({ game, bettable, ageLabel }: { game: GameBoardEntry;
             <span className="text-text-primary font-semibold text-compact">{sideLabel} ladder</span>
             <span className="inline-flex items-center gap-1.5"><svg width="18" height="6" aria-hidden><line x1="0" y1="3" x2="18" y2="3" stroke="#9ca3af" strokeWidth="2" /></svg>Market fair</span>
             {hasModel && <span className="inline-flex items-center gap-1.5"><svg width="18" height="6" aria-hidden><line x1="0" y1="3" x2="18" y2="3" stroke={SKY} strokeWidth="2" strokeDasharray="4 3" /></svg>Our projection</span>}
-            <span className="inline-flex items-center gap-1.5"><svg width="8" height="12" aria-hidden><rect x="1" y="0" width="6" height="12" rx="3" fill="#7d8596" fillOpacity="0.45" /></svg>Range of book prices</span>
+            <span className="inline-flex items-center gap-1.5"><svg width="8" height="14" aria-hidden><rect x="0" y="0" width="8" height="8" rx="2" fill={GREEN} fillOpacity="0.75" /><rect x="0" y="8" width="8" height="6" rx="2" fill="#7d8596" fillOpacity="0.5" /></svg>Books vs fair (green beats it)</span>
             <span className="inline-flex items-center gap-1.5"><svg width="10" height="10" aria-hidden><circle cx="5" cy="5" r="4" fill={GREEN} /></svg>Best price</span>
           </div>
           <LadderChart rungs={chartRungs} selected={selected} sideLabel={sideLabel} onSelect={line => setPicked(p => ({ ...p, [market]: line }))} />

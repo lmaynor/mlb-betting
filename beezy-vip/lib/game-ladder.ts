@@ -197,3 +197,13 @@ export function rungVerdict(rung: LadderRung, label: string, bookLabel: (book: s
   const sus = rung.suspect ? ' That gap is unusually large: check the price at the book before trusting it.' : ''
   return `${head} That is ${ev} EV against the market fair price of ${fair}. ${beatText}${sus}`
 }
+
+/**
+ * How far every book's price on a rung sits from the market fair price, as EV (fair probability x decimal payout - 1): the lowest and
+ * highest, and the best BETTABLE price's. Zero is the fair price; above it a book beats fair. Null without a market fair value.
+ */
+export function rungEdgeRange(rung: LadderRung): { lo: number; hi: number; best: number | null } | null {
+  if (rung.pMarket == null || rung.dots.length === 0) return null
+  const evs = rung.dots.map(d => rung.pMarket! * d.decimal - 1)
+  return { lo: Math.min(...evs), hi: Math.max(...evs), best: rung.evMarket }
+}

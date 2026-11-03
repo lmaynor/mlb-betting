@@ -139,14 +139,18 @@ describe('the ladder chart: dots at break-even, edge gaps, rung selection', () =
     expect(best).toContain(breakEvenProb(134))
     expect(breakEvenProb(134)).toBeCloseTo(0.4274, 4)
   })
-  it('each line is one range bar from its best to its worst book, not a dot per book', () => {
+  it('each line with a market fair value gets one bar from its worst book to its best, against fair', () => {
     render(<GameBoard feeds={feeds()} />)
     const chart = within(screen.getByTestId('ladder-chart'))
     expect(chart.queryAllByTestId('book-dot')).toHaveLength(0)
-    const bands = chart.getAllByTestId('book-range')
-    expect(bands).toHaveLength(3)
-    const main = bands.find(b => Math.abs(Number(b.getAttribute('data-lo')) - breakEvenProb(134)) < 1e-9)!
-    expect(Number(main.getAttribute('data-hi'))).toBeCloseTo(breakEvenProb(118), 10)
+    // only the main rung has the 3+ reference books a fair value needs; the two alt rungs have 2 books each
+    const bars = chart.getAllByTestId('book-range')
+    expect(bars).toHaveLength(1)
+    const lo = Number(bars[0].getAttribute('data-ev-lo'))
+    const hi = Number(bars[0].getAttribute('data-ev-hi'))
+    expect(hi).toBeGreaterThan(lo)
+    expect(screen.getByTestId('edge-panel').textContent).toMatch(/Books against the market fair price/)
+    expect(screen.getByTestId('edge-panel').textContent).toMatch(/fair/)
   })
   it('shows the lines near the main line by default, and every line on request', () => {
     const rows = Array.from({ length: 21 }, (_, i) => mk(GK, 'DET', 'FLA', T1, 'spread', -12.5 + i, SIX(-110, -110)))
