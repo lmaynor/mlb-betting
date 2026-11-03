@@ -162,7 +162,7 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
 
       <div className="flex justify-between items-center flex-wrap gap-2">
         <Link href={`/picks/${sport}/systems`} className="times text-cozy text-link no-underline">&larr; All {pillar.shortName} systems</Link>
-        <Link href={`/edge/projections?league=${sport}`} className="times text-cozy text-link no-underline">Every {pillar.shortName} projection in Prop Research &rarr;</Link>
+        <Link href={`/ev/projections?league=${sport}`} className="times text-cozy text-link no-underline">Every {pillar.shortName} projection in the Odds Terminal &rarr;</Link>
       </div>
     </div>
   )

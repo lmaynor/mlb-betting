@@ -118,6 +118,8 @@ export async function apiGetPicks(params: {
   limit?:   number
   offset?:  number
   book?:    string
+  /** mlb | nfl | nhl | nba | all. The API's own default is mlb. */
+  sport?:   string
 }): Promise<Bet[]> {
   const sp = new URLSearchParams()
   if (params.system) sp.set('system',  params.system)
@@ -126,6 +128,7 @@ export async function apiGetPicks(params: {
   if (params.limit)  sp.set('limit',   String(params.limit))
   if (params.offset) sp.set('offset',  String(params.offset))
   if (params.book)   sp.set('book',    params.book)
+  if (params.sport)  sp.set('sport',   params.sport)
   const qs = sp.toString() ? `?${sp.toString()}` : ''
   const data = await apiFetch<PicksResponse>(`/api/public/picks${qs}`, 60)
   return data.picks

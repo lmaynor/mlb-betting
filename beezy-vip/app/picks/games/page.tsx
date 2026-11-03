@@ -10,6 +10,8 @@ import type { SportSlug } from '@/lib/sports'
 export const metadata: Metadata = {
   title: 'Game Picks',
   description: 'MLB game picks: moneyline, run line and game totals, ranked by Beezy Score and settled publicly.',
+  // Hidden from the navigation, the sitemap and search: the page still answers so an old link does not 404.
+  robots: { index: false, follow: false },
 }
 
 /** Game Picks is the TRACKED, graded game record (MLB). NBA / NHL game lines are unvalidated model estimates with no record, so

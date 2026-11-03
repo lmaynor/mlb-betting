@@ -49,7 +49,6 @@ SYSTEM = "PROPS"
 SPORTS = ("nfl", "nba", "nhl")
 MIN_MINS_TO_START = 30.0
 MAX_PAYLOAD_AGE_MIN = 45.0          # a board older than this is not live; log nothing rather than log a stale price
-MAX_POSTS_PER_PASS = 5              # mirrors the Official Card's own cap
 HEARTBEAT_KEY = "ModelPicks/last_run.json"          # {ts, sports: {sport: {status, selected, logged, ...}}}; monitor_ops reads it
 STAKE = 1.0
 # Official tier also needs the market-anchored blended EV to clear this. The engines' own standalone P(side) is noisier than the
@@ -262,9 +261,10 @@ def _teams(p: dict) -> tuple:
 # -- Discord -----------------------------------------------------------------------------------------------------------
 
 def post_official(sport: str, picks: list[dict]) -> bool:
-    """Post the newly logged OFFICIAL picks to the sport's alerts channel (paper / unvalidated). True if delivered."""
+    """Post the newly logged OFFICIAL picks to the sport's alerts channel (paper / unvalidated). True if delivered. No count cap here:
+    the Daily Card has none; sport_alerts.MAX_ALERTS is the only flood guard on top-level posts."""
     from mlb_core.alerts.sport_alerts import post_sport_alerts
-    rows = [p for p in picks if p.get("tier") == "official" and p.get("american") is not None][:MAX_POSTS_PER_PASS]
+    rows = [p for p in picks if p.get("tier") == "official" and p.get("american") is not None]
     if not rows:
         return False
     return post_sport_alerts(sport, rows, log_bets=False)
