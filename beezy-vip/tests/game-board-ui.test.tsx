@@ -89,6 +89,15 @@ describe('GameBoard: cards across the top, one deep-dive below', () => {
   })
 })
 
+describe('a sport with a feed but no games', () => {
+  it('says why it is missing instead of silently vanishing', () => {
+    const waiting = { ...oddsFeed('nba', []), status: 'awaiting_lines' as const }
+    render(<GameBoard feeds={{ odds: { nhl: oddsFeed('nhl', rowsNhl), nba: waiting }, proj: {} }} />)
+    expect(within(screen.getByRole('group', { name: 'Sport' })).getAllByRole('button').map(b => b.textContent)).toEqual(['All sports', 'NHL'])
+    expect(screen.getByTestId('quiet-sports').textContent).toMatch(/NBA: the next slate's lines are not posted yet/)
+  })
+})
+
 describe('GameDetail: summary, drivers and the model', () => {
   it('shows the projected score, the ML win probability and only the drivers that exist', () => {
     render(<GameBoard feeds={feeds()} />)

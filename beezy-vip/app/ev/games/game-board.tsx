@@ -107,6 +107,8 @@ export function GameBoard({ feeds: initial, initialGame, initialSport }: { feeds
   const activeSport = sport === 'all' || available.includes(sport) ? sport : 'all'
   const games = useMemo(() => sortBoard(entries.filter(g => activeSport === 'all' || g.sport === activeSport), sort), [entries, activeSport, sort])
   const selected = games.find(g => g.key === picked) ?? games[0] ?? null
+  // A sport with a feed but no game is not a pill, so say why instead of leaving it to look missing.
+  const quiet = feedSports.filter(s => !available.includes(s)).map(s => `${s.toUpperCase()}: ${odds[s]?.status === 'awaiting_lines' ? 'the next slate\'s lines are not posted yet' : 'no games with prices right now'}`)
 
   useEffect(() => {
     if (typeof window === 'undefined' || !selected) return
@@ -163,6 +165,7 @@ export function GameBoard({ feeds: initial, initialGame, initialSport }: { feeds
             </details>
           </div>
 
+          {quiet.length > 0 && <p className="text-[12px] text-text-secondary m-0 mb-2.5" data-testid="quiet-sports">{quiet.join(' \u00b7 ')}</p>}
           {games.length === 0 ? (
             <div role="status" className="py-6 text-neutral-300 text-cozy">No games for this sport right now.</div>
           ) : (
