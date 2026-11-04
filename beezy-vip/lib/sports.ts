@@ -187,7 +187,14 @@ export function sportsWithRows(boards: Partial<Record<SportSlug, { rows?: unknow
 /** One league as a filter pill: `live` has rows now, `empty` is a league we cover with nothing on the board, `soon` has no feed on this page yet. */
 export type LeagueState = 'live' | 'empty' | 'soon'
 
-export interface LeaguePill { slug: SportSlug; label: string; state: LeagueState; note: string }
+/**
+ * Leagues that have a price board but are not a sport pillar (no model, no picks, no pass): they get a filter pill and nothing else.
+ * Registering one here is all a price-only league needs; a full sport goes in SPORT_SLUGS / SPORT_PILLARS instead.
+ */
+export const EXTRA_LEAGUES = [{ slug: 'ncaab', shortName: 'NCAAB' }] as const
+export type LeagueSlug = SportSlug | (typeof EXTRA_LEAGUES)[number]['slug']
+
+export interface LeaguePill { slug: LeagueSlug; label: string; state: LeagueState; note: string }
 
 /**
  * Every league filter (Odds Terminal, Game Lines) shows every live pillar in registry order (SPORT_SLUGS), so a league never disappears
@@ -195,8 +202,8 @@ export interface LeaguePill { slug: SportSlug; label: string; state: LeagueState
  * `soon` is the leagues this page has no feed for at all.
  */
 export function leaguePills(live: readonly string[], soon: readonly string[] = [], date = new Date()): LeaguePill[] {
-  // Soccer is a live pillar but not a US league filter: it has its own three-way surface (/ev/games?sport=soccer), so the row stays four.
-  return LIVE_SPORTS.filter(p => p.slug !== 'soccer').map(p => {
+  const leagues: { slug: LeagueSlug; shortName: string }[] = [...LIVE_SPORTS, ...EXTRA_LEAGUES]
+  return leagues.map(p => {
     const state: LeagueState = soon.includes(p.slug) ? 'soon' : live.includes(p.slug) ? 'live' : 'empty'
     const note = state === 'soon' ? `${p.shortName} is not on this page yet.`
       : state === 'empty' ? (p.slug === 'mlb' && isMlbOffseason(date) ? 'MLB is in the offseason and resumes in March.' : `No ${p.shortName} games with prices right now.`)
@@ -204,6 +211,14 @@ export function leaguePills(live: readonly string[], soon: readonly string[] = [
     return { slug: p.slug, label: p.shortName, state, note }
   })
 }
+
+/** Leagues whose prices live on Game Lines only (no player-props feed): the props board's pills send these there instead of filtering. */
+export const GAME_LINES_ONLY = ['soccer', 'ncaab'] as const
+export type GameLinesOnly = (typeof GAME_LINES_ONLY)[number]
+export function isGameLinesOnly(v: string): v is GameLinesOnly {
+  return (GAME_LINES_ONLY as readonly string[]).includes(v)
+}
+export const gameLinesHref = (v: GameLinesOnly): string => `/ev/games?sport=${v}`
 
 const PROP_STAT_LABEL: Record<string, string> = {
   rec_yds: 'Rec Yds', rush_yds: 'Rush Yds', pass_yds: 'Pass Yds', receptions: 'Receptions', pass_tds: 'Pass TDs',

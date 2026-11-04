@@ -35,7 +35,7 @@ const POLL_MS = 3 * 60_000
  * a fair value de-vigged from the reference books the viewer picks, EV, and game-line arbitrage. All maths is lib/game-odds.ts
  * (an adapter onto lib/odds-screen.ts). Offshore books are shown but are never the best price. UNVALIDATED market data.
  */
-export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<string, GameOddsFeed | null>; sport: 'all' | 'nba' | 'nhl' }) {
+export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<string, GameOddsFeed | null>; sport: 'all' | 'nba' | 'nhl' | 'ncaab' }) {
   const [feeds, setFeeds] = useState(initial)
   const [market, setMarket] = useState<Market>('all')
   const [game, setGame] = useState('all')
@@ -54,7 +54,7 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
   const isMobile = useIsMobile(768)
   const deferredQ = useDeferredValue(q)
 
-  const sports = useMemo(() => (sport === 'all' ? ['nba', 'nhl'] : [sport]), [sport])
+  const sports = useMemo(() => (sport === 'all' ? ['nba', 'nhl', 'ncaab'] : [sport]), [sport])
   const active = useMemo(() => sports.map(s => feeds[s]).filter((f): f is GameOddsFeed => !!f), [sports, feeds])
 
   useEffect(() => {
@@ -99,7 +99,7 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
   const stale = active.some(f => f.stale)
   const ages = active.map(f => f.age_minutes).filter((n): n is number => n != null && isFinite(n))
   const age = ages.length ? Math.max(...ages) : null
-  const sportLabel = sport === 'all' ? 'NBA + NHL' : sport.toUpperCase()
+  const sportLabel = sport === 'all' ? 'NBA + NHL + NCAAB' : sport.toUpperCase()
 
   const copyHedge = useCallback(async (r: Parameters<typeof gameArbHedgeText>[0]) => {
     const text = gameArbHedgeText(r, OUTLAY)

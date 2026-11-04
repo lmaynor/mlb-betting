@@ -1,9 +1,9 @@
 'use client'
 
-import { leaguePills, type LeaguePill, type SportSlug } from '@/lib/sports'
+import { leaguePills, type LeagueSlug, type LeaguePill } from '@/lib/sports'
 import { cx } from '@/utils/cx'
 
-export type LeagueValue = 'all' | SportSlug
+export type LeagueValue = 'all' | LeagueSlug
 
 const SUFFIX: Record<LeaguePill['state'], string> = { live: '', empty: 'off', soon: 'soon' }
 
@@ -38,7 +38,7 @@ export function LeagueFilter({ value, onChange, live, soon, label = 'League' }: 
 
 /** Shown in place of a board when the picked league has nothing: the reason, then one button per league that does. */
 export function LeagueNote({ value, live, soon, onPick }: {
-  value: SportSlug
+  value: LeagueSlug
   live: readonly string[]
   soon?: readonly string[]
   onPick: (v: LeagueValue) => void

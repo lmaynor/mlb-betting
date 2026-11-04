@@ -1,12 +1,13 @@
 import Link from 'next/link'
 
 export type GamesView = 'board' | 'table'
-export type GameSport = 'all' | 'nba' | 'nhl' | 'soccer'
+export type GameSport = 'all' | 'nba' | 'nhl' | 'soccer' | 'ncaab'
 
 export const SPORT_TABS: { key: GameSport; label: string }[] = [
   { key: 'all', label: 'All sports' },
   { key: 'nba', label: 'NBA' },
   { key: 'nhl', label: 'NHL' },
+  { key: 'ncaab', label: 'NCAAB' },
   { key: 'soccer', label: 'SOCCER (EPL / UCL)' },
 ]
 const VIEW_TABS: { key: GamesView; label: string; title: string }[] = [
@@ -25,7 +26,7 @@ export function analysisGame(v: string | undefined, game: string | undefined): s
 }
 
 export function parseGameSport(v: string | undefined): GameSport {
-  return v === 'nba' || v === 'nhl' || v === 'soccer' ? v : 'all'
+  return v === 'nba' || v === 'nhl' || v === 'soccer' || v === 'ncaab' ? v : 'all'
 }
 
 /** A shareable /ev/games URL: the view and the sport live in the query string, never in client state. BOARD and ALL are the defaults and stay out of it. */

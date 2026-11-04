@@ -1,5 +1,6 @@
 import { bookDisplay } from '@/lib/tokens'
 import { LeagueFilter } from '@/components/ui/league-filter'
+import { GAME_LINES_ONLY, gameLinesHref, isGameLinesOnly } from '@/lib/sports'
 import { STAT_LABEL, type SideFilter } from '@/lib/odds-screen'
 import { SportFilter, SortKey, HAIR, GREEN, SHARP_PRESET, MIN_EV, ODDS_MIN, PAGE, MID_COST, MID_GAP, OUTLIER_GAP_OPTIONS, OUTLIER_ODDS_OPTIONS, OUTLIER_MIN_BOOKS, MODES, SGP_ARCHETYPE_OPTIONS, SGP_MIN_EV_OPTIONS } from './odds-constants'
 import { startLabel } from './odds-format'
@@ -24,7 +25,7 @@ export function MobileFilterBar({ odds }: { odds: OddsScreen }) {
       </div>
 
       <div style={{ padding: '8px 10px', borderTop: `1px solid ${HAIR}`, display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-        <LeagueFilter value={sport} live={sportOptions} onChange={v => { setSport(v); setStat('all'); setGame('all'); setLimit(PAGE) }} />
+        <LeagueFilter value={sport} live={[...sportOptions, ...GAME_LINES_ONLY]} onChange={v => { if (isGameLinesOnly(v)) { window.location.assign(gameLinesHref(v)); return } setSport(v); setStat('all'); setGame('all'); setLimit(PAGE) }} />
 
         <input
           aria-label="Search player or team"
@@ -101,7 +102,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
           })}
         </PillGroup>
           <Field label="Sport">
-            <LeagueFilter value={sport} live={sportOptions} onChange={v => { setSport(v); setStat('all'); setGame('all'); setLimit(PAGE) }} />
+            <LeagueFilter value={sport} live={[...sportOptions, ...GAME_LINES_ONLY]} onChange={v => { if (isGameLinesOnly(v)) { window.location.assign(gameLinesHref(v)); return } setSport(v); setStat('all'); setGame('all'); setLimit(PAGE) }} />
           </Field>
           <Field label="Prop" htmlFor="odds-stat">
             <Select id="odds-stat" value={stat} onChange={v => { setStat(v); setLimit(PAGE) }}

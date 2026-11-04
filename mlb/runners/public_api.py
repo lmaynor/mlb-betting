@@ -1176,7 +1176,7 @@ def get_game_odds_board(sport, day=None, market=None, limit=1500):
             "count": count, "books": books,
             "offshore_books": [b for b in payload.get("offshore_books") or [] if b in books],
             "games": sorted(per_game.values(), key=lambda g: (str(g["start"]), str(g["game_key"]))),
-            "rows": rows, "history": history}
+            "rows": rows, "history": history, "team_names": payload.get("team_names") or {}}
 
 
 def _roi(profit, stake):

@@ -1,4 +1,4 @@
-import { LIVE_SPORTS } from '@/lib/sports'
+import { EXTRA_LEAGUES, LIVE_SPORTS } from '@/lib/sports'
 import '@testing-library/jest-dom'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { BestBoard } from '@/app/ev/games/best-board'
@@ -58,8 +58,8 @@ describe('BestBoard: one row per game', () => {
   it('always offers every live league, dims the ones with nothing, and says why one is missing', () => {
     render(<BestBoard feeds={{ odds: { nhl: feed(TIGHT), nba: { ...feed([], { sport: 'nba' }), status: 'awaiting_lines' } }, proj: {} }} />)
     const group = within(screen.getByRole('group', { name: 'Sport' }))
-    const tag: Record<string, string> = { nhl: '', nba: 'off' }
-    expect(group.getAllByRole('button').map(b => b.textContent)).toEqual(['All', ...LIVE_SPORTS.map(p => `${p.shortName}${tag[p.slug] ?? 'soon'}`)])
+    const tag: Record<string, string> = { nhl: '', nba: 'off', ncaab: 'off', soccer: '' }     // ncaab has a board feed (empty here); soccer's pill opens its own board, so it reads live
+    expect(group.getAllByRole('button').map(b => b.textContent)).toEqual(['All', ...[...LIVE_SPORTS, ...EXTRA_LEAGUES].map(p => `${p.shortName}${tag[p.slug] ?? 'soon'}`)])
     expect(screen.getByTestId('quiet-sports').textContent).toMatch(/NBA: the next slate's lines are not posted yet/)
     fireEvent.click(group.getByRole('button', { name: /NFL/ }))
     expect(screen.getByTestId('league-note').textContent).toMatch(/NFL is not on this page yet/)

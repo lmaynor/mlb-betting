@@ -2,6 +2,7 @@ import { bookDisplay, SURFACE_CARD } from '@/lib/tokens'
 import { cx } from '@/utils/cx'
 import { BookLogo } from '@/components/ui/book-logo'
 import { SGP_ARTIFACT_EV_PCT, SGP_UNVALIDATED_LABEL } from '@/lib/odds-screen'
+import { gameLinesHref, isGameLinesOnly } from '@/lib/sports'
 import { HAIR, GREEN, PAGE } from './odds-constants'
 import { ageLabel, usd } from './odds-format'
 import { EvRow, ArbTableRow, MiddleTableRow, LongshotTableRow, OutlierTableRow, SgpTableRow } from './odds-rows'
@@ -284,7 +285,7 @@ export function OddsResults({ odds }: { odds: OddsScreen }) {
       {unpublished ? (
         <Empty title="Odds board not published yet" body="The price feed behind this screen is not available right now. It is rewritten every 30 minutes while games are on the board; check back shortly." />
       ) : sport !== 'all' && !sportOptions.includes(sport) ? (
-        <LeagueNote value={sport} live={sportOptions} onPick={v => { setSport(v); setLimit(PAGE) }} />
+        <LeagueNote value={sport} live={sportOptions} onPick={v => { if (isGameLinesOnly(v)) { window.location.assign(gameLinesHref(v)); return } setSport(v); setLimit(PAGE) }} />
       ) : allRows.length === 0 ? (
         <Empty title="No prop prices posted" body="No book has posted player props for the games on the board yet." />
       ) : nRows === 0 ? (

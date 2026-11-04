@@ -4,6 +4,8 @@
 #
 #   ncaab-bank-bp       python -m ev.ncaab_banker --source bettingpros   hourly at :35, Nov-Apr
 #   ncaab-bank-kalshi   python -m ev.ncaab_banker --source kalshi        hourly at :40, Nov-Apr
+#   ncaab-board         python -m ev.ncaab_board                         hourly at :55, Nov-Apr (joins the three banked feeds + BestBook's
+#                                                                        cbb file into EVSweep/ncaab_games/odds_board_latest.json, the Game Lines board)
 #
 # Each writes Odds/{source}_live/ncaab/game_lines_latest.json (BestBook's ladder shape; the previous good file is kept when a
 # crawl finds no priced games). Both feeds are free and unauthenticated: no ParlayAPI credits. Sources keep their own team codes
@@ -22,10 +24,11 @@ IMAGE="${IMAGE:-gcr.io/${PROJECT_ID}/mlb-betting-feeds}"
 SA_EMAIL="${SERVICE_NAME}-sa@${PROJECT_ID}.iam.gserviceaccount.com"
 SCHED_SA="scheduler-invoker@${PROJECT_ID}.iam.gserviceaccount.com"
 
-# job|source|cron (America/Chicago)
+# job|module args|cron (America/Chicago); the board runs after the :35 / :40 banks and BestBook's :50 crawl
 ROWS=(
-  "ncaab-bank-bp|bettingpros|35 * * 11-12,1-4 *"
-  "ncaab-bank-kalshi|kalshi|40 * * 11-12,1-4 *"
+  "ncaab-bank-bp|ev.ncaab_banker,--source,bettingpros|35 * * 11-12,1-4 *"
+  "ncaab-bank-kalshi|ev.ncaab_banker,--source,kalshi|40 * * 11-12,1-4 *"
+  "ncaab-board|ev.ncaab_board|55 * * 11-12,1-4 *"
 )
 
 for MODE in PAUSE RESUME; do
@@ -46,11 +49,11 @@ gcloud iam service-accounts describe "$SA_EMAIL" --quiet >/dev/null || { echo "E
 gcloud container images describe "$IMAGE" --quiet >/dev/null 2>&1 || { echo "ERROR: $IMAGE not found."; exit 1; }
 
 for row in "${ROWS[@]}"; do
-  IFS='|' read -r JOB SOURCE CRON <<<"$row"
+  IFS='|' read -r JOB MODARGS CRON <<<"$row"
   FLAGS=(--image="$IMAGE" --region="$REGION" --service-account="$SA_EMAIL"
          --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest"
          --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION}"
-         --command="python" --args="-m,ev.ncaab_banker,--source,$SOURCE"
+         --command="python" --args="-m,$MODARGS"
          --task-timeout="600s" --max-retries=1 --memory="512Mi" --cpu="1")
   if gcloud run jobs describe "$JOB" --region="$REGION" --project="$PROJECT_ID" --quiet >/dev/null 2>&1; then
     echo "Updating Cloud Run job $JOB..."
@@ -68,7 +71,7 @@ for row in "${ROWS[@]}"; do
                --oauth-service-account-email="$SCHED_SA"
                --oauth-token-scope="https://www.googleapis.com/auth/cloud-platform"
                --location="$REGION" --project="$PROJECT_ID"
-               --description="Trigger $JOB -> Odds/${SOURCE}_live/ncaab/game_lines_latest.json")
+               --description="Trigger $JOB (ncaab banking / board)")
   if gcloud scheduler jobs describe "$JOB" --location="$REGION" --project="$PROJECT_ID" --quiet >/dev/null 2>&1; then
     gcloud scheduler jobs update http "$JOB" "${SCHED_FLAGS[@]}" --quiet
   else

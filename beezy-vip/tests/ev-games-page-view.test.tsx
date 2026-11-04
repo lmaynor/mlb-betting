@@ -33,9 +33,9 @@ beforeEach(() => {
 })
 
 describe('/ev/games view and sport routing (server-side)', () => {
-  it('defaults to the BOARD: both odds feeds and both model feeds (the card\'s Analysis tab needs them), one row per game', async () => {
+  it('defaults to the BOARD: every two-way odds feed, and the model feeds that have an engine (the card\'s Analysis tab needs them), one row per game', async () => {
     render(await page({}))
-    expect(oddsMock.mock.calls.map(c => c[0]).sort()).toEqual(['nba', 'nhl'])
+    expect(oddsMock.mock.calls.map(c => c[0]).sort()).toEqual(['nba', 'ncaab', 'nhl'])    // soccer is its own tab; ncaab is a price-only feed
     expect(projMock.mock.calls.map(c => c[0]).sort()).toEqual(['nba', 'nhl'])
     expect(screen.getByTestId('best-board')).toBeInTheDocument()
     expect(screen.getAllByTestId('board-row').length).toBeGreaterThan(0)
