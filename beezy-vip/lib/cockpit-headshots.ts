@@ -12,6 +12,8 @@ export function withHeadshotIds(rows: CockpitRow[]): CockpitRow[] {
     if (!r.player) return r
     if (r.sport === 'mlb' && r.player_id == null) return { ...r, player_id: playerIdByName('mlb', r.player) }
     if (r.sport === 'nfl' && r.headshot_id == null) return { ...r, headshot_id: playerIdByName('nfl', r.player, r.team) }
+    // NHL / NBA sweep rows carry a league id; rows built from the projection board (lib/cockpit-players.ts) do not, so resolve by name
+    if ((r.sport === 'nhl' || r.sport === 'nba') && r.player_id == null) return { ...r, player_id: playerIdByName(r.sport, r.player, r.team) }
     return r
   })
 }

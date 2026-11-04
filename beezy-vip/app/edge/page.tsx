@@ -1,10 +1,11 @@
 export const dynamic = 'force-dynamic'
 
 import type { Metadata } from 'next'
-import { apiGetTodayAllPredictions, apiGetTodaySlate, apiGetEdgeEnrich, apiGetTodayAlerts, apiGetEdgeCockpit, type EdgeAlert } from '@/lib/betting-api'
+import { apiGetTodayAllPredictions, apiGetTodaySlate, apiGetEdgeEnrich, apiGetTodayAlerts, type EdgeAlert } from '@/lib/betting-api'
 import type { Bet, CockpitFeed, TodaySlate, SlateGame } from '@/lib/types'
 import { formatCentralDate, siteDateKey } from '@/lib/dates'
 import { limitCockpit } from '@/lib/access-feeds'
+import { loadCockpit } from '@/lib/cockpit-loader'
 import { withHeadshotIds } from '@/lib/cockpit-headshots'
 import { limitBets } from '@/lib/access-bets'
 import { getViewer } from '@/lib/auth'
@@ -58,8 +59,8 @@ export default async function EdgePage() {
     apiGetTodaySlate().catch(() => ({ games: [] } as unknown as TodaySlate)),
     apiGetEdgeEnrich(date),
     apiGetTodayAlerts(date),
-    // fail-soft: until the backend serves /edge/cockpit the page falls back to the MLB model board
-    apiGetEdgeCockpit({ limit: 60 }).catch(() => null),
+    // the sweep's flagged rows plus the daily projection boards (lib/cockpit-players.ts); fail-soft per source
+    loadCockpit(),
     getViewer(),
   ])
 
