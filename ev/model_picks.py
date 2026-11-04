@@ -65,8 +65,8 @@ MAX_STAKE_UNITS = 2.0
 # stat's measured c says the engine adds (points / pra c = 0.02 add almost nothing, so they rarely clear this).
 OFFICIAL_MIN_BLEND_EV = 0.025
 # Official tier also needs the stat to carry MEASURED information beyond the market on the engine that prices it (blend c >= 0.08,
-# t >= 2.5 in the repo's own real-line studies). A stat that fails stays on the board and in the tracked tier (stake 0, still settled
-# and closed, so the forward record keeps accumulating) but is never staked or posted. Measured, per the study docs:
+# t >= 2.5 in the repo's own real-line studies). A stat that fails stays on the board and in the tracked tier (still settled and
+# closed, so the forward record keeps accumulating) but is never posted; it is still Kelly-sized on its blend like every pick. Measured, per the study docs:
 #   NBA threes +0.19 (t 8.4), rebounds +0.13 (t 9.4), assists +0.09 (t 5.7)      nba_engine_vs_market_2026-11-01.md, `ship_noabs`
 #   NHL saves  +0.48 pooled on the board engine (-0.23 / +0.84 / +0.19 by season: regime-dependent)   nhl_engine_vs_market_2026-11-01.md
 #   NFL rush_yds +0.25 (t 2.9) -- measured on the HIERARCHICAL engine only, so only rows that engine priced
