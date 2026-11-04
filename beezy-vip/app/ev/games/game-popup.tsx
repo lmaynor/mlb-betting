@@ -57,7 +57,7 @@ function SideButtons({ r }: { r: AltRow }) {
           </div>
           <div className="mt-1 flex items-center gap-2 flex-wrap min-h-[20px]">
             {s.actionable && s.ev != null && <span className="mono text-[11px] font-semibold rounded-chip px-1.5" style={{ color: GREEN, background: 'rgba(87,242,135,0.10)' }}>{signedPct(s.ev)} vs fair</span>}
-            {s.suspect && s.ev != null && <span className="mono text-[11px] font-semibold rounded-chip px-1.5 text-warn" style={{ background: 'rgba(250,204,21,0.10)' }} title="Far better than the market fair price: often a stale quote, sometimes a mispriced line. Confirm the price at the book.">{signedPct(s.ev)} CHECK</span>}
+            {s.suspect && s.ev != null && <span className="mono text-[11px] font-semibold rounded-chip px-1.5 text-warn" style={{ background: 'rgba(250,204,21,0.10)' }} title="Far better than the market fair price: often a stale quote, sometimes a mispriced line. Confirm the price at the book.">{signedPct(s.ev)} Check</span>}
             {s.others.length > 0 && <span className="mono text-[11px] text-text-tertiary" title="The next best prices at other books">also {s.others.map(o => `${bookDisplay(o.book).short} ${formatOdds(o.american)}`).join(' · ')}</span>}
           </div>
         </div>

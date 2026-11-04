@@ -35,8 +35,8 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
 
       {PRE_LAUNCH && (
         <div className="mb-2.5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgba(87,242,135,0.35)] bg-background-primary-default px-4 py-2.5 shadow-card">
-          <div className="flex items-center gap-2.5">
-            <span className="ui-heading rounded-chip bg-[var(--brand-dim)] px-2 py-[3px] text-signal">Pre-launch preview</span>
+          <div className="flex flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:gap-2.5">
+            <span className="ui-heading shrink-0 whitespace-nowrap rounded-chip bg-[var(--brand-dim)] px-2 py-[3px] text-signal">Pre-launch preview</span>
             <span className="text-body-2-regular text-text-secondary">The full Odds Terminal is unlocked for early visitors (included in All-Access Pro at launch).</span>
           </div>
           <Link href="/pricing" className="text-caption-1-semibold text-signal no-underline hover:underline">Lock pre-launch pricing &rarr;</Link>

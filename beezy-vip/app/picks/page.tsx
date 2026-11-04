@@ -71,7 +71,7 @@ export default async function TopPicksPage({ searchParams }: { searchParams: Pro
             </div>
           </div>
           <span className="mono text-caption-1-regular text-text-secondary">
-            {formatDateKey(date, { weekday: 'short', month: 'short', day: 'numeric' })} &middot; all sports, ranked by Beezy Score &middot; free
+            {formatDateKey(date, { weekday: 'short', month: 'short', day: 'numeric' })}{' '}&middot; all sports, ranked by Beezy Score &middot; free
           </span>
         </div>
 

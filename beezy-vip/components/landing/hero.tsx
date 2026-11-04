@@ -31,7 +31,7 @@ export async function Hero() {
           </div>
 
           <span className="mono text-mini text-text-secondary">
-            VERIFIED PUBLIC LEDGER &middot; 1/4 KELLY SIZING
+            Verified public ledger &middot; 1/4 Kelly sizing
             {h ? ` \u00b7 ${h.graded.toLocaleString()} graded` : ''} &middot; From ${PLANS.single.price}/mo
           </span>
         </div>

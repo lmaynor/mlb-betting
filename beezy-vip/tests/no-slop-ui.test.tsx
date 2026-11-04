@@ -86,7 +86,7 @@ describe('design-system debt guards', () => {
     const hero = read('components/landing/hero.tsx')
     expect(hero).not.toMatch(/linear-gradient|radius-xl/)
     expect(hero).toMatch(/SURFACE_CARD|bg-background-primary-default/)
-    expect(hero).toMatch(/VERIFIED PUBLIC LEDGER &middot; 1\/4 KELLY SIZING/)
+    expect(hero).toMatch(/Verified public ledger &middot; 1\/4 Kelly sizing/)
     expect(read('app/page.tsx')).not.toMatch(/linear-gradient|radius-xl/)
     // the legal disclosure stays in the footer, as one muted paragraph (no PAPER MODE callout box)
     const footer = read('components/layout/footer.tsx')

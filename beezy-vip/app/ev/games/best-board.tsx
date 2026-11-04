@@ -65,7 +65,7 @@ function EdgeCell({ g, testId = 'row-edge' }: { g: GameBoardEntry; testId?: stri
       <BookLogo book={e.shop.book!} size={14} />
       <span className="text-[12px] text-text-primary">{e.shop.label}{e.alt ? ' (alt)' : ''}</span>
       <b className="mono text-[12px] font-semibold" style={{ color: e.outlier ? '#facc15' : GREEN }}>{formatOdds(e.shop.american!)}</b>
-      <span className="mono text-[11px] font-semibold rounded-chip px-1" style={{ color: e.outlier ? '#facc15' : GREEN, background: e.outlier ? 'rgba(250,204,21,0.10)' : 'rgba(87,242,135,0.10)' }}>{signedPct(e.shop.ev!)}{e.outlier ? ' CHECK' : ''}</span>
+      <span className="mono text-[11px] font-semibold rounded-chip px-1" style={{ color: e.outlier ? '#facc15' : GREEN, background: e.outlier ? 'rgba(250,204,21,0.10)' : 'rgba(87,242,135,0.10)' }}>{signedPct(e.shop.ev!)}{e.outlier ? ' Check' : ''}</span>
     </span>
   )
 }

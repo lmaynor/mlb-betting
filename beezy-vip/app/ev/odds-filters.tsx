@@ -10,7 +10,7 @@ export function MobileFilterBar({ odds }: { odds: OddsScreen }) {
   const { mode, sport, setSport, sportOptions, setStat, setGame, q, setQ, setLimit, setMobileFiltersOpen, activeFilterCount, switchMode, badgeFor } = odds
   return (
     <section className="mb-2.5 rounded-xl border border-separator-border bg-background-primary-default shadow-card" aria-label="Filters">
-      <HorizontalPillStrip padding="8px 10px" gap="6px">
+      <div className="grid grid-cols-2 gap-1.5 px-2.5 py-2 [&>button]:w-full [&>button]:whitespace-nowrap">
         {MODES.map(m => {
           const n = badgeFor(m.key)
           const hot = n != null && n > 0 && (m.key === 'arb' || m.key === 'outliers')
@@ -21,9 +21,9 @@ export function MobileFilterBar({ odds }: { odds: OddsScreen }) {
             </Pill>
           )
         })}
-      </HorizontalPillStrip>
+      </div>
 
-      <div style={{ padding: '8px 10px', borderTop: `1px solid ${HAIR}`, display: 'flex', gap: '8px', alignItems: 'center' }}>
+      <div style={{ padding: '8px 10px', borderTop: `1px solid ${HAIR}`, display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
         <HorizontalPillStrip gap="4px" padding="0" style={{ width: 'auto', flexShrink: 0 }}>
           {(['all', ...sportOptions] as SportFilter[]).map(s => {
             const selected = sport === s
@@ -66,8 +66,8 @@ export function MobileFilterBar({ odds }: { odds: OddsScreen }) {
             height: '32px',
             padding: '0 8px',
             fontSize: '12px',
-            flex: 1,
-            minWidth: '80px',
+            flex: '1 1 100%',
+            order: 3,
           }}
         />
 
@@ -80,6 +80,7 @@ export function MobileFilterBar({ odds }: { odds: OddsScreen }) {
             fontSize: '12px',
             height: '32px',
             flexShrink: 0,
+            marginLeft: 'auto',
             display: 'inline-flex',
             alignItems: 'center',
             gap: '5px',
