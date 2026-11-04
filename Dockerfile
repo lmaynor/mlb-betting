@@ -28,6 +28,8 @@ COPY mlb_core/      ./mlb_core/
 COPY nba/           ./nba/
 COPY nfl/           ./nfl/
 COPY nhl/           ./nhl/
+# soccer/ pillar (EPL + UCL game lines): ev.daily_projections imports soccer.game.run_daily; without it the soccer board never builds
+COPY soccer/        ./soccer/
 # mlb/ pillar: runners/, training/, systems/{HR_Pro, NRFI_Pro_System, ...}
 COPY mlb/           ./mlb/
 COPY ev/            ./ev/
