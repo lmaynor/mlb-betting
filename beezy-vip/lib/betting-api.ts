@@ -8,6 +8,7 @@ import type { GameOddsFeed } from '@/lib/game-odds'
 import { siteDateKey } from '@/lib/dates'
 import type { ProjectionSport, SportSlug } from '@/lib/sports'
 import type { OddsBoard } from '@/lib/odds-screen'
+import { suppressJunkBooks } from '@/lib/offshore'
 
 function normalizeApiUrl(value: string) {
   const trimmed = value.trim().replace(/\/+$/, '')
@@ -282,7 +283,7 @@ export async function apiGetOddsBoard(sport: SportSlug, opts: { day?: string; st
   if (opts.day) sp.set('day', opts.day)
   if (opts.stat) sp.set('stat', opts.stat)
   if (opts.limit) sp.set('limit', String(opts.limit))
-  return apiFetch<OddsBoard>(`/api/public/odds/board?${sp.toString()}`, 60, `/api/odds-board?${sp.toString()}`)
+  return suppressJunkBooks(await apiFetch<OddsBoard>(`/api/public/odds/board?${sp.toString()}`, 60, `/api/odds-board?${sp.toString()}`))
 }
 
 /** Quantitative game-line projections (ML, Spread/Puck Line, Total) for NBA / NHL. */
@@ -310,11 +311,11 @@ export async function apiGetGameOddsBoard(
   if (opts.day) sp.set('day', opts.day)
   if (opts.market) sp.set('market', opts.market)
   if (opts.limit) sp.set('limit', String(opts.limit))
-  return apiFetch<GameOddsFeed>(
+  return suppressJunkBooks(await apiFetch<GameOddsFeed>(
     `/api/public/games/odds?${sp.toString()}`,
     60,
     `/api/games/odds?${sp.toString()}`,
-  )
+  ))
 }
 
 /** /edge multi-sport prop cockpit: candidates for MLB / NFL / NHL / NBA with each player's last-10 game log vs the line. */

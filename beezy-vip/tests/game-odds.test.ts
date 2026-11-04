@@ -1,5 +1,5 @@
 import {
-  ageText, buildGamePriceRows, effectiveBettable, filterGamePriceRows, gameArbHedgeText, gameBookColumns, gameOddsQueryString, lineLabel, parseGameOddsQuery,
+  ageText, buildGamePriceRows, freshnessBin, effectiveBettable, filterGamePriceRows, gameArbHedgeText, gameBookColumns, gameOddsQueryString, lineLabel, parseGameOddsQuery,
   sideLabels, signedLine, sortGamePriceRows, toBoardRow, type GameOddsRow,
 } from '../lib/game-odds'
 import { computeRowArb, kalshiEffectiveDecimal } from '../lib/odds-screen'
@@ -43,8 +43,8 @@ describe('labels and the spread line sign', () => {
     expect(lineLabel(row({ books: [] }))).toBe('ML')
   })
   it('formats the age', () => {
-    expect(ageText(12)).toBe('12 MIN')
-    expect(ageText(150)).toBe('2.5 H')
+    expect(ageText(12)).toBe('12 min')
+    expect(ageText(150)).toBe('2.5 h')
     expect(ageText(null)).toBe('--')
   })
 })
@@ -209,5 +209,20 @@ describe('query validation', () => {
   })
   it('serialises only the validated fields', () => {
     expect(gameOddsQueryString({ sport: 'nhl', market: 'ml', limit: 5 })).toBe('sport=nhl&market=ml&limit=5')
+  })
+})
+
+describe('freshnessBin', () => {
+  it('bins the age into green up to 15 min, amber up to an hour, red beyond', () => {
+    expect(freshnessBin(0)).toBe('fresh')
+    expect(freshnessBin(15)).toBe('fresh')
+    expect(freshnessBin(15.1)).toBe('aging')
+    expect(freshnessBin(60)).toBe('aging')
+    expect(freshnessBin(61)).toBe('old')
+  })
+  it('is red when the feed says stale, and unknown with no age', () => {
+    expect(freshnessBin(2, true)).toBe('old')
+    expect(freshnessBin(null)).toBeNull()
+    expect(freshnessBin(NaN)).toBeNull()
   })
 })

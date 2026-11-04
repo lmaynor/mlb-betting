@@ -3,27 +3,27 @@
  * the same section. Five questions, five nav items; everything else is a tab inside one of them.
  *
  *   Scanner  what is mispriced right now?     /ev (Odds Terminal: every book's player-prop price) + /ev/projections (the model's lambda for every
- *            player prop and NBA / NHL game line, UNVALIDATED) + /ev/games (NBA / NHL game-line prices) + /edge (prop research view)
+ *            player prop and NBA / NHL game line, UNVALIDATED) + /ev/games (every game's lines and prices: board + card, UNVALIDATED) + /edge (prop research view)
  *   Picks    what does the model say today?   /cheat-sheet (the Daily Card: every official play) + /picks (top signals, all sports) +
  *            /picks/history (those plays, graded). Picks is the tracked, graded record; unvalidated estimates live in the Scanner.
- *            /picks/games (MLB tracked game picks) still resolves but is HIDDEN: no tab, no link, no sitemap entry, noindex.
+ *            /picks/games (game picks) still resolves but is HIDDEN: no tab, no link, no sitemap entry, noindex.
  *   Results  what happened, and is it real?   /results (ledger)      + /analytics tabs + /models (methodology)
  *   Tools    calculators and dashboards       /tools/*
  *   Home     proof, nothing else
  *
- * Sport ribbon (under the nav): ALL SPORTS = /picks, then one item per LIVE pillar in lib/sports.ts, each at /picks/[sport]:
- * the same page hierarchy for every sport (picks board, /[system]). Projections are NOT part of it: /picks/[sport]/projections redirects to /ev/projections.
- * /sports/[sport] redirects to /picks/[sport].
+ * There is no global sport ribbon: it linked away from the page it sat on. A page that needs a sport filter has its own pills, built
+ * from the sports that actually have games (lib/sports.ts sportsInSeason / sportsWithRows). Every sport still lives at /picks/[sport]
+ * (picks board, /[system]); projections are NOT part of it: /picks/[sport]/projections redirects to /ev/projections. /sports/[sport] redirects there.
  */
 import type { SportSlug } from '@/lib/sports'
 
-export interface SectionTab { label: string; href: string; /** extra path prefixes that keep this tab active */ also?: string[] }
+export interface SectionTab { label: string; /** shorter label for a phone, where up to four tabs share the row without scrolling */ short?: string; href: string; /** extra path prefixes that keep this tab active */ also?: string[] }
 export interface Section { id: 'scanner' | 'picks' | 'results'; prefixes: string[]; /** paths that belong to the section only when they match exactly */ exact?: string[]; tabs: SectionTab[] }
 
 export const SECTIONS: Section[] = [
   {
     id: 'scanner', prefixes: ['/ev', '/edge'],
-    tabs: [{ label: 'Odds Terminal', href: '/ev' }, { label: 'Projections', href: '/ev/projections' }, { label: 'Game Lines', href: '/ev/games' }, { label: 'Prop Research', href: '/edge' }],
+    tabs: [{ label: 'Odds Terminal', short: 'Odds', href: '/ev' }, { label: 'Projections', href: '/ev/projections' }, { label: 'Game Lines', href: '/ev/games' }, { label: 'Prop Research', short: 'Props', href: '/edge' }],
   },
   {
     // The tab strip is for the all-sports views only; MLB and the other sports are chosen in the ribbon and have their own headers.

@@ -152,8 +152,8 @@ describe('DayToggle', () => {
   it('one chip per date with events: YESTERDAY, TODAY, then each later game day, the shown date marked', () => {
     const links = chips({ selected: day(3) })
     expect(links).toHaveLength(4)
-    expect(links[0]).toHaveTextContent('YESTERDAY')
-    expect(links[1]).toHaveTextContent('TODAY')
+    expect(links[0]).toHaveTextContent('Yesterday')
+    expect(links[1]).toHaveTextContent('Today')
     expect(links[0]).toHaveAttribute('href', '/picks/nba?market=NBA_PTS&day=yesterday')           // drops game, sets day
     expect(links[1]).toHaveAttribute('href', `/picks/nba?market=NBA_PTS&date=${TODAY}`)           // names its own date
     expect(links[2]).toHaveAttribute('href', `/picks/nba?market=NBA_PTS&date=${day(1)}`)
@@ -165,7 +165,7 @@ describe('DayToggle', () => {
     const links = chips({ yesterday: null, days: liveDays(week().filter(r => gameDayKey(r) !== TODAY), TODAY), selected: day(1) })
     expect(links).toHaveLength(2)
     expect(links[0]).toHaveAttribute('aria-current', 'date')
-    expect(links[0]).not.toHaveTextContent('TODAY')
+    expect(links[0]).not.toHaveTextContent('Today')
   })
 
   it('MLB keeps clean URLs (its board is always the day itself)', () => {

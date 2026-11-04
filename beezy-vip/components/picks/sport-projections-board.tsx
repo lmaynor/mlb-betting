@@ -14,16 +14,16 @@ const SURFACE = SURFACE_CARD
 const TH = { ...TABLE_TH, textAlign: 'left', position: 'sticky', top: 0, whiteSpace: 'nowrap' } as const
 const TD = { ...TABLE_TD, verticalAlign: 'middle', whiteSpace: 'nowrap' } as const
 const PAGE = 80
-/** columns a phone drops from the row (they move into the tap-to-open detail line): the table keeps SCORE, PLAYER, PICK, MODEL, BEST PRICE and EDGE */
-const HIDE_ON_PHONE = new Set(['TEAM', 'MARKET FAIR', 'FORM', 'PRICE EV', 'RESULT', 'RANGE', 'MODEL VS MARKET'])
+/** columns a phone drops from the row (they move into the tap-to-open detail line): the table keeps Score, Player, Pick, Model, Best price and Edge */
+const HIDE_ON_PHONE = new Set(['Team', 'Market fair', 'Form', 'Price EV', 'Result', 'Range', 'Model vs market'])
 const TAP_PX = 44
 const HEAD_TIPS: Record<string, string> = {
-  SCORE: 'Beezy Score, 0-100: how strong the play is. Not a win probability.',
-  'MARKET FAIR': 'The books\' consensus probability for this side with the vig removed.',
-  RANGE: 'The model\'s expected value (the bright tick, lambda) against the book line (the amber rule), inside the model\'s own 10th-90th percentile range. Not a validated interval.',
-  'MODEL VS MARKET': 'The model\'s probability for the listed side over the market\'s de-vigged fair probability. The gap between the bars is the model edge.',
-  'MODEL EDGE': 'Model probability minus market fair probability. It says where the model disagrees with the market. It is not a profit estimate.',
-  'PRICE EV': 'Return on a 1 unit bet at the best price IF the market fair probability is right. Positive means the best price beats the market\'s own fair price.',
+  Score: 'Beezy Score, 0-100: how strong the play is. Not a win probability.',
+  'Market fair': 'The books\' consensus probability for this side with the vig removed.',
+  Range: 'The model\'s expected value (the bright tick, lambda) against the book line (the amber rule), inside the model\'s own 10th-90th percentile range. Not a validated interval.',
+  'Model vs market': 'The model\'s probability for the listed side over the market\'s de-vigged fair probability. The gap between the bars is the model edge.',
+  'Model edge': 'Model probability minus market fair probability. It says where the model disagrees with the market. It is not a profit estimate.',
+  'Price EV': 'Return on a 1 unit bet at the best price IF the market fair probability is right. Positive means the best price beats the market\'s own fair price.',
 }
 
 const pct = (x: number | null | undefined, d = 0) => (x == null ? '--' : `${(x * 100).toFixed(d)}%`)
@@ -66,13 +66,13 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
   const showEv = rows.some(r => r.marketEv != null)
   const showModel = rows.some(r => r.proj != null || r.pModel != null)
   const showRange = visuals && rows.some(r => r.proj != null)
-  const heads = ['SCORE', 'PLAYER', 'TEAM', 'MARKET & LINE', ...(showModel ? ['MODEL'] : []), ...(showRange ? ['RANGE'] : []),
-    ...(showFair ? [visuals ? 'MODEL VS MARKET' : 'MARKET FAIR'] : []),
-    ...(showForm ? ['FORM'] : []), 'BEST PRICE', 'MODEL EDGE', ...(showEv ? ['PRICE EV'] : []), ...(showResult ? ['RESULT'] : [])]
+  const heads = ['Score', 'Player', 'Team', 'Market & line', ...(showModel ? ['Model'] : []), ...(showRange ? ['Range'] : []),
+    ...(showFair ? [visuals ? 'Model vs market' : 'Market fair'] : []),
+    ...(showForm ? ['Form'] : []), 'Best price', 'Model edge', ...(showEv ? ['Price EV'] : []), ...(showResult ? ['Result'] : [])]
 
   return (
     <div>
-      {status && <div className="text-[11.5px] mb-2" role={statusWarn ? 'status' : undefined} style={{ color: statusWarn ? 'var(--warn)' : 'var(--color-text-secondary)' }}>{status}</div>}
+      {status && <div className="text-[12px] mb-2" role={statusWarn ? 'status' : undefined} style={{ color: statusWarn ? 'var(--warn)' : 'var(--color-text-secondary)' }}>{status}</div>}
       <div className="pb-wrap" style={{ ...SURFACE, overflowX: 'auto' }}>
         <table className="pb-table w-full border-collapse text-cozy">
           <thead><tr>{heads.map(h => <th key={h} className={`ui-heading${HIDE_ON_PHONE.has(h) ? ' pb-hide-m' : ''}`} title={HEAD_TIPS[h]} style={TH}>{h}</th>)}</tr></thead>
@@ -90,11 +90,11 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                     {r.score > 0 ? (
                       <div className="inline-flex items-center gap-1.5">
                         {isOfficial ? (
-                          <span className="ui-heading pb-hide-m text-micro text-signal border border-[color:#57F287] rounded-chip bg-[rgba(87,242,135,0.12)]" style={{ padding: '1px 5px' }}>OFFICIAL PLAY</span>
+                          <span className="ui-heading pb-hide-m text-micro text-signal border border-[color:#57F287] rounded-chip bg-[rgba(87,242,135,0.12)]" style={{ padding: '1px 5px' }}>Official play</span>
                         ) : isOutlier ? (
                           <span className="ui-heading pb-hide-m text-micro text-link border border-[color:#38bdf8] rounded-chip bg-[rgba(56,189,248,0.12)]" style={{ padding: '1px 5px' }}>+EV OUTLIER</span>
                         ) : null}
-                        <span className="mono font-bold" style={{ color: isOfficial ? '#57F287' : isOutlier ? '#38bdf8' : 'var(--color-neutral-300)' }}>{r.score}</span>
+                        <span className="mono font-semibold" style={{ color: isOfficial ? '#57F287' : isOutlier ? '#38bdf8' : 'var(--color-neutral-300)' }}>{r.score}</span>
                       </div>
                     ) : <span className="text-text-secondary">--</span>}
                   </td>
@@ -132,8 +132,8 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                   </td>
                   {showModel && (
                     <td className="pb-model" style={TD}>
-                      <span className="mono text-text-primary font-bold">{num(r.proj)}</span>
-                      {r.pModel != null && <span className="mono pb-hide-m ml-2 text-[11.5px] text-neutral-300" title="The model's probability for the listed side">{pct(r.pModel)}</span>}
+                      <span className="mono text-text-primary font-semibold">{num(r.proj)}</span>
+                      {r.pModel != null && <span className="mono pb-hide-m ml-2 text-[12px] text-neutral-300" title="The model's probability for the listed side">{pct(r.pModel)}</span>}
                     </td>
                   )}
                   {showRange && (
@@ -168,14 +168,14 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                   <td className="pb-price" style={TD}>
                     {r.odds == null || !b ? <span className="text-text-secondary">--</span> : (
                       <span className="inline-flex items-center gap-[7px]">
-                        <span className="pb-book text-mini font-bold" data-short={b.short} title={b.label} style={{ color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '2px 7px' }}>{b.label}</span>
+                        <span className="pb-book text-mini font-semibold" data-short={b.short} title={b.label} style={{ color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px', padding: '2px 7px' }}>{b.label}</span>
                         <span className="mono text-text-primary">{formatOdds(r.odds)}</span>
                       </span>
                     )}
                   </td>
                   <td className="pb-edge" style={TD}>
                     <span className="mono" title="Model probability minus the de-vigged market probability for this side" style={{ color: (r.modelEdge ?? 0) > 0 ? 'var(--signal)' : 'var(--color-text-secondary)' }}>{signed(r.modelEdge)}</span>
-                    {r.confluence && <span className="ui-heading pb-hide-m ml-2 text-micro text-signal border border-[color:rgba(87,242,135,0.35)] rounded-chip" title="The model and the market price both favor this side" style={{ padding: '1px 5px' }}>MODEL + MARKET</span>}
+                    {r.confluence && <span className="ui-heading pb-hide-m ml-2 text-micro text-signal border border-[color:rgba(87,242,135,0.35)] rounded-chip" title="The model and the market price both favor this side" style={{ padding: '1px 5px' }}>Model + market</span>}
                     {r.isPick && <span className="ui-heading pb-hide-m ml-2 text-signal">PICK</span>}
                   </td>
                   {showEv && (
@@ -184,7 +184,7 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                     </td>
                   )}
                   {showResult && (
-                    <td className="ui-heading pb-hide-m" style={{ ...TD, fontSize: '10px', color: r.result ? RESULT_COLOR[r.result] : 'var(--color-text-secondary)' }}>{r.result ? r.result.toUpperCase() : 'PENDING'}</td>
+                    <td className="ui-heading pb-hide-m" style={{ ...TD, fontSize: '10px', color: r.result ? RESULT_COLOR[r.result] : 'var(--color-text-secondary)' }}>{r.result ? r.result.toUpperCase() : 'Pending'}</td>
                   )}
                 </tr>
                 {isOpen && <DetailRow r={r} span={heads.length} showResult={showResult} visuals={visuals} />}
@@ -197,13 +197,13 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
       {rows.length > limit && (
         <button onClick={() => setLimit(limit + PAGE)} className="btn btn-ghost tap-m mt-[10px]">Show {Math.min(PAGE, rows.length - limit)} more</button>
       )}
-      <p className="text-[11.5px] text-text-secondary mt-2.5 leading-[1.55]">
+      <p className="text-[12px] text-text-secondary mt-2.5 leading-[1.55]">
         Model edge is the model&rsquo;s probability minus the market&rsquo;s fair probability: where the model disagrees. Price EV is the best
         price against the market&rsquo;s own fair probability: whether a book is actually off-market. A big edge with a negative EV means only the
         model likes the play. Rows with no line are projections only: prices have not posted.
       </p>
       {visuals && showRange && (
-        <ul className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 p-0 list-none text-[11.5px] text-text-secondary" aria-label="How to read RANGE">
+        <ul className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 p-0 list-none text-[12px] text-text-secondary" aria-label="How to read RANGE">
           {LAMBDA_LEGEND.map(l => (
             <li key={l.label} className="inline-flex items-center gap-1.5"><span aria-hidden className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: l.color }} />{l.label}</li>
           ))}
@@ -227,17 +227,17 @@ function DetailRow({ r, span, showResult, visuals = false }: { r: BoardRow; span
     <tr className="pb-detail">
       <td colSpan={span} style={{ ...TABLE_TD, background: '#0e1016', padding: '10px 12px' }}>
         <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '6px 14px' }}>
-          {item('GAME', r.matchup || '--')}
-          {r.team && item('TEAM', r.team)}
-          {r.pModel != null && item('MODEL', `${pct(r.pModel)} ${r.side === 'under' ? 'under' : 'over'}`)}
-          {visuals && r.proj != null && item('RANGE', <LambdaBar mean={r.proj} p10={r.p10} p90={r.p90} line={r.hasLine ? r.line : null} side={r.side} />)}
-          {r.pFair != null && item('MARKET FAIR', `${pct(r.pFair)}${fair != null ? ` ${formatOdds(fair)}` : ''}${r.nBooks != null ? ` \u00b7 ${r.nBooks} bk` : ''}`)}
-          {(r.l5 != null || r.l10 != null) && item('FORM', `L5 ${pct(r.l5)} \u00b7 L10 ${pct(r.l10)}`)}
+          {item('Game', r.matchup || '--')}
+          {r.team && item('Team', r.team)}
+          {r.pModel != null && item('Model', `${pct(r.pModel)} ${r.side === 'under' ? 'under' : 'over'}`)}
+          {visuals && r.proj != null && item('Range', <LambdaBar mean={r.proj} p10={r.p10} p90={r.p90} line={r.hasLine ? r.line : null} side={r.side} />)}
+          {r.pFair != null && item('Market fair', `${pct(r.pFair)}${fair != null ? ` ${formatOdds(fair)}` : ''}${r.nBooks != null ? ` \u00b7 ${r.nBooks} bk` : ''}`)}
+          {(r.l5 != null || r.l10 != null) && item('Form', `L5 ${pct(r.l5)} \u00b7 L10 ${pct(r.l10)}`)}
           {r.l5 == null && r.l10 == null && (r.avg10 != null || r.avgSzn != null) && item('AVG', `L10 ${num(r.avg10)} \u00b7 szn ${num(r.avgSzn)}`)}
-          {r.marketEv != null && item('PRICE EV', signed(r.marketEv))}
-          {r.confluence && item('SIGNAL', 'Model + market agree')}
-          {showResult && r.result && item('RESULT', r.result.toUpperCase())}
-          {r.engine && item('ENGINE', r.engine)}
+          {r.marketEv != null && item('Price EV', signed(r.marketEv))}
+          {r.confluence && item('Signal', 'Model + market agree')}
+          {showResult && r.result && item('Result', r.result.toUpperCase())}
+          {r.engine && item('Engine', r.engine)}
         </dl>
         {r.sport !== 'mlb' && <div className="mt-2 text-mini text-warn">Unvalidated model output. Paper only, not in the public results.</div>}
       </td>

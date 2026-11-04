@@ -43,6 +43,15 @@ describe('limitGameOdds', () => {
       expect(out.feed.games.reduce((n, g) => n + g.n_rows, 0)).toBe(FREE_PREVIEW_ROWS.ev_terminal)
     }
   })
+  it('movement of a game whose prices were withheld is cut with it', () => {
+    const f = feed()
+    const pts = [{ t: '2026-11-03T14:00:00Z', line: null, p_a: 0.5, best_a: -110, best_b: -110, n: 3 }, { t: '2026-11-03T15:00:00Z', line: null, p_a: 0.52, best_a: -110, best_b: -110, n: 3 }]
+    f.history = Object.fromEntries([0, 1, 2, 3].map(i => [`g${i}|ml`, { points: pts }]))
+    const out = limitGameOdds(f, free, ON)
+    const kept = new Set(out.feed.rows.map(r => r.game_key))
+    expect(Object.keys(out.feed.history ?? {}).sort()).toEqual([...kept].map(k => `${k}|ml`).sort())
+    expect(limitGameOdds(f, pro, ON).feed.history).toBe(f.history)
+  })
   it('drops a game whose rows were all withheld', () => {
     const f = feed()
     f.rows = f.rows.filter(r => r.game_key !== 'g0')   // g0 stays in `games` but has no rows left to show

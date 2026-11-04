@@ -58,10 +58,10 @@ export function Select({ id, label, value, onChange, options }: { id: string; la
 
 export function Pill({ children, active, onClick, title }: { children: React.ReactNode; active: boolean; onClick: () => void; title?: string }) {
   return (
-    <button className="tracking-[0.03em] py-[5px] px-[10px] cursor-pointer" type="button" onClick={onClick} title={title} aria-pressed={active}
+    <button className="py-[5px] px-[10px] cursor-pointer" type="button" onClick={onClick} title={title} aria-pressed={active}
       style={{
         fontFamily: 'var(--font-text), sans-serif',
-        fontSize: '11.5px',
+        fontSize: '12px',
         fontWeight: 600,
         borderRadius: '6px',
         color: active ? 'var(--color-text-primary)' : 'var(--color-neutral-300)',
@@ -111,7 +111,7 @@ export function BookPicker({ label, books, selected, onChange, presets, note, em
   const small = { padding: '3px 8px', fontSize: '11px' } as const
   return (
     <div ref={box} className="relative">
-      <button type="button" onClick={() => setOpen(v => !v)} aria-expanded={open} className="btn btn-ghost py-[5px] px-[11px] text-[11.5px] h-8">{label}</button>
+      <button type="button" onClick={() => setOpen(v => !v)} aria-expanded={open} className="btn btn-ghost py-[5px] px-[11px] text-[12px] h-8">{label}</button>
       {open && (
         <div role="group" aria-label={label} style={{ position: 'absolute', zIndex: 30, top: '36px', left: 0, width: '270px', ...SURFACE_CARD, padding: '10px', display: 'grid', gap: '8px' }}>
           <div className="flex gap-[5px] flex-wrap">
@@ -125,7 +125,7 @@ export function BookPicker({ label, books, selected, onChange, presets, note, em
                 <input className="cursor-pointer" type="checkbox" checked={on.has(b.key)} onChange={() => toggle(b.key)} style={{ accentColor: 'var(--signal)' }} />
                 <BookLogo book={b.key} size={20} />
                 <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{bookDisplay(b.key).label}{b.offshore ? ' (offshore)' : ''}</span>
-                <span className="mono text-[10.5px] text-text-secondary">{b.n}</span>
+                <span className="mono text-[11px] text-text-secondary">{b.n}</span>
               </label>
             ))}
           </div>
@@ -149,7 +149,7 @@ function BestCell({ s }: { s: GameSidePrice }) {
       <div className="flex items-center gap-2">
         <BookLogo book={s.book} size={24} />
         <div>
-          <div className="mono text-cozy font-bold text-text-primary">{formatOdds(s.american)}</div>
+          <div className="mono text-cozy font-semibold text-text-primary">{formatOdds(s.american)}</div>
           <div className="mono odds-sub" title={`${s.label} at ${bookDisplay(s.book).label}`}>{s.label} &middot; {bookDisplay(s.book).short}</div>
         </div>
       </div>
@@ -214,21 +214,21 @@ export function PriceTableRow({ r, columns, bankroll, copied, onCopy }: {
         <td className="odds-ev">
           {noFair ? (
             <>
-              <div className="mono text-cozy font-bold text-text-secondary">--</div>
+              <div className="mono text-cozy font-semibold text-text-secondary">--</div>
               <div className="mono odds-sub" title="Fewer than 3 reference books priced this line both ways; a fair value needs 3">{Math.max(r.a.nRef, r.b.nRef)} of 3 bk</div>
             </>
           ) : (
             <>
-              <div className="mono text-[12.5px] font-semibold text-text-primary" title={`${r.a.label} fair ${r.a.fairAmerican == null ? '--' : formatOdds(r.a.fairAmerican)}`}>{pctText(r.a.pFair)}</div>
-              <div className="mono text-[12.5px] font-semibold text-text-primary" title={`${r.b.label} fair ${r.b.fairAmerican == null ? '--' : formatOdds(r.b.fairAmerican)}`}>{pctText(r.b.pFair)}</div>
+              <div className="mono text-[13px] font-semibold text-text-primary" title={`${r.a.label} fair ${r.a.fairAmerican == null ? '--' : formatOdds(r.a.fairAmerican)}`}>{pctText(r.a.pFair)}</div>
+              <div className="mono text-[13px] font-semibold text-text-primary" title={`${r.b.label} fair ${r.b.fairAmerican == null ? '--' : formatOdds(r.b.fairAmerican)}`}>{pctText(r.b.pFair)}</div>
             </>
           )}
         </td>
         <td className="odds-ev">
-          {noFair ? <div className="mono text-cozy font-bold text-text-secondary">--</div> : (
+          {noFair ? <div className="mono text-cozy font-semibold text-text-secondary">--</div> : (
             <>
-              <SideLine s={r.a}><span className="mono text-[12.5px] font-bold" style={{ color: evColor(r.a) }}>{r.a.ev == null ? '--' : signedPct(r.a.ev)}</span></SideLine>
-              <SideLine s={r.b}><span className="mono text-[12.5px] font-bold" style={{ color: evColor(r.b) }}>{r.b.ev == null ? '--' : signedPct(r.b.ev)}</span></SideLine>
+              <SideLine s={r.a}><span className="mono text-[13px] font-semibold" style={{ color: evColor(r.a) }}>{r.a.ev == null ? '--' : signedPct(r.a.ev)}</span></SideLine>
+              <SideLine s={r.b}><span className="mono text-[13px] font-semibold" style={{ color: evColor(r.b) }}>{r.b.ev == null ? '--' : signedPct(r.b.ev)}</span></SideLine>
             </>
           )}
         </td>
@@ -256,14 +256,14 @@ export function ArbLine({ r, copied, onCopy }: { r: GamePriceRow; copied: boolea
   const a = r.arb
   if (!a) return null
   return (
-    <div className="flex items-center gap-y-1.5 gap-x-3.5 flex-wrap text-[11.5px]">
-      <span className="mono font-bold" style={{ color: GREEN }} title={a.feeLeg ? `Gross ${a.arbPct.toFixed(2)}%, net of Kalshi's taker fee ${a.netArbPct.toFixed(2)}%` : 'No fee on either leg'}>
+    <div className="flex items-center gap-y-1.5 gap-x-3.5 flex-wrap text-[12px]">
+      <span className="mono font-semibold" style={{ color: GREEN }} title={a.feeLeg ? `Gross ${a.arbPct.toFixed(2)}%, net of Kalshi's taker fee ${a.netArbPct.toFixed(2)}%` : 'No fee on either leg'}>
         ARB +{a.netArbPct.toFixed(2)}%{a.feeLeg ? ' NET OF KALSHI FEE' : ''}
       </span>
       <span className="mono text-text-primary">{r.a.label} {formatOdds(a.bestOverAm)} {bookDisplay(a.bestOverBook).label} {usd(a.stakeOverPer100)}</span>
       <span className="mono text-text-primary">{r.b.label} {formatOdds(a.bestUnderAm)} {bookDisplay(a.bestUnderBook).label} {usd(a.stakeUnderPer100)}</span>
       <span className="mono" style={{ color: GREEN }}>+{usd(a.guaranteedProfitPer100)} locked on $100</span>
-      <button type="button" className="btn btn-ghost py-[1px] px-2 text-[10.5px]" onClick={() => onCopy(r)}>{copied ? 'Copied' : 'Copy hedge'}</button>
+      <button type="button" className="btn btn-ghost py-[1px] px-2 text-[11px]" onClick={() => onCopy(r)}>{copied ? 'Copied' : 'Copy hedge'}</button>
     </div>
   )
 }
@@ -276,16 +276,16 @@ export function PriceCard({ r, columns, copied, onCopy }: {
   const side = (s: GameSidePrice) => (
     <div className="flex items-center gap-2 py-[5px] px-0" style={{ borderTop: `1px solid ${HAIR}` }}>
       {s.book ? <BookLogo book={s.book} size={22} /> : <span  className="w-[22px]"/>}
-      <span className="flex-1 text-[12.5px] text-text-primary font-semibold">{s.label}</span>
-      <span className="mono text-cozy font-bold text-text-primary">{s.american == null ? '--' : formatOdds(s.american)}</span>
+      <span className="flex-1 text-[13px] text-text-primary font-semibold">{s.label}</span>
+      <span className="mono text-cozy font-semibold text-text-primary">{s.american == null ? '--' : formatOdds(s.american)}</span>
       <span className="mono text-mini text-text-secondary min-w-12 text-right">{pctText(s.pFair)}</span>
-      <span className="mono text-compact font-bold min-w-13 text-right" style={{ color: s.ev != null && s.ev > 0 ? GREEN : 'var(--color-text-secondary)' }}>{s.ev == null ? '--' : signedPct(s.ev)}</span>
+      <span className="mono text-compact font-semibold min-w-13 text-right" style={{ color: s.ev != null && s.ev > 0 ? GREEN : 'var(--color-text-secondary)' }}>{s.ev == null ? '--' : signedPct(s.ev)}</span>
     </div>
   )
   return (
     <div data-card="game-prices" style={{ ...SURFACE_CARD, padding: '10px 12px', borderLeft: r.arbLive ? `3px solid ${GREEN}` : '1px solid var(--color-separator-border)' }}>
       <div className="flex justify-between gap-2 items-baseline">
-        <span className="text-[13.5px] font-bold text-text-primary"><Matchup sport={r.row.sport} away={r.row.away} home={r.row.home} size={20} /></span>
+        <span className="text-[14px] font-semibold text-text-primary"><Matchup sport={r.row.sport} away={r.row.away} home={r.row.home} size={20} /></span>
         <span className="mono text-mini text-text-secondary">{startLabel(r.row.commence)}</span>
       </div>
       <div className="mono text-mini text-text-secondary mb-1">{r.row.sport.toUpperCase()} &middot; {r.marketLabel}{r.row.market === 'ml' ? '' : ` ${r.lineLabel}`}</div>
@@ -293,7 +293,7 @@ export function PriceCard({ r, columns, copied, onCopy }: {
       {side(r.b)}
       {r.arbLive && <div className="pt-[6px]" style={{ borderTop: `1px solid ${HAIR}` }}><ArbLine r={r} copied={copied} onCopy={onCopy} /></div>}
       <details style={{ marginTop: '6px' }}>
-        <summary style={{ fontSize: '11.5px', color: 'var(--link)', cursor: 'pointer' }}>All books</summary>
+        <summary style={{ fontSize: '12px', color: 'var(--link)', cursor: 'pointer' }}>All books</summary>
         <table className="w-full border-collapse mt-1">
           <tbody>
             {columns.filter(c => byBook.has(c.key)).map(c => {

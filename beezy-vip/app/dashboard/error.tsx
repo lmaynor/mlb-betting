@@ -9,11 +9,11 @@ export default function RouteError({
 }) {
   return (
     <div className="max-w-7xl mx-auto px-4 py-24 text-center">
-      <p className="mono text-xs text-loss uppercase tracking-widest mb-3">Error</p>
+      <p className="mono text-xs text-loss mb-3">Error</p>
       <p className="text-sm text-text-secondary mb-6">Failed to load this page. Data may be temporarily unavailable.</p>
       <button
         onClick={reset}
-        className="mono text-xs uppercase tracking-widest px-5 py-2.5 bg-accent text-bg font-semibold hover:bg-accent/90 transition-colors"
+        className="mono text-xs px-5 py-2.5 bg-accent text-bg font-semibold hover:bg-accent/90 transition-colors"
       >
         Retry
       </button>

@@ -13,7 +13,7 @@ export function DiscordFollowCTA() {
             <DiscordMark size={26} color="currentColor" />
           </div>
           <div>
-            <div className="ui-display mb-1 text-[19px] tracking-[-0.01em]">
+            <div className="ui-display mb-1 text-[18px] tracking-[-0.01em]">
               Get the card the moment it drops
             </div>
             <p className="times max-w-[52ch] text-body-regular text-text-secondary">

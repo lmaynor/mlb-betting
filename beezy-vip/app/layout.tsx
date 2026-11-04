@@ -32,6 +32,8 @@ export const metadata: Metadata = {
   description:
     'Quantitative models, prop research and a live +EV terminal across MLB, NFL, NHL and NBA. Paper-tracked, every result public.',
   metadataBase: new URL('https://beezy.fyi'),
+  // iOS Safari turns "1-800-GAMBLER" in the footer into a tel link before React hydrates, which fails hydration on every iPhone page.
+  formatDetection: { telephone: false },
   openGraph: {
     images: [{ url: '/brand/og-card.jpg?v=2', width: 2000, height: 1056, alt: 'beezy.fyi — Smarter tools. Bigger plays.' }],
     siteName: 'beezy.fyi',

@@ -116,12 +116,12 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
   return (
     <div>
       <div className="flex items-center gap-y-[6px] gap-x-[14px] flex-wrap min-h-[38px] py-[6px] px-[14px] mb-[10px] bg-background-primary-default text-compact" data-testid="game-prices-strip" style={{ border: `1px solid ${HAIR}`, borderRadius: '8px' }}>
-        <span className="mono font-bold text-text-primary">{sportLabel}</span>
-        <span className="mono text-neutral-300">{visible.length} ROWS</span>
-        <span className="mono text-neutral-300" title={active.map(f => f.lines_source).filter(Boolean).join(', ') || undefined}>LINES {ageText(age)} OLD</span>
-        {stale && <span className="mono text-[10.5px] font-bold tracking-fine text-warn border border-[color:#facc1555] rounded-chip py-0 px-[5px]">STALE</span>}
+        <span className="mono font-semibold text-text-primary">{sportLabel}</span>
+        <span className="mono text-neutral-300">{visible.length} rows</span>
+        <span className="mono text-neutral-300" title={active.map(f => f.lines_source).filter(Boolean).join(', ') || undefined}>Lines {ageText(age)} old</span>
+        {stale && <span className="mono text-[11px] font-semibold text-warn border border-[color:#facc1555] rounded-chip py-0 px-[5px]">Stale</span>}
         <span className="text-neutral-300">
-          <span className="mono text-[10.5px] font-bold tracking-fine text-warn">{GAME_PRICES_LABEL}</span> {GAME_PRICES_NOTE}
+          <span className="mono text-[11px] font-semibold text-warn">{GAME_PRICES_LABEL}</span> {GAME_PRICES_NOTE}
         </span>
       </div>
 
@@ -139,8 +139,8 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
             <PillGroup label="Market">
               {MARKETS.map(m => <Pill key={m.key} active={market === m.key} onClick={() => { setMarket(m.key); reset() }}>{m.label}</Pill>)}
             </PillGroup>
-            <Select id="gp-game" label="GAME" value={game} onChange={v => { setGame(v); reset() }} options={[{ v: 'all', l: 'All games' }, ...games.map(g => ({ v: g.key, l: g.label }))]} />
-            <Select id="gp-minev" label="MIN EV" value={String(minEv)} onChange={v => { setMinEv(Number(v)); reset() }} options={MIN_EV} />
+            <Select id="gp-game" label="Game" value={game} onChange={v => { setGame(v); reset() }} options={[{ v: 'all', l: 'All games' }, ...games.map(g => ({ v: g.key, l: g.label }))]} />
+            <Select id="gp-minev" label="Min EV" value={String(minEv)} onChange={v => { setMinEv(Number(v)); reset() }} options={MIN_EV} />
             <BookPicker label={refs.length ? `Reference books (${refs.length})` : 'Reference books (all)'} books={bookList} selected={refs} onChange={setRefs} presets={refPresets} emptyMeansAll
               note="The fair value is the average of each reference book's own de-vigged price, leaving out the book you would bet at. It needs 3 reference books on the line. Default: every book." />
             <BookPicker label={`Books shown (${columns.length})`} books={bookList} selected={shown ?? defaultShown} onChange={setShown} presets={shownPresets}
@@ -151,7 +151,7 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
             </PillGroup>
             <Toggle label="Exchanges" checked={exchanges} onChange={setExchanges} title="Count Kalshi, Novig and ProphetX in the arbitrage search (Kalshi's taker fee is taken off its leg)" />
             <Toggle label="Arbs only" checked={arbOnly} onChange={v => { setArbOnly(v); reset() }} />
-            <Select id="gp-sort" label="SORT" value={sort} onChange={v => setSort(v as GameSort)} options={SORTS.map(s => ({ v: s.v, l: s.l }))} />
+            <Select id="gp-sort" label="Sort" value={sort} onChange={v => setSort(v as GameSort)} options={SORTS.map(s => ({ v: s.v, l: s.l }))} />
             <input className="bg-background-secondary-default text-text-primary h-8 py-0 px-[10px] text-compact w-[140px]" type="search" aria-label="Search teams" placeholder="Search team" value={q} onChange={e => { setQ(e.target.value); reset() }}
               style={{ border: `1px solid ${HAIR}`, borderRadius: '6px' }} />
           </div>
@@ -169,10 +169,10 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
               <table className="odds-table w-full border-collapse">
                 <thead>
                   <tr>
-                    <th scope="col" className="odds-prop">GAME</th>
-                    <th scope="col" className="odds-ev" title="Best bettable price on the away side (moneyline, spread) or the over (total)">BEST AWAY / OVER</th>
-                    <th scope="col" className="odds-ev" title="Best bettable price on the home side (moneyline, spread) or the under (total)">BEST HOME / UNDER</th>
-                    <th scope="col" className="odds-ev" title="De-vigged fair probability from the reference books, away / over above home / under">FAIR %</th>
+                    <th scope="col" className="odds-prop">Game</th>
+                    <th scope="col" className="odds-ev" title="Best bettable price on the away side (moneyline, spread) or the over (total)">Best away / over</th>
+                    <th scope="col" className="odds-ev" title="Best bettable price on the home side (moneyline, spread) or the under (total)">Best home / under</th>
+                    <th scope="col" className="odds-ev" title="De-vigged fair probability from the reference books, away / over above home / under">Fair %</th>
                     <th scope="col" className="odds-ev" title="EV of each side at its best bettable price against the fair value">EV</th>
                     <th scope="col" title="1/4 Kelly stake on the best +EV side">1/4 KELLY</th>
                     {columns.map(c => (

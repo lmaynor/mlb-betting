@@ -6,7 +6,7 @@ import {
   Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea,
 } from 'recharts'
 import type { CLVDataPoint } from '@/lib/types'
-import { B, SYSTEM_COLOR } from '@/lib/tokens'
+import { B, SYSTEM_COLOR, systemLabel } from '@/lib/tokens'
 
 // ---- constants ---------------------------------------------------------------
 
@@ -43,14 +43,14 @@ function Chip({ label, active, color, onClick }: {
   label: string; active: boolean; color?: string; onClick: () => void
 }) {
   return (
-    <button className="py-1 px-[10px] cursor-pointer tracking-[0.05em]" onClick={onClick} style={{
+    <button className="py-1.5 px-3 cursor-pointer" onClick={onClick} style={{
       fontSize: '10px',
       fontFamily: 'var(--font-mono), monospace',
       fontWeight: active ? 600 : 400,
+      borderRadius: 'var(--radius-pill)',
       border: `1px solid ${active ? (color ?? 'var(--color-neutral-300)') : 'var(--color-separator-border)'}`,
       background: active ? `color-mix(in oklab, ${color ?? 'var(--color-neutral-300)'} 16%, var(--color-background-full))` : 'var(--color-background-primary-default)',
       color: active ? (color ?? 'var(--color-neutral-300)') : 'var(--color-neutral-300)',
-      textTransform: 'uppercase' as const,
       transition: 'all 0.15s',
     }}>{label}</button>
   )
@@ -59,8 +59,8 @@ function Chip({ label, active, color, onClick }: {
 function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
     <div className="py-4 px-5 flex-1 min-w-0">
-      <div className="mono text-micro tracking-label uppercase text-text-secondary mb-1.5">{label}</div>
-      <div className="mono text-[22px] font-bold leading-[1]" style={{ color: color ?? 'var(--color-text-primary)' }}>{value}</div>
+      <div className="mono text-micro text-text-secondary mb-1.5">{label}</div>
+      <div className="mono text-[22px] font-semibold leading-[1]" style={{ color: color ?? 'var(--color-text-primary)' }}>{value}</div>
       {sub && <div className="mono text-micro text-text-secondary mt-1">{sub}</div>}
     </div>
   )
@@ -72,8 +72,8 @@ const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<
   const sys = p.system
   const color = SYSTEM_COLOR[sys] ?? 'var(--color-neutral-300)'
   return (
-    <div className="bg-background-primary-default py-3 px-[14px] text-mini min-w-[160px]" style={{ border: B }}>
-      <div className="mono" style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.08em', color, marginBottom: '8px', textTransform: 'uppercase' }}>{sys}</div>
+    <div className="bg-background-primary-default py-3 px-[14px] text-mini min-w-[160px]" style={{ border: B, borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+      <div className="mono" style={{ fontSize: '10px', fontWeight: 600, color, marginBottom: '8px' }}>{sys}</div>
       <div className="text-text-secondary mb-1.5 text-micro">{p.game_date}</div>
       <div className="grid" style={{ gridTemplateColumns: '70px 1fr', rowGap: '3px' }}>
         <span className="text-text-secondary">Model edge</span>
@@ -81,7 +81,7 @@ const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<
         <span className="text-text-secondary">CLV</span>
         <span className="mono font-semibold" style={{ color: p.y >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{fmt2(p.y)}</span>
         <span className="text-text-secondary">Result</span>
-        <span className="mono uppercase" style={{ color: p.result === 'win' ? 'var(--signal)' : 'var(--loss)' }}>{p.result}</span>
+        <span className="mono" style={{ color: p.result === 'win' ? 'var(--signal)' : 'var(--loss)' }}>{p.result}</span>
         <span className="text-text-secondary">Open odds</span>
         <span className="mono text-text-primary">{p.opening_odds > 0 ? `+${p.opening_odds}` : p.opening_odds}</span>
       </div>
@@ -192,17 +192,17 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
       </div>
 
       {/* Filter bar */}
-      <div className="py-[14px] px-4 mb-4 flex flex-wrap gap-3 items-center" style={{ border: B }}>
+      <div className="py-[14px] px-4 mb-4 flex flex-wrap gap-3 items-center" style={{ border: B, borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
         {/* Date range */}
         <div className="flex gap-1 items-center">
-          <span className="mono text-micro text-text-secondary mr-1.5 tracking-caps uppercase">Range</span>
+          <span className="mono text-micro text-text-secondary mr-1.5">Range</span>
           {DATE_TABS.map(t => (
             <Chip key={t.days} label={t.label} active={days === t.days} onClick={() => handleDays(t.days)} />
           ))}
         </div>
         {/* Result filter */}
         <div className="flex gap-1 items-center">
-          <span className="mono text-micro text-text-secondary mr-1.5 tracking-caps uppercase">Result</span>
+          <span className="mono text-micro text-text-secondary mr-1.5">Result</span>
           {RESULT_TABS.map(r => (
             <Chip key={r} label={r} active={resultFilter === r} onClick={() => setResultFilter(r)} />
           ))}
@@ -215,7 +215,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
         {ALL_SYSTEMS.map(sys => (
           <Chip
             key={sys}
-            label={sys}
+            label={systemLabel(sys)}
             color={SYSTEM_COLOR[sys]}
             active={activeSystems.length === 0 || activeSystems.includes(sys)}
             onClick={() => toggleSystem(sys)}
@@ -229,7 +229,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
       </div>
 
       {/* Scatter chart */}
-      <div className="bg-background-full mb-[1px]" style={{ border: B }}>
+      <div className="bg-background-full mb-[1px]" style={{ border: B, borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
         {filtered.length === 0 ? (
           <div className="h-[420px] flex items-center justify-center">
             <div className="text-center">
@@ -294,8 +294,8 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
 
       {/* Quadrant labels (outside chart, below) */}
       <div className="flex justify-between py-[6px] px-4 mb-4" style={{ border: B, borderTop: 'none' }}>
-        <span className="mono text-micro tracking-head" style={{ color: 'var(--signal)60' }}>TOP RIGHT: edge + positive CLV -- model is finding real value</span>
-        <span className="mono text-micro tracking-head" style={{ color: 'var(--loss)60' }}>BOTTOM LEFT: no edge, negative CLV</span>
+        <span className="mono text-micro" style={{ color: 'var(--signal)60' }}>TOP RIGHT: edge + positive CLV -- model is finding real value</span>
+        <span className="mono text-micro" style={{ color: 'var(--loss)60' }}>BOTTOM LEFT: no edge, negative CLV</span>
       </div>
 
       {/* System legend */}
@@ -312,7 +312,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
 
       {/* Summary stat cards */}
       {stats && (
-        <div className="flex flex-wrap mb-4" style={{ border: B }}>
+        <div className="flex flex-wrap mb-4" style={{ border: B, borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
           <StatCard
             label="Mean CLV"
             value={fmt2(stats.meanCLV)}
@@ -343,12 +343,12 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
       )}
 
       {/* Info panel */}
-      <div style={{ border: B }}>
+      <div style={{ border: B, borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
         <button className="w-full bg-transparent bg-none border-0 cursor-pointer py-3 px-4 flex items-center justify-between"
           onClick={() => setInfoOpen(o => !o)}
          
         >
-          <span className="mono text-micro tracking-caps uppercase text-text-secondary">What is CLV?</span>
+          <span className="mono text-micro text-text-secondary">What is CLV?</span>
           <span className="mono text-compact text-text-secondary">{infoOpen ? '-' : '+'}</span>
         </button>
         {infoOpen && (

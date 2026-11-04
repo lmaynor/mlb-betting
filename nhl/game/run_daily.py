@@ -334,6 +334,7 @@ def run_nhl_game_predictions(
             "home_name": home_n,
             "away_name": away_n,
             "commence_time": comm_time,
+            "start": comm_time,   # same value under the key the NBA feed and the frontend GameMetadata type use
             "lambda_h": pg.lambda_h,
             "lambda_a": pg.lambda_a,
             "exp_total": pg.exp_total,

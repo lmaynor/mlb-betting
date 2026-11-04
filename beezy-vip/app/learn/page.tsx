@@ -31,7 +31,7 @@ export default function LearnPage() {
         <p className="times text-headline-regular text-text-secondary">Data-driven betting education. No gut-feel advice.</p>
       </div>
 
-      <div className="ui-heading mb-4 tracking-[0.12em] text-text-secondary">
+      <div className="ui-heading mb-4 text-text-secondary">
         {ARTICLES.length} Articles
       </div>
 

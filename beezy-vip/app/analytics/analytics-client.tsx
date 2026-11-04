@@ -13,10 +13,10 @@ import { cx } from '@/utils/cx'
 
 type Tab = 'bankroll' | 'calibration' | 'books' | 'health'
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'bankroll', label: 'BANKROLL SIMULATOR' },
-  { id: 'calibration', label: 'EDGE CALIBRATION' },
-  { id: 'books', label: 'BOOK LEADERBOARD' },
-  { id: 'health', label: 'SYSTEM HEALTH' },
+  { id: 'bankroll', label: 'Bankroll simulator' },
+  { id: 'calibration', label: 'Edge calibration' },
+  { id: 'books', label: 'Book leaderboard' },
+  { id: 'health', label: 'System health' },
 ]
 const GATE = 200
 const STORED_KELLY_FRACTION = 0.25   // fraction already baked into bets.kelly_pct for EV rows
@@ -97,7 +97,7 @@ function SystemChips({ system, setSystem }: { system: string; setSystem: (s: str
             className={cx('button-press-motion cursor-pointer rounded-lg border px-2.5 py-1.5 text-caption-1-semibold',
               !on && 'border-separator-border bg-background-secondary-default text-text-secondary hover:bg-background-primary-hover')}
             style={on ? { color: 'var(--color-background-secondary-default)', background: c ?? 'var(--signal)', borderColor: c ?? 'var(--signal)' } : c ? { color: c } : undefined}>
-            {k === 'ALL' ? 'ALL SYSTEMS' : systemLabel(k).toUpperCase()}
+            {k === 'ALL' ? 'All systems' : systemLabel(k).toUpperCase()}
           </button>
         )
       })}
@@ -124,14 +124,14 @@ function Bankroll({ data, bankroll, setBankroll, fraction, setFraction, mounted 
         sub={`Non-compounding rescale of real graded outcomes: each bet stakes clip(kelly x multiplier, 0, ${(h.kelly_cap * 100).toFixed(0)}%) of the starting bankroll and earns the bet's real profit/stake ratio. Flat and model lines start at $1,000.`}
       >
         <div className="mb-4 flex flex-wrap gap-7">
-          <Slider label="STARTING BANKROLL" value={bankroll} min={500} max={25000} step={500} onChange={setBankroll} fmt={v => fmtMoney(v)} />
-          <Slider label="KELLY FRACTION" value={fraction} min={0.1} max={0.5} step={0.05} onChange={setFraction} fmt={v => `${v.toFixed(2)}x`} />
+          <Slider label="Starting bankroll" value={bankroll} min={500} max={25000} step={500} onChange={setBankroll} fmt={v => fmtMoney(v)} />
+          <Slider label="Kelly fraction" value={fraction} min={0.1} max={0.5} step={0.05} onChange={setFraction} fmt={v => `${v.toFixed(2)}x`} />
         </div>
         <div className="mb-2 flex flex-wrap gap-6">
-          <Big label="KELLY ENDING BANKROLL" value={fmtMoney(h.kelly_ending_bankroll)} />
+          <Big label="Kelly ending bankroll" value={fmtMoney(h.kelly_ending_bankroll)} />
           <Big label="KELLY ROI (ON STAKED)" value={h.kelly_roi_pct == null ? '--' : `${h.kelly_roi_pct > 0 ? '+' : ''}${h.kelly_roi_pct.toFixed(2)}%`} />
           <Big label="FLAT $100 P&L" value={fmtMoney(h.flat_pnl_dollars, true)} />
-          <Big label="FLAT ROI" value={h.flat_roi_pct == null ? '--' : `${h.flat_roi_pct > 0 ? '+' : ''}${h.flat_roi_pct.toFixed(2)}%`} />
+          <Big label="Flat ROI" value={h.flat_roi_pct == null ? '--' : `${h.flat_roi_pct > 0 ? '+' : ''}${h.flat_roi_pct.toFixed(2)}%`} />
         </div>
         <div className="h-80">
           {mounted && (
@@ -227,7 +227,7 @@ function Calibration({ data, system, setSystem, mounted }: { data: AnalyticsDeep
           Mean CLV is the average of each bet&apos;s price against the closing price, and a few extreme closes can move it a lot; the CLV Tracker shows the full spread and the median. Buckets under 30 bets are marked low n and should not be read for ROI.
         </p>
       </Panel>
-      <Panel title="HOW MODEL PROBABILITIES ARE CONTROLLED">
+      <Panel title="How model probabilities are controlled">
         <p className="times max-w-[90ch] text-body-regular text-text-secondary">
           Model systems pass every probability through an isotonic calibrator fit on realized outcomes,
           then skip any bet whose post-calibration edge still exceeds an edge cap. Both exist because early diagnostics showed the largest claimed edges were mostly
@@ -250,7 +250,7 @@ function Td({ children, mono, strong, color }: { children: React.ReactNode; mono
 function Books({ data, system, setSystem }: { data: AnalyticsDeepDive; system: string; setSystem: (s: string) => void }) {
   const rows = data.book_leaderboard
   return (
-    <Panel title="SPORTSBOOK AND EXCHANGE LEADERBOARD" sub="Where flagged prices came from and how they graded. Bets = how often the book was caught off consensus. Small samples (n under 100) are noise.">
+    <Panel title="Sportsbook and exchange leaderboard" sub="Where flagged prices came from and how they graded. Bets = how often the book was caught off consensus. Small samples (n under 100) are noise.">
       <SystemChips system={system} setSystem={setSystem} />
       {rows.length === 0 ? <div className="py-5 text-text-secondary">No graded bets for this selection.</div> : (
         <div className="overflow-x-auto">
@@ -261,7 +261,7 @@ function Books({ data, system, setSystem }: { data: AnalyticsDeepDive; system: s
                 const b = bookDisplay(r.book)
                 return (
                   <tr key={r.book} className={cx('border-b border-border-table transition-colors hover:bg-background-primary-hover', r.n < 100 && 'opacity-60')} title={r.n < 100 ? 'Under 100 bets: too few to read' : undefined}>
-                    <Td><span className="text-[11.5px] font-bold py-[3px] px-2" style={{ color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px' }}>{r.book === 'unknown' ? 'Model (no book)' : b.label}</span>{b.isExchange && <span className="ml-2 text-micro text-text-secondary">exchange</span>}</Td>
+                    <Td><span className="text-[12px] font-semibold py-[3px] px-2" style={{ color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px' }}>{r.book === 'unknown' ? 'Model (no book)' : b.label}</span>{b.isExchange && <span className="ml-2 text-micro text-text-secondary">exchange</span>}</Td>
                     <Td mono>{r.n.toLocaleString()}</Td>
                     <Td mono>{r.hit_rate != null ? `${r.hit_rate.toFixed(1)}%` : '--'}</Td>
                     <Td mono color={r.roi_pct == null ? undefined : r.roi_pct >= 0 ? 'var(--signal)' : 'var(--loss)'}>{r.roi_pct != null ? `${r.roi_pct > 0 ? '+' : ''}${r.roi_pct.toFixed(2)}%` : '--'}</Td>
@@ -286,7 +286,7 @@ function Health({ stats }: { stats: SystemStats[] }) {
   const rows = stats.filter(s => Number(s.total_bets) > 0).sort((a, b) => Number(b.total_bets) - Number(a.total_bets))
   const labelOf = (k: string) => (k === '1IOU' ? '1st Inn O/U' : systemLabel(k))
   return (
-    <Panel title="SYSTEM HEALTH" sub="Bets are every graded prediction a system logged, including unstaked log-only ones. Reaching 200 means the sample is big enough to judge, not that the system is profitable.">
+    <Panel title="System health" sub="Bets are every graded prediction a system logged, including unstaked log-only ones. Reaching 200 means the sample is big enough to judge, not that the system is profitable.">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] border-collapse text-body-2-regular">
           <thead><tr>{['System', 'Status', 'Bets', 'ROI'].map(h => <Th key={h}>{h}</Th>)}</tr></thead>
@@ -304,7 +304,7 @@ function Health({ stats }: { stats: SystemStats[] }) {
               const statusColor = isEv || logOnly.has(s.system) || n < GATE ? 'var(--color-text-secondary)' : roi != null && roi < 0 ? 'var(--loss)' : 'var(--color-neutral-300)'
               return (
                 <tr key={s.system} className="border-b border-border-table transition-colors hover:bg-background-primary-hover">
-                  <Td><span style={{ color, fontWeight: 700 }}>{labelOf(s.system)}</span></Td>
+                  <Td><span style={{ color, fontWeight: 600 }}>{labelOf(s.system)}</span></Td>
                   <Td><span style={{ color: statusColor }}>{status}</span></Td>
                   <Td mono>{n.toLocaleString()}</Td>
                   <Td mono color={roi == null ? undefined : roi >= 0 ? 'var(--signal)' : 'var(--loss)'}>{roi == null ? '--' : `${roi > 0 ? '+' : ''}${roi.toFixed(1)}%`}</Td>

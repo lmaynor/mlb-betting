@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { GamePricesClient } from '@/app/ev/games/game-prices-client'
-import { GamesNav, gamesHref } from '@/app/ev/games/games-nav'
+import { analysisGame, GamesNav, gamesHref, parseGamesView } from '@/app/ev/games/games-nav'
 import type { GameOddsFeed, GameOddsRow } from '@/lib/game-odds'
 
 let mobile = false
@@ -35,13 +35,13 @@ describe('GamePricesClient (the /ev/games PRICES view)', () => {
     render(<GamePricesClient feeds={{ nba, nhl }} sport="all" />)
     const strip = screen.getByTestId('game-prices-strip')
     expect(strip.textContent).toMatch(/NBA \+ NHL/)
-    expect(strip.textContent).toMatch(/4 ROWS/)
-    expect(strip.textContent).toMatch(/LINES 12 MIN OLD/)
-    expect(strip.textContent).toMatch(/UNVALIDATED market prices, not a tested edge/)
+    expect(strip.textContent).toMatch(/4 rows/)
+    expect(strip.textContent).toMatch(/Lines 12 min old/)
+    expect(strip.textContent).toMatch(/Unvalidated market prices, not a tested edge/)
     expect(screen.queryByText('STALE')).toBeNull()
     const table = screen.getByRole('table')
     const heads = within(table).getAllByRole('columnheader').map(h => h.textContent)
-    expect(heads).toEqual(expect.arrayContaining(['GAME', 'BEST AWAY / OVER', 'BEST HOME / UNDER', 'FAIR %', 'EV', 'DRAFTKIN', 'FANDUEL', 'BETMGM', 'CAESARS']))
+    expect(heads).toEqual(expect.arrayContaining(['Game', 'Best away / over', 'Best home / under', 'Fair %', 'EV', 'DRAFTKIN', 'FANDUEL', 'BETMGM', 'CAESARS']))
     expect(table.querySelectorAll('[data-matchup="BOS @ MIA"]').length).toBe(3)
     expect(table.querySelector('[data-matchup="TOR @ MTL"]')).not.toBeNull()
     expect(table.textContent).toMatch(/MIA -3\.5/)
@@ -74,10 +74,10 @@ describe('GamePricesClient (the /ev/games PRICES view)', () => {
   it('narrows by market and by arbs only, and says so when nothing matches', () => {
     render(<GamePricesClient feeds={{ nba, nhl }} sport="all" />)
     fireEvent.click(screen.getByRole('button', { name: 'Spread' }))
-    expect(screen.getByTestId('game-prices-strip').textContent).toMatch(/1 ROWS/)
+    expect(screen.getByTestId('game-prices-strip').textContent).toMatch(/1 rows/)
     fireEvent.click(screen.getByRole('button', { name: 'All' }))
     fireEvent.click(screen.getByLabelText('Arbs only'))
-    expect(screen.getByTestId('game-prices-strip').textContent).toMatch(/1 ROWS/)
+    expect(screen.getByTestId('game-prices-strip').textContent).toMatch(/1 rows/)
     fireEvent.change(screen.getByLabelText('Search teams'), { target: { value: 'zzz' } })
     expect(screen.getByRole('status').textContent).toMatch(/No lines match/)
   })
@@ -85,20 +85,20 @@ describe('GamePricesClient (the /ev/games PRICES view)', () => {
   it('searches by team', () => {
     render(<GamePricesClient feeds={{ nba, nhl }} sport="all" />)
     fireEvent.change(screen.getByLabelText('Search teams'), { target: { value: 'mtl' } })
-    expect(screen.getByTestId('game-prices-strip').textContent).toMatch(/1 ROWS/)
+    expect(screen.getByTestId('game-prices-strip').textContent).toMatch(/1 rows/)
     expect(screen.getByRole('table').querySelector('[data-matchup="BOS @ MIA"]')).toBeNull()
   })
 
   it('flags a stale feed', () => {
     render(<GamePricesClient feeds={{ nba: { ...nba, stale: true, age_minutes: 200 }, nhl: null }} sport="nba" />)
-    expect(screen.getByText('STALE')).toBeInTheDocument()
-    expect(screen.getByTestId('game-prices-strip').textContent).toMatch(/LINES 3\.3 H OLD/)
+    expect(screen.getByText('Stale')).toBeInTheDocument()
+    expect(screen.getByTestId('game-prices-strip').textContent).toMatch(/Lines 3\.3 h old/i)
   })
 
   it('says prices are not published when the feeds are missing or unavailable', () => {
     const { rerender } = render(<GamePricesClient feeds={{ nba: null, nhl: null }} sport="all" />)
     expect(screen.getByRole('status').textContent).toMatch(/Game-line prices are not published yet/)
-    expect(screen.getByTestId('game-prices-strip').textContent).toMatch(/UNVALIDATED/)
+    expect(screen.getByTestId('game-prices-strip').textContent).toMatch(/unvalidated/i)
     rerender(<GamePricesClient feeds={{ nba: feed('nba', [], { status: 'unavailable' }), nhl: null }} sport="nba" />)
     expect(screen.getByRole('status').textContent).toMatch(/not published yet/)
     expect(screen.queryByRole('table')).toBeNull()
@@ -127,22 +127,40 @@ describe('GamePricesClient (the /ev/games PRICES view)', () => {
   })
 })
 
-describe('the PRICES | MODEL switch', () => {
-  it('builds shareable hrefs: prices and all are the defaults and stay out of the URL', () => {
-    expect(gamesHref('prices', 'all')).toBe('/ev/games')
-    expect(gamesHref('model', 'all')).toBe('/ev/games?view=model')
-    expect(gamesHref('prices', 'nba')).toBe('/ev/games?sport=nba')
-    expect(gamesHref('model', 'nhl')).toBe('/ev/games?view=model&sport=nhl')
+describe('the BOARD | ALL LINES switch', () => {
+  it('builds shareable hrefs: the board and all sports are the defaults and stay out of the URL', () => {
+    expect(gamesHref('board', 'all')).toBe('/ev/games')
+    expect(gamesHref('table', 'all')).toBe('/ev/games?view=table')
+    expect(gamesHref('board', 'nba')).toBe('/ev/games?sport=nba')
+    expect(gamesHref('table', 'nhl')).toBe('/ev/games?view=table&sport=nhl')
   })
-  it('the view links keep the sport and the sport links keep the view', () => {
-    render(<GamesNav view="model" sport="nba" />)
+  it('old links still land somewhere sensible', () => {
+    expect(parseGamesView('prices')).toBe('table')
+    expect(parseGamesView('table')).toBe('table')
+    expect(parseGamesView('analysis')).toBe('board')
+    expect(parseGamesView('model')).toBe('board')
+    expect(parseGamesView(undefined)).toBe('board')
+  })
+  it('an analysis link opens that game\'s card on its Analysis tab', () => {
+    expect(analysisGame('analysis', 'nhl:2026-11-02:DET@FLA')).toBe('nhl:2026-11-02:DET@FLA')
+    expect(analysisGame(undefined, 'nhl:x')).toBe('nhl:x')       // a bare ?game= is an old analysis link
+    expect(analysisGame('table', 'nhl:x')).toBeNull()
+    expect(analysisGame('analysis', undefined)).toBeNull()
+    expect(analysisGame(undefined, undefined)).toBeNull()
+  })
+  it('on the all-lines table the view links keep the sport and the sport links keep the view', () => {
+    render(<GamesNav view="table" sport="nba" />)
     const view = within(screen.getByRole('navigation', { name: 'Game lines view' }))
-    expect(view.getByRole('link', { name: 'PRICES' })).toHaveAttribute('href', '/ev/games?sport=nba')
-    expect(view.getByRole('link', { name: 'MODEL' })).toHaveAttribute('href', '/ev/games?view=model&sport=nba')
-    expect(view.getByRole('link', { name: 'MODEL' })).toHaveAttribute('aria-current', 'page')
+    expect(view.getAllByRole('link').map(l => l.textContent)).toEqual(['Board', 'All lines'])
+    expect(view.getByRole('link', { name: 'Board' })).toHaveAttribute('href', '/ev/games?sport=nba')
+    expect(view.getByRole('link', { name: 'All lines' })).toHaveAttribute('href', '/ev/games?view=table&sport=nba')
+    expect(view.getByRole('link', { name: 'All lines' })).toHaveAttribute('aria-current', 'page')
     const sports = within(screen.getByRole('navigation', { name: 'Game lines sport' }))
-    expect(sports.getByRole('link', { name: 'NBA + NHL' })).toHaveAttribute('href', '/ev/games?view=model')
-    expect(sports.getByRole('link', { name: 'NHL' })).toHaveAttribute('href', '/ev/games?view=model&sport=nhl')
+    expect(sports.getByRole('link', { name: 'All sports' })).toHaveAttribute('href', '/ev/games?view=table')
     expect(sports.getByRole('link', { name: 'NBA' })).toHaveAttribute('aria-current', 'page')
+  })
+  it('the board has its own sport pills, so the page header carries no sport links', () => {
+    render(<GamesNav view="board" sport="all" />)
+    expect(screen.queryByRole('navigation', { name: 'Game lines sport' })).toBeNull()
   })
 })

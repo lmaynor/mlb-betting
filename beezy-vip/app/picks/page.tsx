@@ -8,7 +8,7 @@ import { ScoreLegend } from '@/components/ui/score-legend'
 import { siteDateKey, formatDateKey } from '@/lib/dates'
 import { sportHref } from '@/lib/ia'
 import { activeFilterCount, parsePickFilters } from '@/lib/picks-filters'
-import { LIVE_SPORTS } from '@/lib/sports'
+import { sportsInSeason } from '@/lib/sports'
 import { filterTopPicks, isOfficialCardPlay, isEvOutlier } from '@/lib/top-picks'
 import { loadTopPlayerPicks } from '@/lib/top-picks-data'
 import { cx } from '@/utils/cx'
@@ -45,7 +45,7 @@ export default async function TopPicksPage({ searchParams }: { searchParams: Pro
           <div>
             <h1 className="text-title-2-bold text-text-primary">Top Signals</h1>
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-              <span className="mono text-caption-2-medium uppercase tracking-wider text-text-secondary">Tier</span>
+              <span className="mono text-caption-2-medium text-text-secondary">Tier</span>
               {[
                 { id: 'all', label: 'All Actionable' },
                 { id: 'official', label: 'Official Plays Only' },
@@ -71,7 +71,7 @@ export default async function TopPicksPage({ searchParams }: { searchParams: Pro
             </div>
           </div>
           <span className="mono text-caption-1-regular text-text-secondary">
-            {formatDateKey(date, { weekday: 'short', month: 'short', day: 'numeric' })} &middot; all sports, ranked by Beezy Score &middot; free
+            {formatDateKey(date, { weekday: 'short', month: 'short', day: 'numeric' })}{' '}&middot; all sports, ranked by Beezy Score &middot; free
           </span>
         </div>
 
@@ -89,7 +89,7 @@ export default async function TopPicksPage({ searchParams }: { searchParams: Pro
 
         <div className="mx-0.5 mt-3 flex flex-wrap items-baseline gap-x-5 gap-y-2 text-body-2-regular">
           <span className="text-text-secondary">Full boards</span>
-          {LIVE_SPORTS.map(p => (
+          {sportsInSeason().map(p => (
             <Link key={p.slug} href={sportHref(p.slug)} className="text-accent-400 hover:underline">{p.shortName} &rarr;</Link>
           ))}
           <Link href="/picks/history" className="text-accent-400 hover:underline">Graded history &rarr;</Link>

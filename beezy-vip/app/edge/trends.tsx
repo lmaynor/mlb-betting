@@ -37,7 +37,7 @@ function Section({ title, sub, children }: { title: string; sub?: string; childr
   return (
     <div className="border-t border-separator-border pt-3">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-        <h4 className="ui-heading tracking-caps text-text-secondary">{title}</h4>
+        <h4 className="ui-heading text-text-secondary">{title}</h4>
         {sub && <span className="mono text-mini text-text-secondary">{sub}</span>}
       </div>
       {children}
@@ -134,7 +134,7 @@ export function GameLog({ games, line, under, label, rolling }: { games: TrendGa
         {line != null && (
           <g>
             <line x1={padL} x2={W - padR} y1={y(line)} y2={y(line)} stroke="#f3f4f6" strokeWidth="1.4" strokeDasharray="5 4" />
-            <text x={padL + 2} y={y(line) - 4} fill="#f3f4f6" style={{ fontSize: '10px', fontWeight: 700, fontFamily: 'monospace' }}>Line {line}</text>
+            <text x={padL + 2} y={y(line) - 4} fill="#f3f4f6" style={{ fontSize: '10px', fontWeight: 600, fontFamily: 'monospace' }}>Line {line}</text>
           </g>
         )}
       </svg>
@@ -177,7 +177,7 @@ export function Distribution({ games, line, under, label }: { games: TrendGame[]
           )
         })}
         {lineX != null && lineX >= padL && lineX <= W - padR && (
-          <g><line x1={lineX} x2={lineX} y1={12} y2={H - padB} stroke="#f3f4f6" strokeWidth="1.4" strokeDasharray="5 4" /><text x={lineX + 3} y={9} fill="#f3f4f6" style={{ fontSize: '10px', fontWeight: 700, fontFamily: 'monospace' }}>{line}</text></g>
+          <g><line x1={lineX} x2={lineX} y1={12} y2={H - padB} stroke="#f3f4f6" strokeWidth="1.4" strokeDasharray="5 4" /><text x={lineX + 3} y={9} fill="#f3f4f6" style={{ fontSize: '10px', fontWeight: 600, fontFamily: 'monospace' }}>{line}</text></g>
         )}
       </svg>
       <div className="mt-1 text-compact leading-[1.5] text-neutral-300">

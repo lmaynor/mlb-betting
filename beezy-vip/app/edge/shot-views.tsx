@@ -82,7 +82,7 @@ export function ZonesView({ data, onFocus }: { data: ShotChartOk; onFocus: (s: s
         const x = Math.min(Math.max(sx(z.cx), 30), VIEW_W - 30), y = sy(z.cy)
         return (
           <g key={z.key} onMouseEnter={() => onFocus(zoneText(z))} onClick={() => onFocus(zoneText(z))} style={{ cursor: 'pointer' }}>
-            <text x={x} y={y - 1} textAnchor="middle" fill="#ffffff" stroke="#0d0f16" strokeWidth="3" paintOrder="stroke" style={{ fontSize: '15px', fontWeight: 700, fontFamily: 'monospace' }}>{pct0(z.fgm, z.fga)}</text>
+            <text x={x} y={y - 1} textAnchor="middle" fill="#ffffff" stroke="#0d0f16" strokeWidth="3" paintOrder="stroke" style={{ fontSize: '15px', fontWeight: 600, fontFamily: 'monospace' }}>{pct0(z.fgm, z.fga)}</text>
             <text x={x} y={y + 13} textAnchor="middle" fill={fill[i]} stroke="#0d0f16" strokeWidth="3" paintOrder="stroke" style={{ fontSize: '11px', fontFamily: 'monospace' }}>{signed1(d)}</text>
           </g>
         )

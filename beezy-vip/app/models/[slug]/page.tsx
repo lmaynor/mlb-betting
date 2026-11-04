@@ -35,7 +35,7 @@ const IMPORTANCE: Record<string, { color: string; border: string; bg: string }> 
 function StatBlock({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
   return (
     <div className="p-[18px]" style={{ borderRight: B }}>
-      <div className="mono text-micro tracking-label text-text-secondary mb-[6px]" style={{ textTransform: 'uppercase' as const }}>{label}</div>
+      <div className="mono text-micro text-text-secondary mb-[6px]" style={{ }}>{label}</div>
       <div className="mono text-[20px] font-semibold leading-[1] mb-1" style={{ color: accent ? 'var(--signal)' : 'var(--color-text-primary)' }}>{value}</div>
       {sub && <div className="times text-mini text-text-secondary">{sub}</div>}
     </div>
@@ -111,13 +111,13 @@ export default async function ModelDetailPage({ params }: Props) {
       </div>
 
       {/* Performance stats */}
-      <div className="grid grid-cols-[repeat(5,1fr)] bg-background-primary-default overflow-hidden mb-7" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
+      <div className="grid grid-cols-2 md:grid-cols-5 [&>*:last-child]:col-span-2 md:[&>*:last-child]:col-span-1 bg-background-primary-default overflow-hidden mb-7" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
         <StatBlock label={metricLabel}  value={metricValue}                                                    sub="Out-of-sample" />
         <StatBlock label="Bets"         value={String(bets)}                                                   sub="Paper mode" />
         <StatBlock label="Win Rate"     value={winRate !== null ? `${winRate.toFixed(1)}%` : '--'}             sub="W / (W+L)" />
         <StatBlock label="ROI"          value={roi !== null ? `${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%` : '--'} accent={roi !== null && roi > 0} sub="Settled bets" />
         <div className="p-4.5">
-          <div className="ui-heading text-micro tracking-label text-text-secondary mb-1.5">Avg Edge</div>
+          <div className="ui-heading text-micro text-text-secondary mb-1.5">Avg Edge</div>
           <div className="mono text-[20px] font-semibold leading-[1] mb-1" style={{ color: avgEdge === null ? 'var(--color-text-secondary)' : avgEdge >= 0 ? 'var(--signal)' : 'var(--loss)' }}>
             {avgEdge !== null ? `${avgEdge >= 0 ? '+' : ''}${avgEdge.toFixed(1)}%` : '--'}
           </div>
@@ -126,7 +126,7 @@ export default async function ModelDetailPage({ params }: Props) {
       </div>
 
       {/* Config + Calibration */}
-      <div className="grid grid-cols-2 gap-4 mb-7">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-7">
 
         {/* Config */}
         <div className="bg-background-primary-default p-5" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
@@ -149,7 +149,7 @@ export default async function ModelDetailPage({ params }: Props) {
         {/* Calibration */}
         <div className="bg-background-primary-default p-5" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
           <div className="flex items-baseline gap-2 mb-4">
-            <span className="text-compact font-semibold tracking-head text-text-primary" style={{ textTransform: 'uppercase' as const }}>Calibration</span>
+            <span className="text-compact font-semibold text-text-primary" style={{ }}>Calibration</span>
             <span className="mono text-micro text-text-secondary">Model prob vs actual hit rate</span>
           </div>
           {Object.keys(buckets).length === 0 ? (
@@ -181,16 +181,16 @@ export default async function ModelDetailPage({ params }: Props) {
       {/* Feature table */}
       <div className="bg-background-primary-default overflow-hidden mb-7" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
         <div className="py-[14px] px-[18px] bg-background-secondary-default" style={{ borderBottom: B }}>
-          <div className="text-compact font-semibold tracking-head text-text-primary" style={{ textTransform: 'uppercase' as const }}>Feature List</div>
+          <div className="text-compact font-semibold text-text-primary" style={{ }}>Feature List</div>
           <div className="mono text-micro text-text-secondary mt-[3px]">{spec.features.length} features &middot; XGBoost importance ranking</div>
         </div>
-        <div className="grid bg-background-secondary-default" style={{ gridTemplateColumns: '1fr 2fr 100px', borderBottom: B }}>
+        <div className="grid grid-cols-[1fr_1.6fr_84px] md:grid-cols-[1fr_2fr_100px] bg-background-secondary-default" style={{ borderBottom: B }}>
           {['Feature', 'Description', 'Importance'].map(h => (
-            <div key={h} className="mono text-micro tracking-label text-text-secondary py-[9px] px-[14px]" style={{ textTransform: 'uppercase' as const }}>{h}</div>
+            <div key={h} className="mono text-micro text-text-secondary py-[9px] px-[14px]" style={{ }}>{h}</div>
           ))}
         </div>
         {spec.features.map((f, i) => (
-          <div className="grid items-center" key={i} style={{ gridTemplateColumns: '1fr 2fr 100px', borderBottom: i < spec.features.length - 1 ? B : undefined }}>
+          <div className="grid grid-cols-[1fr_1.6fr_84px] md:grid-cols-[1fr_2fr_100px] items-center" key={i} style={{ borderBottom: i < spec.features.length - 1 ? B : undefined }}>
             <div className="mono text-mini font-semibold text-text-primary py-2.5 px-3.5">{f.name}</div>
             <div className="text-mini text-neutral-300 py-2.5 px-3.5">{f.description}</div>
             <div className="py-2.5 px-3.5">
@@ -209,14 +209,14 @@ export default async function ModelDetailPage({ params }: Props) {
       <div className="bg-background-primary-default py-[18px] px-5 mb-7 flex items-center gap-6" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
         <div className="flex-1">
           <div className="flex justify-between mb-1.5">
-            <span className="mono text-micro tracking-label text-text-secondary" style={{ textTransform: 'uppercase' as const }}>200-Bet Gate Progress</span>
+            <span className="mono text-micro text-text-secondary" style={{ }}>200-Bet Gate Progress</span>
             <span className="mono text-micro text-text-secondary">{bets}/200</span>
           </div>
           <div className="h-2 rounded-[var(--radius-pill)] overflow-hidden" style={{ background: 'var(--slate)' }}>
             <div className="h-2 rounded-[var(--radius-pill)]" style={{ background: spec.color, width: `${gatePct}%` }} />
           </div>
         </div>
-        <span className="mono text-micro tracking-caps py-[5px] px-[11px]" style={{
+        <span className="mono text-micro py-[5px] px-[11px]" style={{
           borderRadius: 'var(--radius-pill)',
           border: bets >= 200 ? '1px solid var(--win-border)' : B,
           color: bets >= 200 ? 'var(--signal)' : 'var(--color-text-secondary)',
@@ -228,12 +228,12 @@ export default async function ModelDetailPage({ params }: Props) {
 
       {/* P&L summary */}
       {totalPnl !== null && (
-        <div className="grid grid-cols-[repeat(4,1fr)] bg-background-primary-default overflow-hidden mb-7" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
+        <div className="grid grid-cols-2 md:grid-cols-4 bg-background-primary-default overflow-hidden mb-7" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
           <StatBlock label="Total P&L"   value={`${totalPnl >= 0 ? '+' : '-'}$${Math.abs(totalPnl).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} accent={totalPnl > 0} sub="at paper stakes" />
           <StatBlock label="Avg Edge"    value={avgEdge !== null ? `${avgEdge >= 0 ? '+' : ''}${avgEdge.toFixed(1)}%` : '--'} />
           <StatBlock label="Win Rate"    value={winRate !== null ? `${winRate.toFixed(1)}%` : '--'} />
           <div className="p-4.5">
-            <div className="ui-heading text-micro tracking-label text-text-secondary mb-1.5">Sample Size</div>
+            <div className="ui-heading text-micro text-text-secondary mb-1.5">Sample Size</div>
             <div className="mono text-[20px] font-semibold leading-[1] mb-1 text-text-primary">{bets}</div>
             <div className="times text-mini text-text-secondary">Settled bets</div>
           </div>

@@ -4,7 +4,9 @@
  * planned. Adding a sport is a registry change (docs/ADDING_A_NEW_SPORT.md): an entry here, its systems in
  * lib/pick-systems.ts and their badge tokens in lib/tokens.ts -- no new page or component.
  */
-/** Every sport slug, in ribbon order. SportSlug and the SPORT_PILLARS record are derived from it, so a slug added here
+import { isMlbOffseason } from '@/lib/dates'
+
+/** Every sport slug, in registry order. SportSlug and the SPORT_PILLARS record are derived from it, so a slug added here
  * fails to compile until it has a pillar -- and tests/sport-onboarding.test.ts fails until its systems are wired. */
 export const SPORT_SLUGS = ['mlb', 'nfl', 'nhl', 'nba'] as const
 export type SportSlug = (typeof SPORT_SLUGS)[number]
@@ -146,6 +148,42 @@ export const SPORT_LIST: SportPillar[] = SPORT_SLUGS.map(slug => SPORT_PILLARS[s
 /** The sports shown in the sport ribbon, the /picks chips and the scanner pills: every pillar whose status is `live`. */
 export const LIVE_SPORTS: SportPillar[] = SPORT_LIST.filter(p => p.status === 'live')
 
+/**
+ * The live sports worth offering right now: MLB drops out for the winter (lib/dates.ts isMlbOffseason), so no chip, pill or link
+ * defaults to a sport with no games and makes the odds look broken. Where a board is already loaded, prefer the data
+ * (`sportsWithRows`): a sport is offered when it has rows, whatever the calendar says.
+ */
+export function sportsInSeason(date = new Date()): SportPillar[] {
+  return LIVE_SPORTS.filter(p => p.slug !== 'mlb' || !isMlbOffseason(date))
+}
+
+/** The sports of `boards` that have at least one row; every live sport when no board has loaded at all (an outage must not hide the pills). */
+export function sportsWithRows(boards: Partial<Record<SportSlug, { rows?: unknown[] } | null | undefined>>): SportSlug[] {
+  const loaded = LIVE_SPORTS.map(p => p.slug).filter(s => boards[s])
+  if (loaded.length === 0) return LIVE_SPORTS.map(p => p.slug)
+  return loaded.filter(s => (boards[s]?.rows?.length ?? 0) > 0)
+}
+
+/** One league as a filter pill: `live` has rows now, `empty` is a league we cover with nothing on the board, `soon` has no feed on this page yet. */
+export type LeagueState = 'live' | 'empty' | 'soon'
+
+export interface LeaguePill { slug: SportSlug; label: string; state: LeagueState; note: string }
+
+/**
+ * Every league filter (Odds Terminal, Game Lines) shows the same four leagues in the same order, so a league never disappears from
+ * the row. A league with nothing to show stays in place, dimmed, and says why when it is picked. `live` is the leagues that have rows;
+ * `soon` is the leagues this page has no feed for at all.
+ */
+export function leaguePills(live: readonly string[], soon: readonly string[] = [], date = new Date()): LeaguePill[] {
+  return LIVE_SPORTS.map(p => {
+    const state: LeagueState = soon.includes(p.slug) ? 'soon' : live.includes(p.slug) ? 'live' : 'empty'
+    const note = state === 'soon' ? `${p.shortName} is not on this page yet.`
+      : state === 'empty' ? (p.slug === 'mlb' && isMlbOffseason(date) ? 'MLB is in the offseason and resumes in March.' : `No ${p.shortName} games with prices right now.`)
+      : ''
+    return { slug: p.slug, label: p.shortName, state, note }
+  })
+}
+
 const PROP_STAT_LABEL: Record<string, string> = {
   rec_yds: 'Rec Yds', rush_yds: 'Rush Yds', pass_yds: 'Pass Yds', receptions: 'Receptions', pass_tds: 'Pass TDs',
   anytime_td: 'Anytime TD', pass_completions: 'Completions', pass_attempts: 'Pass Attempts', rush_attempts: 'Carries',
@@ -170,7 +208,7 @@ export function isSportSlug(s: string): s is SportSlug {
 
 export const STATUS_LABEL: Record<SportStatus, string> = {
   live: 'LIVE',
-  shadow: 'PREVIEW',
-  data_only: 'COMING SOON',
-  planned: 'COMING SOON',
+  shadow: 'Preview',
+  data_only: 'Coming soon',
+  planned: 'Coming soon',
 }

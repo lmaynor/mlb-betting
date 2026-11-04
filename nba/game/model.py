@@ -38,6 +38,23 @@ NU_TOTAL: float = 12.0
 BASE_SIGMA_MARGIN: float = 12.0
 BASE_SIGMA_TOTAL: float = 18.0
 
+# Model ladder (the `ladder` object on every priced game; UNVALIDATED like the rest of the feed): the half-point spread and
+# total rungs within LADDER_HALFWIDTH points of the model mean, 1.0 apart, plus the market's own main line when it is not
+# already one of them (an integer main line can push). Spread rungs are HOME lines (-3.5 = home gives 3.5).
+LADDER_HALFWIDTH: float = 8.0
+LADDER_DECIMALS: int = 4
+
+
+def ladder_rungs(center: float, halfwidth: float = LADDER_HALFWIDTH, *extra: Optional[float]) -> List[float]:
+    """x.5 lines within `halfwidth` of `center`, 1.0 apart, sorted, plus any `extra` (main-line) values."""
+    lo = math.ceil(center - halfwidth - 0.5)
+    hi = math.floor(center + halfwidth - 0.5)
+    seen = {k + 0.5 for k in range(lo, hi + 1)}
+    for x in extra:
+        if x is not None and math.isfinite(float(x)):
+            seen.add(round(float(x), 4))
+    return sorted(seen)
+
 
 def t_scale_to_sd(scale: float, nu: float) -> float:
     """Standard deviation of a Student-t with `scale` and `nu` degrees of freedom (nu > 2): scale * sqrt(nu / (nu - 2))."""
@@ -98,6 +115,7 @@ class PricedGame:
     sd_margin: float = 0.0   # true outcome standard deviation of the margin (t scale converted)
     sd_total: float = 0.0    # true outcome standard deviation of the total
     markets: List[PricedMarket] = field(default_factory=list)
+    ladder: Dict[str, Any] = field(default_factory=dict)   # model probability for every alt rung (see build_ladder)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -113,6 +131,7 @@ class PricedGame:
             "sd_margin": round(self.sd_margin, 3),
             "sd_total": round(self.sd_total, 3),
             "markets": [m.to_dict() for m in self.markets],
+            "ladder": self.ladder,
         }
 
 
@@ -304,6 +323,34 @@ class DistributionalGameEngine:
 
         return float(np.clip(p_over_adj, 0.01, 0.99)), float(np.clip(p_under_adj, 0.01, 0.99)), float(push_prob)
 
+    def build_ladder(
+        self,
+        mu_margin: float,
+        sigma_margin: float,
+        mu_total: float,
+        sigma_total: float,
+        main_spread: Optional[float] = None,
+        main_total: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """
+        The model's probability for every rung, from the SAME Student-t price_moneyline / price_spread / price_total the
+        main-line markets use (so the main-line rung equals the market value exactly). Cover probabilities are push-adjusted
+        like the main lines (p_home + p_away == 1 to rounding; `push` is the raw push mass, 0 on half-point lines, so the raw
+        cover probability is p * (1 - push)). The push mass of an integer line is the probability mass in [line - 0.5,
+        line + 0.5] (continuity correction, an approximation of a discrete score margin / total). Rounded to LADDER_DECIMALS.
+        """
+        d = LADDER_DECIMALS
+        p_h, p_a = self.price_moneyline(mu_margin, sigma_margin)
+        spread = []
+        for line in ladder_rungs(-mu_margin, LADDER_HALFWIDTH, main_spread):
+            ph, pa, push = self.price_spread(mu_margin, sigma_margin, line)
+            spread.append({"line": float(line), "p_home": round(ph, d), "p_away": round(pa, d), "push": round(push, d)})
+        total = []
+        for line in ladder_rungs(mu_total, LADDER_HALFWIDTH, main_total):
+            po, pu, push = self.price_total(mu_total, sigma_total, line)
+            total.append({"line": float(line), "p_over": round(po, d), "p_under": round(pu, d), "push": round(push, d)})
+        return {"ml": {"p_home": round(p_h, d), "p_away": round(p_a, d)}, "spread": spread, "total": total}
+
     def blend_with_market(
         self,
         p_model: float,
@@ -474,6 +521,8 @@ class DistributionalGameEngine:
             n_books=n_b_tot,
         )
         priced.markets.append(m_under)
+
+        priced.ladder = self.build_ladder(mu_m, sigma_m, mu_t, sigma_t, float(spread_line), float(total_line))
 
         return priced
 

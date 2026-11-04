@@ -166,7 +166,7 @@ def pa_event(fd_ml=(110, -130)):
     A, H = "LA Clippers", "Golden State Warriors"
     return {"id": "e1", "away_team": A, "home_team": H, "commence_time": START, "bookmakers": [
         {"key": "fanduel", "markets": [{"key": "h2h", "outcomes": [{"name": A, "price": fd_ml[0]}, {"name": H, "price": fd_ml[1]}]}]},
-        {"key": "bovada", "markets": [{"key": "h2h", "outcomes": [{"name": A, "price": 112}, {"name": H, "price": -132}]}]},
+        {"key": "caesars", "markets": [{"key": "h2h", "outcomes": [{"name": A, "price": 112}, {"name": H, "price": -132}]}]},
     ]}
 
 
@@ -193,7 +193,7 @@ def test_fresher_bestbook_replaces_a_book_it_shares_and_parlayapi_still_adds_its
     b = board([pa_event()], pa_age=40.0, bb_age=5.0)
     books = {x["book"]: (x["a"], x["b"]) for x in ml_row(b)["books"]}
     assert books["fanduel"] == (114, -134)                                      # BestBook (5 min old) beat ParlayAPI (40 min old)
-    assert books["bovada"] == (112, -132)                                       # a book only ParlayAPI has stays
+    assert books["caesars"] == (112, -132)                                       # a book only ParlayAPI has stays
     assert b["lines_source"] == "oddsaccum_game_lines+bestbook"
     assert b["lines_age_minutes"] == 5.0 and b["as_of"] == (NOW - timedelta(minutes=5)).isoformat()
 

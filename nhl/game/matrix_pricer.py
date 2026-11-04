@@ -50,6 +50,23 @@ SHOOTOUT_SHARE_OF_TIES: float = 0.32  # 32% SO, 68% 3v3 OT
 MAX_CALIBRATION_PASSES: int = 12
 CALIBRATION_TOL: float = 1e-4  # goals per team
 
+# Model ladder (the `ladder` object on every priced game; UNVALIDATED like the rest of the feed). HOME-perspective puck lines
+# (-1.5 = home gives 1.5) and game totals the model prices for EVERY rung, not just the main line. Half-point spreads from
+# -3.5 to +3.5 in 1.0 steps (the alt puck lines books ladder); totals 4.5..8.5 in 0.5 steps (whole numbers can push). The
+# market's own main line is merged in when it is not already a rung, so the main-line market value is always on the ladder.
+NHL_SPREAD_RUNGS: Tuple[float, ...] = tuple(-3.5 + i for i in range(8))        # -3.5, -2.5, ... +3.5
+NHL_TOTAL_RUNGS: Tuple[float, ...] = tuple(4.5 + 0.5 * i for i in range(9))    # 4.5, 5.0, ... 8.5
+LADDER_DECIMALS: int = 4
+
+
+def _merge_rungs(base: Tuple[float, ...], *extra: Optional[float]) -> List[float]:
+    """Sorted unique rung list: the constant rung set plus any extra (main-line) values."""
+    seen = {round(float(x), 4) for x in base}
+    for x in extra:
+        if x is not None and math.isfinite(float(x)):
+            seen.add(round(float(x), 4))
+    return sorted(seen)
+
 
 @dataclass
 class ScoreMatrixResult:
@@ -135,6 +152,33 @@ class ScoreMatrixResult:
                     target_matrix[k - 1, k] += t_prob * p_ot * (1.0 - self.p_home_ot_so_win)
         return target_matrix
 
+    def ladder(
+        self,
+        spread_lines: Optional[List[float]] = None,
+        total_lines: Optional[List[float]] = None,
+        exclude_shootout: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        The model's probability for every rung (see NHL_SPREAD_RUNGS / NHL_TOTAL_RUNGS), straight from the exact score matrix.
+        Cover probabilities are push-ADJUSTED exactly like the main-line markets (puck_line_two_way / total()): p_home + p_away
+        == 1 (to rounding) and `push` is the raw tie mass at that line (0 on half-point lines), so the raw probability of a
+        cover is p * (1 - push). Totals exclude the shootout like the main lines. Rounded to LADDER_DECIMALS.
+        """
+        d = LADDER_DECIMALS
+        sp_lines = list(NHL_SPREAD_RUNGS) if spread_lines is None else spread_lines
+        tot_lines = list(NHL_TOTAL_RUNGS) if total_lines is None else total_lines
+        spread = []
+        for line in sp_lines:
+            p_h, p_a, push = self.puck_line_two_way(float(line))
+            spread.append({"line": float(line), "p_home": round(p_h, d), "p_away": round(p_a, d), "push": round(push, d)})
+        total = []
+        for line in tot_lines:
+            _, _, push, p_over_fair = self.total(float(line), exclude_shootout=exclude_shootout)
+            total.append({"line": float(line), "p_over": round(p_over_fair, d), "p_under": round(1.0 - p_over_fair, d),
+                          "push": round(push, d)})
+        return {"ml": {"p_home": round(self.p_home_ml, d), "p_away": round(self.p_away_ml, d)},
+                "spread": spread, "total": total}
+
     def total(self, line: float, exclude_shootout: bool = True) -> Tuple[float, float, float, float]:
         """
         Evaluate Game Total for line (e.g. 5.5, 6.0, 6.5), settled EXCLUDING the shootout by default.
@@ -215,6 +259,7 @@ class PricedGame:
     sd_margin: float = 0.0   # OUTCOME sd of the final margin, from the score matrix (use this for Normal rung interpolation)
     sd_total: float = 0.0    # OUTCOME sd of the game total (ex-shootout), from the score matrix
     markets: List[PricedMarket] = field(default_factory=list)
+    ladder: Dict[str, Any] = field(default_factory=dict)   # model probability for every alt rung (see ScoreMatrixResult.ladder)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -230,6 +275,7 @@ class PricedGame:
             "sd_margin": round(self.sd_margin, 3),
             "sd_total": round(self.sd_total, 3),
             "markets": [m.to_dict() for m in self.markets],
+            "ladder": self.ladder,
         }
 
 
@@ -631,6 +677,13 @@ class DistributionalNHLMatrixEngine:
             n_books=n_b_tot,
         )
         priced.markets.append(m_under)
+
+        # 4. Ladder: every alternate rung from the SAME matrix (the main lines above are merged in so they are always on it)
+        priced.ladder = matrix.ladder(
+            spread_lines=_merge_rungs(NHL_SPREAD_RUNGS, float(spread_line)),
+            total_lines=_merge_rungs(NHL_TOTAL_RUNGS, float(total_line)),
+            exclude_shootout=totals_exclude_shootout,
+        )
 
         return priced
 

@@ -38,6 +38,12 @@ OFFSHORE_BOOKS = frozenset({
     "betanysports", "sportsbetting", "betus", "matchbook",
 })
 
+# Owner decision (2026-11-02): on the odds BOARDS (ev/odds_board.py props, ev/game_odds_board.py game lines) Pinnacle stays as a
+# sharp REFERENCE price (still never a bettable best price on the client), but every OTHER offshore book is junk there and is
+# dropped at the source, before any min-books filter or consensus / curve maths. Only the two boards use this set; the
+# projection board's best-price logic and the alert / EV-sweep paths keep using OFFSHORE_BOOKS unchanged.
+JUNK_OFFSHORE_BOOKS = OFFSHORE_BOOKS - {"pinnacle"}
+
 # canonical stat -> every ParlayAPI market key seen (or requested) for it
 STAT_KEYS = {
     "pass_yds": {"player_pass_yds", "player_passing_yards"},

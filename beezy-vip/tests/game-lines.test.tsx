@@ -118,22 +118,22 @@ describe('buildGameLinesData and the visible count', () => {
 describe('Game Lines view: badge, header and highlight', () => {
   it('shows the default UNVALIDATED label and never says "edge" as a column or in the copy', () => {
     render(<GameLinesNotice label={gameLinesViewLabel([feed()]).label} validated={false} />)
-    expect(screen.getByTestId('game-lines-label')).toHaveTextContent(GAME_LINES_DEFAULT_LABEL.toUpperCase())
+    expect(screen.getByTestId('game-lines-label')).toHaveTextContent(GAME_LINES_DEFAULT_LABEL)
     expect(screen.getByRole('note')).toHaveTextContent(/not an edge until a backtest supports it/i)
   })
   it('shows the backend label for a validated feed', () => {
     render(<GameLinesNotice label="Validated: 2021-25 backtest" validated />)
-    expect(screen.getByTestId('game-lines-label')).toHaveTextContent('VALIDATED: 2021-25 BACKTEST')
+    expect(screen.getByTestId('game-lines-label')).toHaveTextContent('Validated: 2021-25 backtest')
   })
   it('renders MODEL DIFF headers (not EDGE) and no green on an unvalidated difference', () => {
     const data = buildGameLinesData({ nba: feed({ validated: false }) }, FILTERS)
     const { container, unmount } = render(<GameCard game={data.pricedGames[0]} />)
-    expect(screen.getByText('MODEL DIFF')).toBeInTheDocument()
+    expect(screen.getByText('Model diff')).toBeInTheDocument()
     expect(screen.queryByText('EDGE')).not.toBeInTheDocument()
     expect(container.innerHTML).not.toContain('87, 242, 135') // jsdom normalises #57F287 / rgba(87,242,135,..)
     unmount()
     const t = render(<GameLinesTable rows={data.rows} limit={10} />)
-    expect(screen.getByText('MODEL DIFF')).toBeInTheDocument()
+    expect(screen.getByText('Model diff')).toBeInTheDocument()
     expect(t.container.innerHTML).not.toContain('87, 242, 135')
   })
   it('highlights green only when the feed is validated', () => {

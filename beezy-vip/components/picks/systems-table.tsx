@@ -39,7 +39,7 @@ export function SystemsTable({ sport, kind, stats = [], today = {}, level = 'h2'
   return (
     <section aria-labelledby="systems-h">
       <div className="flex items-baseline justify-between gap-y-2 gap-x-4 flex-wrap mb-2.5">
-        <Heading id="systems-h" style={{ fontSize: level === 'h1' ? '20px' : '15px', fontWeight: 700, color: 'var(--color-text-primary)', margin: 0 }}>{heading}</Heading>
+        <Heading id="systems-h" style={{ fontSize: level === 'h1' ? '20px' : '15px', fontWeight: 600, color: 'var(--color-text-primary)', margin: 0 }}>{heading}</Heading>
         <span className="mono text-compact text-text-secondary">
           {rows.length} systems &middot; {tracked ? 'best available book \u00b7 paper mode' : 'unvalidated projections \u00b7 not in the public results'}
         </span>
@@ -48,24 +48,24 @@ export function SystemsTable({ sport, kind, stats = [], today = {}, level = 'h2'
         <table className="w-full border-collapse" style={{ minWidth: tracked ? '1040px' : '1240px' }}>
           <thead>
             <tr>
-              <th style={TH}>SYSTEM</th>
-              <th style={TH}>MARKET</th>
-              <th style={TH}>TYPE</th>
-              <th style={TH}>DISTRIBUTION</th>
-              <th style={TH}>STATUS</th>
+              <th style={TH}>System</th>
+              <th style={TH}>Market</th>
+              <th style={TH}>Type</th>
+              <th style={TH}>Distribution</th>
+              <th style={TH}>Status</th>
               {tracked ? (
                 <>
                   <th style={{ ...TH, ...R }}>BETS</th>
                   <th style={{ ...TH, ...R }}>HIT %</th>
                   <th style={{ ...TH, ...R }}>ROI</th>
-                  <th style={{ ...TH, ...R }}>SAMPLE</th>
+                  <th style={{ ...TH, ...R }}>Sample</th>
                 </>
               ) : (
                 <>
                   <th style={{ ...TH, ...R }} title="Projections on the board right now, and how many of them have a posted line">TODAY (ROWS / PRICED)</th>
                   <th style={{ ...TH, ...R }} title="Mean absolute error of the mean the live board uses on past games, against the trailing-5 average (lower is better). Accuracy of the projection, not edge against a price.">LIVE MAE (ENGINE / L5)</th>
                   <th style={{ ...TH, ...R }} title="Out-of-sample mean absolute error of the trained research model, and of the trailing-average baseline">RESEARCH MAE (MODEL / BASE)</th>
-                  <th style={{ ...TH, ...R }} title="Brier score against proxy or real lines in the study">BRIER</th>
+                  <th style={{ ...TH, ...R }} title="Brier score against proxy or real lines in the study">Brier</th>
                   <th style={{ ...TH, ...R }} title="Blend coefficient c vs the market and its t-statistic: > 0 means the research model adds information">BLEND c (t)</th>
                 </>
               )}
@@ -89,10 +89,10 @@ export function SystemsTable({ sport, kind, stats = [], today = {}, level = 'h2'
                 <tr key={s.key} className="sys-row">
                   <td style={TD}>
                     <Link className="no-underline" href={href}>
-                      <span className="ui-heading text-micro font-semibold tracking-[0.05em] py-[3px] px-2" style={{ borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border }}>{s.shortName}</span>
+                      <span className="ui-heading text-micro font-semibold py-[3px] px-2" style={{ borderRadius: 'var(--radius-pill)', background: pill.bg, color: pill.color, border: pill.border }}>{s.shortName}</span>
                     </Link>
                   </td>
-                  <td style={{ ...TD, fontSize: '13.5px', fontWeight: 600 }}>
+                  <td style={{ ...TD, fontSize: '14px', fontWeight: 600 }}>
                     <Link className="text-text-primary no-underline" href={href}>{s.name}</Link>
                   </td>
                   <td style={{ ...TD, fontSize: '12px', color: 'var(--color-neutral-300)' }}>{s.market === 'game' ? 'Game' : 'Prop'}</td>
@@ -109,16 +109,16 @@ export function SystemsTable({ sport, kind, stats = [], today = {}, level = 'h2'
                     </>
                   ) : (
                     <>
-                      <td className="mono" style={{ ...TD, ...R, fontSize: '12.5px', color: 'var(--color-neutral-300)' }}>
+                      <td className="mono" style={{ ...TD, ...R, fontSize: '13px', color: 'var(--color-neutral-300)' }}>
                         {t ? <span>{t.rows} <span className="text-text-secondary">/</span> <span style={{ color: t.priced > 0 ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>{t.priced}</span></span> : '--'}
                       </td>
                       <td className="mono" title={live ? `${live.sample}; ${live.n.toLocaleString('en-US')} player-games. ${live.method}. Engine minus L5 MAE ${live.dMae.toFixed(3)} (se ${live.dMaeSe.toFixed(3)}).` : 'No replay covers this stat yet.'}
-                        style={{ ...TD, ...R, fontSize: '12.5px', color: live && live.dMae < 0 ? 'var(--signal)' : 'var(--color-neutral-300)' }}>
+                        style={{ ...TD, ...R, fontSize: '13px', color: live && live.dMae < 0 ? 'var(--signal)' : 'var(--color-neutral-300)' }}>
                         {live ? `${maeText(live.mae)} / ${maeText(live.baselineMae)}` : '--'}
                       </td>
-                      <td className="mono" style={{ ...TD, ...R, fontSize: '12.5px', color: 'var(--color-neutral-300)' }}>{v?.mae != null ? `${fix(v.mae, 3)} / ${fix(v.baselineMae, 3)}` : '--'}</td>
-                      <td className="mono" style={{ ...TD, ...R, fontSize: '12.5px', color: 'var(--color-neutral-300)' }}>{fix(v?.brier, 4)}</td>
-                      <td className="mono" style={{ ...TD, ...R, fontSize: '12.5px', color: 'var(--color-neutral-300)' }}>
+                      <td className="mono" style={{ ...TD, ...R, fontSize: '13px', color: 'var(--color-neutral-300)' }}>{v?.mae != null ? `${fix(v.mae, 3)} / ${fix(v.baselineMae, 3)}` : '--'}</td>
+                      <td className="mono" style={{ ...TD, ...R, fontSize: '13px', color: 'var(--color-neutral-300)' }}>{fix(v?.brier, 4)}</td>
+                      <td className="mono" style={{ ...TD, ...R, fontSize: '13px', color: 'var(--color-neutral-300)' }}>
                         {spec?.blend ? `${spec.blend.c >= 0 ? '+' : ''}${spec.blend.c.toFixed(2)} (${spec.blend.t >= 0 ? '+' : ''}${spec.blend.t.toFixed(1)})` : '--'}
                       </td>
                     </>
@@ -132,7 +132,7 @@ export function SystemsTable({ sport, kind, stats = [], today = {}, level = 'h2'
           </tbody>
         </table>
       </div>
-      <p className="text-[11.5px] text-text-secondary leading-[1.55]" style={{ margin: '10px 2px 0' }}>
+      <p className="text-[12px] text-text-secondary leading-[1.55]" style={{ margin: '10px 2px 0' }}>
         {tracked ? (
           <>Log-only systems record every pick but are not counted as a live card until they clear 200 settled bets. Every result is public on the <Link className="text-link" href="/results">Results</Link> ledger.</>
         ) : (

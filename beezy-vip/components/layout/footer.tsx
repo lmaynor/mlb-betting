@@ -41,7 +41,7 @@ export function Footer() {
             { title: 'Legal',   links: [['Terms of Service','/legal/terms'],['Privacy Policy','/legal/privacy'],['Responsible Gambling','/legal/responsible-gambling'],['Refund Policy','/legal/refunds'],['Support',`mailto:${SITE_CONFIG.supportEmail}`],[SITE_CONFIG.xHandle,SITE_CONFIG.xUrl]] },
           ].map(col => (
             <div key={col.title}>
-              <div className="ui-heading mb-3.5 text-mini tracking-label text-text-secondary">
+              <div className="ui-heading mb-3.5 text-mini text-text-secondary">
                 {col.title}
               </div>
               {col.links.map(([label, href]) => (

@@ -77,19 +77,19 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
             )}
           </div>
         ) : (
-          <span className="mono" style={{ fontSize: '13px', color, fontWeight: 800, zIndex: 1 }}>{pillar.shortName}</span>
+          <span className="mono" style={{ fontSize: '13px', color, fontWeight: 600, zIndex: 1 }}>{pillar.shortName}</span>
         )}
-        <span className="mono absolute top-0 left-0 z-[2] text-micro font-extrabold text-text-primary bg-background-full py-[2px] px-[6px]" style={{ borderBottomRightRadius: '4px' }}>#{rank}</span>
+        <span className="mono absolute top-0 left-0 z-[2] text-micro font-semibold text-text-primary bg-background-full py-[2px] px-[6px]" style={{ borderBottomRightRadius: '4px' }}>#{rank}</span>
       </div>
 
       <div className="flex-1 py-2.5 px-3 flex flex-col justify-center min-w-0">
         <div className="mb-1.5 flex items-center justify-between gap-2">
           <span className="inline-flex items-center gap-1.5 min-w-0">
-            <span className="ui-heading" style={{ fontSize: '10px', letterSpacing: '0.1em', padding: '2px 6px', borderRadius: '4px', background: `${color}20`, color, border: `1px solid ${color}` }}>{pillar.shortName}</span>
+            <span className="ui-heading" style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: `${color}20`, color, border: `1px solid ${color}` }}>{pillar.shortName}</span>
           </span>
-          {edge && <span className="mono text-mini font-extrabold whitespace-nowrap" style={{ color: tierColor }}>{edge}</span>}
+          {edge && <span className="mono text-mini font-semibold whitespace-nowrap" style={{ color: tierColor }}>{edge}</span>}
         </div>
-        <div className="text-[16px] font-extrabold text-text-primary leading-[1.15] overflow-hidden text-ellipsis whitespace-nowrap">{pick.who}</div>
+        <div className="text-[16px] font-semibold text-text-primary leading-[1.15] overflow-hidden text-ellipsis whitespace-nowrap">{pick.who}</div>
         {market && <div className="text-cozy font-semibold text-neutral-300 leading-[1.25] mt-0.5">{market}</div>}
         {meta && <div className="mono text-mini text-text-secondary mt-[3px] overflow-hidden text-ellipsis whitespace-nowrap">{meta}</div>}
         {expanded && (
@@ -106,8 +106,8 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
 
       <div className="min-w-16 flex flex-col items-center justify-center gap-1 py-2 px-[6px]" title={`Beezy Score ${pick.score}. Not a win probability.`}
         style={{ borderLeft: `1px solid ${color}18`, background: `${tierColor}08` }}>
-        <span className="mono text-[22px] font-extrabold leading-[1]" style={{ color: tierColor }}>{pick.score}</span>
-        <span className="ui-heading text-micro tracking-fine py-0.5 px-[5px] rounded-chip border border-[color:#57F287] bg-[rgba(87,242,135,0.12)] text-signal whitespace-nowrap">OFFICIAL PLAY</span>
+        <span className="mono text-[22px] font-semibold leading-[1]" style={{ color: tierColor }}>{pick.score}</span>
+        <span className="ui-heading text-micro py-0.5 px-[5px] rounded-chip border border-[color:#57F287] bg-[rgba(87,242,135,0.12)] text-signal whitespace-nowrap">Official play</span>
         {pick.result && <ResultTag result={pick.result} />}
       </div>
     </div>
@@ -120,7 +120,7 @@ const RESULT_COLOR = { win: 'var(--signal)', loss: 'var(--loss)', push: 'var(--c
 /** A graded play's outcome: the card keeps a play on the list after its game, with the result in place of the clock. */
 function ResultTag({ result }: { result: NonNullable<TopPick['result']> }) {
   return (
-    <span className="ui-heading text-micro tracking-fine py-0.5 px-[5px] rounded-chip whitespace-nowrap"
+    <span className="ui-heading text-micro py-0.5 px-[5px] rounded-chip whitespace-nowrap"
       style={{ color: RESULT_COLOR[result], border: `1px solid ${RESULT_COLOR[result]}` }}>{RESULT_LABEL[result]}</span>
   )
 }
@@ -129,7 +129,7 @@ function YesterdayRow({ pick }: { pick: CardPick }) {
   const win = pick.result === 'win'
   return (
     <div className="flex items-center gap-2 py-1.5 px-0 border-b border-b-[color:var(--color-separator-border)]">
-      <span className="ui-heading text-micro tracking-head py-[2px] px-[5px] shrink-0" style={{ borderRadius: '4px', color: win ? 'var(--signal)' : 'var(--loss)', border: `1px solid ${win ? 'var(--signal)' : 'var(--loss)'}` }}>
+      <span className="ui-heading text-micro py-[2px] px-[5px] shrink-0" style={{ borderRadius: '4px', color: win ? 'var(--signal)' : 'var(--loss)', border: `1px solid ${win ? 'var(--signal)' : 'var(--loss)'}` }}>
         {win ? 'W' : pick.result === 'loss' ? 'L' : '-'}
       </span>
       <span className="mono text-micro text-text-secondary overflow-hidden text-ellipsis whitespace-nowrap">
@@ -140,7 +140,7 @@ function YesterdayRow({ pick }: { pick: CardPick }) {
 }
 
 const copyBtn = (done: boolean): React.CSSProperties => ({
-  fontSize: '11px', letterSpacing: '0.08em', padding: '7px 16px', cursor: 'pointer', borderRadius: 'var(--radius-sm)',
+  fontSize: '11px', padding: '7px 16px', cursor: 'pointer', borderRadius: 'var(--radius-sm)',
   background: done ? 'var(--signal)' : 'transparent', color: done ? '#000' : 'var(--color-neutral-300)', border: '1px solid var(--color-separator-border)',
 })
 
@@ -162,16 +162,16 @@ function PostToX({ sheets }: { sheets: Sheet[] }) {
 
   return (
     <div className="border border-separator-border bg-background-primary-default p-4 mb-4 rounded-[var(--radius)] w-full box-border">
-      <div className="ui-heading text-micro tracking-[0.12em] text-text-secondary mb-3">POST TO X</div>
+      <div className="ui-heading text-micro text-text-secondary mb-3">Post to X</div>
       {sheets.map(sh => {
         const n = postLength(sh.text)
         return (
           <div key={sh.id} className="mb-3.5">
             <div className="flex items-center gap-2.5 mb-1.5">
-              <span className="ui-heading text-mini tracking-caps text-text-primary">{sh.label}</span>
+              <span className="ui-heading text-mini text-text-primary">{sh.label}</span>
               <span className="mono text-micro text-border-button-active">{n}/{POST_LIMIT}</span>
               <div  className="flex-1"/>
-              <button onClick={() => copy(sh.id, sh.text)} className="mono" style={copyBtn(copied === sh.id)}>{copied === sh.id ? 'COPIED' : 'COPY'}</button>
+              <button onClick={() => copy(sh.id, sh.text)} className="mono" style={copyBtn(copied === sh.id)}>{copied === sh.id ? 'Copied' : 'COPY'}</button>
             </div>
             <textarea readOnly value={sh.text} rows={sh.lines + 2} onFocus={e => e.currentTarget.select()} aria-label={`${sh.label} post`} className="mono" style={field} />
             {sh.lines < sh.offered && <p className="text-mini text-text-secondary" style={{ margin: '4px 0 0' }}>Showing {sh.lines} of {sh.offered}: the lowest-ranked {sh.offered - sh.lines === 1 ? 'pick was' : 'picks were'} cut so the post fits {POST_LIMIT}.</p>}
@@ -180,9 +180,9 @@ function PostToX({ sheets }: { sheets: Sheet[] }) {
       })}
       <div className="border-t border-t-[color:var(--color-separator-border)] pt-3">
         <div className="flex items-center gap-2.5 mb-1.5">
-          <span className="ui-heading text-mini tracking-caps text-text-primary">REPLY</span>
+          <span className="ui-heading text-mini text-text-primary">Reply</span>
           <div  className="flex-1"/>
-          <button onClick={() => copy('reply', LINK_REPLY)} className="mono" style={copyBtn(copied === 'reply')}>{copied === 'reply' ? 'COPIED' : 'COPY'}</button>
+          <button onClick={() => copy('reply', LINK_REPLY)} className="mono" style={copyBtn(copied === 'reply')}>{copied === 'reply' ? 'Copied' : 'COPY'}</button>
         </div>
         <textarea readOnly value={LINK_REPLY} rows={3} onFocus={e => e.currentTarget.select()} aria-label="Link reply" className="mono" style={field} />
       </div>
@@ -196,7 +196,7 @@ function PostToX({ sheets }: { sheets: Sheet[] }) {
 }
 
 const chip = (on: boolean): React.CSSProperties => ({
-  padding: '5px 10px', fontSize: '10px', cursor: 'pointer', borderRadius: '4px', letterSpacing: '0.06em', textTransform: 'uppercase',
+  padding: '5px 10px', fontSize: '10px', cursor: 'pointer', borderRadius: '4px',
   border: `1px solid ${on ? 'var(--color-border-button-active)' : 'var(--color-separator-border)'}`, background: on ? '#131a1e' : 'transparent', color: on ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
 })
 
@@ -247,6 +247,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
 
   return (
     <div className="bg-background-full flex flex-col items-center pt-4.5 px-3 pb-10">
+      <h1 className="sr-only">Daily Card</h1>
       <div className="cheat-sheet-layout">
         <div className="w-full max-w-[390px] border border-separator-border bg-background-full rounded-[var(--radius)] overflow-hidden shrink-0">
           {/* Header */}
@@ -254,13 +255,13 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
             <div className="flex items-start justify-between mb-2.5 gap-3">
               <div>
                 <BrandWordmark size="lg" />
-                <div className="text-[15px] font-extrabold text-text-primary leading-[1.15] mt-2">Daily plays</div>
-                <div className="mono text-micro text-text-secondary tracking-label mt-[5px]">{today}</div>
-                <div className="text-[11.5px] text-neutral-300 leading-[1.45] mt-2">
+                <div className="text-[15px] font-semibold text-text-primary leading-[1.15] mt-2">Daily plays</div>
+                <div className="mono text-micro text-text-secondary mt-[5px]">{today}</div>
+                <div className="text-[12px] text-neutral-300 leading-[1.45] mt-2">
                   Every play that clears the gate: the model and the market agree on the side, 4+ books behind the price, a measured edge and a blended EV that survives shrinking toward the market.
                 </div>
                 <div className="text-mini text-signal bg-[rgba(87,242,135,0.08)] border border-[color:rgba(87,242,135,0.22)] rounded-chip py-1.5 px-2.5 mt-2 leading-[1.4]">
-                  <span className="mono font-bold">{shown.length}</span> Official Play{shown.length !== 1 ? 's' : ''} today. No cap and no filler: the number is whatever the gate lets through.
+                  <span className="mono font-semibold">{shown.length}</span> Official Play{shown.length !== 1 ? 's' : ''} today. No cap and no filler: the number is whatever the gate lets through.
                 </div>
                 {wk.days > 0 && (
                   <Link href="/picks/history" className="block no-underline mono text-micro text-neutral-300 border border-separator-border rounded-chip py-1.5 px-2.5 mt-2 leading-[1.4]" title="Every past day's plays with their results">
@@ -273,9 +274,9 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
                   </Link>
                 )}
               </div>
-              <button onClick={() => setExpanded(allExpanded ? new Set() : new Set(shown.map(p => p.key)))} className="mono text-micro tracking-caps bg-transparent py-1 px-[7px] cursor-pointer whitespace-nowrap"
+              <button onClick={() => setExpanded(allExpanded ? new Set() : new Set(shown.map(p => p.key)))} className="mono text-micro bg-transparent py-1 px-[7px] cursor-pointer whitespace-nowrap"
                 style={{ color: allExpanded ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', border: `1px solid ${allExpanded ? 'var(--color-border-button-active)' : 'var(--color-separator-border)'}` }}>
-                {allExpanded ? 'COLLAPSE' : 'EXPAND'}
+                {allExpanded ? 'Collapse' : 'Expand'}
               </button>
             </div>
 
@@ -292,10 +293,10 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
 
           {list.length > 0 && (
             <div className="py-[7px] px-4 border-b border-b-[color:var(--color-separator-border)] flex flex-wrap gap-2.5 items-center">
-              <span className="mono text-micro text-text-secondary tracking-caps">{list.length} {list.length === 1 ? 'PLAY' : 'PLAYS'}</span>
-              {strong > 0 && <span className="ui-heading text-micro text-signal tracking-head">{strong} STRONG</span>}
-              {lean > 0 && <span className="ui-heading text-micro text-signal tracking-head">{lean} LEAN</span>}
-              {best > 0 && <span className="ui-heading text-micro text-signal tracking-head">BEST EDGE +{best.toFixed(1)}%</span>}
+              <span className="mono text-micro text-text-secondary">{list.length} {list.length === 1 ? 'PLAY' : 'PLAYS'}</span>
+              {strong > 0 && <span className="ui-heading text-micro text-signal">{strong} STRONG</span>}
+              {lean > 0 && <span className="ui-heading text-micro text-signal">{lean} LEAN</span>}
+              {best > 0 && <span className="ui-heading text-micro text-signal">BEST EDGE +{best.toFixed(1)}%</span>}
             </div>
           )}
 
@@ -305,12 +306,12 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
                 <LockedNotice locked={locked} what="official plays" plan="Today's full card is on a sport pass or All-Access Pro." />
               ) : (
                 <>
-                  <div className="mono text-micro text-text-secondary tracking-caps mb-3.5 text-center">
-                    NO OFFICIAL PLAYS YET. A PLAY POSTS ONLY WHEN IT CLEARS THE GATE, SO SOME DAYS HAVE NONE.
+                  <div className="mono text-micro text-text-secondary mb-3.5 text-center">
+                    No official plays yet. A play posts only when it clears the gate, so some days have none.
                   </div>
                   {yesterday.length > 0 && (
                     <>
-                      <div className="mono text-micro text-text-secondary tracking-label mb-1.5 text-center">YESTERDAY&apos;S PLAYS</div>
+                      <div className="mono text-micro text-text-secondary mb-1.5 text-center">YESTERDAY&apos;S PLAYS</div>
                       {yesterday.map(p => <YesterdayRow key={p.key} pick={p} />)}
                       {ydayWins + ydayLosses > 0 && (
                         <div className="mono text-micro text-text-secondary text-center mt-2.5">{ydayWins}-{ydayLosses} yesterday</div>
@@ -328,9 +329,9 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
           )}
 
           <div className="border-t border-t-[color:var(--color-separator-border)] py-[11px] px-4 flex items-center gap-2.5 bg-background-full">
-            <button onClick={handleShare} className="ui-heading text-micro tracking-caps py-[6px] px-3 text-black border border-separator-border rounded-[var(--radius)] cursor-pointer whitespace-nowrap"
+            <button onClick={handleShare} className="ui-heading text-micro py-[6px] px-3 text-black border border-separator-border rounded-[var(--radius)] cursor-pointer whitespace-nowrap"
               style={{ background: 'var(--signal)' }}>
-              {copied ? 'COPIED' : 'SHARE CARD'}
+              {copied ? 'Copied' : 'Share card'}
             </button>
             <div  className="flex-1"/>
             <BrandWordmark size="sm" />
@@ -345,20 +346,20 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
           {canPost && <PostToX sheets={sheets} />}
 
           <div className="border border-separator-border bg-background-primary-default p-4 mb-4 rounded-[var(--radius)]">
-            <div className="ui-heading text-micro tracking-[0.12em] text-text-secondary mb-2.5">WHAT IS THIS</div>
+            <div className="ui-heading text-micro text-text-secondary mb-2.5">What is this</div>
             <p className="text-cozy text-neutral-300 leading-[1.6]" style={{ margin: '0 0 10px' }}>
               Today&apos;s official plays across MLB, NFL, NHL and NBA, ranked by Beezy Score. A play is official when the model and the market both like the same side, at least four books price it, the stat is one where the model has measurably added information beyond the market, and the blended edge is still at least 2.5% after shrinking the model toward the market. Each play is logged at its flagged price the first time it qualifies and graded at a flat 1 unit, so the record cannot be edited afterwards. MLB plays settle in the public record; NFL, NHL and NBA plays are paper and unvalidated.
             </p>
             <p className="text-cozy text-neutral-300 leading-[1.6] m-0">
               Tap a play to see why it made the card. Past days and results are in <Link className="text-link" href="/picks/history">Graded History</Link>; each sport&apos;s systems are on its Systems tab:
             </p>
-            <div className="flex flex-wrap gap-y-1.5 gap-x-3.5 mt-2 text-[12.5px]">
+            <div className="flex flex-wrap gap-y-1.5 gap-x-3.5 mt-2 text-[13px]">
               {SPORT_SLUGS.map(s => <Link className="text-link" key={s} href={`${sportHref(s)}/systems`}>{SPORT_PILLARS[s].shortName}</Link>)}
             </div>
           </div>
 
           <div className="border border-separator-border bg-background-primary-default p-4 rounded-[var(--radius)]">
-            <div className="ui-heading text-micro tracking-[0.12em] text-text-secondary mb-2.5">SCORE LEGEND</div>
+            <div className="ui-heading text-micro text-text-secondary mb-2.5">Score legend</div>
             {[
               { tier: 'strong', desc: 'Score 70+: large edge, many books agree' },
               { tier: 'lean', desc: 'Score 45-69: positive edge, moderate confidence' },
@@ -367,7 +368,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
               const t = row.tier as 'strong' | 'lean' | 'watch'
               return (
                 <div key={t} className="flex items-center gap-2.5 mb-2">
-                  <span className="ui-heading text-micro tracking-caps py-[2px] px-[6px] shrink-0" style={{ borderRadius: '4px', color: TIER_COLOR[t], border: `1px solid ${TIER_COLOR[t]}` }}>{TIER_LABEL[t]}</span>
+                  <span className="ui-heading text-micro py-[2px] px-[6px] shrink-0" style={{ borderRadius: '4px', color: TIER_COLOR[t], border: `1px solid ${TIER_COLOR[t]}` }}>{TIER_LABEL[t]}</span>
                   <span className="mono text-micro text-text-secondary">{row.desc}</span>
                 </div>
               )
@@ -376,7 +377,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
         </aside>
       </div>
 
-      <Link href="/picks" className="mono cheat-sheet-picks-link mt-4 text-micro text-text-secondary no-underline tracking-head">ALL PICKS &rarr;</Link>
+      <Link href="/picks" className="mono cheat-sheet-picks-link mt-4 text-micro text-text-secondary no-underline">All picks &rarr;</Link>
     </div>
   )
 }

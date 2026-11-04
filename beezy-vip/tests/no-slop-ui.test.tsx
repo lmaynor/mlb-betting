@@ -64,6 +64,18 @@ describe('design-system debt guards', () => {
     expect(hits).toEqual([])
   })
 
+  it('keeps font sizes on the type scale: no half-pixel sizes outside the OG cards', () => {
+    const half = /(?:text-\[|fontSize: *'?)\d+\.5/
+    const hits = sources().filter(([f, src]) => !/api[\\/]og/.test(f) && half.test(src)).map(([f]) => f)
+    expect(hits).toEqual([])
+  })
+
+  it('has no tracked all-caps labels in work-surface components (sentence case, no letter-spaced uppercase)', () => {
+    const tracked = /\buppercase\b|textTransform: *'uppercase'|tracking-(label|caps|head|fine|wide|wider|widest)\b/
+    const hits = sources().filter(([f, src]) => /\.tsx?$/.test(f) && !/api[\\/]og|brand-mark/.test(f) && tracked.test(src)).map(([f]) => f)
+    expect(hits).toEqual([])
+  })
+
   it('renders no text below the 10px floor', () => {
     const small = /(?:fontSize: *'?|font-size: *|fontSize=["{])(?:[0-9]|[0-9]\.[0-9]+)(?:px)?['"}]?\s*[,;} \n]/
     const hits = sources().filter(([, src]) => small.test(src)).map(([f]) => f)
@@ -74,7 +86,7 @@ describe('design-system debt guards', () => {
     const hero = read('components/landing/hero.tsx')
     expect(hero).not.toMatch(/linear-gradient|radius-xl/)
     expect(hero).toMatch(/SURFACE_CARD|bg-background-primary-default/)
-    expect(hero).toMatch(/VERIFIED PUBLIC LEDGER &middot; 1\/4 KELLY SIZING/)
+    expect(hero).toMatch(/Verified public ledger &middot; 1\/4 Kelly sizing/)
     expect(read('app/page.tsx')).not.toMatch(/linear-gradient|radius-xl/)
     // the legal disclosure stays in the footer, as one muted paragraph (no PAPER MODE callout box)
     const footer = read('components/layout/footer.tsx')

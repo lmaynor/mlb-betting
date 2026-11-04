@@ -12,7 +12,7 @@ export function LiveDot({ label }: { label?: string }) {
       <span className="live-dot" />
       {label && (
         <span
-          className="ui-heading text-micro tracking-[0.12em] text-text-secondary"
+          className="ui-heading text-micro text-text-secondary"
          
         >
           {label}
@@ -27,7 +27,7 @@ export function SystemBadge({ system }: { system: string }) {
   const label = systemLabel(system, true)
   return (
     <span
-      className="ui-heading text-micro tracking-[0.05em] py-[3px] px-2 inline-block"
+      className="ui-heading text-micro py-[3px] px-2 inline-block"
       style={{ borderRadius: 'var(--radius-pill)', background: p.bg, color: p.color, border: p.border }}
     >
       {label}
@@ -39,7 +39,7 @@ export function StatCard({ label, value, sub, accent = false }: { label: string;
   return (
     <div className="flex flex-col gap-1.5 p-5 border border-separator-border rounded-[var(--radius-lg)] bg-background-primary-default">
       <span
-        className="ui-heading text-micro tracking-label text-text-secondary mb-0.5"
+        className="ui-heading text-micro text-text-secondary mb-0.5"
        
       >
         {label}
@@ -57,7 +57,7 @@ export function StatCard({ label, value, sub, accent = false }: { label: string;
 
 export function ResultPill({ result }: { result: string | null }) {
   if (!result || result === 'pending') {
-    return <span className="ui-heading text-micro tracking-head text-text-secondary">PENDING</span>
+    return <span className="ui-heading text-micro text-text-secondary">Pending</span>
   }
   const isWin  = result === 'win'
   const isPush = result === 'push'
@@ -70,7 +70,7 @@ export function ResultPill({ result }: { result: string | null }) {
   return (
     <span
       className="ui-heading"
-      style={{ fontSize: '10px', letterSpacing: '0.06em', padding: '3px 8px', borderRadius: 'var(--radius-pill)', display: 'inline-block', ...style }}
+      style={{ fontSize: '10px', padding: '3px 8px', borderRadius: 'var(--radius-pill)', display: 'inline-block', ...style }}
     >
       {result.toUpperCase()}
     </span>
@@ -115,12 +115,12 @@ export function ScoreBadge({ bet }: { bet: Bet }) {
   const color = TIER_COLOR[tier]
   return (
     <div title={explainScore(bet)} className="flex flex-col items-center gap-1">
-      <span className="mono" style={{ fontSize: '22px', fontWeight: 800, color, lineHeight: 1 }}>
+      <span className="mono" style={{ fontSize: '22px', fontWeight: 600, color, lineHeight: 1 }}>
         {score}
       </span>
       <span
         className="ui-heading"
-        style={{ fontSize: '10px', letterSpacing: '0.08em', padding: '2px 6px', borderRadius: 'var(--radius-pill)', border: `1px solid ${color}`, background: `color-mix(in oklab, ${color} 14%, var(--color-background-full))`, color }}
+        style={{ fontSize: '10px', padding: '2px 6px', borderRadius: 'var(--radius-pill)', border: `1px solid ${color}`, background: `color-mix(in oklab, ${color} 14%, var(--color-background-full))`, color }}
       >
         {TIER_LABEL[tier]}
       </span>

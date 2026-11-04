@@ -251,15 +251,15 @@ h2 {
   font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  text-transform: none;
+  letter-spacing: 0;
 }
 /* Table headers read as terminal column labels. 10px is the floor for any text in the app. */
 th {
   font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0;
 }
 .times {
   font-family: var(--font-text), system-ui, sans-serif;
@@ -481,7 +481,7 @@ a:focus-visible {
 .article-body ul { padding-left: 20px; margin-bottom: 16px; }
 .article-body li { margin-bottom: 8px; }
 .article-body pre { background: var(--graphite); border: 1px solid var(--basalt); border-radius: var(--radius); padding: 16px; overflow-x: auto; margin-bottom: 16px; }
-.article-body code { font-family: var(--font-mono), monospace; font-size: 13.5px; color: var(--signal); }
+.article-body code { font-family: var(--font-mono), monospace; font-size: 14px; color: var(--signal); }
 .article-body a { color: var(--link); text-underline-offset: 3px; }
 
 /* ── Interactive card hover ─────────────────────────────────────── */
@@ -556,7 +556,7 @@ a { color: inherit; }
 /* ── /ev data table: one sticky header (clears the 96px two-tier nav), hairline rows, hover = background only ── */
 
 /* ── /ev Odds Terminal: one row per prop side, one narrow column per book ────────────────────────── */
-.odds-table th { position: sticky; top: calc(131px + env(safe-area-inset-top, 0px)); z-index: 2; background: #11131a; padding: 8px 10px; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; color: var(--fog); border-bottom: 1px solid #1e2230; text-align: right; white-space: nowrap; }
+.odds-table th { position: sticky; top: calc(91px + env(safe-area-inset-top, 0px)); z-index: 2; background: #11131a; padding: 8px 10px; font-size: 10px; font-weight: 600; letter-spacing: 0; color: var(--fog); border-bottom: 1px solid #1e2230; text-align: right; white-space: nowrap; }
 .odds-table td { padding: 7px 10px; vertical-align: middle; border-bottom: 1px solid #151822; white-space: nowrap; }
 .odds-table tbody tr { transition: background-color 120ms ease; }
 .odds-table tbody tr[data-row]:hover { background: #171a24; }
@@ -595,9 +595,9 @@ a { color: inherit; }
 
 /* Article tables, quotes and lists (rendered by lib/markdown.ts) */
 .article-body .table-wrap { overflow-x: auto; margin: 16px 0; }
-.article-body table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+.article-body table { border-collapse: collapse; width: 100%; font-size: 14px; }
 .article-body th, .article-body td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #1e2230; white-space: nowrap; }
-.article-body th { color: var(--fog); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; background: #11131a; }
+.article-body th { color: var(--fog); font-size: 11px; background: #11131a; }
 .article-body blockquote { margin: 16px 0; padding: 8px 14px; border-left: 3px solid var(--iron); color: var(--silver); background: #11131a; }
 .article-body ol { padding-left: 22px; margin: 12px 0; }
 .article-body ol li, .article-body ul li { margin: 4px 0; }
@@ -634,8 +634,6 @@ a { color: inherit; }
   .tap-m { min-height: 44px !important; align-items: center !important; }
 }
 @media (max-width: 768px) {
-  .sport-ribbon { height: 44px !important; }
-  .sport-ribbon-link { min-height: 44px; padding-left: 12px !important; padding-right: 12px !important; }
   .nav-mobile-actions > a, .nav-mobile-actions > button { min-height: 44px; }
 }
 }

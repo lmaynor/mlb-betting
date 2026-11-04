@@ -6,7 +6,7 @@ import { americanToImpliedProb, removeVig, formatProb } from '@/lib/odds'
 
 const B = '1px solid var(--color-separator-border)'
 const inputStyle: React.CSSProperties = { width: '100%', background: 'var(--slate)', border: B, color: 'var(--color-text-primary)', fontFamily: 'var(--font-mono, monospace)', fontSize: '14px', padding: '11px 14px', outline: 'none', borderRadius: 'var(--radius)' }
-const labelStyle: React.CSSProperties = { fontFamily: 'var(--font-text), sans-serif', fontSize: '10px', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '8px' }
+const labelStyle: React.CSSProperties = { fontFamily: 'var(--font-text), sans-serif', fontSize: '10px', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: '8px' }
 
 function americanToDecimal(odds: number): number {
   return odds > 0 ? 1 + odds / 100 : 1 + 100 / Math.abs(odds)
@@ -68,8 +68,8 @@ export default function BoostEvPage() {
         <div className="border border-separator-border rounded-control bg-background-primary-default overflow-hidden">
           <div className="grid grid-cols-2" style={{ borderBottom: B }}>
             <div className="p-5" style={{ borderRight: B }}>
-              <div className="ui-heading text-micro tracking-label text-text-secondary mb-2">Expected value</div>
-              <div className="mono text-[28px] font-bold" style={{ color: ev > 0 ? 'var(--signal)' : 'var(--loss)' }}>
+              <div className="ui-heading text-micro text-text-secondary mb-2">Expected value</div>
+              <div className="mono text-[28px] font-semibold" style={{ color: ev > 0 ? 'var(--signal)' : 'var(--loss)' }}>
                 {ev > 0 ? '+' : ''}{(ev * 100).toFixed(1)}%
               </div>
               <div className="mono text-cozy text-text-secondary mt-1">
@@ -77,8 +77,8 @@ export default function BoostEvPage() {
               </div>
             </div>
             <div className="p-5">
-              <div className="ui-heading text-micro tracking-label text-text-secondary mb-2">Kelly fraction</div>
-              <div className="mono text-[28px] font-bold text-text-primary">{(kellyPct * 100).toFixed(1)}%</div>
+              <div className="ui-heading text-micro text-text-secondary mb-2">Kelly fraction</div>
+              <div className="mono text-[28px] font-semibold text-text-primary">{(kellyPct * 100).toFixed(1)}%</div>
               <div className="mono text-cozy text-text-secondary mt-1">of bankroll (full Kelly; bet a quarter of this)</div>
             </div>
           </div>
