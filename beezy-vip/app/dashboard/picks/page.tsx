@@ -22,7 +22,10 @@ function ProbBar({ modelProb, marketProb }: { modelProb: number; marketProb: num
   )
 }
 import { CopyBetButton }                        from '@/components/ui/copy-bet-button'
-import { getCurrentUser }                      from '@/lib/auth'
+import { LockedNotice }                         from '@/components/picks/locked-notice'
+import { getCurrentUser, getViewer }            from '@/lib/auth'
+import { limitBets }                            from '@/lib/access-bets'
+import { siteDateKey }                          from '@/lib/dates'
 import type { Metadata } from 'next'
 
 export const dynamic = 'force-dynamic'
@@ -34,16 +37,21 @@ export const revalidate = 60
 const DEFAULT_BANKROLL = 1000
 
 export default async function DashboardPicksPage() {
-  const [picks, stats, user] = await Promise.all([
+  const [picks, stats, user, viewer] = await Promise.all([
     getTodayPicks().catch(() => []),
     apiGetStats().then(s => s.overall).catch(() => ({ total_bets: '0', win_rate: '0', roi: '0', avg_edge: '0' })),
     getCurrentUser(),
+    getViewer(),
   ])
 
   const bankroll = (user?.publicMetadata?.bankroll as number) ?? DEFAULT_BANKROLL
 
-  const pending = picks.filter(p => p.result === null).sort((a, b) => beezyscore(b) - beezyscore(a))
-  const settled = picks.filter(p => p.result !== null)
+  // Today's card is cut by the same policy as /api/picks/today (limitBets): the layout gate checks only the tier
+  // name, so without this a Single-Sport Pass for another league would render the full MLB card here.
+  const { bets: visiblePicks, locked } = limitBets(picks, viewer, siteDateKey())
+
+  const pending = visiblePicks.filter(p => p.result === null).sort((a, b) => beezyscore(b) - beezyscore(a))
+  const settled = visiblePicks.filter(p => p.result !== null)
 
   return (
     <div>
@@ -110,6 +118,12 @@ export default async function DashboardPicksPage() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {locked > 0 && (
+        <div className="mb-8">
+          <LockedNotice locked={locked} shown={pending.length} what="picks" plan="Today's full card is on a sport pass or All-Access Pro." />
         </div>
       )}
 

@@ -65,16 +65,16 @@ function enrich(p: TopPick): CardPick {
 /** Days of record shown on the card; the full range is on Graded History. */
 const RECORD_DAYS = 7
 
-export default async function CheatSheetPage({ searchParams }: { searchParams?: Promise<{ ops?: string }> }) {
+export default async function CheatSheetPage() {
   const date = siteDateKey()
-  const params = searchParams ? await searchParams : undefined
   const recentDates = Array.from({ length: RECORD_DAYS }, (_, i) => addDaysToDateKey(date, -(i + 1)))
   const [{ dailyCard }, viewer, recent] = await Promise.all([
     loadTopPlayerPicks(date),
     getViewer(),
     loadDailyPlaysHistory(recentDates),
   ])
-  const canPost = viewer.tier !== 'public' || params?.ops === '1'
+  // Capability flags come from the authenticated viewer only, never from a query parameter.
+  const canPost = viewer.tier !== 'public'
 
   // Yesterday's graded plays (the empty-state proof) and the last week's record: both are the same daily plays Graded History lists.
   const yesterdayPicks = recent.find(d => d.date === addDaysToDateKey(date, -1))?.picks ?? []
