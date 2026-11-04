@@ -29,11 +29,11 @@ from mlb_core.odds import bestbook as bb
 log = logging.getLogger("ev.bestbook_events")
 
 _ET = ZoneInfo("America/New_York")
-SPORTS = ("nfl", "nhl", "nba")
+SPORTS = ("nfl", "nhl", "nba", "cbb")
 OUT_KEY = "Odds/bestbook_live/{sport}/latest.json"
 GAME_LINES_KEY = "Odds/bestbook_live/{sport}/game_lines_latest.json"   # full-game ML / spread / total ladders (ev.bestbook_game_lines)
 
-DEFAULT_DAYS = {"nfl": 7, "nhl": 3, "nba": 7}    # ET calendar days INCLUDING today (today .. today + days - 1)
+DEFAULT_DAYS = {"nfl": 7, "nhl": 3, "nba": 7, "cbb": 3}    # ET calendar days INCLUDING today (today .. today + days - 1)
 MAX_CONSECUTIVE_FETCH_FAILURES = 3
 
 BESTBOOK_STAT_MAP: dict[str, dict[str, str]] = {
@@ -192,6 +192,12 @@ def _two_sided_stats(row: dict) -> tuple[int, float]:
     return n, (dist / n if n else 1.0)
 
 
+def bb_team_code(sport: str, name) -> str | None:
+    """College basketball has ~360 teams and no engine, so BestBook's own team code (the slate's `away` / `home`, e.g. 'UK', 'SDST')
+    is the team identity. Only the game-line ladders are kept (the feed has no cbb player props), keyed by these codes."""
+    return str(name).strip().upper() or None if name else None
+
+
 def build_events_from_snapshots(
     sport: str,
     slate_games: list[dict],
@@ -208,7 +214,10 @@ def build_events_from_snapshots(
     multi-MB snapshot is fetched only for games that pass the started / unknown-team filters, turned into its event, and
     dropped before the next one is fetched (holding every game at once was ~100 MB for a full NFL slate)."""
     if canon is None:
-        from ev.daily_projections import canon_team as canon
+        if sport == "cbb":
+            canon = bb_team_code
+        else:
+            from ev.daily_projections import canon_team as canon
 
     keys = PARLAY_KEY.get(sport, {})
     events: list[dict] = []

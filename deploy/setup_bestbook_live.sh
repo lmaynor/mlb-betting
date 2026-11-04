@@ -4,6 +4,7 @@
 #   bb-live-nhl   python -m mlb.runners.bestbook_live_props --sport nhl   hourly at :20
 #   bb-live-nfl   python -m mlb.runners.bestbook_live_props --sport nfl   hourly at :20 (Sunday pre-kickoff every 30 min)
 #   bb-live-nba   python -m mlb.runners.bestbook_live_props --sport nba   hourly at :20
+#   bb-live-cbb   python -m mlb.runners.bestbook_live_props --sport cbb   hourly at :50, Nov-Apr (college basketball: game lines only)
 #
 # Each run writes Odds/bestbook_live/{sport}/latest.json (ParlayAPI event shape, real two-sided sportsbooks + exchanges;
 # DFS apps and Kalshi are dropped) which ev.daily_projections.load_events unions with ParlayAPI and BettingPros lines.
@@ -35,6 +36,7 @@ ROWS=(
   "bb-live-nfl|nfl|sun-am|20,50 6-12 * 9-12,1-2 0"
   "bb-live-nfl|nfl|sun-rest|20 0-5,13-23 * 9-12,1-2 0"
   "bb-live-nba|nba|hourly|20 * * 10-12,1-6 *"
+  "bb-live-cbb|cbb|hourly|50 * * 11-12,1-4 *"
 )
 
 if [ "${RESUME:-0}" = "1" ]; then

@@ -2,7 +2,7 @@
 mlb_core.odds.bestbook -- BestBook (bestbook.app) live odds client + normalizer.
 
 BestBook is a cross-book odds aggregator (a direct beezy.fyi comp set /
-OddsJam-shape product). It covers NFL + NBA + NHL -- NO MLB slate was observed
+OddsJam-shape product). It covers NFL + NBA + NHL + college basketball ('cbb', game lines only: probed 2026-11-03, no player-prop sections) -- NO MLB slate was observed
 on probe day, in-season or out -- which is why this client lives in the shared
 mlb_core.odds package (sport-agnostic infra, CONTEXT.md section 0) while any
 consumer/runner belongs to a sport pillar (nfl/ first).
@@ -181,14 +181,14 @@ def _ensure_token() -> None:
 # ---------------------------------------------------------------------------
 
 _GAME_KEY_RE = re.compile(
-    r"^(?:(?P<sport>nfl|nhl|nba):)?(?P<date>\d{4}-\d{2}-\d{2})-"
-    r"(?P<away>[A-Z]{2,4})-(?P<home>[A-Z]{2,4})$"
+    r"^(?:(?P<sport>nfl|nhl|nba|cbb):)?(?P<date>\d{4}-\d{2}-\d{2})-"
+    r"(?P<away>[A-Z]{2,6})-(?P<home>[A-Z]{2,6})$"
 )
 
 
 def parse_game_key(key: str) -> dict | None:
     """'2026-11-02-CHI-SEA' -> {sport:'nfl', date, away:'CHI', home:'SEA'}.
-    NHL/NBA keys carry the sport prefix ('nhl:2026-10-30-NJD-VGK'); an
+    NHL/NBA/CBB keys carry the sport prefix ('nhl:2026-10-30-NJD-VGK', 'cbb:2026-11-03-MAN-UK'); an
     unprefixed key is NFL (BestBook's original sport). None if unparseable."""
     m = _GAME_KEY_RE.match((key or "").strip())
     if not m:
@@ -199,7 +199,7 @@ def parse_game_key(key: str) -> dict | None:
 
 def parse_slate(status: dict) -> list[dict]:
     """Snapshot `status` -> normalized games for EVERY league present
-    (status keys are 'slate' for NFL, 'slate:nhl', 'slate:nba', ...).
+    (status keys are 'slate' for NFL, 'slate:nhl', 'slate:nba', 'slate:cbb', ...).
     Each: {key, sport, date, away, home, start (ISO str), venues: [codes]}."""
     out = []
     for skey, sval in (status or {}).items():
