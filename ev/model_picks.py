@@ -14,14 +14,16 @@ ev.sweep_props_alerts, which do not use the model at all. This closes that gap w
     non-DFS book for the side the model prefers, `confluence` is true (model and market agree on the side, both edges positive,
     not edge-capped, >= CONFLUENCE_MIN_BOOKS reference books) and the game is >= MIN_MINS_TO_START away. A pick that also passes
     the repo's own Official Card gate (ev.daily_card.is_official_card_play) AND whose market-anchored blended EV (`blend_ev`, the
-    best quote priced at the blended posterior, c measured per stat) is >= OFFICIAL_MIN_BLEND_EV is tier 'official'; every other
+    best quote priced at the blended posterior, c measured per stat) is >= OFFICIAL_MIN_BLEND_EV, on a stat with measured signal
+    (PROPS_SIGNAL_ALLOWLIST) and with no sharp book pricing the side lower than the pack, is tier 'official'; every other
     confluence row is tier 'tracked'. Only official picks are posted.
   * LEDGER: bets table, system='PROPS', sport=<sport>, paper. EVERY pick is sized by quarter Kelly on the market-anchored blended
     probability (p_blend vs the vig-inclusive best price, 100u paper bankroll, capped at MAX_STAKE_UNITS) and written with that
     stake and kelly_pct; kelly_triggered = (stake > 0). A pick whose blend has no edge at its price (or a board with no blend) sizes
     to 0 and stays a monitoring row: settled on a 1-unit reference (settle_bets._settle_winter_bets) and closing-line-captured but
     not counted in the public record (/picks, /results, the #daily-recap headline count only kelly_triggered, stake > 0 rows).
-    The tier ('official' | 'tracked') no longer sets the stake; it only decides who is announced on Discord. First qualifying sighting wins (never re-priced or re-logged), so the record
+    The tier ('official' | 'tracked') no longer sets the stake; it only decides who is announced on Discord. First qualifying
+    sighting wins (never re-priced or re-logged), so the record
     cannot be cherry-picked after the fact. Settlement is the existing winter settler
     (settle_bets._settle_winter_bets: league player id, fail-closed, void only on a proven DNP) -- it keys on sport, not system.
   * CLV: closing_odds / closing_prob / clv_pct from the board archive's LAST pre-game state of the same prop (same line only).
@@ -50,7 +52,6 @@ SYSTEM = "PROPS"
 SPORTS = ("nfl", "nba", "nhl")
 MIN_MINS_TO_START = 30.0
 MAX_PAYLOAD_AGE_MIN = 45.0          # a board older than this is not live; log nothing rather than log a stale price
-MAX_POSTS_PER_PASS = 5              # mirrors the Official Card's own cap
 HEARTBEAT_KEY = "ModelPicks/last_run.json"          # {ts, sports: {sport: {status, selected, logged, ...}}}; monitor_ops reads it
 STAKE = 1.0                         # the historical flat official stake; kept for reference / old rows
 # Every pick is sized by Kelly on the MARKET-ANCHORED blended probability (never the raw engine P, which is winner's-curse noisy):
@@ -63,6 +64,33 @@ MAX_STAKE_UNITS = 2.0
 # market (NBA log loss 0.7164 vs 0.6859), so a raw model-vs-market gap is mostly winner's curse; the blend shrinks it to what the
 # stat's measured c says the engine adds (points / pra c = 0.02 add almost nothing, so they rarely clear this).
 OFFICIAL_MIN_BLEND_EV = 0.025
+# Official tier also needs the stat to carry MEASURED information beyond the market on the engine that prices it (blend c >= 0.08,
+# t >= 2.5 in the repo's own real-line studies). A stat that fails stays on the board and in the tracked tier (stake 0, still settled
+# and closed, so the forward record keeps accumulating) but is never staked or posted. Measured, per the study docs:
+#   NBA threes +0.19 (t 8.4), rebounds +0.13 (t 9.4), assists +0.09 (t 5.7)      nba_engine_vs_market_2026-11-01.md, `ship_noabs`
+#   NHL saves  +0.48 pooled on the board engine (-0.23 / +0.84 / +0.19 by season: regime-dependent)   nhl_engine_vs_market_2026-11-01.md
+#   NFL rush_yds +0.25 (t 2.9) -- measured on the HIERARCHICAL engine only, so only rows that engine priced
+# EXCLUDED on evidence: NBA points +0.02 / pra +0.02 (forward audit -9.5% / -26.5%), NHL goals +0.03 / assists +0.06 / points +0.03 on the
+# board engine. NOT measured at all (no real lines to test them on): NBA pr / pa / ra / steals / blocks, NHL sog / blocked_shots on the
+# board engine, every other NFL stat -- unmeasured is not allowed, whatever a prior says.
+PROPS_SIGNAL_ALLOWLIST = {
+    "nba": frozenset({"threes", "rebounds", "assists"}),
+    "nhl": frozenset({"saves"}),
+}
+NFL_HIER_SIGNAL = frozenset({"rush_yds"})
+# NHL rows served from the TRAINED models (NHL_TRAINED_PROPS on): measured c goals +0.37, assists +0.34, points +0.175, saves +0.75
+# (docs/analysis/nhl_trained_serving_2026-11-01.md). Information, not money -- the blend_ev gate still has to clear.
+NHL_TRAINED_SIGNAL = frozenset({"goals", "assists", "points", "saves"})
+
+
+def has_measured_signal(r: dict) -> bool:
+    """True when this row's (sport, stat, engine) has a measured market-blend c >= 0.08 (see PROPS_SIGNAL_ALLOWLIST)."""
+    sport, stat = r.get("sport"), r.get("stat")
+    if sport == "nhl" and r.get("nhl_model") == "trained_v1":
+        return stat in NHL_TRAINED_SIGNAL
+    if sport == "nfl":
+        return stat in NFL_HIER_SIGNAL and "hierarchical" in str(r.get("engine") or "")
+    return stat in PROPS_SIGNAL_ALLOWLIST.get(sport, ())
 
 
 def _num(x):
@@ -100,6 +128,10 @@ def qualifies(r: dict, now: datetime | None = None) -> str | None:
     if mins is None or mins < MIN_MINS_TO_START:
         return None
     if not DC.is_official_card_play(r, allow_dislocation=False):
+        return "tracked"
+    # no measured information on this stat, or a sharp reference book (Novig / ProphetX / Pinnacle, when one quotes) prices our side
+    # lower than the pack: monitored, never staked. A board with no sharp fields (older schema) passes the sharp test (fail-open).
+    if not has_measured_signal(r) or r.get("sharp_agrees") is False:
         return "tracked"
     # a board written before `blend_ev` existed (or a row with no blend) cannot show the engine clears the bar: not official
     blend_ev = _num(r.get("blend_ev"))
@@ -248,9 +280,10 @@ def _teams(p: dict) -> tuple:
 # -- Discord -----------------------------------------------------------------------------------------------------------
 
 def post_official(sport: str, picks: list[dict]) -> bool:
-    """Post the newly logged OFFICIAL picks to the sport's alerts channel (paper / unvalidated). True if delivered."""
+    """Post the newly logged OFFICIAL picks to the sport's alerts channel (paper / unvalidated). True if delivered. No count cap here:
+    the Daily Card has none; sport_alerts.MAX_ALERTS is the only flood guard on top-level posts."""
     from mlb_core.alerts.sport_alerts import post_sport_alerts
-    rows = [p for p in picks if p.get("tier") == "official" and p.get("american") is not None][:MAX_POSTS_PER_PASS]
+    rows = [p for p in picks if p.get("tier") == "official" and p.get("american") is not None]
     if not rows:
         return False
     return post_sport_alerts(sport, rows, log_bets=False)

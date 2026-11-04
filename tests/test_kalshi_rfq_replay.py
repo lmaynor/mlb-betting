@@ -304,3 +304,41 @@ def test_leg_records_export_priced_legs_beside_price_and_result():
     assert rec["yes_price"] == 0.30 and rec["yes_won"] is True
     assert {l["game_key"] for l in rec["legs"]} == {"nfl:2026-10-25:G1@H1"} and rec["legs"][0]["p_yes"] == pytest.approx(0.4)
     assert rp.leg_records(combo(["ZZ9"], iso(T0 + 60)), s) is None
+
+
+# ------------------------------------------------------------------------------------------ banked game lines (NBA / NHL)
+def game_line_event(start_ts, home="Minnesota Timberwolves", away="Toronto Raptors"):
+    def bm(key, ml, spread, total):
+        return {"key": key, "markets": [
+            {"key": "h2h", "outcomes": [{"name": home, "price": ml[0]}, {"name": away, "price": ml[1]}]},
+            {"key": "spreads", "outcomes": [{"name": home, "point": -4.5, "price": spread[0]}, {"name": away, "point": 4.5, "price": spread[1]}]},
+            {"key": "totals", "outcomes": [{"name": "Over", "point": 220.5, "price": total[0]}, {"name": "Under", "point": 220.5, "price": total[1]}]}]}
+    return {"id": "g1", "commence_time": datetime.fromtimestamp(start_ts, timezone.utc).isoformat(), "home_team": home, "away_team": away,
+            "bookmakers": [bm("fanduel", (-190, 160), (-110, -110), (-110, -110)), bm("draftkings", (-185, 155), (-112, -108), (-108, -112))]}
+
+
+def test_game_line_store_prices_game_spread_and_total_legs_at_the_snapshot_time():
+    store = rp.store_from_game_lines("nba", [(T0, [game_line_event(T0 + 7200)])])
+    book = store.book_at(T0 + 300)
+    ml = book.get("KXNBAGAME-26OCT25TORMIN-MIN")
+    assert ml is not None and 0.6 < ml.p_cons_yes < 0.7 and ml.n_books == 2
+    assert book.get("KXNBAGAME-26OCT25TORMIN-TOR").p_cons_yes == pytest.approx(1.0 - ml.p_cons_yes)
+    assert book.get("KXNBASPREAD-26OCT25TORMIN-MIN5") is not None                    # MIN wins by over 4.5
+    assert book.get("KXNBATOTAL-26OCT25TORMIN-221").p_cons_yes == pytest.approx(0.5, abs=0.01)   # Over 220.5
+
+
+def test_game_line_store_has_no_look_ahead_and_drops_a_started_game():
+    store = rp.store_from_game_lines("nba", [(T0, [game_line_event(T0 + 600)]), (T0 + 1800, [game_line_event(T0 + 600)])])
+    t = "KXNBAGAME-26OCT25TORMIN-MIN"
+    assert store.book_at(T0 - 1) is None                                            # nothing was banked yet
+    assert store.book_at(T0 + 300).get(t) is not None
+    assert store.book_at(T0 + 900).get(t) is None                                   # tip-off passed: never a pre-game fair value
+    assert store.book_at(T0 + 2000).get(t) is None                                  # ... including from the later snapshot
+
+
+def test_game_line_and_prop_stores_compose_for_one_game():
+    comp = rp.CompositeStore([rp.store_from_raw("nba", [(T0, [nba_event(T0 + 7200)])]),
+                              rp.store_from_game_lines("nba", [(T0, [game_line_event(T0 + 7200)])])])
+    b = comp.book_at(T0 + 300)
+    assert b.get("KXNBAPTS-26OCT25TORMIN-MINAEDWARDS5-25") is not None and b.get("KXNBAGAME-26OCT25TORMIN-MIN") is not None
+    assert comp.may_price([["KXNBAGAME-26OCT25TORMIN-MIN", "yes"]])

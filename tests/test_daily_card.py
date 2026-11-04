@@ -1,5 +1,5 @@
 """
-tests/test_daily_card.py -- Tests for strict Official Card selection gate, dynamic 1..5 sizing,
+tests/test_daily_card.py -- Tests for strict Official Card selection gate, uncapped dynamic sizing,
 deduplication, and persistence.
 """
 from datetime import datetime
@@ -119,7 +119,7 @@ def test_ev_outlier_gate():
 
 
 def test_build_daily_card_never_pads_dynamic_size():
-    # Only 2 plays qualify -> returns exactly 2 plays, never 5
+    # Only 2 plays qualify -> returns exactly 2 plays, never padded
     p1 = _proj_row(player="Player One", beezy_score=75)
     p2 = _proj_row(player="Player Two", beezy_score=70)
     weak1 = _proj_row(player="Player Three", confluence=False, beezy_score=50)
@@ -183,3 +183,11 @@ def test_save_and_load_locked_card(tmp_path, monkeypatch):
     assert loaded is not None
     assert loaded["date"] == "2026-10-28"
     assert loaded["plays"][0]["player"] == "New"
+
+
+def test_build_daily_card_has_no_count_cap():
+    # 8 qualifying plays, each its own player and game -> all 8 are on the card (the card used to stop at 5)
+    plays = [_proj_row(player=f"Player {i}", game_key=f"nba:2026-10-28:T{i}@U{i}", beezy_score=90 - i) for i in range(8)]
+    card = build_daily_card(plays)
+    assert len(card) == 8
+    assert [p["beezy_score"] for p in card] == sorted((p["beezy_score"] for p in card), reverse=True)

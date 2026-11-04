@@ -297,3 +297,12 @@ def test_cli_needs_a_sport_unless_fixing_stakes(monkeypatch):
         MP.main([])
     monkeypatch.setattr(MP, "fix_tracked_stakes", lambda dry_run=False: {"candidates": 0, "updated": 0, "unparsed": 0})
     assert MP.main(["--fix-tracked-stakes", "--dry-run"]) == 0
+
+
+def test_board_rows_are_stamped_with_the_one_definition_of_a_pick():
+    # the site's Daily Card reads `pick_tier` instead of re-deriving the gates, so the stamp must be exactly qualifies()
+    from ev import daily_projections as DP
+    for kw in ({}, {"blend_ev": 0.01}, {"confluence": False}, {"best_over_book": "pinnacle"}, {"stat": "points"}):
+        assert DP.pick_tier(row(**kw)) == MP.qualifies(row(**kw))
+    assert DP.pick_tier(row()) == "official"
+    assert DP.pick_tier(row(confluence=False)) is None

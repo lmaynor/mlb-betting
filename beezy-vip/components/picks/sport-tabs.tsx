@@ -6,7 +6,7 @@ export type SportView = 'picks' | 'projections' | 'systems'
 
 /**
  * The one header strip every sport page shares (MLB, NFL, NHL, NBA, and any sport added to lib/sports.ts): the sport and
- * how many systems it lists on the left, PICKS & +EV / PROJECTIONS / SYSTEMS on the right. A system's own page is part of
+ * how many systems it lists on the left, PICKS & +EV / SYSTEMS on the right (projections live in the Scanner, /ev/projections). A system's own page is part of
  * SYSTEMS (it carries the strip of every system), so it passes active='systems'.
  */
 export function SportTabs({ sport, active }: { sport: SportSlug; active: SportView | null }) {
@@ -14,7 +14,6 @@ export function SportTabs({ sport, active }: { sport: SportSlug; active: SportVi
   const n = getSystemsBySport(sport).length
   const tabs: { id: SportView; label: string; href: string }[] = [
     { id: 'picks', label: 'PICKS & +EV', href: `/picks/${sport}` },
-    { id: 'projections', label: 'ALL PROJECTIONS', href: `/picks/${sport}/projections` },
     { id: 'systems', label: 'SYSTEMS', href: `/picks/${sport}/systems` },
   ]
   return (

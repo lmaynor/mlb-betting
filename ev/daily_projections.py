@@ -203,6 +203,20 @@ BLEND_C_BY_SPORT_STAT = {
     "nhl": {"sog": 0.30, "saves": 0.15, "blocked_shots": 0.10, "points": 0.03, "goals": 0.03, "assists": 0.06,
             "pp_points": 0.05},
 }
+# The same weight for NHL rows that were served from the TRAINED models (row `nhl_model == "trained_v1"`, only with NHL_TRAINED_PROPS on).
+# MEASURED on those models (docs/analysis/nhl_trained_serving_2026-11-01.md, BettingPros 2022-10..2026-10, walk-forward refits): goals +0.37
+# (t 5.8), assists +0.34 (t 6.9), points +0.175 (t 3.5); saves pooled +0.75 but +0.37 / +1.02 / +0.35 by season, so the weakest season's
+# value is used. Information, not money: the skater markets' ROI5 at the best price is -0.2% / -0.3% / -1.5%.
+BLEND_C_TRAINED = {"nhl": {"goals": 0.37, "assists": 0.34, "points": 0.175, "saves": 0.35}}
+# Per-stat intercept / slope of the blend, logit(p) = a + b logit(mkt) + c (logit(model) - logit(mkt)) (what the model-vs-market studies
+# FIT; blend_p_over's default a = 0, b = 1 is the c-only form). Empty = every stat keeps (0, 1). Filled only from a real refit
+# (scripts/nba_engine_vs_market.py), never by hand.
+BLEND_AB_BY_SPORT_STAT: dict = {}
+BLEND_MAX_SHIFT = 0.08                                # the study's clamp: the blend never moves more than this from the market
+# Books whose price is the reference the pack follows (an exchange / the sharpest offshore line). A row is `sharp_agrees` unless these
+# books, left out the book we would bet at, price OUR side meaningfully lower than the whole pack does. UNVALIDATED as a filter.
+SHARP_BOOKS = frozenset({"pinnacle", "novig", "prophetx"})
+SHARP_TOLERANCE = 0.010
 # NBA engine feature switches, consulted at projection time; `nba_features(...)` flips them for a replay. A switch is ON only
 # where nba/props/engine_eval.py showed a held-out gain past its bar (selected on 2023-24, scored on 2024-25 / 2025-26:
 # docs/analysis/nba_engine_walkforward_2026-11-01.md): eta_scale 0.4 with steals / blocks excluded (the spec's 0.55-0.65
@@ -898,32 +912,77 @@ def p_over(family: str, mu: float, line: float, ctx: StatContext, sd_mu: float |
     return float(1.0 - norm.cdf((line - mu) / sd))
 
 
-def blend_c(sport: str | None, stat: str | None) -> float:
-    """The blend weight for a sport/stat: BLEND_C_BY_SPORT_STAT, else that sport's "default", else BLEND_C."""
+def blend_c(sport: str | None, stat: str | None, trained: bool = False) -> float:
+    """The blend weight for a sport/stat: BLEND_C_TRAINED for a row served from the trained models, else BLEND_C_BY_SPORT_STAT, else
+    that sport's "default", else BLEND_C."""
+    if trained:
+        c = BLEND_C_TRAINED.get(sport or "", {}).get(stat)
+        if c is not None:
+            return float(c)
     table = BLEND_C_BY_SPORT_STAT.get(sport or "", {})
     return float(table.get(stat, table.get("default", BLEND_C)))
 
 
+def blend_ab(sport: str | None, stat: str | None) -> tuple[float, float]:
+    """(a, b) of the blend for a sport/stat: BLEND_AB_BY_SPORT_STAT, else the c-only form (0.0, 1.0)."""
+    a, b = BLEND_AB_BY_SPORT_STAT.get(sport or "", {}).get(stat, (0.0, 1.0))
+    return float(a), float(b)
+
+
 def blend_p_over(p_model_over: float | None, p_mkt_over: float | None, c: float | None = None,
-                 sport: str | None = None, stat: str | None = None) -> float | None:
-    """Market-anchored posterior: logit(p) = logit(market) + c * (logit(model) - logit(market)).
+                 sport: str | None = None, stat: str | None = None, a: float | None = None, b: float | None = None,
+                 trained: bool = False) -> float | None:
+    """Market-anchored posterior: logit(p) = a + b logit(market) + c (logit(model) - logit(market)).
 
     This is the form the repo's own model-vs-market studies test (blend coefficient `c`; docs/analysis/
     bettingpros_model_vs_market_2026-10-15.md): c = 0 trusts the market entirely, c = 1 trusts the model entirely. Those
-    studies measured c = +0.02 .. +0.30 for the TRAINED research models; nothing has been measured for this empirical
-    engine, so BLEND_C is a deliberately small, UNVALIDATED shrinkage prior. It is display-only: it feeds neither the
-    edge, the confluence flag nor the Beezy Score. None unless both engines have a probability.
+    studies measured c = +0.02 .. +0.30 for the TRAINED research models; the per-stat table (BLEND_C_BY_SPORT_STAT) says which
+    weights are measured on this engine and which are priors. `a` / `b` default to the c-only form (0, 1) unless
+    BLEND_AB_BY_SPORT_STAT carries a refit for the stat; with a refit the result is clamped to the market +/- BLEND_MAX_SHIFT, as in the
+    studies. It is display-only: it feeds neither the edge, the confluence flag nor the Beezy Score (the Official-tier `blend_ev`
+    gate of ev.model_picks aside). None unless both engines have a probability.
 
     `c` explicit wins; else the per-stat weight for (sport, stat) (blend_c); else BLEND_C."""
     if p_model_over is None or p_mkt_over is None:
         return None
     if c is None:
-        c = blend_c(sport, stat)
+        c = blend_c(sport, stat, trained)
+    explicit_ab = a is not None or b is not None
+    if a is None or b is None:
+        fa, fb = blend_ab(sport, stat)
+        a, b = fa if a is None else a, fb if b is None else b
     lo, hi = 0.01, 0.99
     pm = min(max(float(p_model_over), lo), hi)
     pk = min(max(float(p_mkt_over), lo), hi)
-    z = math.log(pk / (1 - pk)) + c * (math.log(pm / (1 - pm)) - math.log(pk / (1 - pk)))
-    return 1.0 / (1.0 + math.exp(-z))
+    lk = math.log(pk / (1 - pk))
+    z = a + b * lk + c * (math.log(pm / (1 - pm)) - lk)
+    p = 1.0 / (1.0 + math.exp(-z))
+    if explicit_ab or (a, b) != (0.0, 1.0):
+        p = min(max(p, pk - BLEND_MAX_SHIFT), pk + BLEND_MAX_SHIFT)
+    return p
+
+
+def sharp_fields(cons, side: str | None, best: dict) -> dict:
+    """{p_sharp_over, n_sharp, sharp_agrees} from the consensus's per-book fair P(over).
+
+    p_sharp_over = median fair P(over) of the SHARP_BOOKS that two-side the line, leaving out the book we would bet at (a venue
+    cannot confirm its own price). sharp_agrees is False only when such a book exists and prices OUR side more than SHARP_TOLERANCE
+    below the whole pack's consensus; with no sharp book (Pinnacle never quotes BettingPros props) it is True and `n_sharp` is 0 --
+    fail-open, so absence of a sharp reference never blocks a row."""
+    out = {"p_sharp_over": None, "n_sharp": 0, "sharp_agrees": True}
+    if cons is None or getattr(cons, "book_fair", None) is None:
+        return out
+    bet_book = (best.get(side) or (None,))[0] if side in ("over", "under") else None
+    vals = [float(p) for bk, p in cons.book_fair if bk in SHARP_BOOKS and bk != bet_book]
+    if not vals:
+        return out
+    p_sharp = float(np.median(vals))
+    out.update(p_sharp_over=p_sharp, n_sharp=len(vals))
+    if side in ("over", "under"):
+        p_sharp_side = p_sharp if side == "over" else 1.0 - p_sharp
+        p_mkt_side = cons.p_over if side == "over" else 1.0 - cons.p_over
+        out["sharp_agrees"] = bool(p_sharp_side >= p_mkt_side - SHARP_TOLERANCE)
+    return out
 
 
 def blend_side_ev(p_blend_over: float | None, side: str | None, best: dict) -> tuple:
@@ -1428,9 +1487,10 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
     p_mkt_side = None if p_mkt_over is None or side is None else (p_mkt_over if side == "over" else 1 - p_mkt_over)
     score, basis = score_inputs(ef, cons.n_books if cons is not None else None, p_model_side, p_mkt_side)
     bo, bu = best["over"], best["under"]
-    p_blend_over = blend_p_over(p_model_over, p_mkt_over, blend_c(sport, stat))
+    p_blend_over = blend_p_over(p_model_over, p_mkt_over, sport=sport, stat=stat, trained=extra.get("nhl_model") == "trained_v1")
     p_blend_side, blend_ev = blend_side_ev(p_blend_over, side, best)
-    return {
+    sharp = sharp_fields(cons, side, best)
+    row = {
         "sport": sport, "stat": stat, "stat_label": STAT_LABEL.get(stat, stat), "player": player, "player_norm": pn,
         "team": team, "opp": opp, "game_key": gk, "commence": None if start is None else start.isoformat(),
         "mins_to_start": None if mins is None else round(mins, 1),
@@ -1439,6 +1499,7 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
         "proj_p10": _f(p_floor, 1), "proj_p90": _f(p_ceil, 1),
         "p_over_model": _f(p_model_over),
         "p_over_blend": _f(p_blend_over), "p_blend_side": _f(p_blend_side), "blend_ev": _f(blend_ev),
+        "p_sharp_over": _f(sharp["p_sharp_over"]), "n_sharp": sharp["n_sharp"], "sharp_agrees": sharp["sharp_agrees"],
         "p_model_side": _f(p_model_side), "p_mkt_side": _f(p_mkt_side),
         "l5_hit_rate": form["l5_rate"] if form else None, "l10_hit_rate": form["l10_rate"] if form else None,
         "szn_rate": form["szn_rate"] if form else None, "hit_basis": "over",
@@ -1453,6 +1514,19 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
         "validated": False, "engine": engine, **extra,
         **({"nba_model": NBA_MODEL} if nb is not None else {}),
     }
+    row["pick_tier"] = pick_tier(row)
+    return row
+
+
+def pick_tier(row: dict) -> str | None:
+    """'official' | 'tracked' | None: the row's tier under ev.model_picks.qualifies, the ONE definition of a pick. Stamped on every row
+    so the site's Daily Card and boards read the backend's verdict instead of re-deriving the gates (the allowlist of stats with
+    measured signal, the blended-EV bar and the sharp-book check live only in Python). Lazy import: model_picks imports this module."""
+    try:
+        from ev import model_picks
+        return model_picks.qualifies(row)
+    except Exception:                                                                  # noqa: BLE001
+        return None
 
 
 def _price_hier(stat, rows, team, opp, env_t, logs, coef, mu_raw, start):
