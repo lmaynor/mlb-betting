@@ -26,7 +26,7 @@ from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 
 from soccer.config import (ACTIVE_SOCCER_LEAGUES, DOMESTIC_UNDERSTAT_LEAGUES, ENGINE_LABEL, ENGINE_NAME,
-                           PREDICTIONS_KEY, SOCCER_LEAGUES, UCL_HFA_SCALE, XG_VARIANT)
+                           FALLBACK_ENGINE_LABEL, FALLBACK_ENGINE_NAME, FALLBACK_XG_VARIANT, PREDICTIONS_KEY, SOCCER_LEAGUES, UCL_HFA_SCALE, XG_VARIANT)
 from soccer.data import ingest
 from soccer.data.reep_register import league_codes
 from soccer.game import dixon_coles
@@ -43,7 +43,7 @@ def game_key(league_date: date, away: str, home: str) -> str:
 
 def build_predictions(fixtures: list[dict], ratings_by_league: dict[str, dixon_coles.Ratings],
                       elo: dict[str, float] | None = None, market_probs: dict | None = None,
-                      now: datetime | None = None) -> dict:
+                      now: datetime | None = None, xg_variant: str = XG_VARIANT) -> dict:
     """Fixtures + fitted ratings -> the predictions payload. A fixture whose clubs are not both rated is
     skipped (fail closed). The Elo sanity guard runs when both the ClubElo prior and a market consensus
     (de-vigged three-way) are available for the game."""
@@ -82,7 +82,7 @@ def build_predictions(fixtures: list[dict], ratings_by_league: dict[str, dixon_c
             "away": fx["away"], "home": fx["home"],
             "commence": commence.isoformat() if isinstance(commence, datetime) else str(commence),
             "lambda_home": round(lam[0], 4), "lambda_away": round(lam[1], 4), "rho": ratings.rho,
-            "xg_variant": XG_VARIANT,
+            "xg_variant": xg_variant,
             "p_home": probs["p_home"], "p_draw": probs["p_draw"], "p_away": probs["p_away"],
             "p_1x": probs["p_1x"], "p_x2": probs["p_x2"], "p_12": probs["p_12"],
             "p_home_dnb": probs["p_home_dnb"], "p_away_dnb": probs["p_away_dnb"],
@@ -99,7 +99,7 @@ def build_predictions(fixtures: list[dict], ratings_by_league: dict[str, dixon_c
     priced.sort(key=lambda r: r["commence"])
     return {
         "sport": "soccer", "engine": ENGINE_NAME, "engine_version": 1, "label": ENGINE_LABEL,
-        "xg_variant": XG_VARIANT, "validated": False,
+        "xg_variant": xg_variant, "validated": False,
         "ts": now.isoformat(), "status": "live" if priced else "awaiting_fixtures",
         "markets": ["ml", "total", "btts", "dc"],
         "count": len(priced), "rows": [], "priced_games": priced, "games": games,
@@ -207,6 +207,20 @@ def _pooled_ratings(league: str, pool_played: list[dict], today: date,
     return ratings
 
 
+def _football_data_fallback(league: str, season: int, fetch=None) -> list[dict]:
+    """A domestic league's played matches from football-data.co.uk (two seasons), shaped like the Understat rows the fit reads. No xG:
+    effective_goals then uses the shots-on-target proxy (or plain goals). Any failure returns what was loaded; never raises."""
+    out: list[dict] = []
+    for yr in (season - 1, season):
+        try:
+            for m in ingest.fetch_football_data_csv(league, yr, fetch=fetch):
+                out.append({**m, "is_result": True, "datetime": datetime(m["date"].year, m["date"].month, m["date"].day, 12),
+                            "xg_home": None, "xg_away": None})
+        except Exception:  # noqa: BLE001 -- a missing season file must not take the other leagues down
+            log.warning("soccer run_daily: football-data fallback pull failed for %s %s", league, yr, exc_info=True)
+    return out
+
+
 def run_soccer_predictions(now: datetime | None = None, write: bool = False, fetch=None) -> dict:
     """Pull, fit and price the active leagues; optionally persist predictions + the odds board."""
     now = now or datetime.now(timezone.utc)
@@ -221,13 +235,22 @@ def run_soccer_predictions(now: datetime | None = None, write: bool = False, fet
         log.warning("soccer run_daily: ClubElo pull failed; fitting without the Elo prior")
     # Domestic Understat pulls: the active domestic leagues' own fits AND the cross-European pool behind UCL.
     domestic: dict[str, list[dict]] = {}
+    understat_down: list[str] = []
+    fallback_leagues: list[str] = []
     for league in DOMESTIC_UNDERSTAT_LEAGUES:
         matches: list[dict] = []
         for yr in (season - 1, season):
             try:
                 matches.extend(ingest.fetch_understat_matches(league, yr, fetch=fetch))
+            except ingest.UnderstatUnavailable as exc:
+                understat_down.append(str(exc))
+                log.warning("soccer run_daily: understat unavailable for %s %s: %s", league, yr, exc)
             except Exception:  # noqa: BLE001 -- one bad pull must not kill the other leagues or the pool
                 log.exception("soccer run_daily: understat pull failed for %s %s", league, yr)
+        if not matches and understat_down:
+            matches = _football_data_fallback(league, season, fetch=fetch)
+            if matches:
+                fallback_leagues.append(league)
         domestic[league] = matches
     pool_played = [m for ms in domestic.values() for m in ms if m["is_result"]]
     ratings_by_league: dict[str, dixon_coles.Ratings] = {}
@@ -260,8 +283,19 @@ def run_soccer_predictions(now: datetime | None = None, write: bool = False, fet
                 _add_fixture(m)
     for fx in _banked_fixtures(now):
         _add_fixture(fx)
+    variant = XG_VARIANT
+    if fallback_leagues:
+        variant = FALLBACK_XG_VARIANT if len(fallback_leagues) == len(DOMESTIC_UNDERSTAT_LEAGUES) else f"{XG_VARIANT}+{FALLBACK_XG_VARIANT}"
     payload = build_predictions(fixtures, ratings_by_league, elo=elo or None,
-                                market_probs=market_probs, now=now)
+                                market_probs=market_probs, now=now, xg_variant=variant)
+    if fallback_leagues:
+        payload["engine"], payload["label"] = FALLBACK_ENGINE_NAME, FALLBACK_ENGINE_LABEL
+        payload["fallback"] = {"source": "football-data.co.uk", "leagues": fallback_leagues,
+                               "reason": f"Understat is not serving match data ({understat_down[0]})"}
+    if not payload["priced_games"] and not ratings_by_league and understat_down:
+        # No ratings could be fitted because Understat serves no match data: say so, not "awaiting_fixtures" (the fixtures exist).
+        payload["status"] = "awaiting_data"
+        payload["reason"] = f"Understat is not serving match data ({understat_down[0]}); no team ratings can be fitted"
     if write:
         try:
             from mlb_core import storage

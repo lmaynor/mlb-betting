@@ -26,6 +26,13 @@ XG_VARIANT = "understat_shot_v1"
 ENGINE_NAME = "dixon_coles_xg_v1"
 ENGINE_LABEL = "UNVALIDATED model estimate, not a tested edge"
 
+# Fallback when Understat serves no match data (2026-11-04 outage): the SAME Dixon-Coles fit on football-data.co.uk results, with the
+# shots-on-target proxy in place of xG (soccer.game.dixon_coles.effective_goals). A different observation, so it is a different variant:
+# every payload and row names which one priced it, and the UI badge follows it. Weaker than xG; never presented as the xG model.
+FALLBACK_XG_VARIANT = "football_data_sot_proxy_v1"
+FALLBACK_ENGINE_NAME = "dixon_coles_fd_v1"
+FALLBACK_ENGINE_LABEL = "UNVALIDATED goals + shots-on-target estimate (no xG source), not a tested edge"
+
 PREDICTIONS_KEY = "EVSweep/soccer_games/predictions_latest.json"
 ODDS_BOARD_KEY = "EVSweep/soccer_games/odds_board_latest.json"
 

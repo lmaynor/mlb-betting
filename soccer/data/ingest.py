@@ -52,6 +52,16 @@ def _cache_put(key: str, text: str) -> None:
         log.debug("soccer ingest cache write failed for %s", key)
 
 
+def _cache_get(key: str) -> str | None:
+    try:
+        from mlb_core import storage
+        if storage.exists(key):
+            return storage.read_bytes(key).decode("utf-8")
+    except Exception:  # noqa: BLE001 -- cache is best-effort by design
+        log.debug("soccer ingest cache read failed for %s", key)
+    return None
+
+
 def _f(value) -> float | None:
     try:
         v = float(str(value).strip())
@@ -141,10 +151,15 @@ def parse_football_data_csv(text: str, league: str) -> list[dict]:
 _MATCHES_DATA_RE = re.compile(r"matchesData\s*=\s*JSON\.parse\('(.*?)'\)", re.DOTALL)
 
 
+class UnderstatUnavailable(ValueError):
+    """Understat answered with a page that carries no match data (maintenance / 'We will come back soon' page, or a changed layout)."""
+
+
 def _decode_understat_payload(html: str) -> list:
     m = _MATCHES_DATA_RE.search(html)
     if not m:
-        raise ValueError("understat page has no matchesData payload")
+        why = "its 'We will come back soon' maintenance page" if "come back soon" in html else "no matchesData payload"
+        raise UnderstatUnavailable(f"understat served {why} ({len(html)} bytes)")
     raw = m.group(1)
     # The payload is a JS single-quoted string carrying JSON with \xNN / \uNNNN escapes.
     decoded = raw.encode("utf-8").decode("unicode_escape")
@@ -165,11 +180,26 @@ def fetch_understat_matches(league: str, season, fetch=None) -> list[dict]:
                          "its ratings come from the pooled domestic fit, not a per-league pull")
     year = str(season)[:4]
     url = f"{UNDERSTAT_BASE}/{cfg['understat_league']}/{year}"
+    cache_key = f"Soccer/understat/{league}_{year}.html"
     html = (fetch or _default_fetch)(url)
-    _cache_put(f"Soccer/understat/{league}_{year}.html", html)
+    try:
+        payload = _decode_understat_payload(html)
+    except UnderstatUnavailable as exc:
+        # Never cache a page without match data (an earlier version did, and overwrote the last good copy with the maintenance
+        # page). Fall back to the last good cached payload; with none, fail loudly so run_daily reports 'awaiting_data'.
+        cached = _cache_get(cache_key)
+        try:
+            payload = _decode_understat_payload(cached) if cached else None
+        except UnderstatUnavailable:
+            payload = None
+        if payload is None:
+            raise
+        log.warning("understat %s %s unavailable live (%s); using the last good cached copy", league, year, exc)
+    else:
+        _cache_put(cache_key, html)
     out: list[dict] = []
     skipped = 0
-    for m in _decode_understat_payload(html):
+    for m in payload:
         home = resolve_club((m.get("h") or {}).get("title"), league=league, provider="understat")
         away = resolve_club((m.get("a") or {}).get("title"), league=league, provider="understat")
         try:

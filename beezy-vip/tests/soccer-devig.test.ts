@@ -114,3 +114,14 @@ describe('new soccer source files stay ASCII', () => {
     })
   }
 })
+
+describe('soccerModelBadge', () => {
+  it('names the variant that priced the board: xG by default, the goals + shots-on-target fallback when Understat is down', () => {
+    const { soccerModelBadge, SOCCER_MODEL_BADGE } = require('@/lib/soccer-games')
+    expect(soccerModelBadge(undefined)).toBe(SOCCER_MODEL_BADGE)
+    expect(soccerModelBadge('understat_shot_v1')).toBe(SOCCER_MODEL_BADGE)
+    expect(soccerModelBadge('football_data_sot_proxy_v1')).toMatch(/NO xG/)
+    expect(soccerModelBadge('understat_shot_v1+football_data_sot_proxy_v1')).toMatch(/NO xG/)
+    expect(soccerModelBadge('football_data_sot_proxy_v1')).not.toMatch(/understat_shot_v1/)
+  })
+})

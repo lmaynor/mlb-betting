@@ -65,6 +65,15 @@ export interface SoccerProjectionsFeed {
 /** The Nutmeg metric-card attribution shown wherever the soccer model is displayed. */
 export const SOCCER_MODEL_BADGE = 'Model: Dixon-Coles Bivariate Poisson \u00b7 xG: understat_shot_v1 \u00b7 UNVALIDATED'
 
+/** The badge for the variant that actually priced the board: the xG model, or the goals + shots-on-target fallback used while Understat is down. */
+export function soccerModelBadge(variant?: string | null): string {
+  const v = variant || 'understat_shot_v1'
+  const base = 'Model: Dixon-Coles Bivariate Poisson'
+  if (v === 'understat_shot_v1') return SOCCER_MODEL_BADGE
+  if (v.includes('football_data_sot_proxy_v1')) return `${base} \u00b7 goals + shots on target, NO xG (Understat unavailable) \u00b7 UNVALIDATED`
+  return `${base} \u00b7 ${v} \u00b7 UNVALIDATED`
+}
+
 export interface ThreeWayBook {
   book: string
   home: number
