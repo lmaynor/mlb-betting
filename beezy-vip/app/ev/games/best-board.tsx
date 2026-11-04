@@ -174,7 +174,7 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen, nav }: { 
               <Pill active={activeSport === 'all'} onClick={() => setSport('all')}>All sports</Pill>
               {available.map(s => <Pill key={s} active={activeSport === s} onClick={() => setSport(s)}>{s.toUpperCase()}</Pill>)}
             </PillGroup>
-            <Select id="bb-sort" label="SORT" value={sort} onChange={v => setSort(v as BoardSort)} options={BOARD_SORTS.map(s => ({ v: s.v, l: s.l }))} />
+            <Select id="bb-sort" label="Sort" value={sort} onChange={v => setSort(v as BoardSort)} options={BOARD_SORTS.map(s => ({ v: s.v, l: s.l }))} />
             <span className="hidden md:inline-flex items-center gap-1.5 text-[12px] text-text-secondary rounded-control border border-separator-border px-2.5 py-1" data-testid="open-hint">Double-click any game to open its card</span>
           </div>
           {quiet.length > 0 && <p className="text-[12px] text-text-secondary m-0 mb-2.5" data-testid="quiet-sports">{quiet.join(' · ')}</p>}

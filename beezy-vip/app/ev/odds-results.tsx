@@ -203,7 +203,7 @@ function PropTableView({ odds }: { odds: OddsScreen }) {
         <thead>
           <tr>
             <th scope="col" className="odds-prop text-left min-w-[210px]">PROP</th>
-            <th scope="col" className="text-left">GAME</th>
+            <th scope="col" className="text-left">Game</th>
             {mode === 'ev' && (
               <>
                 <th scope="col" className="odds-ev" title="Fair price of this side from the reference books">Fair odds</th>

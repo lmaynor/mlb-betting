@@ -139,7 +139,7 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
             <PillGroup label="Market">
               {MARKETS.map(m => <Pill key={m.key} active={market === m.key} onClick={() => { setMarket(m.key); reset() }}>{m.label}</Pill>)}
             </PillGroup>
-            <Select id="gp-game" label="GAME" value={game} onChange={v => { setGame(v); reset() }} options={[{ v: 'all', l: 'All games' }, ...games.map(g => ({ v: g.key, l: g.label }))]} />
+            <Select id="gp-game" label="Game" value={game} onChange={v => { setGame(v); reset() }} options={[{ v: 'all', l: 'All games' }, ...games.map(g => ({ v: g.key, l: g.label }))]} />
             <Select id="gp-minev" label="Min EV" value={String(minEv)} onChange={v => { setMinEv(Number(v)); reset() }} options={MIN_EV} />
             <BookPicker label={refs.length ? `Reference books (${refs.length})` : 'Reference books (all)'} books={bookList} selected={refs} onChange={setRefs} presets={refPresets} emptyMeansAll
               note="The fair value is the average of each reference book's own de-vigged price, leaving out the book you would bet at. It needs 3 reference books on the line. Default: every book." />
@@ -151,7 +151,7 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
             </PillGroup>
             <Toggle label="Exchanges" checked={exchanges} onChange={setExchanges} title="Count Kalshi, Novig and ProphetX in the arbitrage search (Kalshi's taker fee is taken off its leg)" />
             <Toggle label="Arbs only" checked={arbOnly} onChange={v => { setArbOnly(v); reset() }} />
-            <Select id="gp-sort" label="SORT" value={sort} onChange={v => setSort(v as GameSort)} options={SORTS.map(s => ({ v: s.v, l: s.l }))} />
+            <Select id="gp-sort" label="Sort" value={sort} onChange={v => setSort(v as GameSort)} options={SORTS.map(s => ({ v: s.v, l: s.l }))} />
             <input className="bg-background-secondary-default text-text-primary h-8 py-0 px-[10px] text-compact w-[140px]" type="search" aria-label="Search teams" placeholder="Search team" value={q} onChange={e => { setQ(e.target.value); reset() }}
               style={{ border: `1px solid ${HAIR}`, borderRadius: '6px' }} />
           </div>
@@ -169,7 +169,7 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
               <table className="odds-table w-full border-collapse">
                 <thead>
                   <tr>
-                    <th scope="col" className="odds-prop">GAME</th>
+                    <th scope="col" className="odds-prop">Game</th>
                     <th scope="col" className="odds-ev" title="Best bettable price on the away side (moneyline, spread) or the over (total)">Best away / over</th>
                     <th scope="col" className="odds-ev" title="Best bettable price on the home side (moneyline, spread) or the under (total)">Best home / under</th>
                     <th scope="col" className="odds-ev" title="De-vigged fair probability from the reference books, away / over above home / under">Fair %</th>

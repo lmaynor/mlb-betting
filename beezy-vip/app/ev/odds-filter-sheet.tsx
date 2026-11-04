@@ -83,7 +83,7 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
               </PillGroup>
             </div>
             <div>
-              <div className="ui-heading mb-1.5 text-micro text-text-secondary">SORT</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">Sort</div>
               <Select id="mobile-ev-sort" value={sort} onChange={v => setSort(v as SortKey)} options={[{ v: 'ev', l: 'Best EV %' }, { v: 'time', l: 'Game time' }, { v: 'player', l: 'Player' }]} />
             </div>
           </>
@@ -293,7 +293,7 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
           </div>
 
           <div>
-            <div className="ui-heading mb-1.5 text-micro text-text-secondary">GAME</div>
+            <div className="ui-heading mb-1.5 text-micro text-text-secondary">Game</div>
             <select
               id="mobile-odds-game"
               value={game}

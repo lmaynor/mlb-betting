@@ -343,7 +343,7 @@ export function PicksTable({ bets, sort: initSort = 'score', dir: initDir = 'des
     { label: 'DATE', sortKey: 'date' },
     { label: 'Score', sortKey: 'score' },
     { label: 'System' },
-    { label: 'GAME' },
+    { label: 'Game' },
     { label: 'PICK' },
     { label: 'ODDS', sortKey: 'odds' },
     { label: 'EDGE', sortKey: 'edge' },

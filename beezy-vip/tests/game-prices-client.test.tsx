@@ -41,7 +41,7 @@ describe('GamePricesClient (the /ev/games PRICES view)', () => {
     expect(screen.queryByText('STALE')).toBeNull()
     const table = screen.getByRole('table')
     const heads = within(table).getAllByRole('columnheader').map(h => h.textContent)
-    expect(heads).toEqual(expect.arrayContaining(['GAME', 'Best away / over', 'Best home / under', 'Fair %', 'EV', 'DRAFTKIN', 'FANDUEL', 'BETMGM', 'CAESARS']))
+    expect(heads).toEqual(expect.arrayContaining(['Game', 'Best away / over', 'Best home / under', 'Fair %', 'EV', 'DRAFTKIN', 'FANDUEL', 'BETMGM', 'CAESARS']))
     expect(table.querySelectorAll('[data-matchup="BOS @ MIA"]').length).toBe(3)
     expect(table.querySelector('[data-matchup="TOR @ MTL"]')).not.toBeNull()
     expect(table.textContent).toMatch(/MIA -3\.5/)

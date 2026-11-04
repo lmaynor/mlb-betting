@@ -73,7 +73,7 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
           <div className="flex items-baseline gap-3 flex-wrap">
             <h1 className="text-[20px] font-bold text-text-primary m-0">{pillar.shortName} {system.name}</h1>
             <span className="ui-heading" style={{ fontSize: '10px', color, border: `1px solid ${color}66`, borderRadius: '6px', padding: '2px 8px' }}>
-              {system.market === 'game' ? 'GAME' : 'PROP'} / {system.gap ? 'Data gap' : tracked ? (pillar.markets.find(m => m.system === system.key)?.status ?? 'Paper').toUpperCase() : 'Unvalidated'}
+              {system.market === 'game' ? 'Game' : 'Prop'} / {system.gap ? 'Data gap' : tracked ? (pillar.markets.find(m => m.system === system.key)?.status ?? 'Paper').toUpperCase() : 'Unvalidated'}
             </span>
           </div>
           <Link className="text-[13px] text-link" href={`/picks/${sport}/systems`}>&larr; All {pillar.shortName} systems</Link>

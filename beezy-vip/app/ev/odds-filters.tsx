@@ -134,11 +134,11 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
               ))}
             </PillGroup>
           </Field>
-          <Field label="PROP" htmlFor="odds-stat">
+          <Field label="Prop" htmlFor="odds-stat">
             <Select id="odds-stat" value={stat} onChange={v => { setStat(v); setLimit(PAGE) }}
               options={[{ v: 'all', l: 'All props' }, ...statOptions.map(s => ({ v: s, l: STAT_LABEL[s] ?? s }))]} />
           </Field>
-          <Field label="GAME" htmlFor="odds-game">
+          <Field label="Game" htmlFor="odds-game">
             <Select id="odds-game" value={game} onChange={v => { setGame(v); setLimit(PAGE) }}
               options={[{ v: 'all', l: 'All games' }, ...games.map(g => ({ v: g.key, l: `${g.label} ${startLabel(g.start)}` }))]} />
           </Field>
@@ -200,7 +200,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
                 {MIN_EV.map(m => <Pill key={m.v} active={minEv === m.v} onClick={() => setMinEv(m.v)}>{m.label}</Pill>)}
               </PillGroup>
             </Field>
-            <Field label="SORT" htmlFor="odds-sort">
+            <Field label="Sort" htmlFor="odds-sort">
               <Select id="odds-sort" value={sort} onChange={v => setSort(v as SortKey)} options={[{ v: 'ev', l: 'Best EV %' }, { v: 'time', l: 'Game time' }, { v: 'player', l: 'Player' }]} />
             </Field>
           </>
@@ -240,7 +240,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
                 ))}
               </PillGroup>
             </Field>
-            <Field label="VIEW">
+            <Field label="View">
               <PillGroup>
                 <Pill active={outlierView === 'cards'} onClick={() => setOutlierView('cards')}>Visual Cards</Pill>
                 <Pill active={outlierView === 'table'} onClick={() => setOutlierView('table')}>Compact Table</Pill>
@@ -250,7 +250,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
         )}
         {mode === 'arb' && (
           <>
-            <Field label="SHOW">
+            <Field label="Show">
               <PillGroup>
                 <Pill active={arbView === 'live'} onClick={() => { setArbView('live'); setLimit(PAGE) }}>LIVE ARBS (&gt; 0%)</Pill>
                 <Pill active={arbView === 'near'} onClick={() => { setArbView('near'); setLimit(PAGE) }} title="Within 1.5% of break-even: bonus-bet conversion and near zero-hold line shopping">NEAR ARBS (&gt; -1.5%)</Pill>
@@ -279,12 +279,12 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
                 {MID_COST.map(c => <Pill key={c} active={midCost === c} onClick={() => { setMidCost(c); setLimit(PAGE) }} title="The most a miss may cost, as a share of the outlay">{`${c}%`}</Pill>)}
               </PillGroup>
             </Field>
-            <Field label="VALUE">
+            <Field label="Value">
               <PillGroup>
                 <Pill active={midPosEv} onClick={() => { setMidPosEv(v => !v); setLimit(PAGE) }} title="Only middles whose window chance, estimated from the reference books' fair price at each line, beats the break-even chance">+EV ONLY</Pill>
               </PillGroup>
             </Field>
-            <Field label="WINDOW">
+            <Field label="Window">
               <PillGroup>
                 {MID_GAP.map(g => <Pill key={g.v} active={midGap === g.v} onClick={() => { setMidGap(g.v); setLimit(PAGE) }} title="Narrowest gap between the two lines, in points">{g.label}</Pill>)}
               </PillGroup>
@@ -352,7 +352,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
                 ))}
               </PillGroup>
             </Field>
-            <Field label="BOOK" htmlFor="sgp-book">
+            <Field label="Book" htmlFor="sgp-book">
               <Select
                 id="sgp-book"
                 value={sgpBook}

@@ -70,7 +70,7 @@ describe('BestBoard: one row per game', () => {
     const later = TIGHT.map(r => ({ ...r, key: r.key.replace('FLA', 'MTL'), game_key: 'nhl:2026-11-02:TOR@MTL', away: 'TOR', home: 'MTL', commence: '2026-11-03T03:00:00Z' }))
     render(board([...later, ...TIGHT]))
     expect(screen.getAllByTestId('board-row').map(r => r.getAttribute('data-game'))).toEqual([GK, 'nhl:2026-11-02:TOR@MTL'])
-    expect(Array.from((screen.getByLabelText('SORT') as HTMLSelectElement).options).map(o => o.textContent)).toContain('Movement')
+    expect(Array.from((screen.getByLabelText('Sort') as HTMLSelectElement).options).map(o => o.textContent)).toContain('Movement')
   })
 })
 
