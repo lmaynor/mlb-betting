@@ -162,6 +162,7 @@ export async function loadSportBoard(
 function withFeedOutliersOnDay(feed: EvFeed, sport: ProjectionSport, date: string, today: string): EvFeed {
   const cut = (rows: EvBookOutlierRow[]) => onDay(rows, date, today)
   if (sport === 'nfl') return feed.nfl ? { ...feed, nfl: { ...feed.nfl, book_outliers: cut(feed.nfl.book_outliers ?? []) } } : feed
+  if (sport === 'soccer') return feed // no EV feed block for soccer (game markets only)
   const block = feed[sport]
   return block ? { ...feed, [sport]: { ...block, rows: cut(block.rows) } } : feed
 }

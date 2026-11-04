@@ -10,7 +10,7 @@
  */
 import { decimalOf, LADDER_SUSPECT_EV, LADDER_THIN_BELOW } from '@/lib/game-ladder'
 import type { GameBoardEntry } from '@/lib/game-board'
-import { sideLabels, type GameMarket, type GamePriceRow } from '@/lib/game-odds'
+import { sideLabels, type TwoWayMarket, type GamePriceRow } from '@/lib/game-odds'
 import { hasMovement, type MoveSummary } from '@/lib/line-move'
 import { americanToImpliedProb } from '@/lib/odds'
 import { isOffshore } from '@/lib/offshore'
@@ -71,15 +71,15 @@ export function shopSide(r: GamePriceRow, which: 'a' | 'b'): ShopSide {
   return { label, american: sp.american, book: sp.book, ev, others, suspect, actionable: ev != null && enough && robust && !big && ev >= EDGE_MIN }
 }
 
-export interface ShopMarket { market: GameMarket; row: GamePriceRow; a: ShopSide; b: ShopSide }
+export interface ShopMarket { market: TwoWayMarket; row: GamePriceRow; a: ShopSide; b: ShopSide }
 
 /** The main line of one market with both sides' best prices; null when the game has no such market. */
-export function shopMarket(g: GameBoardEntry, market: GameMarket): ShopMarket | null {
+export function shopMarket(g: GameBoardEntry, market: TwoWayMarket): ShopMarket | null {
   const row = g.main[market]
   return row ? { market, row, a: shopSide(row, 'a'), b: shopSide(row, 'b') } : null
 }
 
-export interface EdgeItem { game: GameBoardEntry; market: GameMarket; line: number | null; side: 'a' | 'b'; shop: ShopSide; alt: boolean; outlier: boolean }
+export interface EdgeItem { game: GameBoardEntry; market: TwoWayMarket; line: number | null; side: 'a' | 'b'; shop: ShopSide; alt: boolean; outlier: boolean }
 
 /** Every edge and outlier of every line of one game, biggest EV first. */
 export function gameEdges(g: GameBoardEntry): EdgeItem[] {
@@ -134,13 +134,13 @@ export function gameHeadline(g: GameBoardEntry): string {
 export interface AltRow { line: number | null; row: GamePriceRow; a: ShopSide; b: ShopSide; thin: boolean; main: boolean }
 
 /** Every line of a market with both sides' best prices, in ladder order (home side hardest cover first), main flagged. */
-export function altRows(g: GameBoardEntry, market: GameMarket): AltRow[] {
+export function altRows(g: GameBoardEntry, market: TwoWayMarket): AltRow[] {
   const main = g.main[market]
   return g.rows[market].map(r => ({ line: r.row.line, row: r, a: shopSide(r, 'a'), b: shopSide(r, 'b'), thin: (r.row.books ?? []).length < LADDER_THIN_BELOW, main: r === main }))
 }
 
 /** The one movement a game's card or row shows: the spread's (else the total's, else the moneyline's), and the side it is named from (home / over / home). */
-export function primaryMove(g: GameBoardEntry): { m: MoveSummary; market: GameMarket; side: 'a' | 'b' } | null {
+export function primaryMove(g: GameBoardEntry): { m: MoveSummary; market: TwoWayMarket; side: 'a' | 'b' } | null {
   for (const [market, side] of [['spread', 'b'], ['total', 'a'], ['ml', 'b']] as const) {
     const m = g.move[market]
     if (hasMovement(m)) return { m, market, side }

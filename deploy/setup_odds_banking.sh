@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
-# setup_odds_banking.sh -- provision the NHL + NBA ParlayAPI odds-banking Cloud Run Jobs + Schedulers.
+# setup_odds_banking.sh -- provision the NHL + NBA ParlayAPI odds-banking Cloud Run Jobs + Schedulers,
+# plus the soccer (EPL + UCL) GAME-LINES banking jobs (soccer vertical, 2026-11-03; game lines only, no props).
 #
 # WHY: ParlayAPI has no historical props, so every unbanked day is lost backtest/model-training data.
 # This banks raw payloads + best-book CSVs to gs://<bucket>/OddsAccum/{sport}/ (see nba/odds/accumulator.py).
+# The soccer game_lines snapshots are what ev.game_odds_board.run("soccer") and the soccer scorer read.
 #
 # CREDIT SAFETY (read before changing cadence): every run is metered by nba/odds/credit_ledger.py -- a per-sport
 # monthly budget with a LINEAR pace cap, a per-run cap, and a floor on the shared pool's x-requests-remaining.
 # Sized for the 100k credits/mo plan (applied, confirmed 2026-11). ALL budgets are defined once, in nba/config.py (the shared
-# pool also feeds the MLB snapshot job, the NFL sweep and historical pulls; NBA 35k + NHL 35k + NFL sweep 29k = 99k, 500 test budget, 500 reserve floor; MLB is paused in the offseason).
+# pool also feeds the MLB snapshot job, the NFL sweep and historical pulls; NBA 34.4k + NHL 34.4k + soccer 1.2k + NFL sweep 29k = 99k, 500 test budget, 500 reserve floor; MLB is paused in the offseason).
 # The defaults below are copies of those constants and tests/test_parlay_budget.py fails if they drift:
-#   NBA: 45,000 / mo (~1,500/day)     NHL: 40,000 / mo (~1,335/day)     Reserve Floor: 500 (PARLAY_RESERVE_FLOOR)
+#   NBA: 34,400 / mo     NHL: 34,400 / mo     Soccer EPL: 600 / mo     Soccer UCL: 600 / mo     Reserve Floor: 500 (PARLAY_RESERVE_FLOOR)
 #
 # Cadence (UTC) -- Captures overnight openers (~11pm ET / 03:30 & 05:00 UTC), morning adjustments, midday,
 # peak pre-lock, and closing lines before tipoff/puck drop:
@@ -41,8 +43,10 @@ SA_EMAIL="${SERVICE_NAME}-sa@${PROJECT_ID}.iam.gserviceaccount.com"
 SCHED_SA="scheduler-invoker@${PROJECT_ID}.iam.gserviceaccount.com"
 
 # Budgets / floor: env override, else the nba/config.py values (pinned equal by tests/test_parlay_budget.py).
-BUDGET_NBA="${ODDS_BANK_BUDGET_BASKETBALL_NBA:-35000}"
-BUDGET_NHL="${ODDS_BANK_BUDGET_ICEHOCKEY_NHL:-35000}"
+BUDGET_NBA="${ODDS_BANK_BUDGET_BASKETBALL_NBA:-34400}"
+BUDGET_NHL="${ODDS_BANK_BUDGET_ICEHOCKEY_NHL:-34400}"
+BUDGET_SOCCER_EPL="${ODDS_BANK_BUDGET_SOCCER_EPL:-600}"
+BUDGET_SOCCER_UCL="${ODDS_BANK_BUDGET_SOCCER_UEFA_CHAMPS_LEAGUE:-600}"
 RESERVE_FLOOR="${PARLAY_RESERVE_FLOOR:-500}"
 
 # tag|sport_key|kind|cron(UTC)
@@ -83,6 +87,21 @@ SCHEDULES=(
   "nba|basketball_nba|game_lines|35 21 * * *"
   "nba|basketball_nba|game_lines|35 22 * * *"
   "nba|basketball_nba|game_lines|0 1 * * *"
+  # --- Soccer Game Lines (6 checkpoints / day, same cadence as NBA/NHL lines; 3 credits per run) ---
+  # EPL kickoffs concentrate Sat/Sun afternoons UTC; UCL on Tue/Wed evenings UTC. A game_lines snapshot is
+  # whole-slate, so the shared cadence covers both without soccer-specific timing.
+  "epl|soccer_epl|game_lines|35 3 * * *"
+  "epl|soccer_epl|game_lines|35 12 * * *"
+  "epl|soccer_epl|game_lines|35 17 * * *"
+  "epl|soccer_epl|game_lines|35 21 * * *"
+  "epl|soccer_epl|game_lines|35 22 * * *"
+  "epl|soccer_epl|game_lines|0 1 * * *"
+  "ucl|soccer_uefa_champs_league|game_lines|35 3 * * *"
+  "ucl|soccer_uefa_champs_league|game_lines|35 12 * * *"
+  "ucl|soccer_uefa_champs_league|game_lines|35 17 * * *"
+  "ucl|soccer_uefa_champs_league|game_lines|35 21 * * *"
+  "ucl|soccer_uefa_champs_league|game_lines|35 22 * * *"
+  "ucl|soccer_uefa_champs_league|game_lines|0 1 * * *"
 )
 
 if [ "${PAUSE:-0}" = "1" ]; then
@@ -108,7 +127,7 @@ for row in "${SCHEDULES[@]}"; do
     ARGS="-m,nba.odds.accumulator,--sport,${SPORT},--kind,${KIND},--max-credits,600"
     FLAGS=(--image="$IMAGE" --region="$REGION" --service-account="$SA_EMAIL"
            --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest,PARLAY_API_KEY=parlay-api-key:latest"
-           --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION},ODDS_BANK_BUDGET_BASKETBALL_NBA=${BUDGET_NBA},ODDS_BANK_BUDGET_ICEHOCKEY_NHL=${BUDGET_NHL},PARLAY_RESERVE_FLOOR=${RESERVE_FLOOR}"
+           --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION},ODDS_BANK_BUDGET_BASKETBALL_NBA=${BUDGET_NBA},ODDS_BANK_BUDGET_ICEHOCKEY_NHL=${BUDGET_NHL},ODDS_BANK_BUDGET_SOCCER_EPL=${BUDGET_SOCCER_EPL},ODDS_BANK_BUDGET_SOCCER_UEFA_CHAMPS_LEAGUE=${BUDGET_SOCCER_UCL},PARLAY_RESERVE_FLOOR=${RESERVE_FLOOR}"
            --command="python" --args="$ARGS"
            --memory=1Gi --cpu=1 --task-timeout=900 --max-retries=0 --quiet)
     # max-retries=0: a retried props run would re-spend credits; the ledger records the first attempt either way.

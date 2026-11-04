@@ -6,7 +6,7 @@ import { BookLogo } from '@/components/ui/book-logo'
 import { LeagueFilter, LeagueNote, type LeagueValue } from '@/components/ui/league-filter'
 import { SportLogo } from '@/components/ui/sport-assets'
 import { BOARD_SORTS, buildGameBoard, sortBoard, sportsWithGames, type BoardSort, type GameBoardEntry } from '@/lib/game-board'
-import { ageText, GAME_MIN_REF, freshnessBin, gameOddsUnavailable, startLabel, type Freshness, type GameMarket, type GameOddsFeed } from '@/lib/game-odds'
+import { ageText, GAME_MIN_REF, freshnessBin, gameOddsUnavailable, startLabel, type Freshness, type TwoWayMarket, type GameOddsFeed } from '@/lib/game-odds'
 import { edgesNow, gameEdges, primaryMove, shopMarket, type EdgeItem, type ShopSide } from '@/lib/game-shop'
 import { moveForSide } from '@/lib/line-move'
 import { formatOdds } from '@/lib/odds'
@@ -36,7 +36,7 @@ function SideCell({ s }: { s: ShopSide }) {
   )
 }
 
-function MarketCell({ g, market }: { g: GameBoardEntry; market: GameMarket }) {
+function MarketCell({ g, market }: { g: GameBoardEntry; market: TwoWayMarket }) {
   const sm = shopMarket(g, market)
   if (!sm) return <span className="text-text-tertiary">--</span>
   return <span className="grid"><SideCell s={sm.a} /><SideCell s={sm.b} /></span>

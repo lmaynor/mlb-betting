@@ -147,6 +147,25 @@ export const SPORT_MODEL_SPECS: Record<Exclude<SportSlug, 'mlb'>, SportModelSpec
       'No edge claimable. Accuracy gains over a rolling mean are 0.5 - 2.7% of MAE, the kind of gap a book\'s own projection already contains. Minutes and availability are the main driver the model does not have.',
     sources: 'NBA props evaluation, 2026-10-14 (CRPS: 2025-26 season; Brier / ECE: proxy lines, PIT-recalibrated).',
   },
+  soccer: {
+    sport: 'soccer',
+    models: withBlend('soccer', [
+      { key: 'match_result', label: '1X2 Match Result', trained: false, distribution: 'Dixon-Coles bivariate Poisson (11x11 scoreline matrix)', validation: null, verdict: 'No trained model; unvalidated' },
+      { key: 'total_goals', label: 'Match Totals', trained: false, distribution: 'Dixon-Coles bivariate Poisson (11x11 scoreline matrix)', validation: null, verdict: 'No trained model; unvalidated' },
+      { key: 'btts', label: 'Both Teams To Score', trained: false, distribution: 'Dixon-Coles bivariate Poisson (11x11 scoreline matrix)', validation: null, verdict: 'No trained model; unvalidated' },
+      { key: 'double_chance', label: 'Double Chance', trained: false, distribution: 'Derived from the 1X2 probabilities (exact sums)', validation: null, verdict: 'No trained model; unvalidated' },
+      { key: 'draw_no_bet', label: 'Draw No Bet', trained: false, distribution: 'Derived from the 1X2 probabilities (two-way conditional)', validation: null, verdict: 'No trained model; unvalidated' },
+    ]),
+    features: [
+      'Attack / defense ratings fit on a composite of Understat match xG (70%) and goals (30%), time-decayed (110-day half-life)',
+      'ClubElo anchor prior and divergence sanity guard',
+      'Dixon-Coles low-score correlation (rho) fit on actual 0-0 / 1-0 / 0-1 / 1-1 results',
+      'Club identity resolved through the Reep Register (no fuzzy name matching)',
+    ],
+    marketVerdict:
+      'No edge shown and none claimed. The vertical ships unvalidated: the walk-forward backtest against football-data.co.uk Pinnacle closing lines (soccer/game/backtest.py) and live forward CLV set the promotion bar, and neither has cleared it.',
+    sources: 'Soccer vertical Phase 1 scope, 2026-11-03 (docs/DATA_LICENSES.md for the data sources).',
+  },
 }
 
 /**

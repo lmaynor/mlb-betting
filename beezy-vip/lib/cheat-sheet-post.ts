@@ -51,6 +51,7 @@ const EMOJI: Record<SportSlug, string> = {
   nfl: String.fromCodePoint(0x1f3c8),
   nhl: String.fromCodePoint(0x1f3d2),
   nba: String.fromCodePoint(0x1f3c0),
+  soccer: String.fromCodePoint(0x26bd),
 }
 
 /** Site stat label -> the short form bettors type. Anything not listed passes through unchanged. */

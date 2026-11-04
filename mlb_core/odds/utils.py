@@ -215,6 +215,67 @@ def kelly_stake(
     return round(min(pct, max_pct) * bankroll, 2)
 
 
+def _shin_fair_n(probs, z: float) -> list:
+    """Shin's fair probabilities for an n-outcome market at insider fraction z (no renormalization)."""
+    s = float(sum(probs))
+    return [(np.sqrt(z * z + 4.0 * (1.0 - z) * p * p / s) - z) / (2.0 * (1.0 - z)) for p in probs]
+
+
+def devig_three_way(p_home: float, p_draw: float, p_away: float, method: str = "power") -> tuple:
+    """Remove vig from a THREE-way market (soccer 1X2: home / draw / away). Returns (fair_home, fair_draw, fair_away)
+    summing to 1.0 within 1e-9.
+
+    Two-way devig cannot price a draw, so soccer needs its own: the overround must be allocated across three mutually
+    exclusive outcomes. Methods:
+      * "proportional": fair_i = p_i / S (S = sum of implied probs). Splits vig in proportion to price, which is known
+        to under-shade longshots (the favorite-longshot bias, same flaw as remove_vig in two-way markets).
+      * "power" (default): fair_i = p_i**k with k >= 1 solved so the fairs sum to 1; the exponent shrinks small
+        probabilities proportionally more, pushing more of the overround onto the draw / underdog legs.
+      * "shin": Shin (1993) insider-trading model generalized to three outcomes; solves for the insider fraction
+        z in [0, 0.4). Also shades longshots harder than proportional.
+
+    Inputs must be vig-inclusive implied probabilities in (0, 1) with sum >= 1.0 (a sum below 1 is an arbitrage /
+    data error, not a book); anything else raises ValueError -- callers must fail closed, never price a bad book.
+    """
+    probs = (float(p_home), float(p_draw), float(p_away))
+    if any(pd.isna(p) or p <= 0.0 or p >= 1.0 for p in probs):
+        raise ValueError(f"devig_three_way: implied probs must be in (0, 1), got {probs}")
+    s = sum(probs)
+    if s < 1.0 - 1e-12:
+        raise ValueError(f"devig_three_way: implied probs sum to {s:.6f} < 1.0 (not a valid book)")
+    if method not in ("proportional", "power", "shin"):
+        raise ValueError(f"devig_three_way: unknown method {method!r}")
+    if s <= 1.0 + 1e-12 or method == "proportional":
+        return tuple(p / s for p in probs)
+    if method == "power":
+        # sum(p_i**k) decreases in k for p_i in (0, 1); at k=1 it is s > 1, so the root has k > 1. 20-step bisection
+        # on [0.5, 5.0] per the soccer spec; a final renormalization pins the sum to 1.0 exactly.
+        lo, hi = 0.5, 5.0
+        for _ in range(20):
+            mid = (lo + hi) / 2.0
+            if sum(p ** mid for p in probs) > 1.0:
+                lo = mid
+            else:
+                hi = mid
+        k = (lo + hi) / 2.0
+        raw = [p ** k for p in probs]
+    else:  # shin
+        lo, hi = 0.0, 0.4
+        if sum(_shin_fair_n(probs, hi)) > 1.0:
+            return tuple(p / s for p in probs)      # overround too large for z < 0.4: proportional fallback
+        for _ in range(60):
+            mid = (lo + hi) / 2.0
+            if sum(_shin_fair_n(probs, mid)) > 1.0:
+                lo = mid
+            else:
+                hi = mid
+        raw = _shin_fair_n(probs, (lo + hi) / 2.0)
+    tot = float(sum(raw))
+    if tot <= 0 or pd.isna(tot):
+        return tuple(p / s for p in probs)
+    return tuple(float(v / tot) for v in raw)
+
+
 def kelly_pct(model_prob: float, odds, fraction: float = 0.25) -> float:
     """Returns Kelly as fraction of bankroll. Use for signal gating.
 

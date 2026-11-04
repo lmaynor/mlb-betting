@@ -3,16 +3,16 @@
 import { useMemo, useState } from 'react'
 import { leanOf, modelSideProb, type GameBoardEntry } from '@/lib/game-board'
 import { buildLadderRung, mainLineOf, orderRungs, selectRung, windowRungs, type LadderSide } from '@/lib/game-ladder'
-import { signedLine, type GameMarket } from '@/lib/game-odds'
+import { signedLine, type TwoWayMarket } from '@/lib/game-odds'
 import { Seg } from './game-detail'
 import { GREEN, SKY } from './game-prices-parts'
 import { LadderChart, type ChartRung } from './ladder-chart'
 
-const MARKET_NAME: Record<GameMarket, string> = { ml: 'Moneyline', spread: 'Spread', total: 'Total' }
+const MARKET_NAME: Record<TwoWayMarket, string> = { ml: 'Moneyline', spread: 'Spread', total: 'Total' }
 const pct = (p: number) => `${(p * 100).toFixed(1)}%`
 const pts = (x: number) => `${x >= 0 ? '+' : ''}${(x * 100).toFixed(1)} pts`
 
-interface ModelRow { market: GameMarket; label: string; side: LadderSide; line: number | null; pModel: number; pMarket: number; gap: number }
+interface ModelRow { market: TwoWayMarket; label: string; side: LadderSide; line: number | null; pModel: number; pMarket: number; gap: number }
 
 /** For each market's main line, the side the model likes most relative to the market (the larger gap), with both probabilities. */
 function modelRows(g: GameBoardEntry): ModelRow[] {

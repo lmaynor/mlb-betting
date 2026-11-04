@@ -1000,13 +1000,14 @@ _GAME_PROJ_CACHE_TTL = 300  # 5 minutes
 
 
 def get_game_projections(sport: str, day: str | None = None, market: str | None = None, limit: int = 300) -> dict:
-    """Quantitative game-line projections (Moneyline, Spread/Puck Line, Total) for NBA / NHL.
+    """Quantitative game-line projections (Moneyline, Spread/Puck Line, Total) for NBA / NHL, and the soccer
+    Dixon-Coles match markets (1X2, totals, BTTS, double chance) for soccer.
     Reads precomputed payload from EVSweep/{sport}_games/predictions_latest.json."""
     import json as _json
     import time as _time
     sport = (sport or "").lower()
-    if sport not in ("nba", "nhl"):
-        raise ValueError(f"unknown game projections sport {sport!r}; expected 'nba' or 'nhl'")
+    if sport not in ("nba", "nhl", "soccer"):
+        raise ValueError(f"unknown game projections sport {sport!r}; expected 'nba', 'nhl' or 'soccer'")
     limit = max(1, min(int(limit), 500))
     day = _proj_day(day, "day") if day else None
     market_filter = str(market).lower().strip() if market else None
@@ -1083,7 +1084,7 @@ def get_game_projections(sport: str, day: str | None = None, market: str | None 
         "rows": rows[:limit],
         "priced_games": priced_games,
         "games": games,
-        "markets": ["spread", "total", "ml"],
+        "markets": payload.get("markets") or ["spread", "total", "ml"],
     }
 
 

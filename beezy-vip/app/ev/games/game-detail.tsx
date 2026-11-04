@@ -5,7 +5,7 @@ import { SportLogo } from '@/components/ui/sport-assets'
 import { modelSideProb, type GameBoardEntry } from '@/lib/game-board'
 import { buildLadderRung, mainLineOf, orderRungs, rungVerdict, selectRung, windowRungs, type LadderSide } from '@/lib/game-ladder'
 import { hasMovement, moveForSide } from '@/lib/line-move'
-import { GAME_PRICES_LABEL, gameArbHedgeText, signedLine, startLabel, type GameMarket } from '@/lib/game-odds'
+import { GAME_PRICES_LABEL, gameArbHedgeText, signedLine, startLabel, type TwoWayMarket } from '@/lib/game-odds'
 import { probToAmerican, formatOdds } from '@/lib/odds'
 import { bookDisplay } from '@/lib/tokens'
 import { BestVsRest } from './best-vs-rest'
@@ -16,7 +16,7 @@ import { GREEN, SKY, signedPct, usd } from './game-prices-parts'
 
 type LogoSport = Parameters<typeof SportLogo>[0]['sport']
 
-const MARKET_TABS: { key: GameMarket; label: string }[] = [
+const MARKET_TABS: { key: TwoWayMarket; label: string }[] = [
   { key: 'ml', label: 'Moneyline' },
   { key: 'spread', label: 'Spread' },
   { key: 'total', label: 'Total' },
@@ -42,7 +42,7 @@ const fairOdds = (p: number | null) => (p == null || p <= 0 || p >= 1 ? '--' : f
 const pctOf = (p: number | null) => (p == null ? '--' : `${(p * 100).toFixed(1)}%`)
 
 /** The spread / total / ML label of one rung for the active side. */
-function rungLabel(market: GameMarket, line: number | null, side: LadderSide, away: string, home: string): string {
+function rungLabel(market: TwoWayMarket, line: number | null, side: LadderSide, away: string, home: string): string {
   if (market === 'ml') return `${side === 'a' ? away : home} ML`
   if (line == null) return market === 'spread' ? 'Spread' : 'Total'
   if (market === 'spread') return side === 'b' ? `${home} ${signedLine(line)}` : `${away} ${signedLine(-line)}`
@@ -56,10 +56,10 @@ function rungLabel(market: GameMarket, line: number | null, side: LadderSide, aw
  */
 export function GameDetail({ game, bettable, ageLabel, embedded = false }: { game: GameBoardEntry; bettable: ReadonlySet<string> | null; ageLabel: string; /** inside the card, which already has the matchup header and the border */ embedded?: boolean }) {
   const markets = MARKET_TABS.filter(m => game.rows[m.key].length > 0)
-  const [market, setMarket] = useState<GameMarket>(() => (markets.find(m => m.key === 'spread') ?? markets[0])?.key ?? 'spread')
-  const [sideByMarket, setSideByMarket] = useState<Record<GameMarket, LadderSide>>({ ml: 'b', spread: 'b', total: 'a' })
+  const [market, setMarket] = useState<TwoWayMarket>(() => (markets.find(m => m.key === 'spread') ?? markets[0])?.key ?? 'spread')
+  const [sideByMarket, setSideByMarket] = useState<Record<TwoWayMarket, LadderSide>>({ ml: 'b', spread: 'b', total: 'a' })
   const [wide, setWide] = useState(false)
-  const [picked, setPicked] = useState<Partial<Record<GameMarket, number | null>>>({})
+  const [picked, setPicked] = useState<Partial<Record<TwoWayMarket, number | null>>>({})
 
   const side = sideByMarket[market]
   const rows = game.rows[market]

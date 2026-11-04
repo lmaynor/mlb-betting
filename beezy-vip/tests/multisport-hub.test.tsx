@@ -236,7 +236,7 @@ describe('pricing', () => {
   it('the single-sport league picker changes the plan copy and exposes four leagues', () => {
     render(<PricingSection />)
     const group = screen.getByRole('radiogroup', { name: 'League' })
-    expect(within(group).getAllByRole('radio').map(b => b.textContent)).toEqual(['NFL', 'NBA', 'NHL', 'MLB'])
+    expect(within(group).getAllByRole('radio').map(b => b.textContent)).toEqual(['NFL', 'NBA', 'NHL', 'MLB', 'SOCCER'])
     expect(screen.getByText(/#nfl-card/)).toBeInTheDocument()
     fireEvent.click(within(group).getByRole('radio', { name: 'NHL' }))
     expect(screen.getByText(/#nhl-card/)).toBeInTheDocument()

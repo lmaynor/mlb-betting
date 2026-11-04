@@ -8,7 +8,7 @@ import { useFocusTrap } from '@/components/ui/use-focus-trap'
 import { modelSideProb, type GameBoardEntry } from '@/lib/game-board'
 import { buildLadderRung } from '@/lib/game-ladder'
 import { altRows, gameHeadline, type AltRow, type ShopSide } from '@/lib/game-shop'
-import { signedLine, startLabel, type GameMarket } from '@/lib/game-odds'
+import { signedLine, startLabel, type TwoWayMarket } from '@/lib/game-odds'
 import { hasMovement, moveForSide } from '@/lib/line-move'
 import { formatOdds } from '@/lib/odds'
 import { bookDisplay } from '@/lib/tokens'
@@ -19,10 +19,10 @@ import { ModelPane } from './model-pane'
 import { Sparkline } from './sparkline'
 
 /** 'analysis' is the Model tab; the id stays so old ?view=analysis links keep landing on it. */
-export type PopupPane = GameMarket | 'move' | 'analysis'
+export type PopupPane = TwoWayMarket | 'move' | 'analysis'
 type LogoSport = Parameters<typeof SportLogo>[0]['sport']
 
-const MARKET_NAME: Record<GameMarket, string> = { ml: 'Moneyline', spread: 'Spread', total: 'Total' }
+const MARKET_NAME: Record<TwoWayMarket, string> = { ml: 'Moneyline', spread: 'Spread', total: 'Total' }
 const ALT_WINDOW = 9
 
 /** One side's best price as a short line: the book, the price, and the EV chip only when it is a real edge (amber "check" when too big to trust). */
@@ -70,7 +70,7 @@ function SideButtons({ r }: { r: AltRow }) {
  * One market the way Pikkit lays out a spread or total: a line scroller to pick the line, the two big best-price buttons for it, and
  * every other line as a pair of tiles underneath (tap a tile to jump to that line). A moneyline has the buttons only.
  */
-function MarketPane({ g, market, initialLine, bettable }: { g: GameBoardEntry; market: GameMarket; initialLine?: number | null; bettable: ReadonlySet<string> | null }) {
+function MarketPane({ g, market, initialLine, bettable }: { g: GameBoardEntry; market: TwoWayMarket; initialLine?: number | null; bettable: ReadonlySet<string> | null }) {
   const rows = altRows(g, market)
   const main = rows.find(r => r.main) ?? rows[0] ?? null
   const [line, setLine] = useState<number | null>(initialLine !== undefined && rows.some(r => r.line === initialLine) ? initialLine : (main?.line ?? null))

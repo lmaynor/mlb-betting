@@ -12,7 +12,7 @@ export function CheckoutButton({
 }: {
   tier:      'single_sport' | 'pro_monthly' | 'pro_annual' | 'starter' | 'pro' | 'season'
   /** required for single_sport: the one league the pass covers */
-  sport?:    'mlb' | 'nfl' | 'nba' | 'nhl'
+  sport?:    'mlb' | 'nfl' | 'nba' | 'nhl' | 'soccer'
   label:     string
   featured?: boolean
 }) {

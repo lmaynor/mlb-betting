@@ -28,8 +28,10 @@
 import teams from './sport-teams.json'
 
 export type AssetSport = 'nhl' | 'nba'
-/** Headshots also cover MLB and NFL (teams/logos do not: MLB keeps its own flat /logos/{abbr}.png assets, NFL has none). */
-export type HeadshotSport = AssetSport | 'mlb' | 'nfl'
+/** Headshots also cover MLB and NFL (teams/logos do not: MLB keeps its own flat /logos/{abbr}.png assets, NFL has none).
+ *  Soccer is in the unions so generic surfaces typecheck, but it has NO asset source yet: the builders return null
+ *  for it (see HEADSHOT_SPORTS, which deliberately excludes it). */
+export type HeadshotSport = AssetSport | 'mlb' | 'nfl' | 'soccer'
 
 /** Sports with a headshot source. A sport added to lib/sports.ts gets headshots by being added here. */
 export const HEADSHOT_SPORTS: readonly string[] = ['mlb', 'nfl', 'nhl', 'nba']
@@ -87,6 +89,7 @@ const NFL_TOKEN = /^[a-z0-9]{10,40}$/i
 
 /** Headshot URL from a league player id (NHL playerId / ESPN athlete id / NFL image token), or null for a missing/invalid id. */
 export function headshotUrlById(sport: HeadshotSport, id: number | string | null | undefined): string | null {
+  if (sport === 'soccer') return null
   if (sport === 'nfl') return typeof id === 'string' && NFL_TOKEN.test(id) ? `https://static.www.nfl.com/image/upload/f_png,q_auto,w_200/league/${id}` : null
   const n = typeof id === 'string' ? Number(id) : id
   if (n == null || !Number.isInteger(n) || n <= 0) return null
@@ -103,7 +106,7 @@ export function playerSlug(name: string | null | undefined): string {
 }
 
 // ---- team logos for the games strip and tables, every sport ------------------------------------------------------
-export type LogoSport = AssetSport | 'mlb' | 'nfl'
+export type LogoSport = AssetSport | 'mlb' | 'nfl' | 'soccer'
 
 /** ESPN's NFL logo slugs differ from the ev/ team codes in a few places (JAC -> jax, WAS -> wsh); everything else is the lowercased code. */
 const ESPN_NFL_SLUG: Record<string, string> = { JAC: 'jax', JAX: 'jax', WAS: 'wsh', WSH: 'wsh', LA: 'lar' }
@@ -117,6 +120,7 @@ const MLB_LOGOS = new Set(('ari atl bal bos chc cin cle col cws det hou kc laa l
 export function anyTeamLogoUrl(sport: LogoSport, team: string | null | undefined): string | null {
   const code = (team ?? '').trim().toUpperCase()
   if (!code) return null
+  if (sport === 'soccer') return null // no club-crest source wired yet; never fall through to another sport's table
   if (sport === 'nhl' || sport === 'nba') return teamLogoUrl(sport, code)
   if (sport === 'mlb') {
     const slug = code === 'WAS' ? 'wsh' : code === 'CHW' ? 'cws' : code === 'ATH' ? 'oak' : code.toLowerCase()

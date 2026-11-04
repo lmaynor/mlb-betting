@@ -193,9 +193,9 @@ describe('beezyscore / scoreTier', () => {
 })
 
 describe('sport registry and tokens', () => {
-  test('SPORT_PILLARS has the four pillars and none is a placeholder', () => {
-    expect(Object.keys(SPORT_PILLARS).sort()).toEqual(['mlb', 'nba', 'nfl', 'nhl'])
-    expect(SPORT_LIST.map(p => p.status)).toEqual(['live', 'live', 'live', 'live'])
+  test('SPORT_PILLARS has the five pillars and none is a placeholder', () => {
+    expect(Object.keys(SPORT_PILLARS).sort()).toEqual(['mlb', 'nba', 'nfl', 'nhl', 'soccer'])
+    expect(SPORT_LIST.map(p => p.status)).toEqual(['live', 'live', 'live', 'live', 'live'])
     for (const p of SPORT_LIST) {
       expect(['data_only', 'planned']).not.toContain(p.status)
       for (const m of p.markets) expect(m.status).not.toMatch(/soon|preview|planned/i)
@@ -204,6 +204,7 @@ describe('sport registry and tokens', () => {
     expect(SPORT_PILLARS.nfl.markets.map(m => m.key)).toEqual(['pass_yds', 'pass_tds', 'pass_completions', 'pass_attempts', 'interceptions', 'rush_yds', 'rush_attempts', 'rec_yds', 'receptions', 'anytime_td'])
     expect(SPORT_PILLARS.nhl.markets.map(m => m.key)).toEqual(['sog', 'goals', 'assists', 'points', 'pp_points', 'saves', 'blocked_shots'])
     expect(SPORT_PILLARS.nba.markets.map(m => m.key)).toEqual(['points', 'rebounds', 'assists', 'threes', 'pra', 'pr', 'pa', 'ra', 'steals', 'blocks'])
+    expect(SPORT_PILLARS.soccer.markets.map(m => m.key)).toEqual(['1x2', 'total_goals', 'btts', 'double_chance', 'draw_no_bet'])
   })
   test('BOOK_META marks exchanges and bookDisplay falls back for unknown books', () => {
     expect(BOOK_META.kalshi.isExchange).toBe(true)

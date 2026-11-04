@@ -10,9 +10,9 @@
 import { orderRungs, mainLineOf, type LadderSide } from '@/lib/game-ladder'
 import type { GameMetadata, GameModelLadder, GamePricedGame, GameProjectionsFeed } from '@/lib/game-lines'
 import { moveScore, summarizeMove, type MoveSummary } from '@/lib/line-move'
-import { buildGamePriceRows, feedRows, sideLabels, type GameMarket, type GameOddsFeed, type GamePriceOptions, type GamePriceRow } from '@/lib/game-odds'
+import { buildGamePriceRows, feedRows, sideLabels, type TwoWayMarket, type GameOddsFeed, type GamePriceOptions, type GamePriceRow } from '@/lib/game-odds'
 
-const MARKETS: GameMarket[] = ['ml', 'spread', 'total']
+const MARKETS: TwoWayMarket[] = ['ml', 'spread', 'total']
 
 /** Standard normal CDF (Abramowitz-Stegun 26.2.17, |error| < 7.5e-8). */
 export function normalCdf(x: number): number {
@@ -45,8 +45,8 @@ export interface GameBoardEntry {
   away: string
   home: string
   start: string
-  rows: Record<GameMarket, GamePriceRow[]>
-  main: Record<GameMarket, GamePriceRow | null>
+  rows: Record<TwoWayMarket, GamePriceRow[]>
+  main: Record<TwoWayMarket, GamePriceRow | null>
   /** most books on any main line */
   nBooks: number
   /** best EV (either side, MAIN lines only: an alt rung's EV never headlines a card) */
@@ -56,7 +56,7 @@ export interface GameBoardEntry {
   modelGap: number | null
   model: GameModel | null
   /** movement since the board first saw the game, per market (null = fewer than two snapshots) */
-  move: Record<GameMarket, MoveSummary | null>
+  move: Record<TwoWayMarket, MoveSummary | null>
   /** the price feed carries history at all (an older backend does not, and then nothing about movement is shown) */
   hasHistory: boolean
   moveScore: number
@@ -73,7 +73,7 @@ function pushNorm(pa: number, pb: number): [number, number] | null {
  * The model's probability for one side of one rung, push-adjusted so it is comparable to a de-vigged two-way price.
  * `side` follows the price rows: 'a' = away / over, 'b' = home / under. Null when the model has nothing for the rung.
  */
-export function modelSideProb(model: GameModel | null, market: GameMarket, line: number | null, side: LadderSide): number | null {
+export function modelSideProb(model: GameModel | null, market: TwoWayMarket, line: number | null, side: LadderSide): number | null {
   if (!model) return null
   const L = model.ladder
   if (market === 'ml') {
@@ -161,7 +161,7 @@ export function buildGameBoard(feeds: BoardFeeds, opts: GamePriceOptions): GameB
     const model = buildGameModel(sport, first.away, first.home, pg, meta, typeof proj?.engine === 'string' ? proj.engine : null)
 
     const rowsBy = { ml: [] as GamePriceRow[], spread: [] as GamePriceRow[], total: [] as GamePriceRow[] }
-    for (const r of list) rowsBy[r.row.market].push(r)
+    for (const r of list) if (r.row.market !== 'btts') rowsBy[r.row.market].push(r)
     const main = { ml: null as GamePriceRow | null, spread: null as GamePriceRow | null, total: null as GamePriceRow | null }
     for (const m of MARKETS) {
       rowsBy[m] = orderRungs(rowsBy[m].map(r => ({ line: r.row.line, r })), m, 'b').map(x => x.r)
@@ -173,6 +173,7 @@ export function buildGameBoard(feeds: BoardFeeds, opts: GamePriceOptions): GameB
     const evs = mains.map(r => r.bestEv).filter((x): x is number => x != null)
     let gap: number | null = null
     for (const r of mains) {
+      if (r.row.market === 'btts') continue
       for (const side of ['a', 'b'] as const) {
         const pm = modelSideProb(model, r.row.market, r.row.line, side)
         const pf = (side === 'a' ? r.a : r.b).pFair
@@ -231,7 +232,7 @@ export function restrictProjToOdds(proj: GameProjectionsFeed | null, odds: GameO
 }
 
 export interface GameLean {
-  market: GameMarket
+  market: TwoWayMarket
   side: LadderSide
   /** 'FLA -1.5', 'O 6.5', 'DET ML' */
   label: string

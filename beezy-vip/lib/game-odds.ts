@@ -16,10 +16,12 @@ import { bookDisplay, canonBook } from '@/lib/tokens'
 import type { MoveSeries } from '@/lib/line-move'
 import { buildScreenRows, computeRowArb, type ArbResult, type BoardRow, type DevigMethod } from '@/lib/odds-screen'
 
-export type GameMarket = 'ml' | 'spread' | 'total'
+export type GameMarket = 'ml' | 'spread' | 'total' | 'btts'
+/** The two-way markets the NBA / NHL board, popup and model pane run on; BTTS and the 1X2 draw leg are soccer-only (SoccerGamesClient). */
+export type TwoWayMarket = Exclude<GameMarket, 'btts'>
 export type GameOddsStatus = 'live' | 'stale' | 'awaiting_lines' | 'unavailable'
 
-export interface GameOddsBook { book: string; a: number | null; b: number | null }
+export interface GameOddsBook { book: string; a: number | null; b: number | null; /** soccer 1X2 only: the draw price (the third leg); absent / null on two-way rows */ draw?: number | null }
 export interface GameOddsRow {
   key: string
   sport: string
@@ -52,8 +54,8 @@ export interface GameOddsFeed {
   locked?: number
 }
 
-export const GAME_ODDS_SPORTS = ['nba', 'nhl'] as const
-export const GAME_ODDS_MARKETS = ['ml', 'spread', 'total'] as const
+export const GAME_ODDS_SPORTS = ['nba', 'nhl', 'soccer'] as const
+export const GAME_ODDS_MARKETS = ['ml', 'spread', 'total', 'btts'] as const
 export const GAME_ODDS_MAX_LIMIT = 5000
 /** Fewest reference books behind a fair value (the Odds Terminal's MIN_REF): below it a row shows prices only. */
 export const GAME_MIN_REF = 3
@@ -73,7 +75,7 @@ function validDay(day: string): boolean {
 /** Whitelist for the /api/games/odds proxy: nothing but known, well-formed values is forwarded upstream. */
 export function parseGameOddsQuery(sp: URLSearchParams): { ok: true; query: GameOddsQuery } | { ok: false; error: string } {
   const sport = (sp.get('sport') ?? '').toLowerCase()
-  if (!(GAME_ODDS_SPORTS as readonly string[]).includes(sport)) return { ok: false, error: 'sport must be one of nba, nhl' }
+  if (!(GAME_ODDS_SPORTS as readonly string[]).includes(sport)) return { ok: false, error: 'sport must be one of nba, nhl, soccer' }
   const query: GameOddsQuery = { sport: sport as GameOddsQuery['sport'] }
   const day = sp.get('day')
   if (day != null && day !== '') {
@@ -136,11 +138,12 @@ export function signedLine(n: number): string {
   return n > 0 ? `+${n}` : String(n)
 }
 
-export const MARKET_LABEL: Record<GameMarket, string> = { ml: 'Moneyline', spread: 'Spread', total: 'Total' }
+export const MARKET_LABEL: Record<GameMarket, string> = { ml: 'Moneyline', spread: 'Spread', total: 'Total', btts: 'Both teams to score' }
 
 /** The line as shown beside the market: moneyline 'ML', spread the HOME line ('MIA -3.5'), total 'O/U 224.5'. */
 export function lineLabel(row: Pick<GameOddsRow, 'market' | 'line' | 'home'>): string {
   if (row.market === 'ml') return 'ML'
+  if (row.market === 'btts') return 'BTTS'
   if (row.line == null) return row.market === 'spread' ? 'Spread' : 'Total'
   return row.market === 'spread' ? `${row.home} ${signedLine(row.line)}` : `O/U ${row.line}`
 }
@@ -148,6 +151,7 @@ export function lineLabel(row: Pick<GameOddsRow, 'market' | 'line' | 'home'>): s
 /** The label of each side: 'BOS ML' / 'MIA ML'; 'BOS +3.5' / 'MIA -3.5' (away gets the opposite of the home line); 'O 224.5' / 'U 224.5'. */
 export function sideLabels(row: Pick<GameOddsRow, 'market' | 'line' | 'away' | 'home'>): { a: string; b: string } {
   if (row.market === 'ml') return { a: `${row.away} ML`, b: `${row.home} ML` }
+  if (row.market === 'btts') return { a: 'Yes', b: 'No' }
   if (row.market === 'spread') {
     return row.line == null ? { a: row.away, b: row.home } : { a: `${row.away} ${signedLine(-row.line)}`, b: `${row.home} ${signedLine(row.line)}` }
   }
