@@ -221,11 +221,15 @@ def run_soccer_predictions(now: datetime | None = None, write: bool = False, fet
         log.warning("soccer run_daily: ClubElo pull failed; fitting without the Elo prior")
     # Domestic Understat pulls: the active domestic leagues' own fits AND the cross-European pool behind UCL.
     domestic: dict[str, list[dict]] = {}
+    understat_down: list[str] = []
     for league in DOMESTIC_UNDERSTAT_LEAGUES:
         matches: list[dict] = []
         for yr in (season - 1, season):
             try:
                 matches.extend(ingest.fetch_understat_matches(league, yr, fetch=fetch))
+            except ingest.UnderstatUnavailable as exc:
+                understat_down.append(str(exc))
+                log.warning("soccer run_daily: understat unavailable for %s %s: %s", league, yr, exc)
             except Exception:  # noqa: BLE001 -- one bad pull must not kill the other leagues or the pool
                 log.exception("soccer run_daily: understat pull failed for %s %s", league, yr)
         domestic[league] = matches
@@ -262,6 +266,10 @@ def run_soccer_predictions(now: datetime | None = None, write: bool = False, fet
         _add_fixture(fx)
     payload = build_predictions(fixtures, ratings_by_league, elo=elo or None,
                                 market_probs=market_probs, now=now)
+    if not payload["priced_games"] and not ratings_by_league and understat_down:
+        # No ratings could be fitted because Understat serves no match data: say so, not "awaiting_fixtures" (the fixtures exist).
+        payload["status"] = "awaiting_data"
+        payload["reason"] = f"Understat is not serving match data ({understat_down[0]}); no team ratings can be fitted"
     if write:
         try:
             from mlb_core import storage

@@ -634,3 +634,33 @@ def test_reep_register_resolves_parlayapi_live_spellings_and_skips_corners_event
         assert resolve_club(name, provider="parlayapi") == code, name
     assert resolve_club("Arsenal (Corners)", provider="parlayapi") is None
     assert resolve_club("Totally Unknown FC", provider="parlayapi") is None      # still fail closed
+
+
+def test_understat_maintenance_page_is_detected_not_cached_and_falls_back_to_the_last_good_copy(monkeypatch):
+    """2026-11-04: Understat served a 'We will come back soon' page for every league page; the loader cached it over the last good copy
+    and the scorer silently reported 'awaiting_fixtures'."""
+    import pytest
+    from soccer.data import ingest
+    maintenance = "<html><body>We will come back soon</body></html>"
+    puts: dict = {}
+    monkeypatch.setattr(ingest, "_cache_put", lambda key, text: puts.__setitem__(key, text))
+    monkeypatch.setattr(ingest, "_cache_get", lambda key: None)
+    with pytest.raises(ingest.UnderstatUnavailable, match="come back soon"):
+        ingest.fetch_understat_matches("epl", 2025, fetch=lambda url: maintenance)
+    assert puts == {}                                                       # the junk page is never cached
+    monkeypatch.setattr(ingest, "_cache_get", lambda key: _UNDERSTAT_HTML)  # a good cached copy exists -> served, with a warning
+    assert ingest.fetch_understat_matches("epl", 2025, fetch=lambda url: maintenance)
+    ingest.fetch_understat_matches("epl", 2025, fetch=lambda url: _UNDERSTAT_HTML)
+    assert list(puts) == ["Soccer/understat/epl_2025.html"]                 # a valid page IS cached
+
+
+def test_run_soccer_predictions_says_awaiting_data_when_understat_is_down(monkeypatch):
+    from datetime import datetime, timezone
+    from soccer.data import ingest
+    from soccer.game import run_daily
+    monkeypatch.setattr(ingest, "_cache_get", lambda key: None)                 # no last-good copy: Understat is the only source
+    monkeypatch.setattr(run_daily, "_refresh_board", lambda now, write: None)
+    monkeypatch.setattr(run_daily, "_banked_fixtures", lambda now: [])
+    p = run_daily.run_soccer_predictions(now=datetime(2026, 11, 4, 12, tzinfo=timezone.utc), write=False,
+                                         fetch=lambda url: "<html>We will come back soon</html>")
+    assert p["status"] == "awaiting_data" and "Understat is not serving match data" in p["reason"] and p["count"] == 0
