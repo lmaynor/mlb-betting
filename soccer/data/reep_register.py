@@ -21,6 +21,7 @@ import csv
 import io
 import logging
 import os
+import re
 
 log = logging.getLogger("soccer.reep_register")
 
@@ -83,12 +84,66 @@ _SEED: list[tuple[str, str, tuple[str, ...], dict[str, str]]] = [
     ("USG", "Union Saint-Gilloise", ("ucl",), {"parlayapi": "Union Saint-Gilloise", "understat": "Union Saint-Gilloise", "football_data": "Union SG", "clubelo": "Union SG", "bestbook": "Union Saint-Gilloise", "kalshi": "Union Saint-Gilloise"}),
     ("PAF", "Pafos", ("ucl",), {"parlayapi": "Pafos FC", "understat": "Pafos", "football_data": "Pafos", "clubelo": "Pafos", "bestbook": "Pafos FC", "kalshi": "Pafos FC"}),
     ("KAI", "Kairat Almaty", ("ucl",), {"parlayapi": "Kairat Almaty", "understat": "Kairat", "football_data": "Kairat Almaty", "clubelo": "Kairat", "bestbook": "Kairat Almaty", "kalshi": "Kairat Almaty"}),
+    # ---- clubs ParlayAPI listed 2026-11-04 that the seed lacked (parlayapi spelling only: ratings for a club with no other provider
+    #      column fail closed in the pricer; the odds board needs only the identity) ----
+    ("AEK", "AEK Athens", ('ucl',), {"parlayapi": "AEK Athens"}),
+    ("COV", "Coventry City", ('epl',), {"parlayapi": "Coventry City"}),
+    ("HUL", "Hull City", ('epl',), {"parlayapi": "Hull City"}),
+    ("IPS", "Ipswich Town", ('epl',), {"parlayapi": "Ipswich Town"}),
+    ("COM", "Como", ('ucl',), {"parlayapi": "Como"}),
+    ("LNS", "Lens", ('ucl',), {"parlayapi": "Lens"}),
+    ("RBL", "RB Leipzig", ('ucl', 'bundesliga'), {"parlayapi": "RB Leipzig"}),
+    ("BET", "Real Betis", ('ucl', 'laliga'), {"parlayapi": "Real Betis"}),
+    ("SAB", "Sabah", ('ucl',), {"parlayapi": "Sabah"}),
+    ("VIK", "Viking", ('ucl',), {"parlayapi": "Viking"}),
+    ("FEN", "Fenerbahce", ('ucl',), {"parlayapi": "Fenerbahce"}),
 ]
 
 CLUBS: dict[str, dict] = {}
 for _code, _name, _leagues, _providers in _SEED:
     CLUBS[_code] = {"code": _code, "name": _name, "leagues": _leagues, "providers": dict(_providers)}
 
+
+# ParlayAPI's live spellings ("Arsenal FC", "AFC Bournemouth"...), observed 2026-11-04. EXACT extra spellings only: nothing here fuzzy-matches.
+_PARLAY_ALIASES: dict[str, tuple[str, ...]] = {
+    "BOU": ('AFC Bournemouth',),
+    "ARS": ('Arsenal FC',),
+    "AVL": ('Aston Villa FC',),
+    "BRE": ('Brentford FC',),
+    "BHA": ('Brighton & Hove Albion FC',),
+    "CHE": ('Chelsea FC',),
+    "CRY": ('Crystal Palace FC',),
+    "EVE": ('Everton FC',),
+    "FUL": ('Fulham FC',),
+    "LEE": ('Leeds United FC',),
+    "LIV": ('Liverpool FC',),
+    "MCI": ('Manchester City FC',),
+    "MUN": ('Manchester United FC',),
+    "NEW": ('Newcastle United FC',),
+    "NFO": ('Nottingham Forest FC',),
+    "SUN": ('Sunderland AFC',),
+    "TOT": ('Tottenham Hotspur FC',),
+    "WHU": ('West Ham United FC',),
+    "WOL": ('Wolverhampton Wanderers FC',),
+    "BUR": ('Burnley FC',),
+    "HUL": ('Hull City AFC',),
+    "IPS": ('Ipswich Town FC',),
+    "COV": ('Coventry City FC',),
+    "DOR": ('BV Borussia Dortmund',),
+    "NAP": ('SSC Napoli',),
+    "RMA": ('Real Madrid CF',),
+    "BRU": ('Club Brugge KV',),
+    "SLP": ('SK Slavia Praha',),
+    "COM": ('Como 1907',),
+    "LNS": ('Racing Club de Lens',),
+    "BET": ('Real Betis Balompié',),
+    "FEN": ('Fenerbahçe SK',),
+    "SAB": ('Sabah FK',),
+    "VIK": ('Viking FK',),
+}
+
+# ParlayAPI also lists corners / bookings props as pseudo-events named "Arsenal (Corners)": not clubs, skipped without a warning.
+_NOT_A_CLUB = re.compile(r"\((?:Corners|Bookings)\)\s*$")
 
 def _norm(value: str) -> str:
     return " ".join(str(value).strip().split()).casefold()
@@ -102,6 +157,9 @@ def _build_index() -> dict[str, str]:
         index[_norm(club["name"])] = code
         for spelling in club["providers"].values():
             index[_norm(spelling)] = code
+    for code, spellings in _PARLAY_ALIASES.items():
+        for spelling in spellings:
+            index.setdefault(_norm(spelling), code)
     return index
 
 
@@ -163,7 +221,7 @@ def resolve_club(name_or_code: str | None, league: str | None = None, provider: 
     caller's fixture filter, not an identity fact -- but an unknown string is always None: fail closed, never a
     fuzzy guess. Unresolved names log UNRESOLVED_SOCCER_CLUB so coverage gaps are visible, not silent.
     """
-    if not name_or_code:
+    if not name_or_code or _NOT_A_CLUB.search(str(name_or_code)):
         return None
     key = _norm(name_or_code)
     if provider and provider in PROVIDERS:
