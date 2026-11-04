@@ -257,6 +257,7 @@ export function ResultsClient({
 
   const [system,  setSystem]  = useState('ALL')
   const [result,  setResult]  = useState('ALL')
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [sortBy,  setSortBy]  = useState<'date' | 'edge' | 'odds' | 'pnl'>('date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [page,    setPage]    = useState(0)
@@ -340,7 +341,7 @@ export function ResultsClient({
       {/* One inline metric strip: models and +EV alerts are summarised separately. */}
       <div className={cx('mono mb-5 flex min-h-[38px] flex-wrap items-center gap-x-5.5 gap-y-1.5 px-3.5 py-2 text-xs text-text-secondary', CARD)}>
         <span><span className="text-text-tertiary">Models</span> {models.bets.toLocaleString()} bets &middot; {models.winRate}% win &middot; <span style={{ color: models.pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{money(models.pnl)}</span> at paper stakes</span>
-        <span><span className="text-text-tertiary">+EV ALERTS</span> {ev.bets.toLocaleString()} graded &middot; {ev.winRate}% win &middot; <span style={{ color: ev.pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{money(ev.pnl)}</span> flat $100</span>
+        <span><span className="text-text-tertiary">+EV alerts</span> {ev.bets.toLocaleString()} graded &middot; {ev.winRate}% win &middot; <span style={{ color: ev.pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{money(ev.pnl)}</span> flat $100</span>
       </div>
 
       {/* Season curve: cumulative P&L of the models (paper stakes) vs the +EV alerts (flat $100), from the first graded bet. */}
@@ -531,8 +532,13 @@ export function ResultsClient({
         </>
       )}
 
-      {/* System filter chips -- grouped with labels */}
-      <div className="mb-4">
+      {/* System filter chips -- grouped with labels. On a phone they sit behind one Filters row so the ledger starts on the first screen. */}
+      <button type="button" aria-expanded={filtersOpen} aria-controls="results-filters" onClick={() => setFiltersOpen(o => !o)}
+        className="mono button-press-motion mb-3 flex min-h-[44px] w-full cursor-pointer items-center justify-between rounded-lg border border-separator-border bg-background-primary-default px-3 text-compact text-text-primary md:hidden" data-testid="results-filters-toggle">
+        <span>Filters{system !== 'ALL' || result !== 'ALL' ? ` \u00b7 ${[system !== 'ALL' ? (SYSTEM_LABEL[system] ?? system) : null, result !== 'ALL' ? result : null].filter(Boolean).join(', ')}` : ''}</span>
+        <span aria-hidden>{filtersOpen ? '\u2212' : '+'}</span>
+      </button>
+      <div id="results-filters" className={cx('mb-4 md:block', filtersOpen ? 'block' : 'hidden')}>
         <div className="mb-2.5 flex flex-wrap items-center gap-5">
 
           {/* ALL chip */}
