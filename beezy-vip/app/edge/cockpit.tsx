@@ -145,9 +145,13 @@ function BookBadge({ book }: { book: string | null | undefined }) {
 }
 
 function EvBadge({ ev, size = 'sm' }: { ev: number | null; size?: 'sm' | 'lg' }) {
-  const pos = (ev ?? 0) >= 0
+  // no credible EV (a board row with under 3 books behind it): a quiet dash, never the green positive chip
+  if (ev == null) {
+    return <span className="mono rounded-[6px] border border-separator-border px-1.5 whitespace-nowrap inline-block text-text-secondary" style={{ fontSize: size === 'lg' ? '15px' : '13px', fontWeight: 600 }} title="No credible edge: fewer than 3 books price this line">--</span>
+  }
+  const pos = ev >= 0
   return (
-    <span className="mono text-background-secondary-default rounded-[6px] whitespace-nowrap inline-block" style={{ fontSize: size === 'lg' ? '15px' : '12.5px', fontWeight: 600, background: pos ? GOOD : BAD, padding: size === 'lg' ? '5px 10px' : '3px 7px' }}>
+    <span className="mono text-background-secondary-default rounded-[6px] whitespace-nowrap inline-block" style={{ fontSize: size === 'lg' ? '15px' : '13px', fontWeight: 600, background: pos ? GOOD : BAD, padding: size === 'lg' ? '5px 10px' : '3px 7px' }}>
       {evText(ev)}
     </span>
   )
@@ -470,6 +474,7 @@ function PropCard({ r, active, onSelect }: { r: CockpitRow; active: boolean; onS
         <span className="truncate text-body-2-semibold text-text-primary">{propText(r)}</span>
         <span className="flex min-w-0 items-center gap-[7px]">
           <span className="ui-heading shrink-0 rounded-chip border px-[5px] py-px" style={{ color: accent, borderColor: `${accent}55` }}>{r.sport.toUpperCase()}</span>
+          {r.flag && <span className="ui-heading shrink-0 text-signal" title="A book is hanging this line well off the market and it passed the credibility gates">Flagged</span>}
           {r.sport !== 'mlb' && <span className="ui-heading shrink-0 text-gold" title="NFL, NHL and NBA output has no tested edge against prices">Unvalidated</span>}
           <span className="mono min-w-0 flex-1 truncate text-mini text-text-secondary">{meta}</span>
         </span>
@@ -616,7 +621,7 @@ export function Cockpit({ feed, sport, updated, loading, onRefresh, renderMlbExt
             <Segmented<SortKey> label="Sort" value={sort} onChange={setSort}
               options={[{ id: 'ev', label: 'BEST +EV' }, { id: 'l10', label: 'L10 HIT%' }, { id: 'start', label: 'STARTS SOON' }]} />
             <Segmented<string> label="Confidence" value={credibleOnly ? 'credible' : 'all'} onChange={v => setCredibleOnly(v === 'credible')}
-              options={[{ id: 'all', label: 'ALL SIGNALS' }, { id: 'credible', label: 'CREDIBLE ONLY' }]} />
+              options={[{ id: 'all', label: 'All players' }, { id: 'credible', label: 'Flagged only' }]} />
           </div>
           <input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search player or team" aria-label="Search player or team"
             className="h-[34px] min-w-0 max-w-[300px] flex-[1_1_180px] rounded-lg border border-border-button-default bg-background-secondary-default px-2.5 text-body-2-regular text-text-primary outline-none placeholder:text-text-placeholder focus:border-accent-500" />
@@ -635,7 +640,7 @@ export function Cockpit({ feed, sport, updated, loading, onRefresh, renderMlbExt
         <div className={cx(CARD, 'px-5 py-9 text-center')}>
           <div className="mb-1.5 text-body-semibold text-text-primary">No props match right now</div>
           <div className="mx-auto max-w-[60ch] text-body-2-regular text-text-secondary">
-            The scanner re-checks lines every 15 minutes through the betting day. Try another sport, clear the market filter, or switch off Credible only.
+            The player list refreshes every 30 minutes from the daily projection boards. Try another sport, clear the market filter, or switch off Flagged only.
           </div>
         </div>
       ) : (
