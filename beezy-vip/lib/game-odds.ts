@@ -50,11 +50,13 @@ export interface GameOddsFeed {
   rows: GameOddsRow[]
   /** how each game's main line and market fair price moved since the board first saw it: `<game_key>|<market>` -> points (absent on an older backend) */
   history?: Record<string, MoveSeries>
+  /** ncaab only: team code -> school name (the codes are BettingPros' own, e.g. 'SCAR'); absent elsewhere */
+  team_names?: Record<string, string>
   /** added by the viewer-gated proxy / page: how many rows the access policy withheld */
   locked?: number
 }
 
-export const GAME_ODDS_SPORTS = ['nba', 'nhl', 'soccer'] as const
+export const GAME_ODDS_SPORTS = ['nba', 'nhl', 'soccer', 'ncaab'] as const
 export const GAME_ODDS_MARKETS = ['ml', 'spread', 'total', 'btts'] as const
 export const GAME_ODDS_MAX_LIMIT = 5000
 /** Fewest reference books behind a fair value (the Odds Terminal's MIN_REF): below it a row shows prices only. */
@@ -75,7 +77,7 @@ function validDay(day: string): boolean {
 /** Whitelist for the /api/games/odds proxy: nothing but known, well-formed values is forwarded upstream. */
 export function parseGameOddsQuery(sp: URLSearchParams): { ok: true; query: GameOddsQuery } | { ok: false; error: string } {
   const sport = (sp.get('sport') ?? '').toLowerCase()
-  if (!(GAME_ODDS_SPORTS as readonly string[]).includes(sport)) return { ok: false, error: 'sport must be one of nba, nhl, soccer' }
+  if (!(GAME_ODDS_SPORTS as readonly string[]).includes(sport)) return { ok: false, error: 'sport must be one of nba, nhl, soccer, ncaab' }
   const query: GameOddsQuery = { sport: sport as GameOddsQuery['sport'] }
   const day = sp.get('day')
   if (day != null && day !== '') {

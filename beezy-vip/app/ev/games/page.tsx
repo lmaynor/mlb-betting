@@ -58,12 +58,12 @@ export default async function GameLinesPage({ searchParams }: { searchParams: Pr
   } else if (view === 'table') {
     body = <GamePricesClient key={sport} feeds={odds} sport={sport} />
   } else {
-    const projRaw = await Promise.all(sports.map(s => (odds[s] ? apiGetGameProjections(s).catch(() => null) : Promise.resolve(null))))
+    const projRaw = await Promise.all(sports.map(s => (odds[s] && s !== 'ncaab' ? apiGetGameProjections(s).catch(() => null) : Promise.resolve(null))))
     // The model never rides along for a game the viewer's price preview withheld.
     const proj: Record<string, GameProjectionsFeed | null> = {}
     sports.forEach((s, i) => { proj[s] = restrictProjToOdds(projRaw[i], odds[s]) })
     const open = analysisGame(params.view, params.game)
-    body = <BestBoard feeds={{ odds, proj }} initialSport={params.sport === 'nba' || params.sport === 'nhl' ? params.sport : undefined} initialOpen={open ? { key: open, pane: 'analysis' } : undefined} nav={<GamesNav view={view} sport={sport} />} />
+    body = <BestBoard feeds={{ odds, proj }} initialSport={params.sport === 'nba' || params.sport === 'nhl' || params.sport === 'ncaab' ? params.sport : undefined} initialOpen={open ? { key: open, pane: 'analysis' } : undefined} nav={<GamesNav view={view} sport={sport} />} />
   }
 
   return (

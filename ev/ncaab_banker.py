@@ -117,6 +117,17 @@ def bp_parse_event(event: dict, offers: list) -> list[dict]:
     return list(out.values())
 
 
+def bp_names(offers: list) -> dict:
+    """{team code: school name} from the offers' participants ('TENN' -> 'Tennessee'); a code without a city is left out."""
+    out: dict = {}
+    for o in offers or []:
+        for p in o.get("participants") or []:
+            city = ((p.get("team") or {}).get("city") or "").strip()
+            if p.get("id") and city:
+                out[str(p["id"])] = city
+    return out
+
+
 def bp_fetch(now: datetime, days: int = DEFAULT_DAYS, delay: float = 0.8) -> dict:
     """Crawl today .. today + days - 1 (ET) of BettingPros NCAAB game lines. Network only through bettingpros(_props)."""
     sess = bpp.make_session(BP_SPORT)
@@ -150,12 +161,13 @@ def bp_fetch(now: datetime, days: int = DEFAULT_DAYS, delay: float = 0.8) -> dic
         by_event: dict = {}
         for o in offers:
             by_event.setdefault(o.get("event_id"), []).append(o)
+        nm = {eid: bp_names(offs) for eid, offs in by_event.items()}
         for eid, (e, start) in live.items():
             quotes = bp_parse_event(e, by_event.get(eid, []))
             if not quotes:
                 continue
             games.append({"src_key": f"bp{eid}", "away_team": e["away"], "home_team": e["home"],
-                          "away_name": None, "home_name": None,
+                          "away_name": nm.get(eid, {}).get(e["away"]), "home_name": nm.get(eid, {}).get(e["home"]),
                           "commence_time": start.astimezone(timezone.utc).isoformat() if start else None, "quotes": quotes})
             counts["events_priced"] += 1
             counts["quotes"] += len(quotes)

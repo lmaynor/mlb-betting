@@ -38,7 +38,7 @@ from mlb_core.alerts.discord_routes import canonical_book
 log = logging.getLogger("ev.game_odds_board")
 _ET = ZoneInfo("America/New_York")
 
-SPORTS = ("nba", "nhl", "nfl", "soccer")
+SPORTS = ("nba", "nhl", "nfl", "soccer", "ncaab")
 PARLAY_KEY = {"nba": "basketball_nba", "nhl": "icehockey_nhl", "nfl": "americanfootball_nfl", "soccer": "soccer_epl"}
 # Soccer is banked per league; run("soccer") unions both league snapshots into the one soccer board.
 SOCCER_PARLAY_KEYS = ("soccer_epl", "soccer_uefa_champs_league")
@@ -77,6 +77,9 @@ def _resolver(sport: str):
     if sport == "nfl":
         from nfl.game.run_daily import nfl_team_code
         return nfl_team_code
+    if sport == "ncaab":
+        from ev.ncaab_board import team_code
+        return team_code
     if sport == "soccer":
         from soccer.data.reep_register import resolve_club
         return lambda name: resolve_club(name, provider="parlayapi") or resolve_club(name)
@@ -511,6 +514,9 @@ def run(sport: str, now: Optional[datetime] = None, write: bool = True) -> dict:
     if sport not in SPORTS:
         raise ValueError(f"unknown game odds sport {sport!r}; expected one of {SPORTS}")
     now = now or datetime.now(timezone.utc)
+    if sport == "ncaab":                      # three banked feeds joined by start time + team likeness: ev.ncaab_board
+        from ev import ncaab_board
+        return ncaab_board.run(now, write)
     if sport == "soccer":
         # two banked league snapshots (EPL + UCL) union into the one soccer board; meta comes from the first
         # snapshot that carried events (either league alone is enough to build the board).

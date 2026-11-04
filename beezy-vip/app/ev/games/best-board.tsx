@@ -10,7 +10,7 @@ import { ageText, GAME_MIN_REF, freshnessBin, gameOddsUnavailable, startLabel, t
 import { edgesNow, gameEdges, primaryMove, shopMarket, type EdgeItem, type ShopSide } from '@/lib/game-shop'
 import { moveForSide } from '@/lib/line-move'
 import { formatOdds } from '@/lib/odds'
-import { SPORT_SLUGS, type SportSlug } from '@/lib/sports'
+import { SPORT_SLUGS, type LeagueSlug } from '@/lib/sports'
 import { useBankroll } from '@/lib/use-bankroll'
 import { useMyBooks } from '@/lib/use-my-books'
 import { GamePopup, type PopupPane } from './game-popup'
@@ -98,7 +98,7 @@ function Stoplight({ bin, text }: { bin: Freshness | null; text: string }) {
  * table, "Edges now" lists the few real edges on the slate (against the market fair price, 3+ books, not suspiciously large), or says
  * there are none. UNVALIDATED market data.
  */
-const NO_GAME_FEED = SPORT_SLUGS.filter(s => s !== 'nba' && s !== 'nhl') /* game-line feeds exist for NBA and NHL only */
+const NO_GAME_FEED = SPORT_SLUGS.filter(s => s !== 'nba' && s !== 'nhl' && s !== 'soccer') /* two-way game-line feeds exist for NBA, NHL and NCAAB; soccer's three-way board is its own tab */
 
 export function BestBoard({ feeds: initial, initialSport, initialOpen, nav }: { feeds: GameBoardFeeds; initialSport?: string; initialOpen?: { key: string; pane?: PopupPane }; nav?: ReactNode }) {
   const { odds, proj, feedSports } = useGameFeeds(initial)
@@ -176,14 +176,14 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen, nav }: { 
           )}
 
           <div className="flex flex-wrap items-center gap-y-2 gap-x-3.5 mb-2.5">
-            <LeagueFilter label="Sport" value={activeSport as LeagueValue} live={available} soon={NO_GAME_FEED} onChange={setSport} />
+            <LeagueFilter label="Sport" value={activeSport as LeagueValue} live={[...available, 'soccer']} soon={NO_GAME_FEED} onChange={v => (v === 'soccer' ? window.location.assign('/ev/games?sport=soccer') : setSport(v))} />
             <Select id="bb-sort" label="Sort" value={sort} onChange={v => setSort(v as BoardSort)} options={BOARD_SORTS.map(s => ({ v: s.v, l: s.l }))} />
             <span className="hidden md:inline-flex items-center gap-1.5 text-[12px] text-text-secondary rounded-control border border-separator-border px-2.5 py-1" data-testid="open-hint">Double-click any game to open its card</span>
           </div>
           {quiet.length > 0 && <p className="text-[12px] text-text-secondary m-0 mb-2.5" data-testid="quiet-sports">{quiet.join(' · ')}</p>}
 
           {activeSport !== 'all' && !available.includes(activeSport) ? (
-            <LeagueNote value={activeSport as SportSlug} live={available} soon={NO_GAME_FEED} onPick={setSport} />
+            <LeagueNote value={activeSport as LeagueSlug} live={available} soon={NO_GAME_FEED} onPick={setSport} />
           ) : games.length === 0 ? (
             <div role="status" className="py-6 text-neutral-300 text-cozy">No games for this sport right now.</div>
           ) : (
