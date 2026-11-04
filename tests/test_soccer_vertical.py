@@ -664,3 +664,26 @@ def test_run_soccer_predictions_says_awaiting_data_when_understat_is_down(monkey
     p = run_daily.run_soccer_predictions(now=datetime(2026, 11, 4, 12, tzinfo=timezone.utc), write=False,
                                          fetch=lambda url: "<html>We will come back soon</html>")
     assert p["status"] == "awaiting_data" and "Understat is not serving match data" in p["reason"] and p["count"] == 0
+
+
+def test_goals_fallback_prices_with_football_data_and_labels_the_variant(monkeypatch):
+    """Understat down -> the same Dixon-Coles fit on football-data rows (shots-on-target proxy), labeled as a different variant."""
+    from datetime import datetime, timezone
+    from soccer.data import ingest
+    from soccer.game import run_daily
+    monkeypatch.setattr(ingest, "_cache_get", lambda key: None)
+    monkeypatch.setattr(ingest, "_cache_put", lambda key, text: None)
+    monkeypatch.setattr(run_daily, "_refresh_board", lambda now, write: None)
+
+    def fetch(url):
+        return _FD_CSV if "football-data" in url else "<html>We will come back soon</html>"
+    fixtures = [{"league": "epl", "date": datetime(2026, 11, 8).date(), "home": "ARS", "away": "CHE",
+                 "datetime": datetime(2026, 11, 8, 15, 0)}]
+    monkeypatch.setattr(run_daily, "_banked_fixtures", lambda now: fixtures)
+    p = run_daily.run_soccer_predictions(now=datetime(2026, 11, 4, 12, tzinfo=timezone.utc), write=False, fetch=fetch)
+    assert p["fallback"]["source"] == "football-data.co.uk" and "epl" in p["fallback"]["leagues"]
+    assert p["engine"] == "dixon_coles_fd_v1" and "no xG source" in p["label"]
+    assert p["xg_variant"] in ("football_data_sot_proxy_v1", "understat_shot_v1+football_data_sot_proxy_v1")
+    assert p["status"] in ("live", "awaiting_fixtures", "awaiting_data")        # priced when the tiny fixture CSV rates both clubs
+    for row in p["priced_games"]:
+        assert row["xg_variant"] == p["xg_variant"] and row["validated"] is False

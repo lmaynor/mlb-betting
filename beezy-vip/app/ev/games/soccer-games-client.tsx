@@ -5,7 +5,7 @@ import { BookLogo } from '@/components/ui/book-logo'
 import type { GameOddsFeed } from '@/lib/game-odds'
 import { formatOdds } from '@/lib/odds'
 import {
-  bestThreeWayPrices, bestTotalPrices, evVsFair, gameRows, oddsOnlyGames, SOCCER_MODEL_BADGE, threeWayConsensus,
+  bestThreeWayPrices, bestTotalPrices, evVsFair, gameRows, oddsOnlyGames, soccerModelBadge, threeWayConsensus,
   type OddsOnlyGame, type SoccerPricedGame, type SoccerProjectionsFeed, type ThreeWayConsensus, type ThreeWayLeg,
 } from '@/lib/soccer-games'
 import { bookDisplay } from '@/lib/tokens'
@@ -284,6 +284,8 @@ export function SoccerGamesClient({ projections, odds }: { projections: SoccerPr
   const games = projections?.priced_games ?? []
   const oddsGames = useMemo(() => oddsOnlyGames(odds), [odds])
   const showOddsOnly = games.length === 0 && oddsGames.length > 0
+  const badge = soccerModelBadge(projections?.xg_variant)
+  const usesFallback = (projections?.xg_variant ?? '').includes('football_data_sot_proxy_v1')
 
   return (
     <div>
@@ -291,7 +293,7 @@ export function SoccerGamesClient({ projections, odds }: { projections: SoccerPr
         <span className="mono font-bold text-text-primary">SOCCER (EPL / UCL)</span>
         <span className="mono text-neutral-300">{games.length > 0 ? games.length : oddsGames.length} GAMES</span>
         <span className="mono text-[11px] font-bold text-warn border border-[color:#facc1555] rounded-chip py-0 px-[5px]">Unvalidated</span>
-        <span className="mono text-neutral-300">{SOCCER_MODEL_BADGE}</span>
+        <span className="mono text-neutral-300">{badge}</span>
       </div>
 
       {games.length === 0 && !showOddsOnly ? (
@@ -348,8 +350,8 @@ export function SoccerGamesClient({ projections, odds }: { projections: SoccerPr
         </div>
       )}
       <p className="text-compact text-text-secondary mt-3 leading-[1.5]">
-        {SOCCER_MODEL_BADGE}: the model probabilities come from one 11x11 Dixon-Coles scoreline matrix per game
-        (attack / defense ratings fit on Understat match xG with a ClubElo anchor), so 1X2, totals, BTTS and double
+        {badge}: the model probabilities come from one 11x11 Dixon-Coles scoreline matrix per game
+        (attack / defense ratings fit on {usesFallback ? 'football-data.co.uk results with a shots-on-target proxy in place of xG, because Understat is not serving match data' : 'Understat match xG'} with a ClubElo anchor), so 1X2, totals, BTTS and double
         chance can never contradict each other. Fair values de-vig each book&apos;s three prices together (power
         method). Nothing here is a tracked pick and no soccer system has passed its validation gate.
       </p>
