@@ -59,9 +59,11 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
       <SystemStrip sport={sport} active={system.key} />
       {board && (
         <>
-          <AlignedBar>
-            <DayToggle today={today} yesterday={board.yesterday} days={board.days} selected={board.date} pinDates={!tracked} />
-          </AlignedBar>
+          {(board.yesterday || board.days.length > 0) && (
+            <AlignedBar>
+              <DayToggle today={today} yesterday={board.yesterday} days={board.days} selected={board.date} pinDates={!tracked} />
+            </AlignedBar>
+          )}
           <GamesStrip games={games} selected={f.game} today={today} total={base.length} />
           <FilterBar sport={sport} fixedMarket showResult={tracked && f.day === 'yesterday'} />
         </>

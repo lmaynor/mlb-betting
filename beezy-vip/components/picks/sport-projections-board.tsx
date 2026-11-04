@@ -14,13 +14,13 @@ const SURFACE = SURFACE_CARD
 const TH = { ...TABLE_TH, textAlign: 'left', position: 'sticky', top: 0, whiteSpace: 'nowrap' } as const
 const TD = { ...TABLE_TD, verticalAlign: 'middle', whiteSpace: 'nowrap' } as const
 const PAGE = 80
-/** columns a phone drops from the row (they move into the tap-to-open detail line): the table keeps SCORE, PLAYER, PICK, MODEL, BEST PRICE and EDGE */
+/** columns a phone drops from the row (they move into the tap-to-open detail line): the table keeps Score, Player, Pick, Model, Best price and Edge */
 const HIDE_ON_PHONE = new Set(['Team', 'Market fair', 'Form', 'Price EV', 'Result', 'Range', 'Model vs market'])
 const TAP_PX = 44
 const HEAD_TIPS: Record<string, string> = {
-  SCORE: 'Beezy Score, 0-100: how strong the play is. Not a win probability.',
+  Score: 'Beezy Score, 0-100: how strong the play is. Not a win probability.',
   'Market fair': 'The books\' consensus probability for this side with the vig removed.',
-  RANGE: 'The model\'s expected value (the bright tick, lambda) against the book line (the amber rule), inside the model\'s own 10th-90th percentile range. Not a validated interval.',
+  Range: 'The model\'s expected value (the bright tick, lambda) against the book line (the amber rule), inside the model\'s own 10th-90th percentile range. Not a validated interval.',
   'Model vs market': 'The model\'s probability for the listed side over the market\'s de-vigged fair probability. The gap between the bars is the model edge.',
   'Model edge': 'Model probability minus market fair probability. It says where the model disagrees with the market. It is not a profit estimate.',
   'Price EV': 'Return on a 1 unit bet at the best price IF the market fair probability is right. Positive means the best price beats the market\'s own fair price.',

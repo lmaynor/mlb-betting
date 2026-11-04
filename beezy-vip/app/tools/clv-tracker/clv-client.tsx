@@ -43,10 +43,11 @@ function Chip({ label, active, color, onClick }: {
   label: string; active: boolean; color?: string; onClick: () => void
 }) {
   return (
-    <button className="py-1 px-[10px] cursor-pointer" onClick={onClick} style={{
+    <button className="py-1.5 px-3 cursor-pointer" onClick={onClick} style={{
       fontSize: '10px',
       fontFamily: 'var(--font-mono), monospace',
       fontWeight: active ? 600 : 400,
+      borderRadius: 'var(--radius-pill)',
       border: `1px solid ${active ? (color ?? 'var(--color-neutral-300)') : 'var(--color-separator-border)'}`,
       background: active ? `color-mix(in oklab, ${color ?? 'var(--color-neutral-300)'} 16%, var(--color-background-full))` : 'var(--color-background-primary-default)',
       color: active ? (color ?? 'var(--color-neutral-300)') : 'var(--color-neutral-300)',
@@ -71,7 +72,7 @@ const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<
   const sys = p.system
   const color = SYSTEM_COLOR[sys] ?? 'var(--color-neutral-300)'
   return (
-    <div className="bg-background-primary-default py-3 px-[14px] text-mini min-w-[160px]" style={{ border: B }}>
+    <div className="bg-background-primary-default py-3 px-[14px] text-mini min-w-[160px]" style={{ border: B, borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
       <div className="mono" style={{ fontSize: '10px', fontWeight: 600, color, marginBottom: '8px' }}>{sys}</div>
       <div className="text-text-secondary mb-1.5 text-micro">{p.game_date}</div>
       <div className="grid" style={{ gridTemplateColumns: '70px 1fr', rowGap: '3px' }}>
@@ -191,7 +192,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
       </div>
 
       {/* Filter bar */}
-      <div className="py-[14px] px-4 mb-4 flex flex-wrap gap-3 items-center" style={{ border: B }}>
+      <div className="py-[14px] px-4 mb-4 flex flex-wrap gap-3 items-center" style={{ border: B, borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
         {/* Date range */}
         <div className="flex gap-1 items-center">
           <span className="mono text-micro text-text-secondary mr-1.5">Range</span>
@@ -228,7 +229,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
       </div>
 
       {/* Scatter chart */}
-      <div className="bg-background-full mb-[1px]" style={{ border: B }}>
+      <div className="bg-background-full mb-[1px]" style={{ border: B, borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
         {filtered.length === 0 ? (
           <div className="h-[420px] flex items-center justify-center">
             <div className="text-center">
@@ -311,7 +312,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
 
       {/* Summary stat cards */}
       {stats && (
-        <div className="flex flex-wrap mb-4" style={{ border: B }}>
+        <div className="flex flex-wrap mb-4" style={{ border: B, borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
           <StatCard
             label="Mean CLV"
             value={fmt2(stats.meanCLV)}
@@ -342,7 +343,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
       )}
 
       {/* Info panel */}
-      <div style={{ border: B }}>
+      <div style={{ border: B, borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
         <button className="w-full bg-transparent bg-none border-0 cursor-pointer py-3 px-4 flex items-center justify-between"
           onClick={() => setInfoOpen(o => !o)}
          

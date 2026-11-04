@@ -227,7 +227,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
           <button className="py-[6px] px-[14px] bg-transparent"
             onClick={() => void refresh()}
             disabled={refreshing}
-            style={{ fontSize: '10px', fontFamily: 'var(--font-mono), monospace', border: B, color: refreshing ? 'var(--color-border-button-active)' : 'var(--color-text-secondary)', cursor: refreshing ? 'default' : 'pointer' }}
+            style={{ fontSize: '11px', fontFamily: 'var(--font-mono), monospace', borderRadius: 'var(--radius-pill)', border: B, color: refreshing ? 'var(--color-border-button-active)' : 'var(--color-text-secondary)', cursor: refreshing ? 'default' : 'pointer' }}
           >
             {refreshing ? 'Refreshing...' : 'Refresh'}
           </button>
@@ -235,7 +235,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
       </div>
 
       {/* Filter bar */}
-      <div className="py-3 px-4 mb-4 flex gap-3 items-center flex-wrap" style={{ border: B }}>
+      <div className="py-3 px-4 mb-4 flex gap-3 items-center flex-wrap" style={{ border: B, borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
         <label className="flex items-center gap-2 cursor-pointer">
           <span className="w-7 h-4 rounded-control inline-block shrink-0 cursor-pointer"
             onClick={() => setPicksOnly(o => !o)}
@@ -275,7 +275,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
 
       {/* Games list */}
       {filtered.length === 0 ? (
-        <div className="py-15 px-5 text-center" style={{ border: B }}>
+        <div className="py-15 px-5 text-center" style={{ border: B, borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
           <div className="mono text-compact text-text-secondary mb-2">
             {slateData.total_games === 0 ? 'No games scheduled today.' : 'No games match the current filter.'}
           </div>
@@ -286,7 +286,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
           )}
         </div>
       ) : (
-        <div style={{ border: B }}>
+        <div style={{ border: B, borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
           {/* Column headers */}
           <div className="grid py-2 px-4 bg-background-primary-default" style={{ gridTemplateColumns: '1fr auto', borderBottom: B }}>
             <span className="mono text-micro text-text-secondary">

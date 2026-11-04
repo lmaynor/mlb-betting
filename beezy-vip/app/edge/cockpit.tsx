@@ -127,7 +127,7 @@ function Avatar({ r, size }: { r: CockpitRow; size: number }) {
   const [bad, setBad] = useState(false)
   const src = headshotUrlById(r.sport, r.sport === 'nfl' ? r.headshot_id : r.player_id)
   return (
-    <span className="flex-none bg-background-tertiary-default inline-flex items-end justify-center overflow-hidden text-text-secondary" style={{ width: size, height: size, borderRadius: size > 48 ? '14px' : '10px', border: `1px solid ${HAIR}`, fontSize: size > 48 ? '17px' : '12px', fontWeight: 700 }}>
+    <span className="flex-none bg-background-tertiary-default inline-flex items-end justify-center overflow-hidden text-text-secondary" style={{ width: size, height: size, borderRadius: size > 48 ? '14px' : '10px', border: `1px solid ${HAIR}`, fontSize: size > 48 ? '17px' : '12px', fontWeight: 600 }}>
       {src && !bad ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={src} alt={r.player ?? ''} width={size} height={size} loading="lazy" decoding="async" referrerPolicy="no-referrer"
@@ -141,13 +141,13 @@ function Avatar({ r, size }: { r: CockpitRow; size: number }) {
 
 function BookBadge({ book }: { book: string | null | undefined }) {
   const b = bookDisplay(book)
-  return <span className="text-mini font-bold py-[2px] px-[7px] whitespace-nowrap" style={{ color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px' }}>{b.label}</span>
+  return <span className="text-mini font-semibold py-[2px] px-[7px] whitespace-nowrap" style={{ color: b.color, background: b.bg, border: `1px solid ${b.color}55`, borderRadius: '6px' }}>{b.label}</span>
 }
 
 function EvBadge({ ev, size = 'sm' }: { ev: number | null; size?: 'sm' | 'lg' }) {
   const pos = (ev ?? 0) >= 0
   return (
-    <span className="mono text-background-secondary-default rounded-[6px] whitespace-nowrap inline-block" style={{ fontSize: size === 'lg' ? '15px' : '12.5px', fontWeight: 800, background: pos ? GOOD : BAD, padding: size === 'lg' ? '5px 10px' : '3px 7px' }}>
+    <span className="mono text-background-secondary-default rounded-[6px] whitespace-nowrap inline-block" style={{ fontSize: size === 'lg' ? '15px' : '12.5px', fontWeight: 600, background: pos ? GOOD : BAD, padding: size === 'lg' ? '5px 10px' : '3px 7px' }}>
       {evText(ev)}
     </span>
   )
@@ -157,7 +157,7 @@ function Panel({ title, sub, children }: { title: string; sub?: string; children
   return (
     <section className={cx(CARD, 'px-4 py-3.5')}>
       <div className="mb-2.5 flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="ui-heading tracking-caps text-text-secondary">{title}</h3>
+        <h3 className="ui-heading text-text-secondary">{title}</h3>
         {sub && <span className="mono text-mini text-text-secondary">{sub}</span>}
       </div>
       {children}
@@ -170,7 +170,7 @@ function StatPills({ items }: { items: { label: string; value: string; color?: s
     <div className="mt-3 grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(76px,1fr))]">
       {items.map(it => (
         <div key={it.label} className="min-w-0 rounded-lg border border-separator-border bg-background-secondary-default px-[9px] py-[7px]">
-          <div className="mono text-[15px] font-bold leading-[1.1] text-text-primary" style={it.color ? { color: it.color } : undefined}>{it.value}</div>
+          <div className="mono text-[15px] font-semibold leading-[1.1] text-text-primary" style={it.color ? { color: it.color } : undefined}>{it.value}</div>
           <div className="ui-heading mt-1 text-text-secondary">{it.label}</div>
         </div>
       ))}
@@ -229,7 +229,7 @@ export function FormSparkline({ form, under }: { form: CockpitForm; under: boole
         {line != null && (
           <g>
             <line x1={padL} x2={W - padR} y1={y(line)} y2={y(line)} stroke="#f3f4f6" strokeWidth="1.4" strokeDasharray="5 4" />
-            <text x={W - padR} y={y(line) - 4} textAnchor="end" fill="#f3f4f6" style={{ fontSize: '10px', fontWeight: 700, fontFamily: 'monospace' }}>Line {line}</text>
+            <text x={W - padR} y={y(line) - 4} textAnchor="end" fill="#f3f4f6" style={{ fontSize: '10px', fontWeight: 600, fontFamily: 'monospace' }}>Line {line}</text>
           </g>
         )}
       </svg>
@@ -324,7 +324,7 @@ export function OddsMatrix({ r }: { r: CockpitRow }) {
   const ranked = rankQuotes(quotes, under)
   const cols = 'minmax(110px, 1.5fr) 1fr 1fr 1fr'
   const cell = (american: number | null, strong: boolean) => (
-    <span className="mono" style={{ fontSize: '13.5px', fontWeight: strong ? 800 : 600, color: strong ? GOOD : american == null ? 'var(--color-text-secondary)' : 'var(--color-text-primary)' }}>
+    <span className="mono" style={{ fontSize: '14px', fontWeight: strong ? 800 : 600, color: strong ? GOOD : american == null ? 'var(--color-text-secondary)' : 'var(--color-text-primary)' }}>
       {american == null ? <>&ndash;</> : formatOdds(american)}
     </span>
   )
@@ -344,7 +344,7 @@ export function OddsMatrix({ r }: { r: CockpitRow }) {
               style={{ gridTemplateColumns: cols }}>
               <span role="cell" className="flex items-center gap-1.5 flex-wrap">
                 <BookBadge book={quote.book} />
-                {flagged && <span className="ui-heading text-micro" style={{ color: SKY }}>TARGET</span>}
+                {flagged && <span className="ui-heading text-micro" style={{ color: SKY }}>Target</span>}
               </span>
               <span role="cell">{cell(quote.over, best && !under)}</span>
               <span role="cell">{cell(quote.under, best && under)}</span>
@@ -466,11 +466,11 @@ function PropCard({ r, active, onSelect }: { r: CockpitRow; active: boolean; onS
         !r.flag && 'opacity-80')}>
       <Avatar r={r} size={44} />
       <span className="grid min-w-0 gap-[3px]">
-        <span className="truncate text-[14.5px] font-bold text-text-primary">{r.player ?? 'Unknown player'}</span>
+        <span className="truncate text-[15px] font-semibold text-text-primary">{r.player ?? 'Unknown player'}</span>
         <span className="truncate text-body-2-semibold text-text-primary">{propText(r)}</span>
         <span className="flex min-w-0 items-center gap-[7px]">
           <span className="ui-heading shrink-0 rounded-chip border px-[5px] py-px" style={{ color: accent, borderColor: `${accent}55` }}>{r.sport.toUpperCase()}</span>
-          {r.sport !== 'mlb' && <span className="ui-heading shrink-0 text-gold" title="NFL, NHL and NBA output has no tested edge against prices">UNVALIDATED</span>}
+          {r.sport !== 'mlb' && <span className="ui-heading shrink-0 text-gold" title="NFL, NHL and NBA output has no tested edge against prices">Unvalidated</span>}
           <span className="mono min-w-0 flex-1 truncate text-mini text-text-secondary">{meta}</span>
         </span>
       </span>
@@ -480,7 +480,7 @@ function PropCard({ r, active, onSelect }: { r: CockpitRow; active: boolean; onS
           <BookBadge book={r.book} />
           <span className="mono text-body-2-bold text-text-primary">{r.american != null ? formatOdds(r.american) : '--'}</span>
         </span>
-        <span className="mono rounded-full border border-separator-border bg-background-secondary-default px-2 py-0.5 text-mini font-bold" style={{ color: rateColor(l10) }}>
+        <span className="mono rounded-full border border-separator-border bg-background-secondary-default px-2 py-0.5 text-mini font-semibold" style={{ color: rateColor(l10) }}>
           L10: {pct0(l10)}
         </span>
       </span>
@@ -497,7 +497,7 @@ function Segmented<T extends string>({ value, options, onChange, label }: { valu
         const active = value === o.id
         return (
           <button key={o.id} onClick={() => onChange(o.id)} aria-pressed={active}
-            className={cx('button-press-motion cursor-pointer whitespace-nowrap rounded-md border px-[11px] py-1.5 text-caption-1-semibold tracking-[0.03em]',
+            className={cx('button-press-motion cursor-pointer whitespace-nowrap rounded-md border px-[11px] py-1.5 text-caption-1-semibold ',
               active ? 'border-border-button-hover bg-background-tertiary-default text-text-primary' : 'border-transparent bg-transparent text-text-secondary hover:bg-background-primary-hover')}>
             {o.label}
           </button>

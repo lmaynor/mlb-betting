@@ -111,7 +111,7 @@ export default async function ModelDetailPage({ params }: Props) {
       </div>
 
       {/* Performance stats */}
-      <div className="grid grid-cols-[repeat(5,1fr)] bg-background-primary-default overflow-hidden mb-7" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
+      <div className="grid grid-cols-2 md:grid-cols-5 [&>*:last-child]:col-span-2 md:[&>*:last-child]:col-span-1 bg-background-primary-default overflow-hidden mb-7" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
         <StatBlock label={metricLabel}  value={metricValue}                                                    sub="Out-of-sample" />
         <StatBlock label="Bets"         value={String(bets)}                                                   sub="Paper mode" />
         <StatBlock label="Win Rate"     value={winRate !== null ? `${winRate.toFixed(1)}%` : '--'}             sub="W / (W+L)" />
@@ -126,7 +126,7 @@ export default async function ModelDetailPage({ params }: Props) {
       </div>
 
       {/* Config + Calibration */}
-      <div className="grid grid-cols-2 gap-4 mb-7">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-7">
 
         {/* Config */}
         <div className="bg-background-primary-default p-5" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
@@ -184,13 +184,13 @@ export default async function ModelDetailPage({ params }: Props) {
           <div className="text-compact font-semibold text-text-primary" style={{ }}>Feature List</div>
           <div className="mono text-micro text-text-secondary mt-[3px]">{spec.features.length} features &middot; XGBoost importance ranking</div>
         </div>
-        <div className="grid bg-background-secondary-default" style={{ gridTemplateColumns: '1fr 2fr 100px', borderBottom: B }}>
+        <div className="grid grid-cols-[1fr_1.6fr_84px] md:grid-cols-[1fr_2fr_100px] bg-background-secondary-default" style={{ borderBottom: B }}>
           {['Feature', 'Description', 'Importance'].map(h => (
             <div key={h} className="mono text-micro text-text-secondary py-[9px] px-[14px]" style={{ }}>{h}</div>
           ))}
         </div>
         {spec.features.map((f, i) => (
-          <div className="grid items-center" key={i} style={{ gridTemplateColumns: '1fr 2fr 100px', borderBottom: i < spec.features.length - 1 ? B : undefined }}>
+          <div className="grid grid-cols-[1fr_1.6fr_84px] md:grid-cols-[1fr_2fr_100px] items-center" key={i} style={{ borderBottom: i < spec.features.length - 1 ? B : undefined }}>
             <div className="mono text-mini font-semibold text-text-primary py-2.5 px-3.5">{f.name}</div>
             <div className="text-mini text-neutral-300 py-2.5 px-3.5">{f.description}</div>
             <div className="py-2.5 px-3.5">
@@ -228,7 +228,7 @@ export default async function ModelDetailPage({ params }: Props) {
 
       {/* P&L summary */}
       {totalPnl !== null && (
-        <div className="grid grid-cols-[repeat(4,1fr)] bg-background-primary-default overflow-hidden mb-7" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
+        <div className="grid grid-cols-2 md:grid-cols-4 bg-background-primary-default overflow-hidden mb-7" style={{ border: B, borderRadius: 'var(--radius-lg)' }}>
           <StatBlock label="Total P&L"   value={`${totalPnl >= 0 ? '+' : '-'}$${Math.abs(totalPnl).toLocaleString(undefined, { maximumFractionDigits: 0 })}`} accent={totalPnl > 0} sub="at paper stakes" />
           <StatBlock label="Avg Edge"    value={avgEdge !== null ? `${avgEdge >= 0 ? '+' : ''}${avgEdge.toFixed(1)}%` : '--'} />
           <StatBlock label="Win Rate"    value={winRate !== null ? `${winRate.toFixed(1)}%` : '--'} />

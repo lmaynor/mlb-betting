@@ -69,9 +69,11 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
   return (
     <div>
       <SportTabs sport={sport} active={tab} />
-      <AlignedBar style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap' }}>
-        <DayToggle today={today} yesterday={board.yesterday} days={board.days} selected={board.date} pinDates={!tracked} />
-      </AlignedBar>
+      {(board.yesterday || board.days.length > 0) && (
+        <AlignedBar style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px 16px', flexWrap: 'wrap' }}>
+          <DayToggle today={today} yesterday={board.yesterday} days={board.days} selected={board.date} pinDates={!tracked} />
+        </AlignedBar>
+      )}
       <GamesStrip games={games} selected={f.game} today={today} total={base.length} />
       <FilterBar sport={sport} kind={kind} showResult={tracked && f.day === 'yesterday'} />
       <div className="gutter-m max-w-page mx-auto p-6">
@@ -88,7 +90,7 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
         </div>
         {view === 'picks' && (
           <div className="flex items-center gap-1.5 mb-3.5 flex-wrap">
-            <span className="mono text-mini text-text-secondary">TIER:</span>
+            <span className="mono text-mini text-text-secondary">Tier</span>
             {[
               { id: 'all', label: 'All Actionable' },
               { id: 'official', label: 'Official Plays Only' },

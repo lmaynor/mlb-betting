@@ -50,7 +50,7 @@ export function SystemsTable({ sport, kind, stats = [], today = {}, level = 'h2'
             <tr>
               <th style={TH}>System</th>
               <th style={TH}>Market</th>
-              <th style={TH}>TYPE</th>
+              <th style={TH}>Type</th>
               <th style={TH}>Distribution</th>
               <th style={TH}>Status</th>
               {tracked ? (

@@ -311,7 +311,7 @@ function Section({ title, sub, children }: { title: string; sub?: string; childr
   return (
     <div className="border-t border-separator-border pt-3">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-        <h4 className="ui-heading tracking-caps text-text-secondary">{title}</h4>
+        <h4 className="ui-heading text-text-secondary">{title}</h4>
         {sub && <span className="mono text-mini text-text-secondary">{sub}</span>}
       </div>
       {children}

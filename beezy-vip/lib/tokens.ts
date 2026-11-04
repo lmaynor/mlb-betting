@@ -39,8 +39,6 @@ export const SURFACE_ELEVATED = {
 export const TABLE_TH = {
   fontSize: '10px',
   fontWeight: 600,
-  textTransform: 'uppercase',
-  letterSpacing: '0.06em',
   color: '#7d8596',
   background: '#11131a',
   padding: '9px 10px',
