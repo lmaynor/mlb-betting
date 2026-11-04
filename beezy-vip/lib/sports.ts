@@ -190,8 +190,8 @@ export type LeagueState = 'live' | 'empty' | 'soon'
 export interface LeaguePill { slug: SportSlug; label: string; state: LeagueState; note: string }
 
 /**
- * Every league filter (Odds Terminal, Game Lines) shows the same four leagues in the same order, so a league never disappears from
- * the row. A league with nothing to show stays in place, dimmed, and says why when it is picked. `live` is the leagues that have rows;
+ * Every league filter (Odds Terminal, Game Lines) shows every live pillar in registry order (SPORT_SLUGS), so a league never disappears
+ * from the row and a new sport appears with no change here. A league with nothing to show stays in place, dimmed, and says why when it is picked. `live` is the leagues that have rows;
  * `soon` is the leagues this page has no feed for at all.
  */
 export function leaguePills(live: readonly string[], soon: readonly string[] = [], date = new Date()): LeaguePill[] {
