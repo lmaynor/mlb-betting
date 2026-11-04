@@ -3,6 +3,7 @@ import { plainSummary } from '@/lib/markdown'
 import { DISCORD_URL, X_URL } from '@/lib/links'
 import { PRE_LAUNCH } from '@/lib/launch'
 import { PLANS } from '@/lib/plans'
+import { SITE_CONFIG } from '@/lib/site-config'
 
 export const SITE_URL = 'https://beezy.fyi'
 export const SITE_NAME = 'beezy.fyi'
@@ -20,6 +21,11 @@ export const ORGANIZATION_LD = {
   url: SITE_URL,
   logo: `${SITE_URL}/icon-512.png`,
   sameAs: [X_URL, DISCORD_URL],
+  email: SITE_CONFIG.contactEmail,
+  contactPoint: [
+    { '@type': 'ContactPoint', contactType: 'customer support', email: SITE_CONFIG.supportEmail },
+    { '@type': 'ContactPoint', contactType: 'sales', email: SITE_CONFIG.contactEmail },
+  ],
   description:
     'beezy.fyi is a quantitative sports betting analytics site: a +EV odds scanner, player prop projections and a public results ledger for NFL, NBA, NHL and MLB. Not affiliated with PicksBeezy, Breezy HR or beezy.net.',
   disambiguatingDescription: 'Independent sports betting analytics publication at beezy.fyi.',

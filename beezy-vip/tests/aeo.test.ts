@@ -98,6 +98,14 @@ describe('article dates and schema', () => {
   it('organization schema links its profiles', () => {
     expect(ORGANIZATION_LD.sameAs.length).toBeGreaterThan(0)
   })
+
+  it('organization schema publishes the general and support contact points', () => {
+    expect(ORGANIZATION_LD.email).toBe('hello@beezy.fyi')
+    expect(ORGANIZATION_LD.contactPoint).toEqual([
+      { '@type': 'ContactPoint', contactType: 'customer support', email: 'support@beezy.fyi' },
+      { '@type': 'ContactPoint', contactType: 'sales', email: 'hello@beezy.fyi' },
+    ])
+  })
 })
 
 describe('asOfLabel', () => {

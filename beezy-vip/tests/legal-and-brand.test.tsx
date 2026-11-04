@@ -31,6 +31,24 @@ describe('legal pages', () => {
     expect(SITE_CONFIG.discordInviteUrl).toMatch(/^https:\/\/discord\.gg\//)
   })
 
+  it('the config carries all three live addresses, one per job', () => {
+    expect(SITE_CONFIG.supportEmail).toBe('support@beezy.fyi')   // accounts, billing, product help
+    expect(SITE_CONFIG.contactEmail).toBe('hello@beezy.fyi')     // general public contact
+    expect(SITE_CONFIG.founderEmail).toBe('luc@beezy.fyi')       // partnerships and business, founder direct
+  })
+
+  it('footer and About route each address where it belongs', () => {
+    const footer = read('components/layout/footer.tsx')
+    expect(footer).toContain('SITE_CONFIG.contactEmail')         // Company > Contact is the general address
+    expect(footer).toContain('SITE_CONFIG.supportEmail')         // Legal > Support stays the help route
+    const about = read('app/about/page.tsx')
+    for (const field of ['SITE_CONFIG.contactEmail', 'SITE_CONFIG.supportEmail', 'SITE_CONFIG.founderEmail']) {
+      expect(about).toContain(field)                             // About is the one page that lists all three, labelled by job
+    }
+    const blocked = read('app/blocked/page.tsx')
+    expect(blocked).toContain('SITE_CONFIG.supportEmail')        // a geo-blocked visitor gets a help route, not just Discord
+  })
+
   it('terms state the sole-proprietor operator, the $0 / 30-day cap and Illinois law', () => {
     const t = read('app/legal/terms/page.tsx')
     expect(t).toContain('sole proprietor')
