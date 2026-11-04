@@ -39,8 +39,6 @@ export const SURFACE_ELEVATED = {
 export const TABLE_TH = {
   fontSize: '10px',
   fontWeight: 600,
-  textTransform: 'uppercase',
-  letterSpacing: '0.06em',
   color: '#7d8596',
   background: '#11131a',
   padding: '9px 10px',
@@ -176,10 +174,10 @@ export const SYSTEM_LABEL_SHORT: Record<string, string> = {
   BATTER_TB: 'TB', BATTER_HITS: 'HITS', BATTER_K: 'B.K', SB: 'SB',
   PITCHER_ER: 'ER', '1I': '1I', F1H: '1H', GAME: 'GAME', PROPS: 'MODEL',
   // compact chip / table-pill wording for the multi-sport systems
-  NFL_PASS_YDS: 'PASS YDS', NFL_PASS_TDS: 'PASS TDS', NFL_PASS_COMP: 'COMP', NFL_PASS_ATT: 'ATT', NFL_INT: 'INT',
-  NFL_RUSH_YDS: 'RUSH YDS', NFL_RUSH_ATT: 'CARRIES', NFL_REC_YDS: 'REC YDS', NFL_RECEPTIONS: 'REC', NFL_ANYTIME_TD: 'ANYTIME TD',
-  NHL_SOG: 'SOG', NHL_GOALS: 'GOALS', NHL_ASSISTS: 'ASSISTS', NHL_POINTS: 'POINTS', NHL_PP_POINTS: 'PP PTS',
-  NHL_SAVES: 'SAVES', NHL_BLOCKS: 'BLOCKS', NHL_ML: 'ML', NHL_SPREAD: 'PUCK LINE', NHL_TOTAL: 'TOTAL',
+  NFL_PASS_YDS: 'Pass yds', NFL_PASS_TDS: 'Pass tds', NFL_PASS_COMP: 'COMP', NFL_PASS_ATT: 'ATT', NFL_INT: 'INT',
+  NFL_RUSH_YDS: 'Rush yds', NFL_RUSH_ATT: 'Carries', NFL_REC_YDS: 'Rec yds', NFL_RECEPTIONS: 'REC', NFL_ANYTIME_TD: 'Anytime TD',
+  NHL_SOG: 'SOG', NHL_GOALS: 'Goals', NHL_ASSISTS: 'Assists', NHL_POINTS: 'Points', NHL_PP_POINTS: 'PP pts',
+  NHL_SAVES: 'SAVES', NHL_BLOCKS: 'Blocks', NHL_ML: 'ML', NHL_SPREAD: 'Puck line', NHL_TOTAL: 'TOTAL',
   NBA_PTS: 'PTS', NBA_REB: 'REB', NBA_AST: 'AST', NBA_3PM: '3PM', NBA_PRA: 'PRA', NBA_PR: 'PR', NBA_PA: 'PA', NBA_RA: 'RA',
   NBA_STL: 'STL', NBA_BLK: 'BLK', NBA_ML: 'ML', NBA_SPREAD: 'SPREAD', NBA_TOTAL: 'TOTAL',
   SOCCER_1X2: '1X2', SOCCER_TOTAL: 'TOTALS', SOCCER_BTTS: 'BTTS', SOCCER_DC: 'DC', SOCCER_DNB: 'DNB',

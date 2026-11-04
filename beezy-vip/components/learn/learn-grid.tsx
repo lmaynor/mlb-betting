@@ -28,7 +28,7 @@ export function LearnGrid({ articles }: { articles: LearnCard[] }) {
             <button
               key={c}
               onClick={() => setActive(c)}
-              className={cx('ui-heading button-press-motion cursor-pointer rounded-full border px-3.5 py-[7px] text-mini tracking-head',
+              className={cx('ui-heading button-press-motion cursor-pointer rounded-full border px-3.5 py-[7px] text-mini ',
                 on ? 'border-[var(--win-border)] bg-[var(--win-wash)] text-signal' : 'border-separator-border bg-background-primary-default text-text-secondary hover:bg-background-primary-hover')}
             >
               {c}
@@ -40,7 +40,7 @@ export function LearnGrid({ articles }: { articles: LearnCard[] }) {
       <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
         {shown.map(article => (
           <Link key={article.slug} href={`/learn/${article.slug}`} className="card-hover block rounded-xl border border-separator-border bg-background-primary-default p-5.5 no-underline shadow-card">
-            <div className="ui-heading mb-2.5 tracking-label text-text-secondary">
+            <div className="ui-heading mb-2.5 text-text-secondary">
               {article.category} · {article.keyword} · {article.readTime} min read
             </div>
             <div className="ui-display mb-2 text-[17px] tracking-[-0.01em]">{article.title}</div>

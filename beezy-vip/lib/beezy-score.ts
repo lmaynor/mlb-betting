@@ -87,21 +87,21 @@ export function explainScore(bet: Bet): string {
 
 export const TIER_META: Record<ScoreTier, { label: string; color: string; bg: string; border: string; glow: string }> = {
   strong: {
-    label: 'STRONG',
+    label: 'Strong',
     color: '#57F287',
     bg: 'rgba(87, 242, 135, 0.10)',
     border: 'rgba(87, 242, 135, 0.35)',
     glow: 'none',
   },
   lean: {
-    label: 'LEAN',
+    label: 'Lean',
     color: '#facc15',
     bg: 'rgba(250, 204, 21, 0.10)',
     border: 'rgba(250, 204, 21, 0.30)',
     glow: 'none',
   },
   watch: {
-    label: 'WATCH',
+    label: 'Watch',
     color: '#94a3b8',
     bg: 'rgba(148, 163, 184, 0.08)',
     border: '#1e2230',

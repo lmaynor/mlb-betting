@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { BrandWordmark } from '@/components/ui/brand-mark'
+import { SITE_CONFIG } from '@/lib/site-config'
 
 export const metadata: Metadata = {
   title:  'Not available in your region',
@@ -23,7 +24,8 @@ export default async function BlockedPage({ searchParams }: { searchParams: Prom
           Picks and +EV alerts are not offered where local rules restrict them. The free calculators, guides and the public results record remain available.
         </p>
         <p className="text-cozy text-text-secondary leading-[1.6]" style={{ margin: '0 0 16px' }}>
-          Think this is a mistake, or on a VPN? Turn it off and reload, or ask in the Discord.
+          Think this is a mistake, or on a VPN? Turn it off and reload, ask in the Discord, or email{' '}
+          <a className="text-link" href={`mailto:${SITE_CONFIG.supportEmail}`}>{SITE_CONFIG.supportEmail}</a>.
         </p>
         <div className="flex gap-4 flex-wrap text-cozy">
           <Link className="text-link" href="/tools">Calculators</Link>

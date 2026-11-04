@@ -2,12 +2,13 @@
 // Replaces direct Cloud SQL access for all bets-table queries.
 // The Cloud Run service handles auth and Cloud SQL via its own binding.
 
-import type { Bet, SystemStats, CLVDataPoint, TodaySlate, EvFeed, AnalyticsDeepDive, CockpitFeed, SportProjections } from '@/lib/types'
+import type { Bet, SystemStats, CLVDataPoint, TodaySlate, EvFeed, AnalyticsDeepDive, CockpitFeed, SportProjections, ShotChartResult, TrendsResult } from '@/lib/types'
 import type { GameProjectionsFeed } from '@/lib/game-lines'
 import type { GameOddsFeed } from '@/lib/game-odds'
 import { siteDateKey } from '@/lib/dates'
 import type { ProjectionSport, SportSlug } from '@/lib/sports'
 import type { OddsBoard } from '@/lib/odds-screen'
+import { suppressJunkBooks } from '@/lib/offshore'
 
 function normalizeApiUrl(value: string) {
   const trimmed = value.trim().replace(/\/+$/, '')
@@ -282,7 +283,7 @@ export async function apiGetOddsBoard(sport: SportSlug, opts: { day?: string; st
   if (opts.day) sp.set('day', opts.day)
   if (opts.stat) sp.set('stat', opts.stat)
   if (opts.limit) sp.set('limit', String(opts.limit))
-  return apiFetch<OddsBoard>(`/api/public/odds/board?${sp.toString()}`, 60, `/api/odds-board?${sp.toString()}`)
+  return suppressJunkBooks(await apiFetch<OddsBoard>(`/api/public/odds/board?${sp.toString()}`, 60, `/api/odds-board?${sp.toString()}`))
 }
 
 /** Quantitative game-line projections (ML, Spread/Puck Line, Total) for NBA / NHL. */
@@ -310,11 +311,11 @@ export async function apiGetGameOddsBoard(
   if (opts.day) sp.set('day', opts.day)
   if (opts.market) sp.set('market', opts.market)
   if (opts.limit) sp.set('limit', String(opts.limit))
-  return apiFetch<GameOddsFeed>(
+  return suppressJunkBooks(await apiFetch<GameOddsFeed>(
     `/api/public/games/odds?${sp.toString()}`,
     60,
     `/api/games/odds?${sp.toString()}`,
-  )
+  ))
 }
 
 /** /edge multi-sport prop cockpit: candidates for MLB / NFL / NHL / NBA with each player's last-10 game log vs the line. */
@@ -325,6 +326,27 @@ export async function apiGetEdgeCockpit(params?: { sport?: string; minEv?: numbe
   if (params?.limit)         sp.set('limit', String(params.limit))
   const qs = sp.toString() ? `?${sp.toString()}` : ''
   return apiFetch<CockpitFeed>(`/api/public/edge/cockpit${qs}`, 60, `/api/edge-cockpit${qs}`)
+}
+
+/** /edge NBA shot chart for one player (browser -> /api/shot-chart proxy, which applies the cockpit access policy). */
+export interface ShotChartQuery { player: string; season?: number; opp?: string | null; last?: number | null; venue?: 'home' | 'away' | null; vs?: string | null; period?: number | null }
+export async function apiGetShotChart(params: ShotChartQuery): Promise<ShotChartResult> {
+  const sp = new URLSearchParams({ sport: 'nba', player: params.player })
+  if (params.season != null) sp.set('season', String(params.season))
+  if (params.opp)            sp.set('opp', params.opp)
+  if (params.last)           sp.set('last', String(params.last))
+  if (params.venue)          sp.set('venue', params.venue)
+  if (params.vs)             sp.set('vs', params.vs)
+  if (params.period)         sp.set('period', String(params.period))
+  return apiFetch<ShotChartResult>(`/api/public/edge/shotchart?${sp.toString()}`, 300, `/api/shot-chart?${sp.toString()}`)
+}
+
+/** /edge NBA prop trends for one player and market (browser -> /api/trends proxy, same access policy as the cockpit). */
+export async function apiGetTrends(params: { player: string; stat: string; line?: number | null; opp?: string | null }): Promise<TrendsResult> {
+  const sp = new URLSearchParams({ sport: 'nba', player: params.player, stat: params.stat })
+  if (params.line != null) sp.set('line', String(params.line))
+  if (params.opp)          sp.set('opp', params.opp)
+  return apiFetch<TrendsResult>(`/api/public/edge/trends?${sp.toString()}`, 300, `/api/trends?${sp.toString()}`)
 }
 
 export async function apiGetAnalyticsDeepDive(

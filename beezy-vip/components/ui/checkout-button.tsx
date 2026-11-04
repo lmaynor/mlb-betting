@@ -42,7 +42,7 @@ export function CheckoutButton({
       <button
         onClick={handleClick}
         disabled={loading}
-        className="mono block w-full text-center text-cozy tracking-[0.01em] py-[11px] px-4 font-semibold"
+        className="mono block w-full text-center text-cozy py-[11px] px-4 font-semibold"
         style={{
           cursor: loading ? 'not-allowed' : 'pointer',
           opacity: loading ? 0.5 : 1,

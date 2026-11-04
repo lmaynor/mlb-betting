@@ -97,8 +97,8 @@ describe('MLB projections on the unified board', () => {
     render(board())
     expect(screen.queryByText('UNVALIDATED')).toBeNull()
     const heads = screen.getAllByRole('columnheader').map(h => h.textContent)
-    expect(heads).toContain('MARKET FAIR')
-    expect(heads).not.toContain('FORM')
+    expect(heads).toContain('Market fair')
+    expect(heads).not.toContain('Form')
     expect(screen.queryByText(/L5 /)).toBeNull()
   })
 
@@ -112,10 +112,10 @@ describe('MLB projections on the unified board', () => {
 
   it('sport tabs mark the current view and link the two views of MLB', () => {
     render(<SportTabs sport="mlb" active="systems" />)
-    expect(screen.getByRole('link', { name: 'SYSTEMS' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByRole('link', { name: 'PICKS & +EV' })).not.toHaveAttribute('aria-current')
-    expect(screen.getByRole('link', { name: 'PICKS & +EV' })).toHaveAttribute('href', '/picks/mlb')
-    expect(screen.queryByRole('link', { name: 'ALL PROJECTIONS' })).toBeNull()
+    expect(screen.getByRole('link', { name: 'Systems' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Picks & +EV' })).not.toHaveAttribute('aria-current')
+    expect(screen.getByRole('link', { name: 'Picks & +EV' })).toHaveAttribute('href', '/picks/mlb')
+    expect(screen.queryByRole('link', { name: 'All projections' })).toBeNull()
   })
 })
 
@@ -144,10 +144,10 @@ describe('MLB picks on the same board (bets as rows)', () => {
 
   it('renders on the shared table with a RESULT column only when something is settled', () => {
     const { rerender } = render(<SportProjectionsBoard sport="mlb" rows={rows.slice(0, 3)} />)
-    expect(screen.queryByRole('columnheader', { name: 'RESULT' })).toBeNull()
+    expect(screen.queryByRole('columnheader', { name: 'Result' })).toBeNull()
     expect(within(screen.getByText('Gerrit Cole').closest('tr')!).getByText('PICK')).toBeInTheDocument()
     rerender(<SportProjectionsBoard sport="mlb" rows={rows} />)
-    expect(screen.getByRole('columnheader', { name: 'RESULT' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Result' })).toBeInTheDocument()
     expect(screen.getByText('WIN')).toBeInTheDocument()
   })
 

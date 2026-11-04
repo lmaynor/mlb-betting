@@ -213,7 +213,7 @@ describe('OddsMatrix', () => {
     expect(rows.map(r => ['FanDuel', 'Novig', 'DraftKings'].findIndex(n => r.textContent?.includes(n)))).toEqual([0, 1, 2])   // +115, +110, -108
     expect(rows[0]).toHaveAttribute('data-best', 'true')
     expect(rows[1]).not.toHaveAttribute('data-best')
-    expect(rows[0]).toHaveTextContent('TARGET')
+    expect(rows[0]).toHaveTextContent('Target')
     expect(rows[1]).toHaveTextContent('+110')
     expect(rows[1].textContent).toContain('\u2013')                                          // novig has no under price
   })

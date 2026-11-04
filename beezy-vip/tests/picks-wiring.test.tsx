@@ -130,8 +130,8 @@ describe('games strip and day toggle', () => {
   it('DayToggle is YESTERDAY | TODAY, marks the shown day, clears the game and keeps a clean URL when dates are not pinned', () => {
     render(<DayToggle today="2026-10-17" yesterday={{ date: '2026-10-16', label: 'FRI OCT 16' }} days={[{ date: '2026-10-17', label: 'SAT OCT 17' }]} selected="2026-10-16" pinDates={false} />)
     const nav = screen.getByRole('navigation', { name: 'Day' })
-    const today = within(nav).getByText('TODAY', { exact: false }).closest('a')!
-    const yest = within(nav).getByText('YESTERDAY', { exact: false }).closest('a')!
+    const today = within(nav).getByText('Today', { exact: false }).closest('a')!
+    const yest = within(nav).getByText('Yesterday', { exact: false }).closest('a')!
     expect(today.getAttribute('href')).toBe('/picks/nfl?market=NFL_REC_YDS')
     expect(yest.getAttribute('href')).toBe('/picks/nfl?market=NFL_REC_YDS&day=yesterday')
     expect(yest).toHaveAttribute('aria-current', 'date')

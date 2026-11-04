@@ -51,10 +51,10 @@ def test_dfs_alt_started_and_single_book_lines_are_dropped():
 
 
 def test_one_sided_yes_quote_keeps_under_null():
-    yes = {"key": "bovada", "markets": [{"key": "player_points", "outcomes": [
+    yes = {"key": "pointsbet", "markets": [{"key": "player_points", "outcomes": [
         {"name": "Yes", "description": "Jo Doe", "price": 120, "point": 24.5}]}]}
     b = ob.build_board("nba", [event([*FAIR, yes])], NOW)
-    q = {x["book"]: x for x in b["rows"][0]["books"]}["bovada"]
+    q = {x["book"]: x for x in b["rows"][0]["books"]}["pointsbet"]
     assert q["over"] == 120 and q["under"] is None
 
 
@@ -345,3 +345,43 @@ def test_public_odds_board_fresh_empty_slate_is_not_stale(monkeypatch):
     out = pa.get_odds_board("NBA")
     assert out["count"] == 0 and out["status"] == "idle" and out["stale"] is False
 
+
+
+# ---- junk offshore books are dropped at the source; pinnacle stays as the sharp reference (2026-11-02) --------------
+JUNK = ("bovada", "betonline", "betonlineag", "mybookie", "betus", "matchbook", "betfair", "lowvig")
+
+
+def test_junk_offshore_set_is_offshore_minus_pinnacle():
+    from ev.props import JUNK_OFFSHORE_BOOKS, OFFSHORE_BOOKS
+    assert isinstance(JUNK_OFFSHORE_BOOKS, frozenset)
+    assert "pinnacle" in OFFSHORE_BOOKS and "pinnacle" not in JUNK_OFFSHORE_BOOKS
+    assert JUNK_OFFSHORE_BOOKS == OFFSHORE_BOOKS - {"pinnacle"} and set(JUNK) <= JUNK_OFFSHORE_BOOKS
+
+
+def test_junk_offshore_quotes_never_reach_a_props_row_but_pinnacle_does():
+    junk = [book(j, -105, -115) for j in JUNK]
+    b = ob.build_board("nba", [event([*FAIR, *junk, book("pinnacle", -105, -115)])], NOW)
+    assert b["count"] == 1
+    names = {q["book"] for q in b["rows"][0]["books"]}
+    assert names == {"betmgm", "caesars", "draftkings", "fanduel", "pinnacle"}
+    assert not names & set(JUNK) and not set(JUNK) & set(b["books"])
+    assert b["offshore_books"] == ["pinnacle"]
+
+
+def test_props_row_that_only_had_junk_plus_one_real_book_is_dropped():
+    # bovada + betonline + one real book was a 3-book row before; without the junk it is a single-book row and vanishes
+    only = [book("draftkings", -110, -110, point=31.5, player="Edge Guy"), book("bovada", -110, -110, point=31.5, player="Edge Guy"),
+            book("betonline", -112, -108, point=31.5, player="Edge Guy")]
+    b = ob.build_board("nba", [event([*FAIR, *only])], NOW)
+    assert all(r["player"] != "Edge Guy" for r in b["rows"])
+    # and a row quoted ONLY by junk books vanishes outright, with no offshore_books left over
+    b2 = ob.build_board("nba", [event([book("bovada", -110, -110), book("betonline", -110, -110), book("mybookie", -110, -110)])], NOW)
+    assert b2["count"] == 0 and b2["offshore_books"] == [] and b2["books"] == []
+
+
+def test_junk_books_do_not_feed_the_curve_or_modal_line():
+    # junk books quote a different line than the real ones: they must not create a modal line / row of their own
+    real = [book(b, -110, -110, point=24.5) for b in ("draftkings", "fanduel")]
+    junk = [book(j, -110, -110, point=26.5) for j in ("bovada", "betonline", "mybookie")]
+    b = ob.build_board("nba", [event([*real, *junk])], NOW)
+    assert [r["line"] for r in b["rows"]] == [24.5] and b["rows"][0]["modal_point"] == 24.5

@@ -72,8 +72,8 @@ describe('/models by sport', () => {
 describe('Prop Research: all projections', () => {
   it('ResearchTabs links the cockpit and the Scanner projections tab and marks the active one', () => {
     render(<ResearchTabs active="cockpit" />)
-    expect(screen.getByRole('link', { name: 'PROP COCKPIT' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByRole('link', { name: 'ALL PROJECTIONS' })).toHaveAttribute('href', '/ev/projections')
+    expect(screen.getByRole('link', { name: 'Prop cockpit' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'All projections' })).toHaveAttribute('href', '/ev/projections')
   })
 
   it('the cockpit carries the tabs, and the projections page loads every sport\'s unfiltered projection board', () => {

@@ -37,11 +37,11 @@ export function Footer() {
             { title: 'Picks',   links: [['Odds Terminal','/ev'],['Projections','/ev/projections'],['Prop Research','/edge'],['Top Signals','/picks'],['Graded History','/picks/history'],['Daily Card','/cheat-sheet'],['Results','/results'],['Analytics','/analytics']] },
             { title: 'Sports',  links: [['MLB','/picks/mlb'],['NFL','/sports/nfl'],['NHL','/sports/nhl'],['NBA','/sports/nba']] },
             { title: 'Tools',   links: [['Odds & Vig Calculator','/tools/odds-calculator'],['Kelly Calculator','/tools/kelly-calculator'],['Boost EV Calculator','/tools/boost-ev'],['Slate','/tools/slate']] },
-            { title: 'Company', links: [['Models','/models'],['Results','/results'],['Pricing','/pricing'],['Learn','/learn']] },
+            { title: 'Company', links: [['Models','/models'],['Results','/results'],['Pricing','/pricing'],['Learn','/learn'],['Contact',`mailto:${SITE_CONFIG.contactEmail}`]] },
             { title: 'Legal',   links: [['Terms of Service','/legal/terms'],['Privacy Policy','/legal/privacy'],['Responsible Gambling','/legal/responsible-gambling'],['Refund Policy','/legal/refunds'],['Support',`mailto:${SITE_CONFIG.supportEmail}`],[SITE_CONFIG.xHandle,SITE_CONFIG.xUrl]] },
           ].map(col => (
             <div key={col.title}>
-              <div className="ui-heading mb-3.5 text-mini tracking-label text-text-secondary">
+              <div className="ui-heading mb-3.5 text-mini text-text-secondary">
                 {col.title}
               </div>
               {col.links.map(([label, href]) => (

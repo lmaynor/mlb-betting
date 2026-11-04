@@ -192,7 +192,7 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
               {platform === 'ios' ? (
                 <>
                   <div className="flex items-center gap-2.5 rounded-lg border border-border-button-default bg-background-secondary-default px-3 py-2.5 text-caption-1-regular">
-                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-chip bg-background-tertiary-default text-mini font-bold">
+                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-chip bg-background-tertiary-default text-mini font-semibold">
                       1
                     </span>
                     <span className="flex-1 text-text-secondary">
@@ -205,7 +205,7 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
                     </svg>
                   </div>
                   <div className="flex items-center gap-2.5 rounded-lg border border-border-button-default bg-background-secondary-default px-3 py-2.5 text-caption-1-regular">
-                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-chip bg-background-tertiary-default text-mini font-bold">
+                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-chip bg-background-tertiary-default text-mini font-semibold">
                       2
                     </span>
                     <span className="flex-1 text-text-secondary">
@@ -213,7 +213,7 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
                     </span>
                   </div>
                   <div className="flex items-center gap-2.5 rounded-lg border border-border-button-default bg-background-secondary-default px-3 py-2.5 text-caption-1-regular">
-                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-chip bg-background-tertiary-default text-mini font-bold">
+                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-chip bg-background-tertiary-default text-mini font-semibold">
                       3
                     </span>
                     <span className="flex-1 text-text-secondary">
@@ -224,7 +224,7 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
               ) : platform === 'macos_safari' ? (
                 <>
                   <div className="flex items-center gap-2.5 rounded-lg border border-border-button-default bg-background-secondary-default px-3 py-2.5 text-caption-1-regular">
-                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-chip bg-background-tertiary-default text-mini font-bold">
+                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-chip bg-background-tertiary-default text-mini font-semibold">
                       1
                     </span>
                     <span className="flex-1 text-text-secondary">
@@ -232,7 +232,7 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
                     </span>
                   </div>
                   <div className="flex items-center gap-2.5 rounded-lg border border-border-button-default bg-background-secondary-default px-3 py-2.5 text-caption-1-regular">
-                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-chip bg-background-tertiary-default text-mini font-bold">
+                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-chip bg-background-tertiary-default text-mini font-semibold">
                       2
                     </span>
                     <span className="flex-1 text-text-secondary">
@@ -240,7 +240,7 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
                     </span>
                   </div>
                   <div className="flex items-center gap-2.5 rounded-lg border border-border-button-default bg-background-secondary-default px-3 py-2.5 text-caption-1-regular">
-                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-chip bg-background-tertiary-default text-mini font-bold">
+                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-chip bg-background-tertiary-default text-mini font-semibold">
                       3
                     </span>
                     <span className="flex-1 text-text-secondary">
@@ -251,7 +251,7 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
               ) : (
                 <>
                   <div className="flex items-center gap-2.5 rounded-lg border border-border-button-default bg-background-secondary-default px-3 py-2.5 text-caption-1-regular">
-                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-chip bg-background-tertiary-default text-mini font-bold">
+                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-chip bg-background-tertiary-default text-mini font-semibold">
                       1
                     </span>
                     <span className="flex-1 text-text-secondary">
@@ -259,7 +259,7 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
                     </span>
                   </div>
                   <div className="flex items-center gap-2.5 rounded-lg border border-border-button-default bg-background-secondary-default px-3 py-2.5 text-caption-1-regular">
-                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-chip bg-background-tertiary-default text-mini font-bold">
+                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-chip bg-background-tertiary-default text-mini font-semibold">
                       2
                     </span>
                     <span className="flex-1 text-text-secondary">
@@ -267,7 +267,7 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
                     </span>
                   </div>
                   <div className="flex items-center gap-2.5 rounded-lg border border-border-button-default bg-background-secondary-default px-3 py-2.5 text-caption-1-regular">
-                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-chip bg-background-tertiary-default text-mini font-bold">
+                    <span className="inline-flex size-[22px] shrink-0 items-center justify-center rounded-chip bg-background-tertiary-default text-mini font-semibold">
                       3
                     </span>
                     <span className="flex-1 text-text-secondary">

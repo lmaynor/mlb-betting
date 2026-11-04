@@ -114,5 +114,7 @@ export function limitGameOdds(feed: GameOddsFeed, viewer: Viewer, env?: Env): { 
     count: keptRows.length,
     games: (feed.games ?? []).filter(g => perGame.has(g.game_key)).map(g => ({ ...g, n_rows: perGame.get(g.game_key) ?? 0 })),
   }
+  // movement of a game the viewer's preview withheld never rides along
+  if (feed.history) out.history = Object.fromEntries(Object.entries(feed.history).filter(([k]) => perGame.has(k.split('|')[0])))
   return { feed: out, locked: rows.length - keptRows.length }
 }

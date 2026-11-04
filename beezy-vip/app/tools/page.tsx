@@ -21,7 +21,7 @@ const TOOLS: { href: string; title: string; description: string; access: Access 
 
 const ACCESS_COLOR: Record<Access, string> = { Free: 'var(--signal)', Pro: 'var(--lilac)', 'Coming soon': 'var(--color-text-secondary)' }
 
-const TH = 'border-b border-separator-border bg-background-secondary-default px-3 py-2.5 text-left font-semibold tracking-head text-text-secondary'
+const TH = 'border-b border-separator-border bg-background-secondary-default px-3 py-2.5 text-left font-semibold text-text-secondary'
 const TD = 'border-b border-border-table p-3 align-middle'
 
 export default function ToolsPage() {
@@ -32,18 +32,21 @@ export default function ToolsPage() {
         <span className="mono text-caption-1-regular text-text-secondary">3 free calculators &middot; 2 Pro dashboards &middot; 1 coming soon</span>
       </div>
       <div className="overflow-x-auto rounded-xl border border-separator-border bg-background-primary-default shadow-card">
-        <table className="w-full min-w-[560px] border-collapse">
+        <table className="w-full border-collapse md:min-w-[560px]">
           <thead>
-            <tr><th className={TH}>TOOL</th><th className={TH}>WHAT IT DOES</th><th className={TH}>ACCESS</th></tr>
+            <tr><th className={TH}>Tool</th><th className={`${TH} hidden md:table-cell`}>What it does</th><th className={`${TH} hidden md:table-cell`}>Access</th></tr>
           </thead>
           <tbody>
             {TOOLS.map(t => (
               <tr key={t.href} className="sys-row">
-                <td className={`${TD} whitespace-nowrap`}>
+                <td className={`${TD} md:whitespace-nowrap`}>
                   <Link href={t.href} className="text-body-semibold text-text-primary no-underline">{t.title}</Link>
+                  {/* On a phone the description and access sit under the name; the table keeps three columns from md up. */}
+                  <div className="mt-1 text-body-2-regular text-text-secondary md:hidden">{t.description}</div>
+                  <div className="mono mt-1 text-caption-2-semibold md:hidden" style={{ color: ACCESS_COLOR[t.access] }}>{t.access}</div>
                 </td>
-                <td className={`${TD} text-body-2-regular text-text-secondary`}>{t.description}</td>
-                <td className={`mono ${TD} whitespace-nowrap text-caption-2-semibold`} style={{ color: ACCESS_COLOR[t.access] }}>{t.access.toUpperCase()}</td>
+                <td className={`${TD} hidden text-body-2-regular text-text-secondary md:table-cell`}>{t.description}</td>
+                <td className={`mono ${TD} hidden whitespace-nowrap text-caption-2-semibold md:table-cell`} style={{ color: ACCESS_COLOR[t.access] }}>{t.access}</td>
               </tr>
             ))}
           </tbody>

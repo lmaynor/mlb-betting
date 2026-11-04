@@ -34,7 +34,7 @@ export function BottomNav() {
             <span className={cx('inline-flex h-[26px] w-9 items-center justify-center rounded-full transition-colors', active ? 'bg-[var(--win-wash)]' : 'bg-transparent')}>
               <tab.Icon size={18} strokeWidth={active ? 2.3 : 1.9} color={color} />
             </span>
-            <span className="ui-heading tracking-[0.03em]">
+            <span className="ui-heading">
               {tab.label}
             </span>
           </Link>

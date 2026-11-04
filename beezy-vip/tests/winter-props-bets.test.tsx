@@ -203,7 +203,7 @@ describe('projection board on a phone', () => {
   it('every column the phone drops is marked, and the long name sits in a truncating cell with its full text in the title', () => {
     const { container } = render(<SportProjectionsBoard sport="nhl" rows={fromSportProjections([proj()])} />)
     const heads = [...container.querySelectorAll('th')].map(th => [th.textContent, th.classList.contains('pb-hide-m')])
-    expect(heads).toEqual([['SCORE', false], ['PLAYER', false], ['TEAM', true], ['MARKET & LINE', false], ['MODEL', false], ['MARKET FAIR', true], ['FORM', true], ['BEST PRICE', false], ['MODEL EDGE', false], ['PRICE EV', true]])
+    expect(heads).toEqual([['Score', false], ['Player', false], ['Team', true], ['Market & line', false], ['Model', false], ['Market fair', true], ['Form', true], ['Best price', false], ['Model edge', false], ['Price EV', true]])
     const cells = [...container.querySelectorAll('tbody tr td')]
     expect(cells.map(td => td.classList.contains('pb-hide-m'))).toEqual(heads.map(h => h[1]))
     expect(container.querySelector('td.pb-player .pb-name')).toHaveAttribute('title', proj().player)

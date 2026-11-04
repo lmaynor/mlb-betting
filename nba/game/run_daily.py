@@ -250,6 +250,36 @@ def extract_game_market_odds(event: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def _finite(x: Any, nd: int = 2) -> Optional[float]:
+    """Round a number for the payload; None for a missing / non-finite value (json would emit NaN)."""
+    try:
+        v = float(x)
+    except (TypeError, ValueError):
+        return None
+    return round(v, nd) if np.isfinite(v) else None
+
+
+def _nba_driver_fields(pg: PricedGame, m_feat: Any) -> Dict[str, Any]:
+    """The drivers behind a game's projection, for the game metadata: the model means / pace the engine produced, the schedule
+    fatigue flags and the injury-impact terms the feature store computed. Only quantities that already exist; a field the
+    feature object does not carry is None, never invented."""
+    fat = getattr(m_feat, "fatigue", None)
+    return {
+        "mu_margin": _finite(pg.mu_margin),
+        "mu_total": _finite(pg.mu_total),
+        "exp_pace": _finite(pg.exp_pace),
+        "rest_home": getattr(fat, "rest_home", None),
+        "rest_away": getattr(fat, "rest_away", None),
+        "b2b_home": None if fat is None else bool(getattr(fat, "b2b_home", False)),
+        "b2b_away": None if fat is None else bool(getattr(fat, "b2b_away", False)),
+        "b2b_road_disadvantage": None if fat is None else bool(getattr(fat, "b2b_road_disadvantage", False)),
+        "home_points_lost": _finite(getattr(m_feat, "home_points_lost", None)),
+        "away_points_lost": _finite(getattr(m_feat, "away_points_lost", None)),
+        "injury_margin_delta": _finite(getattr(m_feat, "injury_margin_delta", None)),
+        "injury_total_delta": _finite(getattr(m_feat, "injury_total_delta", None)),
+    }
+
+
 def run_nba_game_predictions(
     target_date: Optional[str] = None,
     write_gcs: bool = False,
@@ -313,19 +343,21 @@ def run_nba_game_predictions(
         commence = str(ev.get("commence_time") or "")
         game_key = f"nba:{date_str}:{away}@{home}"
 
-        games_meta.append({
-            "game_key": game_key,
-            "away": away,
-            "home": home,
-            "start": commence,
-        })
-
         k_pred = kalman.predict_game(home, away, date_str)
         m_feat = feature_store.extract_matchup_features(home, away, date_str, injuries)
         mkt_odds = extract_game_market_odds(ev)
 
         pg = engine.price_full_game(game_key, k_pred, m_feat, market_odds=mkt_odds)
         priced_games.append(pg)
+
+        # Game metadata + the model's own drivers (every field below is already computed by the engine / feature store)
+        games_meta.append({
+            "game_key": game_key,
+            "away": away,
+            "home": home,
+            "start": commence,
+            **_nba_driver_fields(pg, m_feat),
+        })
 
         # Convert markets to SportProjectionRow format for /picks/games and /picks/nba
         for m in pg.markets:

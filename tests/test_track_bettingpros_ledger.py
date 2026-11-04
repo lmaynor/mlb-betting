@@ -27,6 +27,20 @@ TODAY = datetime.now(timezone.utc).date().isoformat()
 YESTERDAY = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
 
 
+@pytest.fixture(autouse=True)
+def frozen_clock(monkeypatch):
+    """Pin the runner's clock to midday on TODAY. TODAY is computed once at import, so a suite that straddles
+    UTC midnight (CI collects at 23:59 and runs these after 00:00) would otherwise read a different ledger day."""
+    fixed = datetime.fromisoformat(TODAY).replace(hour=12, tzinfo=timezone.utc)
+
+    class _Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed if tz is None else fixed.astimezone(tz)
+
+    monkeypatch.setattr(tbp, "datetime", _Clock)
+
+
 @pytest.fixture
 def local_storage(monkeypatch, tmp_path):
     monkeypatch.delenv("MLB_GCS_BUCKET", raising=False)

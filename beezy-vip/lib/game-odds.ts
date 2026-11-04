@@ -13,9 +13,12 @@ import { kellySizing } from '@/lib/ev-math'
 import { formatOdds } from '@/lib/odds'
 import { isOffshore } from '@/lib/offshore'
 import { bookDisplay, canonBook } from '@/lib/tokens'
+import type { MoveSeries } from '@/lib/line-move'
 import { buildScreenRows, computeRowArb, type ArbResult, type BoardRow, type DevigMethod } from '@/lib/odds-screen'
 
 export type GameMarket = 'ml' | 'spread' | 'total' | 'btts'
+/** The two-way markets the NBA / NHL board, popup and model pane run on; BTTS and the 1X2 draw leg are soccer-only (SoccerGamesClient). */
+export type TwoWayMarket = Exclude<GameMarket, 'btts'>
 export type GameOddsStatus = 'live' | 'stale' | 'awaiting_lines' | 'unavailable'
 
 export interface GameOddsBook { book: string; a: number | null; b: number | null; /** soccer 1X2 only: the draw price (the third leg); absent / null on two-way rows */ draw?: number | null }
@@ -45,6 +48,8 @@ export interface GameOddsFeed {
   offshore_books: string[]
   games: GameOddsGame[]
   rows: GameOddsRow[]
+  /** how each game's main line and market fair price moved since the board first saw it: `<game_key>|<market>` -> points (absent on an older backend) */
+  history?: Record<string, MoveSeries>
   /** added by the viewer-gated proxy / page: how many rows the access policy withheld */
   locked?: number
 }
@@ -54,7 +59,7 @@ export const GAME_ODDS_MARKETS = ['ml', 'spread', 'total', 'btts'] as const
 export const GAME_ODDS_MAX_LIMIT = 5000
 /** Fewest reference books behind a fair value (the Odds Terminal's MIN_REF): below it a row shows prices only. */
 export const GAME_MIN_REF = 3
-export const GAME_PRICES_LABEL = 'UNVALIDATED'
+export const GAME_PRICES_LABEL = 'Unvalidated'
 export const GAME_PRICES_NOTE = 'market prices, not a tested edge'
 
 // ------------------------------------------------------------------------------------------------------ query validation
@@ -162,9 +167,19 @@ export function startLabel(iso: string): string {
 }
 
 /** '12 MIN' / '3.5 H' / '2 D' for the header strip; '--' when the feed has no age. */
+/** Stoplight bins for how old the board's newest prices are: green up to 15 min, amber up to an hour, red beyond that (or when the feed says stale). */
+export type Freshness = 'fresh' | 'aging' | 'old'
+export const FRESH_MAX_MIN = 15
+export const AGING_MAX_MIN = 60
+export function freshnessBin(mins: number | null | undefined, stale = false): Freshness | null {
+  if (stale) return 'old'
+  if (mins == null || !isFinite(mins)) return null
+  return mins <= FRESH_MAX_MIN ? 'fresh' : mins <= AGING_MAX_MIN ? 'aging' : 'old'
+}
+
 export function ageText(mins: number | null | undefined): string {
   if (mins == null || !isFinite(mins)) return '--'
-  return mins < 90 ? `${Math.max(1, Math.round(mins))} MIN` : mins < 2880 ? `${(mins / 60).toFixed(1)} H` : `${Math.round(mins / 1440)} D`
+  return mins < 90 ? `${Math.max(1, Math.round(mins))} min` : mins < 2880 ? `${(mins / 60).toFixed(1)} h` : `${Math.round(mins / 1440)} d`
 }
 
 // ----------------------------------------------------------------------------------------------------------- view model

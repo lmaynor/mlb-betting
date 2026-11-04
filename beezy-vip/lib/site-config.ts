@@ -10,7 +10,13 @@ export const SITE_CONFIG = {
   tagline: 'Quantitative Sports Analytics & +EV Market Terminal',
   url: 'https://beezy.fyi',
   apiUrl: 'https://api.beezy.fyi',
+  // The three live addresses (iCloud+ custom domain, live 2026-11-03), one per job: support@ is the user-facing
+  // help route (accounts, billing, product), hello@ is the general public contact (footer, About, listings),
+  // luc@ is the founder directly (partnerships and business). Transactional mail is NOT these: Clerk sends auth
+  // mail and Stripe sends receipts.
   supportEmail: 'support@beezy.fyi',
+  contactEmail: 'hello@beezy.fyi',
+  founderEmail: 'luc@beezy.fyi',
   xHandle: '@beezy_fyi',
   xUrl: X_URL,
   discordInviteUrl: DISCORD_URL,

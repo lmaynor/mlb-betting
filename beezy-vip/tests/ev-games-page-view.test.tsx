@@ -33,30 +33,45 @@ beforeEach(() => {
 })
 
 describe('/ev/games view and sport routing (server-side)', () => {
-  it('defaults to PRICES: fetches both odds feeds, no projections', async () => {
+  it('defaults to the BOARD: both odds feeds and both model feeds (the card\'s Analysis tab needs them), one row per game', async () => {
     render(await page({}))
     expect(oddsMock.mock.calls.map(c => c[0]).sort()).toEqual(['nba', 'nhl'])
-    expect(projMock).not.toHaveBeenCalled()
-    expect(screen.getByTestId('game-prices-strip')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'PRICES' })).toHaveAttribute('aria-current', 'page')
+    expect(projMock.mock.calls.map(c => c[0]).sort()).toEqual(['nba', 'nhl'])
+    expect(screen.getByTestId('best-board')).toBeInTheDocument()
+    expect(screen.getAllByTestId('board-row').length).toBeGreaterThan(0)
+    expect(screen.getByRole('link', { name: 'Board' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByTestId('game-popup')).toBeNull()
   })
-  it('?sport narrows the fetch, and an unreachable feed degrades to the unavailable state', async () => {
+  it('an analysis link opens that game\'s card straight on its Analysis tab', async () => {
+    render(await page({ view: 'analysis', game: 'nba:g' }))
+    expect(screen.getByTestId('game-popup')).toBeInTheDocument()
+    expect(screen.getByTestId('tab-analysis')).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByTestId('model-empty')).toBeInTheDocument()
+  })
+  it('an old ?game= link with no view does the same', async () => {
+    render(await page({ game: 'nba:g' }))
+    expect(screen.getByTestId('tab-analysis')).toHaveAttribute('aria-selected', 'true')
+  })
+  it('the retired MODEL view lands on the board', async () => {
+    render(await page({ view: 'model', sport: 'nhl' }))
+    expect(screen.getByTestId('best-board')).toBeInTheDocument()
+  })
+  it('an unreachable feed degrades to the unavailable state', async () => {
     oddsMock.mockRejectedValue(new Error('down'))
-    render(await page({ sport: 'nba' }))
-    expect(oddsMock.mock.calls.map(c => c[0])).toEqual(['nba'])
+    render(await page({}))
     expect(screen.getByRole('status').textContent).toMatch(/Game-line prices are not published yet/)
   })
-  it('?view=model keeps the existing projection view and does not fetch the price feeds', async () => {
-    render(await page({ view: 'model', sport: 'nhl' }))
-    expect(projMock.mock.calls.map(c => c[0])).toEqual(['nhl'])
-    expect(oddsMock).not.toHaveBeenCalled()
-    expect(screen.getByRole('link', { name: 'MODEL' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByTestId('game-lines-label').textContent).toMatch(/UNVALIDATED/i)
+  it('ALL LINES keeps the all-rows screen and ?sport narrows its fetch', async () => {
+    render(await page({ view: 'table', sport: 'nba' }))
+    expect(oddsMock.mock.calls.map(c => c[0])).toEqual(['nba'])
+    expect(projMock).not.toHaveBeenCalled()
+    expect(screen.getByTestId('game-prices-strip')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'All lines' })).toHaveAttribute('aria-current', 'page')
   })
   it('cuts the price feed on the server for a free viewer before it reaches the client', async () => {
     getViewerMock.mockResolvedValue({ tier: 'public', sport: null })
-    render(await page({ sport: 'nba' }))
-    expect(screen.getByTestId('game-prices-strip').textContent).toMatch(/5 ROWS/)
+    render(await page({ view: 'table', sport: 'nba' }))
+    expect(screen.getByTestId('game-prices-strip').textContent).toMatch(/5 rows/)
     expect(screen.getByRole('note').textContent).toMatch(/3/)
   })
 })

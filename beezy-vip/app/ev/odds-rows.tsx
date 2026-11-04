@@ -21,12 +21,12 @@ export function EvRow({ r, columns, bankroll }: { r: ScreenRow; columns: { key: 
       <td className="odds-ev">
         {r.fairAmerican == null || r.pFair == null ? (
           <>
-            <div className="mono text-cozy font-bold text-text-secondary">--</div>
+            <div className="mono text-cozy font-semibold text-text-secondary">--</div>
             <div className="mono odds-sub" title={`Only ${r.nRef} reference book${r.nRef === 1 ? '' : 's'} priced this line both ways; ${MIN_REF} are needed for a fair value`}>{r.nRef} of {MIN_REF} bk</div>
           </>
         ) : (
           <>
-            <div className="mono text-cozy font-bold text-text-primary">{r.fairAmerican > 0 ? `+${r.fairAmerican}` : r.fairAmerican}</div>
+            <div className="mono text-cozy font-semibold text-text-primary">{r.fairAmerican > 0 ? `+${r.fairAmerican}` : r.fairAmerican}</div>
             <div className="mono odds-sub" title={`${r.nRef} reference books; the other side's fair price is ${fairText(1 - r.pFair)}`}>{r.nRef} BKS &middot; {fairText(1 - r.pFair)}</div>
           </>
         )}
@@ -35,7 +35,7 @@ export function EvRow({ r, columns, bankroll }: { r: ScreenRow; columns: { key: 
         <div className="flex items-center gap-2">
           <BookLogo book={r.bestBook} size={28} />
           <div>
-            <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: evColor }}>{r.ev == null ? '--' : `${signed(r.ev * 100)}%`}</div>
+            <div className="mono" style={{ fontSize: '13px', fontWeight: 600, color: evColor }}>{r.ev == null ? '--' : `${signed(r.ev * 100)}%`}</div>
             <div className="mono odds-sub">{r.side} {formatOdds(r.bestAmerican)}</div>
           </div>
         </div>
@@ -68,19 +68,19 @@ export function ArbTableRow({ r, columns, outlay, copied, onCopy }: {
     <tr data-row="odds">
       <PropCells row={r.row} label={String(r.row.line)} />
       <td className="odds-ev">
-        <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: live ? GREEN : SKY }}
+        <div className="mono" style={{ fontSize: '13px', fontWeight: 600, color: live ? GREEN : SKY }}
           title={a.feeLeg ? `Gross ${signed(a.arbPct, 2)}%, net of Kalshi's taker fee ${signed(a.netArbPct, 2)}%` : `${signed(a.netArbPct, 2)}%, no fee on either leg`}>
           {signed(a.netArbPct, 2)}% {live ? 'ARB' : 'HOLD'}
         </div>
-        <div className="mono odds-sub">{a.feeLeg ? 'NET OF KALSHI FEE' : '\u00a0'}</div>
+        <div className="mono odds-sub">{a.feeLeg ? 'Net of Kalshi fee' : '\u00a0'}</div>
       </td>
       <td className="odds-ev">
         <div className="flex items-center gap-2">
-          <span className="mono text-[11.5px] font-bold text-text-primary min-w-[84px]">OVER {formatOdds(a.bestOverAm)}</span>
+          <span className="mono text-[12px] font-semibold text-text-primary min-w-[84px]">OVER {formatOdds(a.bestOverAm)}</span>
           <BookTag book={a.bestOverBook} />
         </div>
         <div className="flex items-center gap-2 mt-[3px]">
-          <span className="mono text-[11.5px] font-bold text-text-primary min-w-[84px]">UNDER {formatOdds(a.bestUnderAm)}</span>
+          <span className="mono text-[12px] font-semibold text-text-primary min-w-[84px]">UNDER {formatOdds(a.bestUnderAm)}</span>
           <BookTag book={a.bestUnderBook} />
         </div>
       </td>
@@ -88,7 +88,7 @@ export function ArbTableRow({ r, columns, outlay, copied, onCopy }: {
         <div className="mono text-compact text-text-primary">{usd(a.stakeOverPer100 * k)} Over / {usd(a.stakeUnderPer100 * k)} Under</div>
         <div className="flex items-center gap-2 mt-0.5">
           <span className="mono odds-sub" style={{ color: live ? GREEN : SKY }}>{profit >= 0 ? '+' : '-'}{usd(Math.abs(profit))} {live ? 'locked' : 'at this hold'}</span>
-          <button className="btn btn-ghost" onClick={() => onCopy(r)} style={{ padding: '1px 8px', fontSize: '10.5px' }}>{copied ? 'Copied' : 'Copy hedge'}</button>
+          <button className="btn btn-ghost" onClick={() => onCopy(r)} style={{ padding: '1px 8px', fontSize: '11px' }}>{copied ? 'Copied' : 'Copy hedge'}</button>
         </div>
       </td>
       {columns.map(c => {
@@ -113,7 +113,7 @@ export function MiddleTableRow({ r, columns, outlay, copied, onCopy }: {
     <tr data-row="odds">
       <PropCells row={r.low} label={`o${r.low.line} / u${r.high.line}`} />
       <td className="odds-ev">
-        <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: free ? GREEN : SKY }}
+        <div className="mono" style={{ fontSize: '13px', fontWeight: 600, color: free ? GREEN : SKY }}
           title={r.feeLeg ? "Net of Kalshi's taker fee" : 'Both legs win only if the result lands strictly between the two lines'}>
           {r.gap % 1 === 0 ? r.gap : r.gap.toFixed(1)} PT WINDOW
         </div>
@@ -123,11 +123,11 @@ export function MiddleTableRow({ r, columns, outlay, copied, onCopy }: {
       </td>
       <td className="odds-ev">
         <div className="flex items-center gap-2">
-          <span className="mono text-[11.5px] font-bold text-text-primary min-w-[104px]">OVER {r.low.line} {formatOdds(r.overAm)}</span>
+          <span className="mono text-[12px] font-semibold text-text-primary min-w-[104px]">OVER {r.low.line} {formatOdds(r.overAm)}</span>
           <BookTag book={r.overBook} />
         </div>
         <div className="flex items-center gap-2 mt-[3px]">
-          <span className="mono text-[11.5px] font-bold text-text-primary min-w-[104px]">UNDER {r.high.line} {formatOdds(r.underAm)}</span>
+          <span className="mono text-[12px] font-semibold text-text-primary min-w-[104px]">UNDER {r.high.line} {formatOdds(r.underAm)}</span>
           <BookTag book={r.underBook} />
         </div>
       </td>
@@ -137,7 +137,7 @@ export function MiddleTableRow({ r, columns, outlay, copied, onCopy }: {
           <span className="mono odds-sub" title="The chance the window must hit for the middle to break even; the estimate comes from the reference books' fair price at each line">
             BREAK-EVEN {(r.breakevenProb * 100).toFixed(1)}%{r.midProb != null ? ` \u00b7 P(WINDOW) ${(r.midProb * 100).toFixed(1)}%` : ''}
           </span>
-          <button className="btn btn-ghost" onClick={() => onCopy(r)} style={{ padding: '1px 8px', fontSize: '10.5px' }}>{copied ? 'Copied' : 'Copy middle'}</button>
+          <button className="btn btn-ghost" onClick={() => onCopy(r)} style={{ padding: '1px 8px', fontSize: '11px' }}>{copied ? 'Copied' : 'Copy middle'}</button>
         </div>
       </td>
       {columns.map(c => {
@@ -169,16 +169,16 @@ export function LongshotTableRow({ r, columns }: { r: LongshotRow; columns: { ke
       <td className="odds-ev">
         {m.fairOverProb == null ? (
           <>
-            <div className="mono text-cozy font-bold text-text-secondary">--</div>
-            <div className="mono odds-sub" title="Fewer than two reference books price this exact line and no curve covers it">NO FAIR VALUE</div>
+            <div className="mono text-cozy font-semibold text-text-secondary">--</div>
+            <div className="mono odds-sub" title="Fewer than two reference books price this exact line and no curve covers it">No fair value</div>
           </>
         ) : (
           <>
-            <div className="mono text-cozy font-bold text-text-primary">{fairText(m.fairOverProb)} / {fairText(m.fairUnderProb)}</div>
+            <div className="mono text-cozy font-semibold text-text-primary">{fairText(m.fairOverProb)} / {fairText(m.fairUnderProb)}</div>
             <div className="mono odds-sub flex gap-1.5 items-center">
               {m.fairSource === 'curve' ? (
                 <span title={`Implied from player's main line (${r.row.modal_point ?? 'main'}) across reference books`}
-                  style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em', padding: '0 5px', borderRadius: '4px', border: `1px solid ${VIOLET}66`, color: VIOLET }}>EST. FAIR</span>
+                  style={{ fontSize: '10px', fontWeight: 600, padding: '0 5px', borderRadius: '4px', border: `1px solid ${VIOLET}66`, color: VIOLET }}>Est. fair</span>
               ) : <span>{m.nRef} BKS</span>}
               <TierPill alt={m.isAltLine} modalPoint={r.row.modal_point} />
             </div>
@@ -187,10 +187,10 @@ export function LongshotTableRow({ r, columns }: { r: LongshotRow; columns: { ke
       </td>
       <td className="odds-ev">
         {book == null || am == null ? (
-          <div className="mono text-cozy font-bold text-text-secondary">--</div>
+          <div className="mono text-cozy font-semibold text-text-secondary">--</div>
         ) : (
           <>
-            <div className="mono" style={{ fontSize: '12.5px', fontWeight: 700, color }}>
+            <div className="mono" style={{ fontSize: '13px', fontWeight: 600, color }}>
               {over ? `SNIPE OVER ${formatOdds(am)}` : `FADE ${underText(book, am)}`}
             </div>
             <div className="flex items-center gap-1.5 mt-0.5">
@@ -239,7 +239,7 @@ export function OutlierTableRow({
     <tr data-row="odds">
       <PropCells row={r.row} label={r.label} />
       <td className="odds-ev">
-        <div className="mono text-cozy font-bold text-text-primary">
+        <div className="mono text-cozy font-semibold text-text-primary">
           {r.marketAvgAmerican > 0 ? `+${r.marketAvgAmerican}` : `${r.marketAvgAmerican}`}
         </div>
         <div className="mono odds-sub">
@@ -256,7 +256,7 @@ export function OutlierTableRow({
           <div className="flex items-center gap-2">
             <BookLogo book={r.outlierBook} size={28} />
             <div>
-              <div className="mono" style={{ fontSize: '13px', fontWeight: 700, color: GREEN }}>
+              <div className="mono" style={{ fontSize: '13px', fontWeight: 600, color: GREEN }}>
                 {r.side} {r.outlierAmerican > 0 ? `+${r.outlierAmerican}` : `${r.outlierAmerican}`}
               </div>
               <div className="mono odds-sub">{bookDisplay(r.outlierBook).label}</div>
@@ -265,11 +265,11 @@ export function OutlierTableRow({
         )}
       </td>
       <td className="text-right">
-        <div className="mono" style={{ fontSize: '12.5px', fontWeight: 700, color: gapColor }}>
+        <div className="mono" style={{ fontSize: '13px', fontWeight: 600, color: gapColor }}>
           +{r.payoutPremiumPct.toFixed(1)}% MKT
         </div>
         <div className="mono odds-sub" style={{ color: r.trueEvPct != null && r.trueEvPct > 0 ? GREEN : 'var(--color-text-secondary)' }}>
-          {r.trueEvPct != null ? `${signed(r.trueEvPct)}% EV` : 'NO FAIR EV'}
+          {r.trueEvPct != null ? `${signed(r.trueEvPct)}% EV` : 'No fair EV'}
         </div>
       </td>
       {columns.map(c => {
@@ -316,7 +316,7 @@ export function SgpTableRow({ r }: { r: SgpProxyRow }) {
               @ <span className="capitalize text-text-primary font-medium">{bookDisplay(r.book).label}</span>
             </span>
           </div>
-          <div className="mono text-[10.5px] text-text-secondary">
+          <div className="mono text-[11px] text-text-secondary">
             Uncorrelated parlay: {formatOdds(r.naiveSingleProductAm)}
           </div>
         </div>
@@ -341,22 +341,22 @@ export function SgpTableRow({ r }: { r: SgpProxyRow }) {
       <td className="py-2.5 px-3.5">
         <div className="flex items-center gap-1.5 flex-wrap">
           <BookLogo book={r.book} size={22} />
-          <span className="mono text-cozy font-bold text-text-primary">
+          <span className="mono text-cozy font-semibold text-text-primary">
             Modelled: {formatOdds(r.estSgpAm)}
           </span>
         </div>
-        <div className="mono mt-0.5 text-[10.5px] text-text-secondary">
+        <div className="mono mt-0.5 text-[11px] text-text-secondary">
           Assumed book copula (&rho;={r.rhoBook}, hold={Math.round(r.holdBook * 100)}%)
         </div>
         {r.runnerUpBooks && r.runnerUpBooks.length > 0 && (
-          <div className="text-[10.5px] text-text-secondary mt-[3px]">
+          <div className="text-[11px] text-text-secondary mt-[3px]">
             Also at: {r.runnerUpBooks.map(b => `${bookDisplay(b.book).label} (${b.evPct > 0 ? `+${b.evPct.toFixed(1)}%` : `${b.evPct.toFixed(1)}%`})`).join(', ')}
           </div>
         )}
       </td>
       <td className="py-2.5 px-3.5 text-right">
         <div className="flex items-center justify-end gap-2.5">
-          <span className="mono" style={{ fontSize: '12px', fontWeight: 700, padding: '3px 8px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.04)', color: 'var(--color-neutral-300)', border: `1px solid ${HAIR}` }}>
+          <span className="mono" style={{ fontSize: '12px', fontWeight: 600, padding: '3px 8px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.04)', color: 'var(--color-neutral-300)', border: `1px solid ${HAIR}` }}>
             {sgpEvText(r)}
           </span>
           {r.deeplink && (

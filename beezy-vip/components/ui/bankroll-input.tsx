@@ -50,7 +50,7 @@ export function BankrollInput({ defaultValue }: { defaultValue: number }) {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="mono py-[9px] px-[18px] text-background-full text-cozy font-semibold tracking-[0.01em] rounded-[var(--radius)] border border-[color:var(--signal-led)]"
+          className="mono py-[9px] px-[18px] text-background-full text-cozy font-semibold rounded-[var(--radius)] border border-[color:var(--signal-led)]"
           style={{
             background: 'var(--signal)',
             cursor: saving ? 'not-allowed' : 'pointer',

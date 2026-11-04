@@ -101,7 +101,7 @@ describe('POST TO X panel', () => {
   it('is in the mobile column and in the desktop sidebar, with the same boxes', () => {
     const { mobile, sidebar } = renderCard()
     for (const root of [mobile, sidebar]) {
-      expect(within(root).getByText('POST TO X')).toBeInTheDocument()
+      expect(within(root).getByText('Post to X')).toBeInTheDocument()
       for (const label of ['OVERALL post', 'NBA post', 'NHL post', 'Link reply']) expect(within(root).getByLabelText(label)).toBeInTheDocument()
     }
   })
@@ -114,14 +114,14 @@ describe('POST TO X panel', () => {
     expect(buttons).toHaveLength(SHEETS.length + 1)
     fireEvent.click(buttons[1])
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(SHEETS[1].text))
-    await waitFor(() => expect(within(mobile).getByRole('button', { name: 'COPIED' })).toBeInTheDocument())
+    await waitFor(() => expect(within(mobile).getByRole('button', { name: 'Copied' })).toBeInTheDocument())
     fireEvent.click(buttons[buttons.length - 1])
     await waitFor(() => expect(writeText).toHaveBeenLastCalledWith(LINK_REPLY))
   })
 
   it('renders nothing when there are no picks, and the posts carry no link', () => {
     const { container } = render(<CheatSheetClient sheets={[]} sportPicks={{}} players={[]} locked={0} today="T" yesterday={[]} weekRecord={NO_RECORD} />)
-    expect(screen.queryByText('POST TO X')).not.toBeInTheDocument()
+    expect(screen.queryByText('Post to X')).not.toBeInTheDocument()
     expect(container.textContent).not.toContain('Top player picks - ')
     const { mobile } = renderCard()
     for (const ta of within(mobile).getAllByRole('textbox')) {
@@ -132,7 +132,7 @@ describe('POST TO X panel', () => {
   it('hides POST TO X when canPost is false', () => {
     const { mobile, sidebar } = renderCard(false)
     expect(mobile).toBeNull()
-    expect(sidebar.textContent).not.toContain('POST TO X')
+    expect(sidebar.textContent).not.toContain('Post to X')
   })
 })
 

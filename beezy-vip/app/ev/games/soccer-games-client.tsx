@@ -127,7 +127,7 @@ function GameDeepDive({ g, odds }: { g: SoccerPricedGame; odds: GameOddsFeed | n
           {'\u03bb'} home {g.lambda_home.toFixed(2)} {'\u00b7'} {'\u03bb'} away {g.lambda_away.toFixed(2)} {'\u00b7'} {'\u03c1'} {g.rho.toFixed(2)}
         </span>
         {g.sanity_warn && (
-          <span className="mono text-[10.5px] font-bold tracking-fine text-warn border border-[color:#facc1555] rounded-chip py-0 px-[5px]">{g.sanity_warn}</span>
+          <span className="mono text-[11px] font-bold text-warn border border-[color:#facc1555] rounded-chip py-0 px-[5px]">{g.sanity_warn}</span>
         )}
       </div>
 
@@ -290,7 +290,7 @@ export function SoccerGamesClient({ projections, odds }: { projections: SoccerPr
       <div className="flex items-center gap-y-[6px] gap-x-[14px] flex-wrap min-h-[38px] py-[6px] px-[14px] mb-[10px] bg-background-primary-default text-compact" style={{ border: `1px solid ${HAIR}`, borderRadius: '8px' }}>
         <span className="mono font-bold text-text-primary">SOCCER (EPL / UCL)</span>
         <span className="mono text-neutral-300">{games.length > 0 ? games.length : oddsGames.length} GAMES</span>
-        <span className="mono text-[10.5px] font-bold tracking-fine text-warn border border-[color:#facc1555] rounded-chip py-0 px-[5px]">UNVALIDATED</span>
+        <span className="mono text-[11px] font-bold text-warn border border-[color:#facc1555] rounded-chip py-0 px-[5px]">Unvalidated</span>
         <span className="mono text-neutral-300">{SOCCER_MODEL_BADGE}</span>
       </div>
 

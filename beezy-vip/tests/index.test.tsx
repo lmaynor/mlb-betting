@@ -161,7 +161,7 @@ import { ResultPill } from '../components/ui/primitives'
 describe('ResultPill', () => {
   test('renders PENDING for null result', () => {
     render(<ResultPill result={null} />)
-    expect(screen.getByText('PENDING')).toBeTruthy()
+    expect(screen.getByText('Pending')).toBeTruthy()
   })
 
   test('renders WIN for win result', () => {

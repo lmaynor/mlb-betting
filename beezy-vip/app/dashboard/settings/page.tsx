@@ -19,7 +19,7 @@ export default async function DashboardSettingsPage() {
     <div className="max-w-lg">
       {/* Account */}
       <div className="border border-separator-border p-5 mb-4">
-        <p className="mono text-xs uppercase tracking-widest text-text-secondary mb-4">Account</p>
+        <p className="mono text-xs text-text-secondary mb-4">Account</p>
         <div className="space-y-3">
           <div className="flex justify-between items-center">
             <span className="text-xs text-text-secondary">Email</span>
@@ -38,13 +38,13 @@ export default async function DashboardSettingsPage() {
 
       {/* Subscription */}
       <div className="border border-separator-border p-5 mb-4">
-        <p className="mono text-xs uppercase tracking-widest text-text-secondary mb-4">Subscription</p>
+        <p className="mono text-xs text-text-secondary mb-4">Subscription</p>
         <p className="text-xs text-text-secondary mb-4 leading-relaxed">
           Manage billing, cancel, or change your plan via the Stripe customer portal. Cancelling keeps access through the end of the paid period.
         </p>
         <a
           href="/api/stripe/portal"
-          className="mono text-xs uppercase tracking-widest px-4 py-2.5 border border-[var(--border-bright)] text-text-primary hover:border-accent hover:text-accent transition-colors inline-block"
+          className="mono text-xs px-4 py-2.5 border border-[var(--border-bright)] text-text-primary hover:border-accent hover:text-accent transition-colors inline-block"
         >
           Manage Billing →
         </a>
@@ -57,7 +57,7 @@ export default async function DashboardSettingsPage() {
 
       {/* Bankroll setting */}
       <div className="border border-separator-border p-5 mb-4">
-        <p className="mono text-xs uppercase tracking-widest text-text-secondary mb-4">Bankroll</p>
+        <p className="mono text-xs text-text-secondary mb-4">Bankroll</p>
         <p className="text-xs text-text-secondary mb-4">
           Set your bankroll to get personalised Kelly stake amounts in dollars on the picks tab.
         </p>
@@ -66,7 +66,7 @@ export default async function DashboardSettingsPage() {
 
       {/* Notifications */}
       <div className="border border-separator-border p-5">
-        <p className="mono text-xs uppercase tracking-widest text-text-secondary mb-4">Notifications</p>
+        <p className="mono text-xs text-text-secondary mb-4">Notifications</p>
         <p className="text-xs text-text-secondary">
           Picks are delivered via Discord. Join the Pro channel for push notifications.
         </p>
@@ -74,7 +74,7 @@ export default async function DashboardSettingsPage() {
           href={DISCORD_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="mono text-xs uppercase tracking-widest text-accent hover:underline inline-block mt-3"
+          className="mono text-xs text-accent hover:underline inline-block mt-3"
         >
           Open Discord →
         </a>

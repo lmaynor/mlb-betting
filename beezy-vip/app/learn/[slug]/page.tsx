@@ -52,7 +52,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
     <div className="max-w-[780px] mx-auto py-10 px-5">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(articleLd(article)) }} />
       <div className="mb-8 pb-6" style={{ borderBottom: B }}>
-        <div className="mono text-micro tracking-label uppercase text-text-secondary mb-2.5">
+        <div className="mono text-micro text-text-secondary mb-2.5">
           {article.category}
         </div>
         <h1 className="text-[24px] font-bold text-text-primary leading-[1.3]">{article.title}</h1>
@@ -67,7 +67,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
       />
       <div className="mt-10 pt-5 grid gap-3" style={{ borderTop: B }}>
         {related.length > 0 && (
-          <div className="flex gap-4 flex-wrap text-[13.5px]">
+          <div className="flex gap-4 flex-wrap text-[14px]">
             <span className="text-text-secondary">Try it:</span>
             {related.map(r => <Link className="text-link" key={r.href} href={r.href}>{r.label} &rarr;</Link>)}
           </div>
@@ -75,7 +75,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
         <p className="mono text-mini text-text-secondary leading-[1.6] m-0">
           Educational content, not financial advice. Beezy.FYI results are paper-tracked. 21+. If gambling is a problem, call 1-800-GAMBLER.
         </p>
-        <Link className="text-[12.5px] text-link" href="/learn">&larr; All guides</Link>
+        <Link className="text-[13px] text-link" href="/learn">&larr; All guides</Link>
       </div>
     </div>
   )

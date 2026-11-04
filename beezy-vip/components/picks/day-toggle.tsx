@@ -9,7 +9,7 @@ import { addDaysToDateKey } from '@/lib/dates'
 const B = '1px solid var(--color-separator-border)'
 const SEG: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'baseline', gap: '8px', padding: '6px 14px', border: B, background: 'var(--color-background-primary-default)', color: 'var(--color-neutral-300)',
-  fontFamily: 'var(--font-mono)', fontSize: '11px', letterSpacing: '0.04em', textDecoration: 'none', whiteSpace: 'nowrap',
+  fontFamily: 'var(--font-mono)', fontSize: '11px', textDecoration: 'none', whiteSpace: 'nowrap',
 }
 const ON: React.CSSProperties = { borderColor: 'var(--win-border)', background: 'var(--win-wash)', color: 'var(--signal)', fontWeight: 600 }
 
@@ -54,13 +54,13 @@ export function DayToggle({ today, yesterday, days, selected, pinDates = true }:
   }, [selected])
   const chips = [...(yesterday ? [{ ...yesterday, yest: true }] : []), ...days.map(d => ({ ...d, yest: false }))]
   const name = (c: { date: string; label: string }) =>
-    c.date === today ? `TODAY ${c.label}` : c.date === addDaysToDateKey(today, -1) ? `YESTERDAY ${c.label}` : c.label
+    c.date === today ? `Today ${c.label}` : c.date === addDaysToDateKey(today, -1) ? `Yesterday ${c.label}` : c.label
   return (
     <nav className="inline-flex overflow-x-auto" ref={strip} aria-label="Day" style={{ maxWidth: '100%' }}>
       {chips.map((c, i) => {
         const on = c.date === selected
         const [word, ...rest] = name(c).split(' ')
-        const dated = word === 'TODAY' || word === 'YESTERDAY'
+        const dated = word === 'Today' || word === 'Yesterday'
         return (
           <Link key={c.date} href={hrefFor(c.date, c.yest)} scroll={false} aria-current={on ? 'date' : undefined} className="tap-m"
             title={c.count == null ? undefined : `${c.count} ${c.count === 1 ? 'row' : 'rows'}`}

@@ -43,6 +43,14 @@ export default function AboutPage() {
           <a href="/pricing">pricing page</a>{PRE_LAUNCH ? ' to lock these prices.' : '.'}
         </p>
 
+        <h2>Contact</h2>
+        <p>
+          General questions and feedback: <a href={`mailto:${SITE_CONFIG.contactEmail}`}>{SITE_CONFIG.contactEmail}</a>.
+          Account, billing and product help: <a href={`mailto:${SITE_CONFIG.supportEmail}`}>{SITE_CONFIG.supportEmail}</a>,
+          or the support channel in the Discord. Partnerships and business inquiries go to the founder
+          directly: <a href={`mailto:${SITE_CONFIG.founderEmail}`}>{SITE_CONFIG.founderEmail}</a>.
+        </p>
+
         <p>See also: <a href="/compare/oddsjam-alternative">beezy.fyi compared with OddsJam and other tools</a>.</p>
       </div>
     </div>

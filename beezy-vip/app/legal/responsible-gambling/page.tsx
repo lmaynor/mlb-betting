@@ -7,7 +7,7 @@ export default function ResponsibleGamblingPage() {
   return (
     <LegalPage title="Responsible Gambling">
       <div style={{ background: '#11131a', border: '1px solid #1e2230', borderLeft: '3px solid #f87171', borderRadius: '8px', padding: '16px 20px', marginBottom: '28px' }}>
-        <p style={{ fontWeight: 700, margin: '0 0 8px' }}>If you or someone you know has a gambling problem, help is available 24/7:</p>
+        <p style={{ fontWeight: 600, margin: '0 0 8px' }}>If you or someone you know has a gambling problem, help is available 24/7:</p>
         <ul style={{ margin: 0, paddingLeft: '20px' }}>
           <li>
             <strong>National Problem Gambling Helpline:</strong> <a href="tel:18004262537">1-800-GAMBLER (1-800-426-2537)</a>, call or text
