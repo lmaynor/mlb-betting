@@ -622,3 +622,15 @@ def test_soccer_game_lines_banking_is_configured(monkeypatch):
     assert '"epl|soccer_epl|game_lines|' in script
     assert '"ucl|soccer_uefa_champs_league|game_lines|' in script
     assert "ODDS_BANK_BUDGET_SOCCER_UEFA_CHAMPS_LEAGUE=${BUDGET_SOCCER_UCL}" in script
+
+
+def test_reep_register_resolves_parlayapi_live_spellings_and_skips_corners_events():
+    """ParlayAPI's live club names carry 'FC' / 'AFC' / 'SK' (probed 2026-11-04) and it lists 'X (Corners)' pseudo-events; before the
+    aliases 53 of 54 events were unmapped and the soccer board stayed empty."""
+    from soccer.data.reep_register import resolve_club
+    live = {"Arsenal FC": "ARS", "AFC Bournemouth": "BOU", "Brighton & Hove Albion FC": "BHA", "Manchester City FC": "MCI",
+            "BV Borussia Dortmund": "DOR", "SSC Napoli": "NAP", "Real Madrid CF": "RMA", "Hull City AFC": "HUL", "Como 1907": "COM"}
+    for name, code in live.items():
+        assert resolve_club(name, provider="parlayapi") == code, name
+    assert resolve_club("Arsenal (Corners)", provider="parlayapi") is None
+    assert resolve_club("Totally Unknown FC", provider="parlayapi") is None      # still fail closed
