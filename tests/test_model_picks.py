@@ -88,7 +88,7 @@ def test_log_is_idempotent_and_first_sighting_wins(tracker):
     assert len(df) == 1
     b = df.iloc[0]
     assert (b["system"], b["sport"], b["bet_type"], int(b["odds"]), b["book"]) == ("PROPS", "nba", "rebounds_over_10.5", 105, "fanduel")
-    assert b["game_date"] == "2026-10-25" and bool(b["paper"]) and float(b["stake"]) == 1.0 and bool(b["kelly_triggered"])
+    assert b["game_date"] == "2026-10-25" and bool(b["paper"]) and float(b["stake"]) == MP.MAX_STAKE_UNITS and bool(b["kelly_triggered"])
     import json
     n = json.loads(b["notes"])
     assert n["player_id"] == "4594268" and n["tier"] == "official" and n["row_key"].endswith("|rebounds")
@@ -200,16 +200,26 @@ def _ledger(tracker):
         return pd.read_sql(text("SELECT * FROM bets ORDER BY id"), c)
 
 
-def test_tracked_rows_are_zero_stake_monitoring_rows_and_official_rows_are_staked(tracker):
+def test_every_pick_is_sized_by_kelly_on_the_blend_and_a_no_edge_pick_is_a_zero_stake_monitoring_row(tracker):
     off = {**MP.to_pick(row()), "tier": "official"}
-    trk = {**MP.to_pick(row(player="B", player_norm="id2")), "tier": "tracked"}
-    assert len(MP.log_picks("nba", [off, trk], tracker)) == 2
+    trk = {**MP.to_pick(row(player="B", player_norm="id2", p_blend_side=0.50)), "tier": "tracked"}       # +105: breakeven 0.4878
+    none = {**MP.to_pick(row(player="C", player_norm="id3", p_blend_side=0.45)), "tier": "tracked"}      # blend below breakeven
+    assert len(MP.log_picks("nba", [off, trk, none], tracker)) == 3
     df = _ledger(tracker).set_index("player")
-    assert (float(df.loc["Jalen Duren", "stake"]), bool(df.loc["Jalen Duren", "kelly_triggered"])) == (1.0, True)
-    assert (float(df.loc["B", "stake"]), bool(df.loc["B", "kelly_triggered"])) == (0.0, False)
+    assert (float(df.loc["Jalen Duren", "stake"]), bool(df.loc["Jalen Duren", "kelly_triggered"])) == (MP.MAX_STAKE_UNITS, True)       # capped
+    edge, b = 0.50 - 100 / 205, 1.05
+    want = round(edge * (b + 1) / b * MP.KELLY_FRACTION * MP.BANKROLL_UNITS, 2)
+    assert 0 < want < MP.MAX_STAKE_UNITS
+    assert float(df.loc["B", "stake"]) == pytest.approx(want) and bool(df.loc["B", "kelly_triggered"])      # a TRACKED pick with edge is staked
+    assert float(df.loc["B", "kelly_pct"]) == pytest.approx(want / MP.BANKROLL_UNITS, abs=1e-4)
+    assert (float(df.loc["C", "stake"]), bool(df.loc["C", "kelly_triggered"])) == (0.0, False)
     import json
     n = json.loads(df.loc["B", "notes"])
-    assert n["tier"] == "tracked" and n["blend_ev"] == pytest.approx(0.07) and n["p_blend"] == pytest.approx(0.545)
+    assert n["tier"] == "tracked" and n["blend_ev"] == pytest.approx(0.07) and n["p_blend"] == pytest.approx(0.50)
+
+
+def test_a_pick_with_no_blend_fails_closed_to_zero_stake():
+    assert MP.ledger_stake({**MP.to_pick(row(p_blend_side=None)), "tier": "official"}) == (0.0, False)
 
 
 def test_closing_lines_are_captured_on_official_and_tracked_rows(tracker):
@@ -222,21 +232,21 @@ def test_closing_lines_are_captured_on_official_and_tracked_rows(tracker):
     assert res["updated"] == 2
     df = _ledger(tracker).set_index("player")
     assert df.loc["Jalen Duren", "closing_odds"] == -110 and df.loc["B", "closing_odds"] == -115
-    assert df.loc["B", "clv_pct"] > 0 and bool(df.loc["B", "kelly_triggered"]) is False       # CLV on a row that is not staked
+    assert df.loc["B", "clv_pct"] > 0 and bool(df.loc["B", "kelly_triggered"]) is True        # CLV on a Kelly-staked tracked row
 
 
 def test_settlement_grades_zero_stake_rows_on_a_one_unit_reference_and_the_recap_counts_only_staked_rows(tracker, monkeypatch):
-    """A tracked row settles (profit on 1u) but never reaches the recap headline; the staked row alone does."""
+    """A no-edge (zero-stake) row settles (profit on 1u) but never reaches the recap headline; the Kelly-staked row alone does."""
     from sqlalchemy import text
     from mlb.runners import settle_bets as SB
     off = {**MP.to_pick(row()), "tier": "official"}
-    trk = {**MP.to_pick(row(player="B", player_norm="id2")), "tier": "tracked"}
+    trk = {**MP.to_pick(row(player="B", player_norm="id2", p_blend_side=0.45)), "tier": "tracked"}
     MP.log_picks("nba", [off, trk], tracker)
     df = _ledger(tracker)
-    # grade both as winners through the settler's own profit rule (no network): +105 on a 1u reference
     assert SB._calc_profit(float(df.loc[df["player"] == "B", "stake"].iloc[0]) or 1.0, 105, "win") == pytest.approx(1.05)
     with tracker.engine.begin() as c:
-        c.execute(text("UPDATE bets SET result = 'win', profit = 1.05"))
+        c.execute(text("UPDATE bets SET result = 'win', profit = stake * 1.05 WHERE stake > 0"))
+        c.execute(text("UPDATE bets SET result = 'win', profit = 1.05 WHERE stake = 0"))
     monkeypatch.setattr(SB, "_winter_season_start", lambda d: "2026-08-01")
     stats = SB._winter_sport_stats(tracker.engine, "2026-10-26", system="PROPS")
     assert stats["NBA"]["bets"] == 1 and stats["NBA"]["roi"] == pytest.approx(105.0) and stats["NBA"]["pending"] == 0
@@ -260,6 +270,26 @@ def test_fix_tracked_stakes_demotes_only_pre_split_tracked_rows_and_is_idempoten
     assert (float(df.loc["B", "stake"]), bool(df.loc["B", "kelly_triggered"])) == (0.0, False)
     assert (float(df.loc["Jalen Duren", "stake"]), bool(df.loc["Jalen Duren", "kelly_triggered"])) == (1.0, True)
     assert MP.fix_tracked_stakes(tracker)["candidates"] == 0
+
+
+def test_rederive_kelly_resizes_old_rows_from_their_notes_and_is_idempotent(tracker):
+    from sqlalchemy import text
+    a = {**MP.to_pick(row()), "tier": "official"}
+    b = {**MP.to_pick(row(player="B", player_norm="id2", p_blend_side=0.50)), "tier": "tracked"}
+    MP.log_picks("nba", [a, b], tracker)
+    with tracker.engine.begin() as c:                     # the pre-Kelly state: official flat 1u, tracked 0u, both graded winners on 1u
+        c.execute(text("UPDATE bets SET stake = 1.0, kelly_triggered = :t, kelly_pct = NULL, result = 'win', profit = 1.05 WHERE player = 'Jalen Duren'"), {"t": True})
+        c.execute(text("UPDATE bets SET stake = 0, kelly_triggered = :f, kelly_pct = NULL, result = 'win', profit = 1.05 WHERE player = 'B'"), {"f": False})
+    assert MP.rederive_kelly(tracker, dry_run=True)["updated"] == 2
+    assert float(_ledger(tracker).set_index("player").loc["B", "stake"]) == 0.0                 # a dry run changes nothing
+    assert MP.rederive_kelly(tracker) == {"rows": 2, "updated": 2, "staked": 2, "no_blend": 0, "unparsed": 0}
+    df = _ledger(tracker).set_index("player")
+    assert float(df.loc["Jalen Duren", "stake"]) == MP.MAX_STAKE_UNITS and float(df.loc["Jalen Duren", "profit"]) == pytest.approx(2.10)
+    sb = float(df.loc["B", "stake"])
+    assert sb > 0 and bool(df.loc["B", "kelly_triggered"]) and float(df.loc["B", "profit"]) == pytest.approx(round(1.05 * sb, 2))
+    first = _ledger(tracker)[["stake", "profit"]].astype(float).values.tolist()
+    MP.rederive_kelly(tracker)
+    assert _ledger(tracker)[["stake", "profit"]].astype(float).values.tolist() == first
 
 
 def test_cli_needs_a_sport_unless_fixing_stakes(monkeypatch):
