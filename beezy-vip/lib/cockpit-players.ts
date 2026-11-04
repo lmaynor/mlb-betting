@@ -28,7 +28,7 @@ function matchupOf(gameKey: string | null | undefined, team: string | null, opp:
 /** One projection-board row as a cockpit row: model source, unvalidated, not flagged (only the sweep flags). */
 export function projectionToCockpitRow(r: SportProjectionRow): CockpitRow | null {
   const line = r.consensus_line ?? r.line
-  if (!r.player || line == null) return null
+  if (!r.player || line == null || r.sport === 'soccer') return null          // the cockpit is MLB / NFL / NHL / NBA; soccer has no player-props board
   const side = r.side === 'under' ? 'UNDER' : 'OVER'
   const american = side === 'UNDER' ? r.best_under_odds : r.best_over_odds
   const book = side === 'UNDER' ? r.best_under_book : r.best_over_book
@@ -83,6 +83,7 @@ export function withProjectionPlayers(
   const added: CockpitRow[] = []
   const sports: CockpitFeed['sports'] = { ...(feed?.sports ?? {}) }
   for (const [sport, board] of loaded) {
+    if (sport === 'soccer') continue
     const rows = board!.rows.slice().sort(byStrength)
     let n = 0
     for (const pr of rows) {
