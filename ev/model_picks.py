@@ -3,7 +3,8 @@ ev.model_picks -- track, announce and score the MODEL's own NFL / NBA / NHL prop
 
     python -m ev.model_picks --sport nba|nhl|nfl [--dry-run] [--no-post]     one pass: select -> log -> post -> closing lines
     python -m ev.model_picks --sport nba --closing-only                      CLV capture only
-    python -m ev.model_picks --fix-tracked-stakes [--dry-run]                one-off: demote pre-split 'tracked' rows to stake 0
+    python -m ev.model_picks --rederive-kelly [--dry-run]                    one-off: re-size existing PROPS rows by Kelly on their logged p_blend
+    python -m ev.model_picks --fix-tracked-stakes [--dry-run]                OBSOLETE with Kelly sizing: would zero legitimately staked tracked rows; do not run
 
 Until this module the engines' output was only DISPLAYED (the /picks boards, GET /api/public/projections). Nothing logged a
 model pick as a bet, nothing graded it, and the only tracked winter-sport bets (system 'EV') are the BOOK-OUTLIER alerts of
@@ -15,12 +16,14 @@ ev.sweep_props_alerts, which do not use the model at all. This closes that gap w
     the repo's own Official Card gate (ev.daily_card.is_official_card_play) AND whose market-anchored blended EV (`blend_ev`, the
     best quote priced at the blended posterior, c measured per stat) is >= OFFICIAL_MIN_BLEND_EV, on a stat with measured signal
     (PROPS_SIGNAL_ALLOWLIST) and with no sharp book pricing the side lower than the pack, is tier 'official'; every other
-    confluence row is tier 'tracked'. Only official picks are posted and staked.
-  * LEDGER: bets table, system='PROPS', sport=<sport>, paper. Official = flat 1 unit, kelly_triggered=True (the public record: /picks,
-    /results, the #daily-recap headline all count only kelly_triggered, stake > 0 rows). Tracked = kelly_triggered=False, stake 0:
-    monitoring rows, the same contract as every MLB system's unplaced predictions. They are still settled (on a 1-unit reference,
-    settle_bets._settle_winter_bets) and still get closing lines, so the forward CLV / calibration study keeps every row without
-    the unvetted ones reaching the public ledger. First qualifying sighting wins (never re-priced or re-logged), so the record
+    confluence row is tier 'tracked'. Only official picks are posted.
+  * LEDGER: bets table, system='PROPS', sport=<sport>, paper. EVERY pick is sized by quarter Kelly on the market-anchored blended
+    probability (p_blend vs the vig-inclusive best price, 100u paper bankroll, capped at MAX_STAKE_UNITS) and written with that
+    stake and kelly_pct; kelly_triggered = (stake > 0). A pick whose blend has no edge at its price (or a board with no blend) sizes
+    to 0 and stays a monitoring row: settled on a 1-unit reference (settle_bets._settle_winter_bets) and closing-line-captured but
+    not counted in the public record (/picks, /results, the #daily-recap headline count only kelly_triggered, stake > 0 rows).
+    The tier ('official' | 'tracked') no longer sets the stake; it only decides who is announced on Discord. First qualifying
+    sighting wins (never re-priced or re-logged), so the record
     cannot be cherry-picked after the fact. Settlement is the existing winter settler
     (settle_bets._settle_winter_bets: league player id, fail-closed, void only on a proven DNP) -- it keys on sport, not system.
   * CLV: closing_odds / closing_prob / clv_pct from the board archive's LAST pre-game state of the same prop (same line only).
@@ -50,14 +53,20 @@ SPORTS = ("nfl", "nba", "nhl")
 MIN_MINS_TO_START = 30.0
 MAX_PAYLOAD_AGE_MIN = 45.0          # a board older than this is not live; log nothing rather than log a stale price
 HEARTBEAT_KEY = "ModelPicks/last_run.json"          # {ts, sports: {sport: {status, selected, logged, ...}}}; monitor_ops reads it
-STAKE = 1.0
+STAKE = 1.0                         # the historical flat official stake; kept for reference / old rows
+# Every pick is sized by Kelly on the MARKET-ANCHORED blended probability (never the raw engine P, which is winner's-curse noisy):
+# quarter Kelly (the repo-wide fraction), on a 100-unit paper bankroll, capped per bet. A pick whose blend has no edge at its price
+# sizes to 0 and stays a zero-stake monitoring row; a pick with no blend (stale board) also sizes to 0 (fail closed).
+KELLY_FRACTION = 0.25
+BANKROLL_UNITS = 100.0
+MAX_STAKE_UNITS = 2.0
 # Official tier also needs the market-anchored blended EV to clear this. The engines' own standalone P(side) is noisier than the
 # market (NBA log loss 0.7164 vs 0.6859), so a raw model-vs-market gap is mostly winner's curse; the blend shrinks it to what the
 # stat's measured c says the engine adds (points / pra c = 0.02 add almost nothing, so they rarely clear this).
 OFFICIAL_MIN_BLEND_EV = 0.025
 # Official tier also needs the stat to carry MEASURED information beyond the market on the engine that prices it (blend c >= 0.08,
-# t >= 2.5 in the repo's own real-line studies). A stat that fails stays on the board and in the tracked tier (stake 0, still settled
-# and closed, so the forward record keeps accumulating) but is never staked or posted. Measured, per the study docs:
+# t >= 2.5 in the repo's own real-line studies). A stat that fails stays on the board and in the tracked tier (still settled and
+# closed, so the forward record keeps accumulating) but is never posted; it is still Kelly-sized on its blend like every pick. Measured, per the study docs:
 #   NBA threes +0.19 (t 8.4), rebounds +0.13 (t 9.4), assists +0.09 (t 5.7)      nba_engine_vs_market_2026-11-01.md, `ship_noabs`
 #   NHL saves  +0.48 pooled on the board engine (-0.23 / +0.84 / +0.19 by season: regime-dependent)   nhl_engine_vs_market_2026-11-01.md
 #   NFL rush_yds +0.25 (t 2.9) -- measured on the HIERARCHICAL engine only, so only rows that engine priced
@@ -196,10 +205,20 @@ def _already_logged(tracker, sport: str, game_day: str, p: dict) -> bool:
     return any(str(t[0]).rsplit("_", 2)[0] == p["stat"] for t in types)
 
 
+def kelly_pct_of(p: dict) -> float:
+    """Quarter-Kelly fraction of bankroll for the pick: the blended posterior against the vig-inclusive price actually taken."""
+    from mlb_core.odds.utils import kelly_pct
+    pb, am = p.get("p_blend"), p.get("american")
+    if pb is None or am is None:
+        return 0.0
+    return float(kelly_pct(float(pb), int(am), KELLY_FRACTION))
+
+
 def ledger_stake(p: dict) -> tuple:
-    """(stake, kelly_triggered) of a pick: official = a flat staked 1u bet on the public record, anything else = a zero-stake
-    monitoring row (kelly_triggered=False) that is settled and closing-line-captured but never counted in the public record."""
-    return (STAKE, True) if p.get("tier") == "official" else (0.0, False)
+    """(stake, kelly_triggered) of a pick: Kelly-derived units (capped), and kelly_triggered iff the stake is > 0. A pick with no
+    blended edge at its price is a zero-stake monitoring row (still settled on a 1u reference, still closing-line-captured)."""
+    stake = round(min(kelly_pct_of(p) * BANKROLL_UNITS, MAX_STAKE_UNITS), 2)
+    return (stake, True) if stake > 0 else (0.0, False)
 
 
 def log_picks(sport: str, picks: list[dict], tracker=None) -> list[dict]:
@@ -228,7 +247,7 @@ def log_picks(sport: str, picks: list[dict], tracker=None) -> list[dict]:
                 game_date=day, player=p["player"], away_team=a, home_team=h, bet_type=bet_type_of(p),
                 model_prob=float(model_p), market_prob=float(mkt),
                 edge=float(p["model_edge"]) if p["model_edge"] is not None else float(model_p) - float(mkt),
-                odds=int(p["american"]), stake=stake, kelly_triggered=triggered, paper=True, book=p["book"],
+                odds=int(p["american"]), stake=stake, kelly_triggered=triggered, kelly_pct=round(kelly_pct_of(p), 4), paper=True, book=p["book"],
                 proj_mean=p["proj_mean"],
                 notes=json.dumps({
                     "stat": p["stat"], "point": p["point"], "side": p["side"], "n_books": p["n_books"], "tier": p["tier"],
@@ -306,6 +325,50 @@ def fix_tracked_stakes(tracker=None, dry_run: bool = False) -> dict:
                 conn.execute(text("UPDATE bets SET kelly_triggered = :f, stake = 0 WHERE id IN (%s)" % ", ".join(":" + k for k in keys)),
                              {"f": False, **keys})
     return {"candidates": len(ids), "updated": 0 if dry_run else len(ids), "unparsed": unparsed}
+
+
+def rederive_kelly(tracker=None, dry_run: bool = False) -> dict:
+    """One-off: re-size every existing PROPS row by the Kelly rule of log_picks (p_blend from its notes vs its logged odds).
+
+    Updates kelly_pct, stake, kelly_triggered (= stake > 0); a SETTLED row's profit is rescaled from its per-unit result to the new
+    stake (a row that sizes to 0 keeps its 1u-reference profit, as zero-stake rows always do). Rows with no parseable p_blend in
+    their notes are left alone (counted `no_blend`). Idempotent. Run where the DB is reachable (the Cloud Run job):
+        gcloud run jobs execute props-model-picks --region us-central1 --args="-m,ev.model_picks,--rederive-kelly" --wait
+    -> {"rows", "updated", "staked", "no_blend", "unparsed"}"""
+    from sqlalchemy import text
+    if tracker is None:
+        path = _db_path()
+        if path is None:
+            return {"rows": 0, "updated": 0, "staked": 0, "no_blend": 0, "unparsed": 0, "error": "no db"}
+        from mlb_core.tracking import BetTracker
+        tracker = BetTracker(path, system=SYSTEM, sport="nba")
+    with tracker.engine.connect() as conn:
+        rows = conn.execute(text("SELECT id, odds, stake, profit, result, notes FROM bets WHERE system = :sys"), {"sys": SYSTEM}).fetchall()
+    out = {"rows": len(rows), "updated": 0, "staked": 0, "no_blend": 0, "unparsed": 0}
+    todo = []
+    for bid, odds, old_stake, profit, result, notes_s in rows:
+        try:
+            pb = _num(json.loads(notes_s or "{}").get("p_blend"))
+        except (TypeError, ValueError):
+            out["unparsed"] += 1
+            continue
+        if pb is None or odds is None:
+            out["no_blend"] += 1
+            continue
+        pct = kelly_pct_of({"p_blend": pb, "american": odds})
+        stake, triggered = ledger_stake({"p_blend": pb, "american": odds})
+        new_profit = profit
+        if profit is not None and result in ("win", "loss", "push") and stake > 0:
+            unit = float(profit) / (float(old_stake or 0.0) or 1.0)
+            new_profit = round(unit * stake, 2)
+        out["staked"] += 1 if stake > 0 else 0
+        todo.append({"id": int(bid), "k": round(pct, 4), "s": stake, "t": triggered, "p": new_profit})
+    out["updated"] = len(todo)
+    if todo and not dry_run:
+        with tracker.engine.begin() as conn:
+            for r in todo:
+                conn.execute(text("UPDATE bets SET kelly_pct = :k, stake = :s, kelly_triggered = :t, profit = :p WHERE id = :id"), r)
+    return out
 
 
 # -- closing lines -----------------------------------------------------------------------------------------------------
@@ -417,8 +480,13 @@ def main(argv=None) -> int:
     ap.add_argument("--fix-tracked-stakes", action="store_true",
                     help="one-off: demote PROPS rows logged as staked bets with tier 'tracked' to kelly_triggered=false, stake=0 "
                          "(honours --dry-run); does nothing else")
+    ap.add_argument("--rederive-kelly", action="store_true",
+                    help="one-off: re-size every existing PROPS row by Kelly on its logged p_blend (honours --dry-run); does nothing else")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    if a.rederive_kelly:
+        print(json.dumps(rederive_kelly(dry_run=a.dry_run)))
+        return 0
     if a.fix_tracked_stakes:
         print(json.dumps(fix_tracked_stakes(dry_run=a.dry_run)))
         return 0
