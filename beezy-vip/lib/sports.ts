@@ -164,6 +164,26 @@ export function sportsWithRows(boards: Partial<Record<SportSlug, { rows?: unknow
   return loaded.filter(s => (boards[s]?.rows?.length ?? 0) > 0)
 }
 
+/** One league as a filter pill: `live` has rows now, `empty` is a league we cover with nothing on the board, `soon` has no feed on this page yet. */
+export type LeagueState = 'live' | 'empty' | 'soon'
+
+export interface LeaguePill { slug: SportSlug; label: string; state: LeagueState; note: string }
+
+/**
+ * Every league filter (Odds Terminal, Game Lines) shows the same four leagues in the same order, so a league never disappears from
+ * the row. A league with nothing to show stays in place, dimmed, and says why when it is picked. `live` is the leagues that have rows;
+ * `soon` is the leagues this page has no feed for at all.
+ */
+export function leaguePills(live: readonly string[], soon: readonly string[] = [], date = new Date()): LeaguePill[] {
+  return LIVE_SPORTS.map(p => {
+    const state: LeagueState = soon.includes(p.slug) ? 'soon' : live.includes(p.slug) ? 'live' : 'empty'
+    const note = state === 'soon' ? `${p.shortName} is not on this page yet.`
+      : state === 'empty' ? (p.slug === 'mlb' && isMlbOffseason(date) ? 'MLB is in the offseason and resumes in March.' : `No ${p.shortName} games with prices right now.`)
+      : ''
+    return { slug: p.slug, label: p.shortName, state, note }
+  })
+}
+
 const PROP_STAT_LABEL: Record<string, string> = {
   rec_yds: 'Rec Yds', rush_yds: 'Rush Yds', pass_yds: 'Pass Yds', receptions: 'Receptions', pass_tds: 'Pass TDs',
   anytime_td: 'Anytime TD', pass_completions: 'Completions', pass_attempts: 'Pass Attempts', rush_attempts: 'Carries',

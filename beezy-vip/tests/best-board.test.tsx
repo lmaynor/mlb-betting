@@ -54,10 +54,15 @@ describe('BestBoard: one row per game', () => {
     render(board(TIGHT))
     expect(within(screen.getAllByTestId('board-row')[0]).queryByTestId('row-edge')).toBeNull()
   })
-  it('only offers the sports with games, and says why one is missing', () => {
+  it('always offers the same four leagues, dims the ones with nothing, and says why one is missing', () => {
     render(<BestBoard feeds={{ odds: { nhl: feed(TIGHT), nba: { ...feed([], { sport: 'nba' }), status: 'awaiting_lines' } }, proj: {} }} />)
-    expect(within(screen.getByRole('group', { name: 'Sport' })).getAllByRole('button').map(b => b.textContent)).toEqual(['All sports', 'NHL'])
+    const group = within(screen.getByRole('group', { name: 'Sport' }))
+    expect(group.getAllByRole('button').map(b => b.textContent)).toEqual(['All', 'MLBsoon', 'NFLsoon', 'NHL', 'NBAoff'])
     expect(screen.getByTestId('quiet-sports').textContent).toMatch(/NBA: the next slate's lines are not posted yet/)
+    fireEvent.click(group.getByRole('button', { name: /NFL/ }))
+    expect(screen.getByTestId('league-note').textContent).toMatch(/NFL is not on this page yet/)
+    fireEvent.click(within(screen.getByTestId('league-note')).getByRole('button', { name: 'Open NHL' }))
+    expect(screen.getAllByTestId('board-row').length).toBeGreaterThan(0)
   })
   it('says so when nothing is published, and when a feed is empty', () => {
     const first = render(<BestBoard feeds={{ odds: { nhl: null }, proj: {} }} />)

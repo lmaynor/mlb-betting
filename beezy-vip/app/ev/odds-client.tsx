@@ -27,7 +27,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
         <h1 className="text-title-2-bold text-text-primary">Odds Terminal</h1>
         <div className="flex flex-wrap items-center gap-3">
           <span className={cx('mono text-caption-1-regular', meta.stale ? 'text-warn' : 'text-text-secondary')}>
-            {nRows} rows &middot; {meta.age != null ? `Lines ${ageLabel(meta.age)} old` : 'Offseason / no games'}{meta.sources.length ? ` \u00b7 ${meta.sources.join(' + ').toUpperCase()}` : ''}
+            {nRows} rows &middot; {meta.age != null ? `Lines ${ageLabel(meta.age)} old` : 'No games on the board'}{meta.sources.length ? ` \u00b7 ${meta.sources.join(' + ').toUpperCase()}` : ''}
           </span>
           <button onClick={refresh} disabled={loading} className="btn btn-ghost px-3 py-[5px] text-xs">{loading ? 'Refreshing...' : 'Refresh'}</button>
         </div>

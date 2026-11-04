@@ -7,6 +7,7 @@ import { ageLabel, usd } from './odds-format'
 import { EvRow, ArbTableRow, MiddleTableRow, LongshotTableRow, OutlierTableRow, SgpTableRow } from './odds-rows'
 import { MobileEvRowCard, MobileArbCard, MobileMiddleCard, MobileLongshotCard, MobileSgpCard, OutlierCard } from './odds-cards'
 import { OddsScreen } from './use-odds-screen'
+import { LeagueNote } from '@/components/ui/league-filter'
 
 /** One strip above the SGP view: every row is UNVALIDATED model output, and the flagged extreme rows are counted, not silently dropped. */
 function SgpNotice({ extremeCount, includeExtreme, onToggle }: { extremeCount: number; includeExtreme: boolean; onToggle: () => void }) {
@@ -273,7 +274,7 @@ function PropTableView({ odds }: { odds: OddsScreen }) {
 }
 
 export function OddsResults({ odds }: { odds: OddsScreen }) {
-  const { mode, sport, sgpExtreme, setSgpExtreme, setLimit, outlierView, isMobile, mobileView, allRows, sgpExtremeCount, nRows, unpublished, emptyBody } = odds
+  const { mode, sport, setSport, sportOptions, sgpExtreme, setSgpExtreme, setLimit, outlierView, isMobile, mobileView, allRows, sgpExtremeCount, nRows, unpublished, emptyBody } = odds
   return (
     <>
       {mode === 'sgp' && !unpublished && (
@@ -282,8 +283,10 @@ export function OddsResults({ odds }: { odds: OddsScreen }) {
 
       {unpublished ? (
         <Empty title="Odds board not published yet" body="The price feed behind this screen is not available right now. It is rewritten every 30 minutes while games are on the board; check back shortly." />
+      ) : sport !== 'all' && !sportOptions.includes(sport) ? (
+        <LeagueNote value={sport} live={sportOptions} onPick={v => { setSport(v); setLimit(PAGE) }} />
       ) : allRows.length === 0 ? (
-        <Empty title="No prop prices posted" body={sport === 'mlb' ? 'MLB is in the offseason (resumes in March). Switch to NFL, NBA, or NHL for active boards.' : 'No book has posted player props for the games on the board yet.'} />
+        <Empty title="No prop prices posted" body="No book has posted player props for the games on the board yet." />
       ) : nRows === 0 ? (
         <Empty title={emptyBody.title} body={emptyBody.body} />
       ) : isMobile && mobileView === 'cards' ? (

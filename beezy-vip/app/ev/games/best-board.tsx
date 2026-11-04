@@ -3,12 +3,14 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { LockedNotice } from '@/components/picks/locked-notice'
 import { BookLogo } from '@/components/ui/book-logo'
+import { LeagueFilter, LeagueNote, type LeagueValue } from '@/components/ui/league-filter'
 import { SportLogo } from '@/components/ui/sport-assets'
 import { BOARD_SORTS, buildGameBoard, sortBoard, sportsWithGames, type BoardSort, type GameBoardEntry } from '@/lib/game-board'
 import { ageText, GAME_MIN_REF, freshnessBin, gameOddsUnavailable, startLabel, type Freshness, type GameMarket, type GameOddsFeed } from '@/lib/game-odds'
 import { edgesNow, gameEdges, primaryMove, shopMarket, type EdgeItem, type ShopSide } from '@/lib/game-shop'
 import { moveForSide } from '@/lib/line-move'
 import { formatOdds } from '@/lib/odds'
+import { SPORT_SLUGS, type SportSlug } from '@/lib/sports'
 import { useBankroll } from '@/lib/use-bankroll'
 import { useMyBooks } from '@/lib/use-my-books'
 import { GamePopup, type PopupPane } from './game-popup'
@@ -96,9 +98,11 @@ function Stoplight({ bin, text }: { bin: Freshness | null; text: string }) {
  * table, "Edges now" lists the few real edges on the slate (against the market fair price, 3+ books, not suspiciously large), or says
  * there are none. UNVALIDATED market data.
  */
+const NO_GAME_FEED = SPORT_SLUGS.filter(s => s !== 'nba' && s !== 'nhl') /* game-line feeds exist for NBA and NHL only */
+
 export function BestBoard({ feeds: initial, initialSport, initialOpen, nav }: { feeds: GameBoardFeeds; initialSport?: string; initialOpen?: { key: string; pane?: PopupPane }; nav?: ReactNode }) {
   const { odds, proj, feedSports } = useGameFeeds(initial)
-  const [sport, setSport] = useState(initialSport ?? 'all')
+  const [sport, setSport] = useState<string>(initialSport ?? 'all')
   const [sort, setSort] = useState<BoardSort>('time')
   const [sel, setSel] = useState<string | null>(null)
   const [open, setOpen] = useState<{ key: string; pane?: PopupPane; line?: number | null } | null>(initialOpen ?? null)
@@ -110,7 +114,7 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen, nav }: { 
   const opts = useMemo(() => ({ refs: [] as string[], method: 'proportional' as const, bettable, offshore, minRef: GAME_MIN_REF, includeExchanges: true, bankroll }), [bettable, offshore, bankroll])
   const entries = useMemo(() => buildGameBoard({ odds, proj }, opts), [odds, proj, opts])
   const available = useMemo(() => sportsWithGames(entries), [entries])
-  const activeSport = sport === 'all' || available.includes(sport) ? sport : 'all'
+  const activeSport = sport
   const games = useMemo(() => sortBoard(entries.filter(g => activeSport === 'all' || g.sport === activeSport), sort), [entries, activeSport, sort])
   const edges = useMemo(() => edgesNow(games, 5, 1), [games])
   const popup = open ? games.find(g => g.key === open.key) ?? null : null
@@ -144,6 +148,7 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen, nav }: { 
         <div role="status" className="py-6 text-neutral-300 text-cozy">No book has posted game lines for this slate yet. Prices appear as soon as a slate and its lines are posted.</div>
       ) : (
         <>
+          {!(activeSport !== 'all' && !available.includes(activeSport)) && (
           <section aria-label="Edges now" className="mb-3" data-testid="edges-now">
             <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 mb-1.5">
               <span className="text-compact font-semibold text-text-primary whitespace-nowrap">Edges now</span>
@@ -168,18 +173,18 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen, nav }: { 
               </div>
             )}
           </section>
+          )}
 
           <div className="flex flex-wrap items-center gap-y-2 gap-x-3.5 mb-2.5">
-            <PillGroup label="Sport">
-              <Pill active={activeSport === 'all'} onClick={() => setSport('all')}>All sports</Pill>
-              {available.map(s => <Pill key={s} active={activeSport === s} onClick={() => setSport(s)}>{s.toUpperCase()}</Pill>)}
-            </PillGroup>
+            <LeagueFilter label="Sport" value={activeSport as LeagueValue} live={available} soon={NO_GAME_FEED} onChange={setSport} />
             <Select id="bb-sort" label="Sort" value={sort} onChange={v => setSort(v as BoardSort)} options={BOARD_SORTS.map(s => ({ v: s.v, l: s.l }))} />
             <span className="hidden md:inline-flex items-center gap-1.5 text-[12px] text-text-secondary rounded-control border border-separator-border px-2.5 py-1" data-testid="open-hint">Double-click any game to open its card</span>
           </div>
           {quiet.length > 0 && <p className="text-[12px] text-text-secondary m-0 mb-2.5" data-testid="quiet-sports">{quiet.join(' · ')}</p>}
 
-          {games.length === 0 ? (
+          {activeSport !== 'all' && !available.includes(activeSport) ? (
+            <LeagueNote value={activeSport as SportSlug} live={available} soon={NO_GAME_FEED} onPick={setSport} />
+          ) : games.length === 0 ? (
             <div role="status" className="py-6 text-neutral-300 text-cozy">No games for this sport right now.</div>
           ) : (
             <div className="bg-background-primary-default border border-separator-border rounded-xl shadow-card overflow-x-auto">

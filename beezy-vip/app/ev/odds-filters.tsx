@@ -1,5 +1,5 @@
 import { bookDisplay } from '@/lib/tokens'
-import { HorizontalPillStrip } from '@/components/ui/mobile-sheet'
+import { LeagueFilter } from '@/components/ui/league-filter'
 import { STAT_LABEL, type SideFilter } from '@/lib/odds-screen'
 import { SportFilter, SortKey, HAIR, GREEN, SHARP_PRESET, MIN_EV, ODDS_MIN, PAGE, MID_COST, MID_GAP, OUTLIER_GAP_OPTIONS, OUTLIER_ODDS_OPTIONS, OUTLIER_MIN_BOOKS, MODES, SGP_ARCHETYPE_OPTIONS, SGP_MIN_EV_OPTIONS } from './odds-constants'
 import { startLabel } from './odds-format'
@@ -24,34 +24,7 @@ export function MobileFilterBar({ odds }: { odds: OddsScreen }) {
       </div>
 
       <div style={{ padding: '8px 10px', borderTop: `1px solid ${HAIR}`, display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-        <HorizontalPillStrip gap="4px" padding="0" style={{ width: 'auto', flexShrink: 0 }}>
-          {(['all', ...sportOptions] as SportFilter[]).map(s => {
-            const selected = sport === s
-            return (
-              <button
-                key={s}
-                type="button"
-                aria-pressed={selected}
-                onClick={() => {
-                  setSport(s); setStat('all'); setGame('all'); setLimit(PAGE)
-                }}
-                style={{
-                  fontFamily: 'var(--font-mono), monospace',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  padding: '5px 8px',
-                  borderRadius: '4px',
-                  border: `1px solid ${selected ? 'var(--color-border-button-hover)' : HAIR}`,
-                  background: selected ? 'var(--color-background-tertiary-default)' : 'transparent',
-                  color: selected ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                  cursor: 'pointer',
-                }}
-              >
-                {s.toUpperCase()}
-              </button>
-            )
-          })}
-        </HorizontalPillStrip>
+        <LeagueFilter value={sport} live={sportOptions} onChange={v => { setSport(v); setStat('all'); setGame('all'); setLimit(PAGE) }} />
 
         <input
           aria-label="Search player or team"
@@ -128,11 +101,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
           })}
         </PillGroup>
           <Field label="Sport">
-            <PillGroup>
-              {(['all', ...sportOptions] as SportFilter[]).map(s => (
-                <Pill key={s} active={sport === s} onClick={() => { setSport(s); setStat('all'); setGame('all'); setLimit(PAGE) }}>{s.toUpperCase()}</Pill>
-              ))}
-            </PillGroup>
+            <LeagueFilter value={sport} live={sportOptions} onChange={v => { setSport(v); setStat('all'); setGame('all'); setLimit(PAGE) }} />
           </Field>
           <Field label="Prop" htmlFor="odds-stat">
             <Select id="odds-stat" value={stat} onChange={v => { setStat(v); setLimit(PAGE) }}
