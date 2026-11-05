@@ -125,3 +125,18 @@ Verdict file: `NOVIG_GATE_VERDICT_FILE` (default `~/.kalshi_exec/novig_gate_verd
 - `compute` was run against a local mirror (read-only `gcloud storage cp`) of the one day's raw payloads that has a ledger play; the full 2026-10-04..11-05 raw bank was not mirrored
   because the ledger has no plays outside 2026-10-12.
 - Nothing was run against the live Novig API; `props_exec run --novig` with the gate on was exercised only through `run_pass` fakes.
+
+## Addendum 2026-11-05 (later): banking + a scheduled shadow loop (items 1 and 2 of "Missing")
+
+- **Durable ledger.** `ev/novig/shadow_bank.py` banks the `novig` shadow rows to `Novig/shadow_ledger/{ET day}/{run}_{hash}.jsonl.gz`
+  (create-only chunks, natural-key dedupe on read; see CONTEXT.md 15.11). The gate now reads it:
+  `python -m ev.novig.clv_gate compute --bank --gcs-raw` (laptop file no longer required). The two 2026-10-12 laptop fills were banked
+  from a copy of the laptop ledger and the banked path reproduced the table above exactly (rec_yds n=2/2, 1 game day, mean CLV -1.10%,
+  consensus CLV +2.70%, CLOSED).
+- **Running loop.** `ev/novig/shadow_job.py` (Cloud Run Job `novig-shadow-nfl`, `deploy/setup_novig_shadow.sh`) runs the same shadow pass on NFL
+  game windows. It needs no secret beyond the bucket name: consensus is the sweep's `consensus.json`, Novig data is the public catalog,
+  there is no Kalshi join and no paper-sandbox mirror. Every firing prints a `NOVIG_CLV_GATE` status line.
+- **Still true.** The gate thresholds (n >= 250, clustered 95% CI, consensus confirmation) are unchanged, every slice is still CLOSED, and
+  nothing here has any order or live path. Still missing: any non-NFL Novig mapper; the close is still a proxy; shadow fills are still
+  optimistic. The job only helps if consensus is fresh when it fires (25 min age gate), so Sunday-afternoon coverage is bounded by the
+  sweep's hourly cadence there; an opt-in consensus refresh (ParlayAPI credits) is deliberately NOT enabled.

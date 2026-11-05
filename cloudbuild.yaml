@@ -24,11 +24,15 @@ steps:
       - '-c'
       - |
         docker pull ${_IMAGE}:latest || echo "no previous image to cache from (first build)"
-        docker build --cache-from ${_IMAGE}:latest -t ${_IMAGE}:latest .
+        docker build --cache-from ${_IMAGE}:latest -t ${_IMAGE}:${_TAG} .
 images:
-  - '${_IMAGE}:latest'
+  - '${_IMAGE}:${_TAG}'
 substitutions:
   _IMAGE: 'gcr.io/${PROJECT_ID}/mlb-betting'
+  # Default 'latest' == the historical behaviour (deploy_service.sh, build_all_images.sh pass only _IMAGE). A non-latest tag builds
+  # a branch image WITHOUT moving :latest, which every scheduled job on that repo resolves at its next execution
+  # (docs/solutions/conventions/cloud-run-job-image-tag-resolution.md). The layer cache still comes from :latest.
+  _TAG: 'latest'
 options:
   logging: CLOUD_LOGGING_ONLY
 timeout: 1200s
