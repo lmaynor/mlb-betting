@@ -39,7 +39,7 @@ Rules:
 **Binning work into PRs.** Split before committing, not after.
 - One PR = one concern. Concerns are: one sport's modeling work (MLB, NFL, NBA, NHL, NCAAB, soccer), shared UI, shared infra, and one type (feature, fix, refactor, docs, research).
 - Modeling work stays separate per sport. Never mix two sports' models, engines, features, or data pipelines in one PR, even when the change looks similar. Do not touch another sport's files unless the PR is for that sport.
-- UI and infra PRs may span all sports at once.
+- UI and infra PRs may span all sports at once. A shared harness or library (for example `mlb_core/eval/`) is infra; each sport's adapter for it is that sport's modeling PR.
 - Schema or contract changes (anything in CONTEXT.md section 5) get their own PR so they can be reviewed alone.
 - Tests and docs ride with the change they cover. A separate docs-only PR is fine when nothing else changed.
 - Run `git diff --stat main...HEAD` before opening a PR. If the file list spans two concerns, split it.
@@ -50,6 +50,8 @@ Rules:
 - One logical change per commit. Use conventional prefixes (`feat:`, `fix:`, `docs:`, `chore:`) and say why in the body.
 - Keep the attribution trailer from the session's system instructions on commits and PR bodies.
 - Never commit directly to `main`. Never force-push. Never use `git stash` without a unique tag (other sessions share the stack).
+- Push every branch before the session ends. Work left on a local-only branch is invisible to deploys and to other sessions (the RotoWire goalie commits sat unpushed and undeployed for a day while the owner believed them merged).
+- Never state that something is merged, pushed, or deployed from memory. Check it: `gh pr view`, `git branch -r --contains <sha>`, `gcloud run ... describe`.
 
 **Before a PR.**
 - Run tests. For Cloud Run changes, the deploy script runs them: `./deploy/deploy_service.sh`.
@@ -66,11 +68,34 @@ Rules:
 **Session wrap-up sequence.** Run these in order. Do not skip ahead.
 1. Tests pass locally for every touched area.
 2. Commit each concern as its own commit. Update `CONTEXT.md` and commit it last (`docs: update CONTEXT.md`).
-3. Open the PRs. Merge only after the user approves.
+3. Push every branch and open the PRs. Merge only after the user approves.
 4. Deploy Cloud Run through `deploy/deploy_service.sh`, only after the user approves the deploy.
 5. Trigger the Cloud Run jobs the change needs, after the deploy finishes. See CONTEXT.md section 9 for the scheduler reference. Never trigger jobs before the deploy they depend on.
 6. Verify: read back the revision with `gcloud run services describe`, and check the job's execution status.
 7. Clean up merged branches and worktrees.
+
+## Evidence and shipping rules
+
+- Engine or model changes need held-out walk-forward evidence before they touch serving. CLV against the close is the go/no-go, not ROI.
+- Label new outputs UNVALIDATED until there is forward evidence. A null or negative result is a valid deliverable: write it up in `docs/analysis/` and leave the feature OFF. Never claim an edge without forward CLV and a stated sample size.
+- If a gate or threshold is chosen after looking at results, say how many variants were tried and apply a multiple-testing penalty. Fix thresholds on a dev split, then score held-out data once.
+- New behaviour ships OFF behind an env flag unless the PR shows it is safe on. A kill switch must accept `0`, `false`, `off` and `no`.
+- Nothing places a real-money order. Execution code stays shadow or paper until a slice clears its forward-CLV gate (Novig: n >= 250 settled bets, positive mean, CI lower bound above zero) and the user turns it on in chat. Do not loosen risk caps outside demo.
+- A new scraped source needs a recorded ToS or permission check (in CONTEXT.md) before it is built. Ruled out so far: 4codds, MoneyPuck / Natural Stat Trick / Evolving-Hockey (commercial-use terms). Keep to one polite request per refresh and cache.
+
+## Code and test conventions
+
+- ASCII-only source files. Do not paste smart quotes or arrows into code or docs. Note that the Write tool can unescape `\uXXXX` sequences.
+- Tests run offline: use the `conftest.py` fixtures, never GCS or the network, and never add test-detection branches to production code.
+- Use `mlb_core.storage` for GCS and file IO. Scheduled jobs need `PAUSE=1` support in their setup script.
+- Run the suite twice if a failure looks order-dependent. Compare failures to a clean `main` before calling them yours.
+
+## Working with subagents
+
+- Brief like a peer: goal, files to read first, what is ruled out, hard limits (no deploy, no GCS writes, no live orders unless the brief says so), and what the report must contain.
+- One writer per set of files. Give each agent its own worktree and branch.
+- A subagent's report is unverified. Check the PR, branch, and deployed state yourself before relaying "done", and label unchecked numbers as the agent's.
+- Do not let a subagent merge, deploy, or enable auto-merge unless the user asked for that exact step.
 
 **Compute.** Run heavy work (backfills, walk-forward replays, simulators, full test suites) on the laptop, which is free. Use GCP only for jobs that must run unattended on a schedule, and never provision a job or scheduler for one-off research.
 
