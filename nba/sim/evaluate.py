@@ -507,7 +507,7 @@ def report_markdown(dirs: list) -> str:
     """Markdown tables for the analysis document from one or more evaluate output directories (pooled)."""
     cal, pair, corr, tot, game, n_games, tried, n = load_results(dirs)
     g = np.array(game, dtype=float)
-    lines = [f"Games simulated: {n_games} of {tried}; draws per game: {n}; seasons {sorted(cal.season.unique())}; eligible player-games (last-10 "
+    lines = [f"Games simulated: {n_games} of {tried}; draws per game: {n}; seasons {sorted(int(x) for x in cal.season.unique())}; eligible player-games (last-10 "
              f"minutes >= {ELIG_MPG:g}): {cal[['game_id', 'player']].drop_duplicates().shape[0]}.", "",
              f"Game-level input check (actual minus the simulator's input mean): total residual mean {g[:, 0].mean():+.2f}, sd {g[:, 0].std():.2f} "
              f"(input sd {g[:, 2].mean():.2f}); margin residual mean {g[:, 1].mean():+.2f}, sd {g[:, 1].std():.2f} (input sd {g[:, 3].mean():.2f}).", ""]

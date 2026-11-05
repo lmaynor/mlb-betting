@@ -4136,6 +4136,22 @@ separate, later effort. Full detail lives in `nba/README.md`; plan + decisions i
 
 - **Shot charts (2026-11-03, branch `feat/edge-shot-charts`, undeployed):** `nba/shots/` turns a shot table (the supplied `NBA_2004_2025_Shots.csv`, stats.nba.com lineage, ends 2025-04-13) into per-season artifacts under `NBA/shots/`; `nba/shots/charts.py` serves them to the `/edge` inspector (made/missed map, hex map vs league with the -9/-3/0/+3/+9 breaks and an FG% / points-per-shot colour toggle, heat map, zone map, matchup map, assisted-basket map (2025-26 on), filters for last 10 / home / away / vs opponent / quarter, distance curve, quarter table, expected FG% and shot-making) beside the `Trends` tab (game log vs line with rolling means, distribution, splits, minutes fit, teammate-out, variance drivers); the inspector for NBA rows is now Trends / Shots / Prices. 2025-26 and 2026-27 shots come from ESPN play-by-play (`nba/shots/espn.py`). Licensing and source facts: `docs/solutions/integration-issues/nba-shot-chart-source-and-licensing.md`.
 
+- **Joint game simulator (2026-11-05, branch `feat/nba-joint-game-simulator`, OFFLINE, UNVALIDATED, not wired into serving / alerts / Discord / the SGP proxy builder):**
+  `nba/sim/` draws ONE coherent game n times (default 10,000, seeded, vectorised): possession factor + total + margin -> team points; team threes / assists / rebounds as
+  fitted functions of team points and pace; minutes with garbage time (a starter plays ~0.84 of his usual minutes at |margin| >= 25) and copula-correlated leftovers; each pie split
+  multinomially among the modeled players plus a rest-of-roster bucket, so player points + rest = team total EXACTLY, points = 3 x threes + a share of the rest, and pra / pr / pa / ra are
+  sums of the SAME draws (`joint_sim.simulate_game` -> `JointDraws.p_over / joint / joint_all / corr`, CLI `python -m nba.sim.joint_sim --game spec.json ...`). Inputs are the serving engine's own
+  marginals (`nba/sim/adapter.py` calls `_nba_component` / `_nba_projection`); per-player weights and noise are solved so mean and sd match them. `marginals="structural"` keeps the mechanism's
+  shape, `"anchored"` maps ranks onto the analytic quantiles (single-leg P(over) equals the board's, the exact sum constraint is lost). Structural constants (`nba/sim/fit.py`, `nba/sim/params.json`)
+  are fitted on season_year <= 2023; the `player` block was tuned on 388 games of 2023-24. **Held-out 2024-25 + 2025-26 (2,639 games, accuracy only, oracle absences, no spreads, no prices):**
+  structural single-leg P(over) is consistent for rebounds / assists / threes (mean abs gap 0.006, ~1 MC SE) but NOT for points (bias -0.025; the simulation's skewed shape is the better-calibrated one,
+  ECE 0.047 -> 0.005 at the L10 proxy line); anchored is exact for every leg. Correlations vs the box scores: same-player / opposing / player-vs-margin within ~0.03, RMS gap 0.039 over 19 pair types
+  (0.194 if independent); known misses: teammate points-points too negative (-0.046 vs -0.004), teammate points-assists too low (+0.004 vs +0.049), player points vs game total too low (0.146 vs 0.207).
+  Combos: structural beats today's coherent-from-marginals Normals on log score (+0.004..+0.006, z 8..25 in each season) but ~all of it is the points marginal's shape; anchored (dependence only) gains
+  +0.0002..+0.0009 on pra / pr, ~0 on pa, +0.0043 on ra. Verdict: LEAVE OFF; if used, `anchored` for SGP pairs with the UNVALIDATED label. The replay's team-total input overshoots reality by
+  5.95 points a game (the engine's oracle-absence boost), so player-vs-game-total pair events are not a clean test. Details, tables, what was not verified:
+  `docs/analysis/nba_joint_simulator_2026-11-05.md` (+ `docs/analysis/nba_joint_simulator/`); tests `tests/test_nba_joint_sim.py`.
+
 When NBA gains odds + a model it graduates to the full "adding a new system"
 checklist (§6); until then keep it out of the MLB registry/monitors.
 
