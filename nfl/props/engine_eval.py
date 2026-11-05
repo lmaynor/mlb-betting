@@ -700,6 +700,7 @@ def replay_hierarchical(df: pd.DataFrame, test_seasons: Iterable[int], env_tbl: 
                         ls_hier = float(np.log(max(float(hr.dist.mass(y)), MASS_FLOOR)))
                         ls_base = float(np.log(max(float(base.mass(y)), MASS_FLOOR)))
                     rec = {"season": season, "week": int(week), "player": r["_name"], "stat": stat, "y": float(y),
+                           "player_id": r.get("player_id"), "game_id": r.get("game_id"), "team": team,
                            "line": line, "mu_base": mu_base, "mu_hier": hr.mean,
                            "ls_base": ls_base, "ls_hier": ls_hier,
                            "p_base": base.sf(line), "p_hier": hr.p_over(line),
