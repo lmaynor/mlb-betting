@@ -519,11 +519,52 @@ _REQUIRED_STAT_FIELDS = (
     "points", "field_goals_made", "field_goals_attempted", "three_points_made", "three_points_attempted",
     "free_throws_attempted", "rebounds_offensive", "rebounds_defensive", "turnovers",
 )
+# the subset of required fields the player box master can backfill (it is complete for 2019-24)
+_BACKFILL_STAT_FIELDS = ("rebounds_offensive", "rebounds_defensive", "turnovers")
+
+
+def _player_sum_backfill(df: pd.DataFrame, df_players: Optional[pd.DataFrame]):
+    """Fill NaN team-box rebounds/turnovers from player-box sums per (game_id, team_abbr).
+
+    The join nba/sim/fit.py::team_table (PR #186) uses, ported per the Argon review of #183: the team
+    master has NaN rebounds + turnovers for 2019-24 while the player master is complete, so summing the
+    played player rows reconstructs the team totals instead of dropping those team-games as nan_stats.
+    Only NaN cells are filled (a real team value is never overwritten). Returns (df, team-rows touched).
+    Fail-soft: missing player frame / columns / any error returns the input frame unchanged.
+    """
+    if df_players is None or len(df_players) == 0:
+        return df, 0
+    need = {"game_id", "team_abbr", *_BACKFILL_STAT_FIELDS}
+    if not need.issubset(df_players.columns) or not need.issubset(df.columns):
+        return df, 0
+    try:
+        p = df_players
+        if "played" in p.columns:
+            p = p[p["played"].astype(str).str.lower().isin(["true", "1", "1.0"])]
+        p = p.copy()
+        for c in _BACKFILL_STAT_FIELDS:
+            p[c] = pd.to_numeric(p[c], errors="coerce")
+        sums = p.groupby([p["game_id"].astype(str), p["team_abbr"].astype(str)])[
+            list(_BACKFILL_STAT_FIELDS)].sum()
+        out = df.copy()
+        keys = list(zip(out["game_id"].astype(str), out["team_abbr"].astype(str)))
+        touched = pd.Series(False, index=out.index)
+        for c in _BACKFILL_STAT_FIELDS:
+            lookup = sums[c].to_dict()
+            fill = pd.Series([lookup.get(k, np.nan) for k in keys], index=out.index, dtype=float)
+            mask = out[c].isna() & fill.notna()
+            out.loc[mask, c] = fill[mask]
+            touched |= mask
+        return out, int(touched.sum())
+    except Exception as exc:  # noqa: BLE001 - a backfill failure must never break the loader
+        log.warning("player-box backfill failed (%r); team box used as-is", exc)
+        return df, 0
 
 
 def build_team_game_stats_from_raw(
     df_boxscores: Optional[pd.DataFrame],
     tips: Optional[pd.Series] = None,
+    df_player_boxscores: Optional[pd.DataFrame] = None,
 ) -> List[TeamGameStats]:
     """
     Parse the team boxscores master (NBA/team_boxscores_master.csv, schema in nba/data/flatten.py) into TeamGameStats.
@@ -531,6 +572,10 @@ def build_team_game_stats_from_raw(
 
     tips: optional Series game_id -> UTC tip timestamp (nba.props.data.gather_tips). Converts the master's UTC `date`
     to the ET game day so rest/back-to-back are right. Games without a tip keep the master date (counted + logged).
+    df_player_boxscores: optional player boxscores master (same data source as the team master). When given,
+    NaN rebounds/turnovers in the 2019-24 team box are backfilled from played-player sums per
+    (game_id, team_abbr) -- see _player_sum_backfill -- instead of dropping those team-games. When absent,
+    behavior is unchanged (fail-soft).
     Dropped rows are never silent: unresolved tricodes, NaN box stats (2019-24 team box has no rebounds/turnovers),
     preseason and malformed games are each counted and logged.
     """
@@ -550,6 +595,11 @@ def build_team_game_stats_from_raw(
         pre = df["season_type"].astype(str).str.lower().eq("preseason")
         drops["preseason"] = int(pre.sum())
         df = df[~pre]
+
+    df, n_backfilled = _player_sum_backfill(df, df_player_boxscores)
+    if n_backfilled:
+        log.info("NBA history loader: backfilled rebounds/turnovers for %d team-rows from the player "
+                 "box master (the 2019-24 team box is NaN there)", n_backfilled)
 
     for game_id, g_df in df.groupby("game_id", sort=False):
         if len(g_df) != 2:

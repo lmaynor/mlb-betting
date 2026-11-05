@@ -148,6 +148,44 @@ def _compute_turnover_luck(pbp_game: pd.DataFrame, team: str) -> float:
     return float(fumble_luck_epa + int_luck_epa)
 
 
+def _elapsed_secs_per_play(neutral: pd.DataFrame) -> float:
+    """Pace (seconds per play) for one team's neutral-script offensive plays in one game.
+
+    nflverse `play_clock` is the seconds REMAINING on the 40-second play clock at the snap
+    (mean ~10.5s), NOT elapsed seconds per play (mean ~28s). Averaging play_clock (the pre-fix
+    behavior) made every team look hyper-fast and inflated game totals (Argon review of #183).
+    Elapsed time is measured the way nfl/sim/pbp_prep.py (PR #184) does it: diffs of
+    game_seconds_remaining between consecutive plays of the same drive, same half only,
+    filtered to [0, 120]s. Fallbacks: 40 - play_clock (Argon's accepted alternative), then 28.0.
+    """
+    if len(neutral) and "game_seconds_remaining" in neutral.columns:
+        drive_col = ("fixed_drive" if "fixed_drive" in neutral.columns
+                     else "drive" if "drive" in neutral.columns else None)
+        if drive_col is not None:
+            d = neutral[["game_seconds_remaining", drive_col]].copy()
+            d["game_seconds_remaining"] = pd.to_numeric(d["game_seconds_remaining"], errors="coerce")
+            d = d.dropna(subset=["game_seconds_remaining"]).sort_values(
+                "game_seconds_remaining", ascending=False, kind="stable")
+            nxt = d.groupby(drive_col, sort=False)["game_seconds_remaining"].shift(-1)
+            elapsed = d["game_seconds_remaining"] - nxt
+            same_half = (d["game_seconds_remaining"] > 1800) == (nxt > 1800)
+            elapsed = elapsed.where(same_half)
+            elapsed = elapsed[(elapsed >= 0) & (elapsed <= 120)]
+            if len(elapsed) >= 5:
+                val = float(elapsed.mean())
+                if np.isfinite(val):
+                    return val
+    if len(neutral) and "play_clock" in neutral.columns:
+        # nflverse writes play_clock as a STRING column; coerce before arithmetic
+        elapsed = 40.0 - pd.to_numeric(neutral["play_clock"], errors="coerce")
+        elapsed = elapsed[elapsed > 0]
+        if len(elapsed):
+            val = float(elapsed.mean())
+            if np.isfinite(val):
+                return val
+    return 28.0
+
+
 def aggregate_team_game_pbp(pbp: pd.DataFrame) -> List[TeamGamePBP]:
     """
     Aggregate all games in `pbp` into TeamGamePBP rows (one per team per game).
@@ -226,14 +264,12 @@ def aggregate_team_game_pbp(pbp: pd.DataFrame) -> List[TeamGamePBP]:
             qb_hits = int(off_ng.get("qb_hit", pd.Series(0, index=off_ng.index)).sum())
             pressure_rate = (sacks + qb_hits) / dropbacks
 
-            # Pace: seconds per play in neutral game state
+            # Pace: elapsed seconds per play in neutral game state. NOT play_clock -- that is the
+            # seconds REMAINING at the snap (~10.5s), and averaging it inflated totals (see helper).
             neutral_off = off_ng
             if "score_differential" in off_ng.columns:
                 neutral_off = off_ng[off_ng["score_differential"].abs() <= 7]
-            if "play_clock" in neutral_off.columns and len(neutral_off) > 0:
-                secs_per_play = float(neutral_off["play_clock"].mean())
-            else:
-                secs_per_play = 30.0
+            secs_per_play = _elapsed_secs_per_play(neutral_off)
 
             # Turnover luck
             turnover_luck = _compute_turnover_luck(game_df, team)
