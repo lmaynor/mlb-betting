@@ -37,8 +37,9 @@ Rules:
 ## Git and PR process
 
 **Binning work into PRs.** Split before committing, not after.
-- One PR = one concern. Concerns are: one sport or area (MLB, NFL, NBA, NHL, NCAAB, soccer, frontend, infra), and one type (feature, fix, refactor, docs, research).
-- Never mix sports in one PR. NHL work goes in its own PRs. Do not touch another sport's files unless the PR is for that sport.
+- One PR = one concern. Concerns are: one sport's modeling work (MLB, NFL, NBA, NHL, NCAAB, soccer), shared UI, shared infra, and one type (feature, fix, refactor, docs, research).
+- Modeling work stays separate per sport. Never mix two sports' models, engines, features, or data pipelines in one PR, even when the change looks similar. Do not touch another sport's files unless the PR is for that sport.
+- UI and infra PRs may span all sports at once.
 - Schema or contract changes (anything in CONTEXT.md section 5) get their own PR so they can be reviewed alone.
 - Tests and docs ride with the change they cover. A separate docs-only PR is fine when nothing else changed.
 - Run `git diff --stat main...HEAD` before opening a PR. If the file list spans two concerns, split it.
