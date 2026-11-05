@@ -69,7 +69,11 @@ export async function POST(req: NextRequest) {
     metadata:           { clerkUserId: userId, priceId, tier: tier as string, ...sportMeta },
     subscription_data:  { metadata: { clerkUserId: userId, tier: tier as string, ...sportMeta } },
     allow_promotion_codes: true,
-  }, { idempotencyKey: `checkout:${userId}:${priceId}` })
+  // The key carries the sport and a 5-minute bucket: Stripe pins an idempotency key to its first payload for 24h,
+  // so a sport-less key makes a single_sport sport switch (same priceId, different sport metadata) a 400
+  // IdempotencyError, and a bare retry hours later replays the stale first session. The bucket still collapses
+  // double-clicks, two-tab races, and network retries inside the window.
+  }, { idempotencyKey: `checkout:${userId}:${priceId}:${sport ?? 'all'}:${Math.floor(Date.now() / 300_000)}` })
 
   return NextResponse.json({ url: session.url })
 }

@@ -27,7 +27,7 @@ jest.mock('@clerk/nextjs/server', () => ({
 }))
 jest.mock('@/lib/auth', () => ({ getUserId: async () => 'user_1' }))
 
-async function call() {
+async function call(body: Record<string, unknown> = { tier: 'pro_monthly' }) {
   jest.resetModules()
   process.env.STRIPE_SECRET_KEY = 'sk_test_x'
   process.env.STRIPE_PRICE_PRO_MONTHLY = 'price_pro'
@@ -35,7 +35,7 @@ async function call() {
   const req = new NextRequest('http://localhost/api/stripe/checkout', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ tier: 'pro_monthly' }),
+    body: JSON.stringify(body),
   })
   return POST(req)
 }
@@ -67,7 +67,21 @@ describe('POST /api/stripe/checkout', () => {
     const [params, options] = sessionsCreateMock.mock.calls[0]
     expect(params.customer).toBe('cus_new')
     expect('customer_email' in params).toBe(false)
-    expect(options).toEqual({ idempotencyKey: 'checkout:user_1:price_pro' })
+    // Key format: checkout:<user>:<price>:<sport|'all'>:<5-minute bucket>. No sport on a pro tier -> 'all'.
+    expect(options.idempotencyKey).toMatch(/^checkout:user_1:price_pro:all:\d+$/)
+    const bucket = Number(String(options.idempotencyKey).split(':').pop())
+    expect(Math.abs(bucket - Math.floor(Date.now() / 300_000))).toBeLessThanOrEqual(1)
+  })
+
+  it('scopes the idempotency key by sport so a single_sport sport switch is not a key replay', async () => {
+    process.env.STRIPE_PRICE_SINGLE_SPORT = 'price_single'
+    currentUserMock.mockResolvedValue(clerkUser({ stripeCustomerId: 'cus_9' }))
+    await call({ tier: 'single_sport', sport: 'nfl' })
+    await call({ tier: 'single_sport', sport: 'nba' })
+    const keys = sessionsCreateMock.mock.calls.map(c => (c[1] as { idempotencyKey: string }).idempotencyKey)
+    expect(keys[0]).toMatch(/^checkout:user_1:price_single:nfl:\d+$/)
+    expect(keys[1]).toMatch(/^checkout:user_1:price_single:nba:\d+$/)
+    expect(keys[0]).not.toBe(keys[1])
   })
 
   it('returns 409 and creates no session when an active subscription already exists', async () => {
