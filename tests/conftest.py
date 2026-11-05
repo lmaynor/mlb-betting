@@ -23,6 +23,22 @@ import pytest  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
+def _no_ambient_gcs_db_or_startup_jitter(monkeypatch):
+    """Per-test environment, independent of collection / run order.
+
+    Several test modules mutate os.environ at IMPORT time (test_public_api / test_admin_auth `setdefault` a fake
+    MLB_GCS_BUCKET; others pop it), so which value a test saw depended on collection order and on which sibling test ran
+    before it. With a bucket set, storage.* goes to REAL GCS (403 on a dev box with ADC, a connection error / hang
+    anywhere else). Storage re-reads the env at call time, so clearing it per test makes every test local-only unless it
+    opts in itself with monkeypatch.setenv / patches the storage functions.
+    Runner jobs also sleep 5-30 s of startup jitter to spread load in prod: never in a test."""
+    for var in ("MLB_GCS_BUCKET", "GCS_BUCKET", "MLB_DB_URL"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("SKIP_STARTUP_JITTER", "1")
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _daily_projections_never_reach_gcs(monkeypatch):
     """ev.daily_projections used to detect pytest itself (PYTEST_CURRENT_TEST) to avoid two network/GCS paths; that test
     detection is gone from production code, so the isolation lives here instead:

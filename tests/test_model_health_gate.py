@@ -282,23 +282,23 @@ class TestHysteresis:
 # ---------------------------------------------------------------------------
 
 class TestIsSupressedFailOpen:
-    def _set_gate_file(self, tmp_path: Path, content: bytes):
-        """Write a fake gate file to the local MLB_BASE_DATA dir.
+    @pytest.fixture(autouse=True)
+    def _isolated_base(self, tmp_path, monkeypatch):
+        """Each test gets its OWN empty local MLB_BASE_DATA and no bucket. The tests used to share one process-wide temp dir
+        (set at import) and write gate files into it, so test_missing_gate_file_returns_false only passed if it ran before its
+        siblings, and a fake bucket set by other modules at import time (test_public_api) would send the read to real GCS."""
+        monkeypatch.delenv("MLB_GCS_BUCKET", raising=False)
+        monkeypatch.delenv("GCS_BUCKET", raising=False)
+        monkeypatch.setenv("MLB_BASE_DATA", str(tmp_path))
 
-        Also clears MLB_GCS_BUCKET so gates.py reads local disk even when
-        other test modules (e.g. test_public_api.py) set a fake bucket.
-        """
-        os.environ.pop("MLB_GCS_BUCKET", None)
-        os.environ.pop("GCS_BUCKET", None)
-        base = Path(os.environ["MLB_BASE_DATA"])
-        gate_dir = base / "Gates"
+    def _set_gate_file(self, tmp_path: Path, content: bytes):
+        """Write a fake gate file to this test's local MLB_BASE_DATA dir."""
+        gate_dir = tmp_path / "Gates"
         gate_dir.mkdir(parents=True, exist_ok=True)
         (gate_dir / "model_gates.json").write_bytes(content)
 
     def test_missing_gate_file_returns_false(self, tmp_path):
         # No gate file exists -> fail open
-        os.environ.pop("MLB_GCS_BUCKET", None)
-        os.environ.pop("GCS_BUCKET", None)
         from mlb_core.risk.gates import is_suppressed
         assert is_suppressed("K") is False
 
@@ -306,12 +306,8 @@ class TestIsSupressedFailOpen:
         self._set_gate_file(tmp_path, json.dumps({
             "systems": {"K": {"suppressed": True}}
         }).encode())
-        from importlib import reload
         import mlb_core.risk.gates as gates_mod
-        # Ensure file path is picked up by re-importing with tmp base
-        os.environ["MLB_BASE_DATA"] = str(Path(os.environ["MLB_BASE_DATA"]))
-        result = gates_mod.is_suppressed("K")
-        assert result is True
+        assert gates_mod.is_suppressed("K") is True
 
     def test_suppressed_false_returns_false(self, tmp_path):
         self._set_gate_file(tmp_path, json.dumps({
