@@ -26,7 +26,7 @@ Who does what. Pick the cheapest model that can do the step without quality loss
 |---|---|---|---|
 | Orchestration and judgment | Claude Opus 5.5 or Sonnet 5.5 (this session) | Planning, design, code review, deploy decisions, every user-facing answer | Bulk file reading, log trawling |
 | Bounded lookups | Claude Haiku 5.5 (Agent tool, `model: "haiku"`) | Finding files, grep, summarizing logs or diffs, reading CI output, checking whether something exists | Design calls, debugging root causes, anything with a judgment call |
-| Mechanical execution | agy, Gemini 3.8 Flash low (`agy-exec` skill) | Running a command list Claude has already written: git reads, branch/commit/push, gcloud reads | Choosing commands, editing code, interpreting results |
+| Mechanical execution | agy, Gemini 3.8 Flash low (`agy-exec` skill, `.claude/skills/agy-exec/SKILL.md`) | Running a command list Claude has already written: git reads, branch/commit/push, gcloud reads | Choosing commands, editing code, interpreting results |
 
 Rules:
 - Escalate: if a Haiku result is ambiguous or conflicts with the code, re-check it at the orchestration level. Do not act on it.
@@ -58,7 +58,9 @@ Rules:
 **What merging does.**
 - Pushing to `main` auto-deploys `beezy-vip` to Vercel. Treat a merge to `main` as a frontend deploy.
 - Vercel comments on every push to `main`. That is expected noise. Do not investigate those comments as failures unless the Vercel deployment status is an error.
-- Cloud Run is deployed only through `deploy/deploy_service.sh`, never `gcloud builds submit` directly, and only after the user approves.
+- The main Cloud Run service is deployed only through `deploy/deploy_service.sh`, never a bare `gcloud builds submit`, and only after the user approves.
+- Jobs and schedulers go through their `deploy/setup_*.sh` script. A job image is built as the FEEDS image only, with `gcloud builds submit --config=cloudbuild.yaml --substitutions=_IMAGE=<feeds image>` (use `_TAG` to avoid moving `:latest`). Never run `deploy/build_all_images.sh`: it retags prod `:latest` for other images.
+- Every new Cloud Run job needs `roles/run.invoker` bound for its scheduler's service account before the scheduler is created (this has broken three times). Check it after every job deploy.
 - Do not enable auto-merge unless asked.
 
 **Session wrap-up sequence.** Run these in order. Do not skip ahead.
@@ -69,5 +71,7 @@ Rules:
 5. Trigger the Cloud Run jobs the change needs, after the deploy finishes. See CONTEXT.md section 9 for the scheduler reference. Never trigger jobs before the deploy they depend on.
 6. Verify: read back the revision with `gcloud run services describe`, and check the job's execution status.
 7. Clean up merged branches and worktrees.
+
+**Compute.** Run heavy work (backfills, walk-forward replays, simulators, full test suites) on the laptop, which is free. Use GCP only for jobs that must run unattended on a schedule, and never provision a job or scheduler for one-off research.
 
 **Cleanup.** Delete merged branches and their worktrees. Use the `commit-commands:clean_gone` skill for branches already marked gone.
