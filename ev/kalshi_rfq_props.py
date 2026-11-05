@@ -124,7 +124,7 @@ class PropFairIndex:
             return None, "no_rung"
         return LegFairValue(ticker=p.ticker, sport=p.sport, game_key=p.game_key, market_class="player_prop", player_norm=pn,
                             stat=p.stat, strike=p.strike, p_cons_yes=float(p_over), n_books=int(n), disp=float(disp),
-                            p_model_yes=None, pooled=pooled, updated_ts=self.updated_ts), why
+                            p_model_yes=None, pooled=pooled, updated_ts=self.updated_ts, protected=p.protected), why
 
 
 # One-sided prices (a Yes-only anytime-TD ladder, an alternate-line Over) cannot be de-vigged as a pair. Estimate what share of the implied

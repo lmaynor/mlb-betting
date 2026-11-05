@@ -194,6 +194,7 @@ class ParsedPropTicker:
     stat: str
     n: int                       # "N+"  ==  sportsbook Over (N - 0.5)
     strike: float
+    protected: bool = False      # a <SERIES>PROT twin (void-on-first-half-exit); priced as the base series, padded by the pricer
 
 
 _PLAYER_TOKEN = re.compile(r"([A-Z]+)(\d*)")
@@ -225,7 +226,7 @@ def parse_prop_ticker(ticker: str):
         return MapFail("REJ_UNMAPPED", f"{series} only maps the 1+ rung (got {n}+)")
     return ParsedPropTicker(ticker=ticker, series=series, sport=sport, game_key=game_key(sport, game_date, away, home),
                             game_date=game_date, team=team, player_code=m.group(1).lower(), jersey=m.group(2), stat=stat,
-                            n=n, strike=float(n) - 0.5)
+                            n=n, strike=float(n) - 0.5, protected=series.endswith(PROTECTED_SUFFIX))
 
 
 _GENERATIONAL = {"jr", "sr", "ii", "iii", "iv", "v"}
