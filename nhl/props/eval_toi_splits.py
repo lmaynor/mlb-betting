@@ -36,6 +36,7 @@ from nhl.props.toi_feat import TOI_FEATURES, toi_features
 
 NTHREAD = int(os.environ.get("NHL_NTHREAD", "6"))
 STEP_MONTHS = 4
+CONTROL_SEED = 8                       # `control` = the base features refit with another xgboost seed (CM.PARAMS uses 7): the noise floor
 STATS = ["goals", "assists", "points", "sog"]
 ADOPT_SEASONS = 3                      # the log-score gain must be positive in at least this many test seasons
 MIN_SEASON_ROWS = 5000                 # a season with fewer scored rows (a partial current season) does not count toward the replication bar
@@ -66,8 +67,9 @@ def predict(f: pd.DataFrame, stat: str, variant: str, test_from: str, out_dir: s
     path = os.path.join(out_dir, f"pred_{stat}_{variant}.parquet")
     if os.path.exists(path):
         return pd.read_parquet(path)
-    feats = X.SKATER_FEATURES if variant == "base" else X.SKATER_FEATURES + TOI_FEATURES
-    pred = CM.walk_forward(f, stat, feats, test_from, step_months=STEP_MONTHS, params={"nthread": NTHREAD}, prior_col="n_prior")
+    feats = X.SKATER_FEATURES + TOI_FEATURES if variant == "toi" else X.SKATER_FEATURES
+    params = {"nthread": NTHREAD, **({"seed": CONTROL_SEED} if variant == "control" else {})}
+    pred = CM.walk_forward(f, stat, feats, test_from, step_months=STEP_MONTHS, params=params, prior_col="n_prior")
     pred.to_parquet(path, index=False)
     return pred
 
@@ -130,7 +132,10 @@ def verdict(per_stat: dict, n_tests: int) -> dict:
     return out
 
 
-def run(data_dir: str, xg_dir: str, splits_path: str, out_dir: str, stats=STATS, test_from: str = "2022-10-01") -> dict:
+def run(data_dir: str, xg_dir: str, splits_path: str, out_dir: str, stats=STATS, test_from: str = "2022-10-01",
+        control: bool = False) -> dict:
+    """control=True also scores base-with-another-seed against base: the log-score "gain" of a change that carries NO information, i.e.
+    how much of a toi-vs-base gain can be refit noise alone."""
     os.makedirs(out_dir, exist_ok=True)
     splits = load_splits(splits_path)
     f = build_frame(data_dir, xg_dir, splits)
@@ -142,6 +147,10 @@ def run(data_dir: str, xg_dir: str, splits_path: str, out_dir: str, stats=STATS,
         d = paired(f, stat, pb, pt)
         rep["stats"][stat] = {"overall": summarize(d),
                               "by_season": [{"season": int(s), **summarize(g)} for s, g in d.groupby("season")]}
+        if control:
+            c = paired(f, stat, pb, predict(f, stat, "control", test_from, out_dir))     # "toi" slot = the other-seed base
+            rep["stats"][stat]["control"] = {"overall": summarize(c),
+                                             "by_season": [{"season": int(s), **summarize(g)} for s, g in c.groupby("season")]}
     rep["verdict"] = verdict(rep["stats"], len(stats))
     return rep
 
@@ -165,6 +174,14 @@ def render_markdown(rep: dict) -> str:
             L.append(f"| {r['season']} | {r['n']:,} | {r['log_score_gain']['mean']:+.5f} ({r['log_score_gain']['se']:.5f}) | "
                      f"{_f(r['log_score_gain']['z'], 2)} | {r['mae_change']['mean']:+.5f} ({100 * r['mae_rel_change']:+.2f}%) |")
         L.append("")
+    ctl = {k: e["control"]["overall"] for k, e in rep["stats"].items() if "control" in e}
+    if ctl:
+        L += ["Noise floor (the base features refit with another xgboost seed vs base: a change that carries no information):", "",
+              "| stat | log-score gain (SE) | z | MAE change |", "|---|---|---|---|"]
+        for k, s in ctl.items():
+            L.append(f"| {k} | {s['log_score_gain']['mean']:+.5f} ({s['log_score_gain']['se']:.5f}) | {_f(s['log_score_gain']['z'], 2)} | "
+                     f"{100 * s['mae_rel_change']:+.2f}% |")
+        L.append("")
     return "\n".join(L)
 
 
@@ -176,10 +193,11 @@ def main(argv=None) -> int:
     ap.add_argument("--out-dir", required=True)
     ap.add_argument("--stats", nargs="+", default=STATS, choices=STATS)
     ap.add_argument("--test-from", default="2022-10-01")
+    ap.add_argument("--control", action="store_true", help="also refit the base features with another seed (noise floor for the gains)")
     ap.add_argument("--json")
     ap.add_argument("--markdown")
     a = ap.parse_args(argv)
-    rep = run(a.data_dir, a.xg_dir, a.splits, a.out_dir, a.stats, a.test_from)
+    rep = run(a.data_dir, a.xg_dir, a.splits, a.out_dir, a.stats, a.test_from, a.control)
     if a.json:
         with open(a.json, "w") as fh:
             json.dump(rep, fh, indent=1, default=str)
