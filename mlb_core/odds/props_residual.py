@@ -94,12 +94,14 @@ def to_american(dec) -> np.ndarray:
 
 def dec_odds(american) -> np.ndarray:
     a = np.asarray(american, dtype=float)
-    return np.where(a > 0, a / 100.0 + 1.0, 100.0 / np.abs(a) + 1.0)
+    with np.errstate(divide="ignore", invalid="ignore"):          # np.where evaluates both branches
+        return np.where(a > 0, a / 100.0 + 1.0, 100.0 / np.abs(a) + 1.0)
 
 
 def implied(american) -> np.ndarray:
     a = np.asarray(american, dtype=float)
-    return np.where(a > 0, 100.0 / (a + 100.0), np.abs(a) / (np.abs(a) + 100.0))
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return np.where(a > 0, 100.0 / (a + 100.0), np.abs(a) / (np.abs(a) + 100.0))
 
 
 # ------------------------------------------------------------------------------------------------- market-side extras
