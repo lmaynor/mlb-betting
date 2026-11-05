@@ -231,7 +231,10 @@ def aggregate_team_game_pbp(pbp: pd.DataFrame) -> List[TeamGamePBP]:
             if "score_differential" in off_ng.columns:
                 neutral_off = off_ng[off_ng["score_differential"].abs() <= 7]
             if "play_clock" in neutral_off.columns and len(neutral_off) > 0:
-                secs_per_play = float(neutral_off["play_clock"].mean())
+                # nflverse writes play_clock as a STRING column; a bare .mean() raised and took the whole engine down
+                secs_per_play = float(pd.to_numeric(neutral_off["play_clock"], errors="coerce").astype("float64").mean())
+                if not np.isfinite(secs_per_play):
+                    secs_per_play = 30.0
             else:
                 secs_per_play = 30.0
 
