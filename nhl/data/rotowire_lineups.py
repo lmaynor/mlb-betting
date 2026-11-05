@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import unicodedata
 from datetime import datetime
 from html.parser import HTMLParser
 from typing import Dict, List, Optional
@@ -32,6 +33,7 @@ URL = "https://www.rotowire.com/hockey/nhl-lineups.php"
 USER_AGENT = "beezy.fyi-lineups/1.0 (approved by RotoWire; one request per run)"
 TIMEOUT_S = 15
 CACHE_KEY = "EVSweep/nhl_games/confirmed_goalies.json"
+ARCHIVE_PREFIX = "NHL/lineups/rotowire"  # one file per ET day, overwritten each firing: the last pre-game state
 CACHE_MAX_AGE_MIN = 120  # a cache older than this is ignored (the refresh job runs every 30 min)
 
 TEAM_RE = re.compile(r"^(.+?) \((\d+-\d+-\d+)\)$")  # "Flyers (3-7-3)"
@@ -161,6 +163,51 @@ def goalies_by_team(games: List[dict]) -> Dict[str, dict]:
     return out
 
 
+def lineups_by_team(games: List[dict]) -> Dict[str, dict]:
+    """{abbrev: {"pp": {"1": [names], "2": [names]}, "injuries": [{"name", "status"}]}} (names as RotoWire writes them)."""
+    out: Dict[str, dict] = {}
+    for g in games:
+        for blk in g["blocks"]:
+            code = team_code(blk.get("team") or "")
+            if not code:
+                continue
+            pp: Dict[str, List[str]] = {"1": [], "2": []}
+            for p in blk["lineup"]:
+                if p["pp"] in (1, 2) and p["pos"] != "G":
+                    pp[str(p["pp"])].append(p["name"])
+            out[code] = {"pp": pp, "injuries": [{"name": i["name"], "status": i["status"]} for i in blk["injuries"]]}
+    return out
+
+
+def _norm(name: str) -> List[str]:
+    x = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z ]", "", x.replace("-", " ").replace(".", ". ").replace(".", "")).split()
+
+
+def _same_player(board: List[str], page: List[str]) -> bool:
+    """Full-name equal, or the page abbreviates the first name ('C. Giroux') to an initial that matches."""
+    if not board or not page or board[-1] != page[-1]:
+        return False
+    return board == page or (len(page[0]) == 1 and board[0][:1] == page[0])
+
+
+def player_context(lineups: Dict[str, dict], team: Optional[str], player: str) -> dict:
+    """{"pp_unit": 1|2|None, "lineup_status": 'OUT'|'IR'|'DTD'|None} for a board player; None when not found or ambiguous.
+    Display context only: nothing prices off it (no history to validate a power-play multiplier against)."""
+    out = {"pp_unit": None, "lineup_status": None}
+    t = (lineups or {}).get(team or "")
+    if not t:
+        return out
+    want = _norm(player)
+    hits = {u for u in ("1", "2") for n in t["pp"].get(u, []) if _same_player(want, _norm(n))}
+    if len(hits) == 1:
+        out["pp_unit"] = int(next(iter(hits)))
+    inj = {i["status"] for i in t["injuries"] if _same_player(want, _norm(i["name"]))}
+    if len(inj) == 1:
+        out["lineup_status"] = next(iter(inj))
+    return out
+
+
 def confirmed_goalies(date_str: str, now: Optional[datetime] = None) -> Dict[str, str]:
     """{team abbrev: goalie name} confirmed by RotoWire for `date_str` (ET day). Only today / tomorrow exist on the
     page; any other date, and any failure, returns {}."""
@@ -181,13 +228,17 @@ def refresh_cache(now: Optional[datetime] = None) -> Dict[str, str]:
     """Fetch TODAY's page once and write the confirmed goalies to CACHE_KEY. Raises on a fetch/write failure so the job
     shows red; an empty page keeps the previous cache (never overwrite good data with nothing)."""
     now = (now or datetime.now(_ET)).astimezone(_ET)
-    by_team = goalies_by_team(fetch_games(tomorrow=False))
+    games = fetch_games(tomorrow=False)
+    by_team = goalies_by_team(games)
     confirmed = {t: v["goalie"] for t, v in by_team.items() if v["confirmed"]}
     if not by_team:
         raise RuntimeError("RotoWire page parsed to zero games; cache left untouched")
     payload = {"fetched_at": now.astimezone(ZoneInfo("UTC")).isoformat(), "day": now.date().isoformat(),
-               "n_teams_on_page": len(by_team), "confirmed": confirmed}
-    storage.write_bytes(json.dumps(payload).encode("utf-8"), CACHE_KEY)
+               "n_teams_on_page": len(by_team), "confirmed": confirmed,
+               "lineups": lineups_by_team(games)}
+    body = json.dumps(payload).encode("utf-8")
+    storage.write_bytes(body, CACHE_KEY)
+    storage.write_bytes(body, f"{ARCHIVE_PREFIX}/{payload['day']}.json")
     logger.info("rotowire cache: %d teams on page, %d confirmed", len(by_team), len(confirmed))
     return confirmed
 
@@ -204,6 +255,20 @@ def cached_confirmed_goalies(date_str: str, now: Optional[datetime] = None) -> D
         return {str(k): str(v) for k, v in (d.get("confirmed") or {}).items()}
     except Exception as exc:  # noqa: BLE001 -- missing cache is the normal first-run state
         logger.info("no usable confirmed-goalie cache (%s); inferring starters", exc)
+        return {}
+
+
+def cached_lineups(date_str: str, now: Optional[datetime] = None) -> Dict[str, dict]:
+    """Power-play units + injuries from the same cache (same freshness rules as cached_confirmed_goalies); {} otherwise."""
+    try:
+        now_utc = (now or datetime.now(ZoneInfo("UTC"))).astimezone(ZoneInfo("UTC"))
+        d = json.loads(storage.read_bytes(CACHE_KEY).decode("utf-8"))
+        age_min = (now_utc - datetime.fromisoformat(d["fetched_at"])).total_seconds() / 60.0
+        if d.get("day") != date_str[:10] or age_min > CACHE_MAX_AGE_MIN or age_min < -5:
+            return {}
+        return d.get("lineups") or {}
+    except Exception as exc:  # noqa: BLE001
+        logger.info("no usable lineup cache (%s)", exc)
         return {}
 
 

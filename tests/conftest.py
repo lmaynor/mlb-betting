@@ -60,6 +60,7 @@ def _daily_projections_never_reach_gcs(monkeypatch):
     monkeypatch.setattr(dp, "_run_soccer_game_predictions", no_soccer_predictions)
     monkeypatch.setattr(dp, "_load_nba_spreads", lambda now: {})
     monkeypatch.setattr(dp, "_load_nba_tracking", lambda now: None)
+    monkeypatch.setattr(dp, "_nhl_lineup_context", lambda team, player, start: {"pp_unit": None, "lineup_status": None})
     yield
 
 

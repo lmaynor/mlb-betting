@@ -85,3 +85,30 @@ def test_cache_roundtrip_staleness_and_empty_page(monkeypatch):
     except RuntimeError:
         pass
     assert store[rw.CACHE_KEY] == before                                              # good cache kept
+
+
+PP_HTML = HTML.replace("<div>Center A</div><div>LW</div><div>Wing B</div>",
+                       "<div>Center A</div><div>LW</div><div>W. Beta</div><div>POWER PLAY #2</div><div>RW</div><div>C. Giroux</div>")
+
+
+def test_lineup_context_matches_initials_and_marks_injuries():
+    lu = rw.lineups_by_team(rw.parse_lineups(rw.html_to_lines(PP_HTML)))
+    assert lu["OTT"]["pp"] == {"1": ["Center A", "W. Beta"], "2": ["C. Giroux"]}
+    assert rw.player_context(lu, "OTT", "Claude Giroux") == {"pp_unit": 2, "lineup_status": None}
+    assert rw.player_context(lu, "OTT", "Wade Beta")["pp_unit"] == 1
+    assert rw.player_context(lu, "OTT", "Hurt C")["lineup_status"] == "IR"
+    assert rw.player_context(lu, "OTT", "Zed Giroux")["pp_unit"] is None              # same surname, wrong initial
+    assert rw.player_context(lu, "DET", "Claude Giroux") == {"pp_unit": None, "lineup_status": None}
+    assert rw.player_context({}, None, "x") == {"pp_unit": None, "lineup_status": None}
+
+
+def test_refresh_archives_the_day_and_cache_serves_lineups(monkeypatch):
+    store = {}
+    monkeypatch.setattr(rw.storage, "write_bytes", lambda data, key: store.__setitem__(key, data))
+    monkeypatch.setattr(rw.storage, "read_bytes", lambda key: store[key])
+    now = datetime(2026, 11, 4, 12, tzinfo=ZoneInfo("America/New_York"))
+    monkeypatch.setattr(rw, "fetch_games", lambda tomorrow=False: rw.parse_lineups(rw.html_to_lines(PP_HTML)))
+    rw.refresh_cache(now)
+    assert f"{rw.ARCHIVE_PREFIX}/2026-11-04.json" in store
+    assert rw.cached_lineups("2026-11-04", now)["OTT"]["pp"]["2"] == ["C. Giroux"]
+    assert rw.cached_lineups("2026-11-05", now) == {}
