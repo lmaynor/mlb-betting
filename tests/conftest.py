@@ -22,6 +22,54 @@ import sys  # noqa: E402
 import pytest  # noqa: E402
 
 
+class NetworkAccessInTest(ConnectionError):
+    """Raised on any non-loopback socket use inside a test. A ConnectionError so production code that treats an outage as
+    'feed down' degrades exactly as it would offline; the fixture below then FAILS the test, so the dependency is not hidden."""
+
+
+@pytest.fixture(autouse=True)
+def _tests_never_reach_the_network(monkeypatch):
+    """Tests are hermetic: no DNS, no outbound connect (ESPN, api.beezy.fyi, Google, GCS, Discord ...). Loopback and unix
+    sockets stay open (local servers / test clients). Most production fetchers swallow connection errors, so a test that
+    forgot to stub one used to pass anyway while depending on the live service (different data every day) or on a
+    network timeout (a 25-minute suite when offline). Each attempt is recorded and fails the test at teardown with the
+    host that was contacted: stub it (monkeypatch the fetcher / use the conftest fixtures), don't allow it."""
+    import socket
+
+    attempts: list[str] = []
+    real_connect, real_connect_ex, real_gai = socket.socket.connect, socket.socket.connect_ex, socket.getaddrinfo
+    loopback = {"localhost", "127.0.0.1", "::1", "", None}
+
+    def _local(addr) -> bool:
+        host = addr[0] if isinstance(addr, tuple) else addr
+        return host in loopback or str(host).startswith("127.")
+
+    def connect(self, addr, *a, **k):
+        if self.family == socket.AF_UNIX or _local(addr):
+            return real_connect(self, addr, *a, **k)
+        attempts.append(f"connect {addr[0] if isinstance(addr, tuple) else addr}")
+        raise NetworkAccessInTest(f"network blocked in tests: connect {addr}")
+
+    def connect_ex(self, addr, *a, **k):
+        if self.family == socket.AF_UNIX or _local(addr):
+            return real_connect_ex(self, addr, *a, **k)
+        attempts.append(f"connect {addr[0] if isinstance(addr, tuple) else addr}")
+        raise NetworkAccessInTest(f"network blocked in tests: connect {addr}")
+
+    def getaddrinfo(host, *a, **k):
+        if host in loopback or str(host).startswith("127."):
+            return real_gai(host, *a, **k)
+        attempts.append(f"dns {host}")
+        raise NetworkAccessInTest(f"network blocked in tests: dns {host}")
+
+    monkeypatch.setattr(socket.socket, "connect", connect)
+    monkeypatch.setattr(socket.socket, "connect_ex", connect_ex)
+    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
+    yield
+    if attempts:
+        pytest.fail("test tried to reach the network (" + ", ".join(sorted(set(attempts))) + "): stub the fetcher", pytrace=False)
+
+
 @pytest.fixture(autouse=True)
 def _no_ambient_gcs_db_or_startup_jitter(monkeypatch):
     """Per-test environment, independent of collection / run order.
@@ -77,6 +125,17 @@ def _daily_projections_never_reach_gcs(monkeypatch):
     monkeypatch.setattr(dp, "_load_nba_spreads", lambda now: {})
     monkeypatch.setattr(dp, "_load_nba_tracking", lambda now: None)
     monkeypatch.setattr(dp, "_nhl_lineup_context", lambda team, player, start: {"pp_unit": None, "lineup_status": None})
+
+    # GameLogs.nba_absences pulls the LIVE ESPN injury report: the projections would change with the day's real injuries.
+    # Default = report unavailable (ok=False, no absences). A caller that passes its own session (the espn_injuries unit
+    # tests) still gets the real parser.
+    from nba.data import espn_injuries as ei
+    real_fetch = ei.fetch_injuries
+
+    def no_live_injuries(session=None, timeout=20.0):
+        return real_fetch(session, timeout) if session is not None else ei._empty(False, "test: no live fetch")
+
+    monkeypatch.setattr(ei, "fetch_injuries", no_live_injuries)
     yield
 
 
