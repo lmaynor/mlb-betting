@@ -272,3 +272,27 @@ def test_draws_object_is_plain_data():
     d = simulate_game(_game(), n=800, seed=1)
     assert isinstance(d, JointDraws) and d.n == 800
     assert set(d.players()) == {f"{s}{i}" for s in "ha" for i in range(1, 6)}
+
+
+# ------------------------------------------------------------------------------------------------ evaluation helpers
+def test_pooled_pearson_matches_numpy():
+    from nba.sim import evaluate as EV
+    rng = np.random.default_rng(0)
+    a = rng.normal(size=500)
+    b = 0.4 * a + rng.normal(size=500)
+    games = np.array_split(np.arange(500), 25)
+    m = np.array([[float((a[g] * b[g]).sum()), float(a[g].sum()), float(b[g].sum()), float((a[g] ** 2).sum()),
+                   float((b[g] ** 2).sum()), len(g)] for g in games])
+    assert math.isclose(EV._pearson(m), float(np.corrcoef(a, b)[0, 1]), abs_tol=1e-9)
+    row = EV._corr_row("x", m, m, boot=20, seed=1)
+    assert row["gap"] == 0.0 and row["games"] == 25
+
+
+def test_ece_and_cluster_se_basics():
+    from nba.sim import evaluate as EV
+    p = np.repeat([0.1, 0.5, 0.9], 1000)
+    y = np.concatenate([np.r_[np.ones(100), np.zeros(900)], np.r_[np.ones(500), np.zeros(500)], np.r_[np.ones(900), np.zeros(100)]])
+    assert EV.ece(p, y) < 1e-9
+    assert EV.ece(np.full(10, 0.9), np.zeros(10)) == pytest.approx(0.9)
+    d = np.random.default_rng(2).normal(0.1, 1.0, 400)
+    assert EV.cluster_se(d, np.repeat(np.arange(40), 10)) > 0
