@@ -3570,6 +3570,21 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
   the longshot YES rate (12.9% -> 36.3% across final-volume quintiles at a flat ~11% price). Keep only markets whose
   PRE-kick volume alone clears the series cutoff (`scripts/mm_longshot.py::selection_safe`). Verdict of the longshot-fade
   study (docs/analysis/longshot_bias_2026-10-14.md): buying NO on cheap rungs lost money (reverse bias), not +EV.
+- **Novig execution gate (2026-11-05; code + offline tests only, default OFF, nothing deployed/scheduled/written to GCS).**
+  Safety layer for the roadmap item "automated cross-venue execution on Novig once a slice clears the 250-bet forward CLV gate".
+  `ev/novig/clv_gate.py` computes per (sport, stat) slice from the `novig` shadow-ledger fills + banked ParlayAPI closing quotes
+  (`nfl.props.lines`): n with a usable close, mean same-book price-ratio CLV, a game-day-CLUSTERED 95% t-CI, and a closing
+  leave-Novig-out-consensus confirmation. OPEN only when n >= 250 AND mean > 0 AND lower CI > 0 AND consensus CLV > 0; everything
+  else (no data, no/stale/corrupt verdict file, unknown slice) is CLOSED. `ev/novig/liability.py`: per-bet 1% / per-player 1.5% /
+  per-game 3% of a notional bankroll (`NOVIG_LIAB_*`), fee_rate 0.0 stated in config and valid only while the market's
+  `fee.charged == 'WHEN_LIVE'` (else `REJ_LIABILITY_FEE`); shrinks or rejects, never enlarges. `ev/novig/gate.py` +
+  `run_pass(gate=...)` (env `NOVIG_GATE_ENABLED`, off = path unchanged): caps apply to the shadow plan; every decision is annotated
+  `inputs.exec_gate`; a closed slice is not mirrored to the Novig PAPER sandbox. **The CLV gate never blocks the production-priced
+  shadow fill** -- that fill is the only source of forward CLV (gating it would deadlock at n=0). No order client or live path
+  was added (a test scans the new modules for order/network/credential code). **Current verdict: every slice CLOSED** -- the ledger
+  holds 2 filled Novig plans (NFL rec_yds, 2026-10-12), mean CLV -1.10% vs Novig's own close / +2.70% vs closing consensus, 1 game
+  day, no CI. Missing: a running shadow loop, a durable (GCS) copy of the ledger, any non-NFL Novig mapper. See
+  docs/analysis/novig_exec_gate_2026-11-05.md.
 
 ---
 

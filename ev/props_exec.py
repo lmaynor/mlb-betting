@@ -440,7 +440,7 @@ def main(argv=None) -> int:
         demo_venue = KalshiVenue(load_demo_client(a.env_file))
         demo_risk = RiskGate(cfg, ledger, "demo")
     until = datetime.fromisoformat(a.until.replace("Z", "+00:00")) if a.until else None
-    nc = nrisk = novig_legs = None
+    nc = nrisk = novig_legs = ngate = None
     paper_venue = paper_risk = paper_legs = None
     legs_loaded = 0.0
     refresher = None
@@ -454,6 +454,10 @@ def main(argv=None) -> int:
         from ev.novig.client import NovigClient
         nc = NovigClient("public-data")
         nrisk = RiskGate(cfg, ledger, "novig")
+        from ev.novig.gate import load_exec_gate
+        ngate = load_exec_gate()                  # None unless NOVIG_GATE_ENABLED=1; restrictions only (ev/novig/gate.py)
+        if ngate is not None:
+            log.info("NOVIG exec gate ON: liability caps + forward-CLV slice annotation (verdict stale=%s)", ngate.slices.stale)
     if a.novig_paper_orders:
         from ev.novig.paper_orders import PaperRiskGate
         paper_venue, paper_risk = load_novig_paper_venue(a.novig_env_file), PaperRiskGate(cfg, ledger, "novig_paper")
@@ -483,7 +487,7 @@ def main(argv=None) -> int:
                                 paper_legs = paper_legs or {}
                         cands = nx.candidates(latest["snap"], novig_legs, cfg, datetime.now(timezone.utc))
                         ns = nx.run_pass(snap_ts=latest["ts"], cands=cands, cfg=cfg, nc=nc, ledger=ledger, risk=nrisk,
-                                         paper_venue=paper_venue, paper_risk=paper_risk)
+                                         paper_venue=paper_venue, paper_risk=paper_risk, gate=ngate)
                         novig_alerts = ns["alerts"]
                         log.info("NOVIG legs=%s candidates=%s hist=%s executed=%s paper_orders=%s", len(novig_legs),
                                  ns["considered"], ns["hist"], len(ns["executed"]), ns["paper_orders"])

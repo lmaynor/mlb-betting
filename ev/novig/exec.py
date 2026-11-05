@@ -137,7 +137,11 @@ def _paper_attempt(venue, paper_risk, ledger, day, leg, xl, d) -> dict | None:
 
 
 def run_pass(*, snap_ts: str, cands: list, cfg, nc: NovigClient, ledger, risk, clock=None, pace_s: float = 0.7,
-             paper_venue=None, paper_risk=None) -> dict:
+             paper_venue=None, paper_risk=None, gate=None) -> dict:
+    """`gate` (ev.novig.gate.NovigExecGate, default None == off) can only ADD restrictions to a PLAN that already passed
+    every gate and the RiskGate: liability caps (shrink / reject) and a forward-CLV slice annotation that can also skip
+    the PAPER-sandbox mirror. It never blocks the production-priced shadow fill of a closed slice (that is the evidence
+    the gate is computed from) and it adds no order path."""
     clock = clock or (lambda: datetime.now(timezone.utc))
     ncfg = novig_config(cfg)
     day = clock().astimezone(__import__("zoneinfo").ZoneInfo("America/New_York")).date().isoformat()
@@ -178,6 +182,7 @@ def run_pass(*, snap_ts: str, cands: list, cfg, nc: NovigClient, ledger, risk, c
                 ok, why = risk.check_order(d.plan.stake, xl.game_pk, day, cash)
                 if not ok:
                     d.outcome, d.reason = why, "risk gate"
+        review = gate.review(ledger=ledger, day=day, mode=MODE, leg=leg, d=d) if gate is not None and d.outcome == "PLAN" else None
         ack = None
         if d.outcome == "PLAN":
             ack = paper.submit(OrderIntent(d.intent_id, leg.market_id, d.side, d.plan.contracts, d.plan.limit_price,
@@ -192,7 +197,8 @@ def run_pass(*, snap_ts: str, cands: list, cfg, nc: NovigClient, ledger, risk, c
                                    price=f.price, fee=f.fee, ts=f.ts, mode=MODE)
             if ack.fill_count > 0:
                 ledger.kv_set(f"grp:{day}:{group}", d.intent_id)
-            if paper_venue is not None and paper_risk is not None and not paper_risk.killed:
+            if (paper_venue is not None and paper_risk is not None and not paper_risk.killed
+                    and not (review is not None and review.skip_paper)):
                 try:
                     r = _paper_attempt(paper_venue, paper_risk, ledger, day, leg, xl, d)
                 except Exception as e:                                               # noqa: BLE001
@@ -218,8 +224,11 @@ def run_pass(*, snap_ts: str, cands: list, cfg, nc: NovigClient, ledger, risk, c
             executed.append({"player": leg.player, "stat": leg.stat, "strike": leg.strike, "side": side, "ask": d.ask,
                              "ev": d.plan.ev, "units": d.plan.contracts, "filled": ack.fill_count if ack else 0,
                              "cost": ack.filled_cost if ack else 0, "outcome": d.outcome})
-    return {"day": day, "considered": len(cands), "hist": hist, "executed": executed, "alerts": alerts,
-            "killed": risk.killed, "paper_orders": paper_sent}
+    out = {"day": day, "considered": len(cands), "hist": hist, "executed": executed, "alerts": alerts,
+           "killed": risk.killed, "paper_orders": paper_sent}
+    if gate is not None:
+        out["gate"] = gate.summary()
+    return out
 
 
 def grade(ledger, nc: NovigClient, mode: str = MODE) -> dict:
