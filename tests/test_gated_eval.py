@@ -165,6 +165,9 @@ def test_garble_primitives():
     g = gb.garble_columns(df, ["a"], [False] * 4 + [True] * 6, seed=1)
     assert g["a"].iloc[:4].tolist() == [0, 1, 2, 3] and sorted(g["a"].iloc[4:]) == [4, 5, 6, 7, 8, 9]
     assert g["a"].iloc[4:].tolist() != [4, 5, 6, 7, 8, 9] and g["k"].tolist() == df["k"].tolist()
+    nn = pd.DataFrame({"a": [1.0, np.nan, 3.0, 4.0, np.nan, 6.0]})
+    gn = gb.garble_columns(nn, ["a"], [True] * 6, seed=2)
+    assert gn["a"].isna().tolist() == nn["a"].isna().tolist()          # missing stays missing: no game is dropped by the garble
     a = pd.DataFrame({"id": [1, 2, 3], "d": ["2024-01-01", "2024-01-02", "2024-01-03"], "x": [1.0, np.nan, 3.0]})
     b = a.assign(x=[1.0, np.nan, 9.0])
     assert len(gb.prediction_diff(a, b, "id", ["x"], "d", "2024-01-02")) == 0       # NaN == NaN, change is after the cut-off

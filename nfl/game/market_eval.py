@@ -112,10 +112,10 @@ def _conf_cols(d: pd.DataFrame, kind: str) -> Dict[str, object]:
     nan = pd.Series(np.nan, index=d.index)
     col = lambda name: d[name] if name in d.columns else nan          # noqa: E731  (old record files lack them)
     if kind == "margin":
-        return {"c_kal": col("kal_margin"), "c_feat": col("feat_margin"), "c_mu": d["mu_margin"],
-                "c_line": d["mkt_margin"], "c_sd": col("kal_std_margin"), "c_phase": d["week"], "c_dq": nan}
-    return {"c_kal": col("kal_total"), "c_feat": nan, "c_mu": d["mu_total"], "c_line": d["mkt_total"],
-            "c_sd": col("kal_std_total"), "c_phase": d["week"], "c_dq": nan}
+        return {"c_kal": col("kal_margin"), "c_feat": col("feat_margin"), "c_mu": col("mu_margin"),
+                "c_line": d["mkt_margin"], "c_sd": col("kal_std_margin"), "c_phase": col("week"), "c_dq": nan}
+    return {"c_kal": col("kal_total"), "c_feat": nan, "c_mu": col("mu_total"), "c_line": d["mkt_total"],
+            "c_sd": col("kal_std_total"), "c_phase": col("week"), "c_dq": nan}
 
 
 def to_events(rec: pd.DataFrame) -> Dict[str, pd.DataFrame]:
@@ -127,7 +127,7 @@ def to_events(rec: pd.DataFrame) -> Dict[str, pd.DataFrame]:
     out["moneyline (home wins)"] = pd.DataFrame({
         "date": d["date"], "p_model": d["p_home_ml"], "p_mkt": pk, "y": (d["margin"] > 0).astype(int),
         "dec_a_med": da, "dec_b_med": db, "dec_a_best": da, "dec_b_best": db,
-        "season": d["season"], **_conf_cols(d, "margin")}).dropna(subset=["p_mkt"])
+        "season": d["season"] if "season" in d.columns else np.nan, **_conf_cols(d, "margin")}).dropna(subset=["p_mkt"])
     # spread: event = home covers the closing line
     d = rec[(rec["margin"] + (-rec["mkt_margin"])) != 0].copy()
     pk, da, db = _two_way(d, "home_sp_odds", "away_sp_odds")
@@ -135,7 +135,7 @@ def to_events(rec: pd.DataFrame) -> Dict[str, pd.DataFrame]:
     out["spread (home covers)"] = pd.DataFrame({
         "date": d["date"], "p_model": pm, "p_mkt": pk, "y": ((d["margin"] - d["mkt_margin"]) > 0).astype(int),
         "dec_a_med": da, "dec_b_med": db, "dec_a_best": da, "dec_b_best": db,
-        "season": d["season"], **_conf_cols(d, "margin")}).dropna(subset=["p_mkt"])
+        "season": d["season"] if "season" in d.columns else np.nan, **_conf_cols(d, "margin")}).dropna(subset=["p_mkt"])
     # total: event = over
     d = rec[rec["total"] != rec["mkt_total"]].copy()
     pk, da, db = _two_way(d, "over_odds", "under_odds")
@@ -143,7 +143,7 @@ def to_events(rec: pd.DataFrame) -> Dict[str, pd.DataFrame]:
     out["total (over)"] = pd.DataFrame({
         "date": d["date"], "p_model": pm, "p_mkt": pk, "y": (d["total"] > d["mkt_total"]).astype(int),
         "dec_a_med": da, "dec_b_med": db, "dec_a_best": da, "dec_b_best": db,
-        "season": d["season"], **_conf_cols(d, "total")}).dropna(subset=["p_mkt"])
+        "season": d["season"] if "season" in d.columns else np.nan, **_conf_cols(d, "total")}).dropna(subset=["p_mkt"])
     return out
 
 

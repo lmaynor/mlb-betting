@@ -326,6 +326,16 @@ def verdict(conf: Dict[str, object], held_res: Dict[Tuple[str, str, str], dict])
     return "NO"
 
 
+def verdict_by_sport(conf: Dict[str, object], held_res: Dict[Tuple[str, str, str], dict]) -> Dict[str, str]:
+    """The verdict rule applied to each sport's cells separately (a sport with enough games can say NO while a small one cannot)."""
+    out = {}
+    for sport in sorted({k[0] for k in tried(held_res)}):
+        sub = {k: v for k, v in held_res.items() if k[0] == sport}
+        sub_conf = {"any_confirmed": any(c["confirmed"] for k, c in conf["cells"].items() if k[0] == sport)}
+        out[sport] = verdict(sub_conf, sub)
+    return out
+
+
 # ---------------------------------------------------------------------------------------------------- rendering
 def _f(x, spec="+.4f"):
     return "n/a" if x is None or (isinstance(x, float) and not np.isfinite(x)) else format(x, spec)

@@ -105,12 +105,13 @@ def run_held(inputs: Dict[str, str], out_dir: str, allow_rescore: bool = False, 
     surv = [tuple(s.split("|")) for s in frozen["survivors"]]
     conf = G.confirm(held_all, surv, B=B)
     v = G.verdict(conf, held_all)
+    vs = G.verdict_by_sport(conf, held_all)
     open(lock, "w").write(time.strftime("%Y-%m-%dT%H:%M:%S") + (" (re-score)" if allow_rescore else ""))
-    json.dump({"verdict": v, "n_family": conf["n_family"], "n_survivors": conf["n_survivors"],
+    json.dump({"verdict": v, "verdict_by_sport": vs, "n_family": conf["n_family"], "n_survivors": conf["n_survivors"],
                "any_strict": conf["any_strict"], "cells": {"|".join(k): c for k, c in conf["cells"].items()},
                "results": _strip(held_all)}, open(os.path.join(out_dir, "held_results.json"), "w"), indent=1, default=_jsonable)
     lines = [f"# HELD-OUT split ({G.SPEC_VERSION})" + (" -- RE-SCORED, not a clean single look" if allow_rescore else ""), "",
-             f"verdict: {v}; family of gate cells tried: {conf['n_family']}; dev survivors: {conf['n_survivors']}; "
+             f"verdict: {v} (by sport: {vs}); family of gate cells tried: {conf['n_family']}; dev survivors: {conf['n_survivors']}; "
              f"any max-T-adjusted p < .05 over the whole family: {conf['any_strict']}", ""]
     for sport in inputs:
         lines += [f"## {sport.upper()} held-out", "", G.render_table(sport, held_all, conf), ""]

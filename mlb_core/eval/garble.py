@@ -16,14 +16,17 @@ import pandas as pd
 
 def garble_columns(df: pd.DataFrame, cols: Iterable[str], mask: Sequence[bool], seed: int = 0) -> pd.DataFrame:
     """Permute each listed column's values among the masked rows (independently per column, so row-level structure -- e.g. a
-    score matching its own play -- is destroyed while marginal distributions survive). Unmasked rows are untouched."""
+    score matching its own play -- is destroyed while marginal distributions survive). Unmasked rows are untouched. MISSING values
+    stay where they are (only non-null cells are permuted): a replay legitimately skips games with no final score, so moving a NaN
+    onto a game would drop that game from the replay and masquerade as a leak (it did, on the first real-data NFL run)."""
     out = df.copy()
-    idx = np.flatnonzero(np.asarray(mask, dtype=bool))
-    if len(idx) < 2:
-        return out
+    base = np.asarray(mask, dtype=bool)
     rng = np.random.default_rng(seed)
     for c in cols:
         if c not in out.columns:
+            continue
+        idx = np.flatnonzero(base & out[c].notna().to_numpy())
+        if len(idx) < 2:
             continue
         vals = out[c].to_numpy(copy=True)
         vals[idx] = vals[rng.permutation(idx)]
