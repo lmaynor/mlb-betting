@@ -19,6 +19,8 @@ from nba.game.features import FeatureStore, TeamGameStats
 from nba.game.kalman_ratings import KalmanTeamTracker
 from nba.game.model import DistributionalGameEngine
 
+W_KALMAN = 0.55   # mirrors the 0.55 / 0.45 blend in DistributionalGameEngine.compute_means (pinned by a test)
+
 log = logging.getLogger("nba.game.evaluate")
 
 
@@ -40,6 +42,16 @@ class EvaluationRecord:
     closing_total: Optional[float] = None
     pred_home_cover: Optional[float] = None
     pred_over: Optional[float] = None
+    # confidence inputs for mlb_core.eval.gating (pre-game state only; additive, nothing in serving reads them)
+    kal_margin: Optional[float] = None       # Kalman-only expected margin
+    kal_total: Optional[float] = None
+    feat_margin: Optional[float] = None      # feature-side margin implied by the blend: (mu - W_KALMAN * kal) / (1 - W_KALMAN)
+    feat_total: Optional[float] = None
+    kal_std_margin: Optional[float] = None   # Kalman parameter-uncertainty sd
+    kal_std_total: Optional[float] = None
+    sd_margin: Optional[float] = None        # engine outcome sd (Student-t scale converted)
+    sd_total: Optional[float] = None
+    n_prior_min: Optional[int] = None        # min over the two teams of games already played this season
 
 
 @dataclass
@@ -114,6 +126,7 @@ def evaluate_walk_forward(
     engine = DistributionalGameEngine()
 
     records: List[EvaluationRecord] = []
+    season_games: Dict[Tuple[int, str], int] = {}   # (season_year, team) -> games already played this season
 
     # Warmup phase
     for i, (h, a) in enumerate(game_list):
@@ -124,6 +137,8 @@ def evaluate_walk_forward(
                 h.team, a.team, h.points, a.points, h.possessions, h.minutes, h.game_date
             )
             feature_store.add_games([h, a])
+            for t in (h, a):
+                season_games[(t.season_year, t.team)] = season_games.get((t.season_year, t.team), 0) + 1
             continue
 
         # Out-of-sample prediction before game update
@@ -188,6 +203,16 @@ def evaluate_walk_forward(
             closing_total=total_line,
             pred_home_cover=pred_sp_cover,
             pred_over=pred_over,
+            kal_margin=float(k_pred.exp_margin),
+            kal_total=float(k_pred.exp_total),
+            feat_margin=float((priced.mu_margin - W_KALMAN * k_pred.exp_margin) / (1.0 - W_KALMAN)),
+            feat_total=float((priced.mu_total - W_KALMAN * k_pred.exp_total) / (1.0 - W_KALMAN)),
+            kal_std_margin=float(k_pred.std_margin),
+            kal_std_total=float(k_pred.std_total),
+            sd_margin=float(priced.sd_margin),
+            sd_total=float(priced.sd_total),
+            n_prior_min=int(min(season_games.get((h.season_year, h.team), 0),
+                                season_games.get((a.season_year, a.team), 0))),
         )
         records.append(rec)
 
@@ -196,6 +221,8 @@ def evaluate_walk_forward(
             h.team, a.team, h.points, a.points, h.possessions, h.minutes, h.game_date
         )
         feature_store.add_games([h, a])
+        for t in (h, a):
+            season_games[(t.season_year, t.team)] = season_games.get((t.season_year, t.team), 0) + 1
 
     # Compute metrics across records
     n_eval = len(records)
