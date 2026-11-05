@@ -72,3 +72,6 @@ data/kalshi_rfq/
 data/nhl_toi_cache/
 data/nhl_toi_splits/
 EV_Alerts/
+
+# Generated props market-residual raw results (summary tables stay committed)
+docs/analysis/props_market_residual_*_results.json

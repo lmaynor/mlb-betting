@@ -4528,3 +4528,20 @@ closes that gap with the same machinery the MLB systems have. Everything is pape
   `/picks/[sport]/projections` are permanent redirects (query carried); `SportTabs` lost ALL PROJECTIONS. PLAYER PROPS reuses `SportProjectionsBoard` with `visuals`: RANGE = `LambdaBar` (the model's
   lambda, `proj_p10`/`proj_p90` and the line on one SVG), MODEL VS MARKET = `ProbPair`, FORM = `FormBars`; GAME LINES reuses `GameLinesClient` and the game cards gained `ExpectedScoreBar`
   (NHL goal rates, NBA total split by margin). `/ev/games?view=model` still exists and now duplicates the Projections game view: drop it when convenient. Quantiles are the model's own, not a validated interval.
+
+## 25. Market-residual models for NBA / NFL props (2026-11-05, research only, UNVALIDATED, not wired in)
+
+`p = sigmoid(logit(p_mkt) + f(x))` with the de-vigged consensus logit as an OFFSET (the model can only learn the residual); f = own offset-ridge logistic (per-stat slopes shrunk toward pooled) or a shallow xgboost with `base_margin`.
+Code: `mlb_core/odds/props_residual.py` (model, features, expanding-window protocol, metrics, controls, `study()`), `nba/props/residual.py` and `nfl/props/residual.py` (table builders + `build` / `run` CLI), `scripts/props_residual_posthoc.py`,
+`tests/test_props_residual.py`. Docs + tables: `docs/analysis/props_market_residual_2026-11-05.md` (+ `_tables_nba/_nfl.md`, `_nba/_nfl_results.json`). **Nothing is on the serving board, the Official tier, or any job.**
+
+- **Protocol (the point):** strictly chronological by season; hyper-parameters picked on the season before each test season; `assert_chronological` fails closed on any training row dated on/after the first test row; the held-out season (NBA 2025-26, NFL 2025) is scored
+  only with `--report-holdout`, once. Paired log loss with date-clustered SEs, Brier skill, ECE, residual-calibration slope, edge-bucket ROI (2-4 / 4-6 / 6-8 / 8+%) at the MEDIAN and BEST book price, and controls: no-model line shopping (same number of bets), a calibration-only model
+  (per-stat intercept + slope on logit p_mkt), market-expected ROI of each bet, always-Under / always-Over. Leakage-guard tests garble everything on/after a day and require identical predictions.
+- **Result:** NBA (362,777 props): small, statistically significant held-out gain (d log loss -0.00055, z -3.3 ridge; -0.00053, z -4.5 GBDT; Brier skill +0.11%), concentrated in threes / assists / rebounds, about half of it the consensus's stationary over-bias (calibration-only -0.00029),
+  matched or beaten by the c-only engine blend on 2025 (post-hoc), and **breakeven at the median book price** (5,131 held-out bets at any positive edge: +0.0% [-2.7, +2.4]). NFL (33,434 props): nothing (held-out d log loss -0.00001 / -0.00014, z -0.0 / -0.5; development folds slightly worse than the market).
+  Do not promote; the verdict and the "not verified" list are in the analysis doc.
+- **Gotchas found:** (1) Novig / ProphetX only exist in the BettingPros feed from the 2025 season (Pinnacle never), so sharp-vs-soft skew cannot be trained; it is an exploratory block-CV diagnostic (NBA 2025: z -3.7, not chronological, staleness untested; NFL: nothing).
+  (2) BettingPros carries OPENING quotes (`is_open` rows, one per book) so open->close line movement IS available (the consensus loader drops them). (3) Best-price ROI is a quote artifact: the no-model rule returned +14.5% in NBA 2025 (7.5 books per prop vs 4.2 in 2021);
+  always compare to a same-count line-shopping control. (4) The NFL over rate moves by season (45.2% .. 50.0%), so a recalibration learned in 2021-22 hurts later (calibration-only is worse than the market in NFL 2023-25). (5) The oracle-absence variants of `scripts.nba_engine_vs_market` leak the
+  game being priced; this study uses `ship_noabs` only. (6) NFL identity loses ~31% of consensus rows (names that do not resolve to a player-week).
