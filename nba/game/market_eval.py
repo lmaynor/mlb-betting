@@ -29,7 +29,7 @@ import pandas as pd
 from mlb_core import storage
 from mlb_core.eval import market_scoring as ms
 from nba.game.evaluate import evaluate_walk_forward
-from nba.game.features import build_team_game_stats_from_raw
+from nba.game.features import build_team_game_stats_from_raw, sb_team_code
 from nba.game.run_daily import load_historical_boxscores, load_player_boxscores
 from nba.teams import team_code
 
@@ -124,19 +124,51 @@ def _find(mkt: Dict[Tuple[str, str, str], dict], home: str, away: str, day: str)
     return None
 
 
+def dropped_history_flags(raw: pd.DataFrame, kept_game_ids, window: int = 10) -> Dict[Tuple[str, str], bool]:
+    """Data-quality flag per (team, ET day): True when any of the team's previous `window` raw (non-preseason) box games was
+    DROPPED by build_team_game_stats_from_raw (nan_stats / not-two-rows / unknown team), i.e. the engine's rolling state for
+    that team has a hole. Uses only games strictly before the day, so it is pre-game information."""
+    if raw is None or raw.empty:
+        return {}
+    df = raw
+    if "season_type" in df.columns:
+        df = df[~df["season_type"].astype(str).str.lower().eq("preseason")]
+    kept = set(map(str, kept_game_ids))
+    out: Dict[Tuple[str, str], bool] = {}
+    per_team: Dict[str, List[Tuple[str, bool]]] = {}
+    for r in df[["game_id", "team_abbr", "date"]].itertuples(index=False):
+        t = sb_team_code(r.team_abbr)
+        if t:
+            per_team.setdefault(t, []).append((str(r.date)[:10], str(r.game_id) in kept))
+    import bisect
+    for t, lst in per_team.items():
+        lst.sort()
+        days = [d for d, _ in lst]
+        bad = np.cumsum([0 if k else 1 for _, k in lst])
+        for d in sorted(set(days)):
+            i = bisect.bisect_left(days, d)               # games strictly before day d
+            lo = max(0, i - window)
+            out[(t, d)] = bool(i > lo and (bad[i - 1] - (bad[lo - 1] if lo > 0 else 0)) > 0)
+    return out
+
+
 def replay(local_dir: Optional[str] = None) -> pd.DataFrame:
-    games = build_team_game_stats_from_raw(load_historical_boxscores(),
-                                           df_player_boxscores=load_player_boxscores())
+    raw = load_historical_boxscores()
+    games = build_team_game_stats_from_raw(raw, df_player_boxscores=load_player_boxscores())
+    dq = dropped_history_flags(raw, {g.game_id for g in games})
     days = sorted({g.game_date[:10] for g in games})
     mkt = market_by_game(load_quotes(days[0], (pd.Timestamp(days[-1]) + pd.Timedelta(days=1)).date().isoformat(),
                                      local_dir=local_dir))
     closing: Dict[str, Dict[str, float]] = {}
     ids = {}
+    away_of = {}
     for g in games:
         if g.is_home:
             ids[g.game_id] = g
+        else:
+            away_of[g.game_id] = g
     for gid, h in ids.items():
-        a = next((x for x in games if x.game_id == gid and not x.is_home), None)
+        a = away_of.get(gid)
         m = _find(mkt, h.team, a.team, h.game_date[:10]) if a else None
         if m:
             c = {}
@@ -152,29 +184,44 @@ def replay(local_dir: Optional[str] = None) -> pd.DataFrame:
         rows.append({"game_id": r.game_id, "date": r.game_date[:10], "home": r.home_team, "away": r.away_team,
                      "p_home_ml": r.pred_p_home_ml, "p_home_cover": r.pred_home_cover, "p_over": r.pred_over,
                      "mu_margin": r.pred_margin, "mu_total": r.pred_total, "margin": r.actual_margin,
-                     "total": r.actual_total, "ml": m.get("ml"), "spread": m.get("spread"), "total_m": m.get("total")})
+                     "total": r.actual_total, "ml": m.get("ml"), "spread": m.get("spread"), "total_m": m.get("total"),
+                     "kal_margin": r.kal_margin, "kal_total": r.kal_total, "feat_margin": r.feat_margin,
+                     "feat_total": r.feat_total, "kal_std_margin": r.kal_std_margin, "kal_std_total": r.kal_std_total,
+                     "sd_margin": r.sd_margin, "sd_total": r.sd_total, "n_prior_min": r.n_prior_min,
+                     "dq_bad": bool(dq.get((r.home_team, r.game_date[:10]), False)
+                                    or dq.get((r.away_team, r.game_date[:10]), False))})
     return pd.DataFrame(rows)
 
 
 def to_events(rec: pd.DataFrame) -> Dict[str, pd.DataFrame]:
     out: Dict[str, pd.DataFrame] = {}
 
-    def build(name, mk_col, p_col, y_fn, push_fn):
+    def build(name, mk_col, p_col, y_fn, push_fn, kind):
         rows = []
         for r in rec.itertuples(index=False):
             m = getattr(r, mk_col)
             p = getattr(r, p_col)
             if not isinstance(m, dict) or p is None or pd.isna(p) or push_fn(r, m):
                 continue
+            sp = r.spread if isinstance(r.spread, dict) else None
+            if kind == "margin":
+                conf = {"c_kal": r.kal_margin, "c_feat": r.feat_margin, "c_mu": r.mu_margin,
+                        "c_line": (-sp["line"]) if sp else np.nan, "c_sd": r.kal_std_margin}
+            else:
+                conf = {"c_kal": r.kal_total, "c_feat": r.feat_total, "c_mu": r.mu_total, "c_line": m["line"],
+                        "c_sd": r.kal_std_total}
+            d0 = str(r.date)
             rows.append({"date": r.date, "p_model": float(p), "p_mkt": m["p"], "y": int(y_fn(r, m)),
+                         "game_id": r.game_id, "season": int(d0[:4]) if d0[5:7] >= "08" else int(d0[:4]) - 1,
+                         **conf, "c_phase": r.n_prior_min, "c_dq": float(bool(r.dq_bad)),
                          "dec_a_med": m["dec_a_med"], "dec_b_med": m["dec_b_med"], "dec_a_best": m["dec_a_best"],
                          "dec_b_best": m["dec_b_best"]})
         out[name] = pd.DataFrame(rows)
 
-    build("moneyline (home wins)", "ml", "p_home_ml", lambda r, m: r.margin > 0, lambda r, m: r.margin == 0)
+    build("moneyline (home wins)", "ml", "p_home_ml", lambda r, m: r.margin > 0, lambda r, m: r.margin == 0, "margin")
     build("spread (home covers)", "spread", "p_home_cover", lambda r, m: r.margin + m["line"] > 0,
-          lambda r, m: r.margin + m["line"] == 0)
-    build("total (over)", "total_m", "p_over", lambda r, m: r.total > m["line"], lambda r, m: r.total == m["line"])
+          lambda r, m: r.margin + m["line"] == 0, "margin")
+    build("total (over)", "total_m", "p_over", lambda r, m: r.total > m["line"], lambda r, m: r.total == m["line"], "total")
     return out
 
 
@@ -192,9 +239,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", default=None)
     ap.add_argument("--local-dir", default=None, help="local copy of Odds/bettingpros_nba_games (moneyline/ spread/ total/)")
+    ap.add_argument("--records-pkl", default=None, help="write the per-game replay records (pickle: has dict columns)")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    text = report(replay(args.local_dir))
+    rec = replay(args.local_dir)
+    if args.records_pkl:
+        rec.to_pickle(args.records_pkl)
+    text = report(rec)
     print(text)
     if args.out:
         open(args.out, "w").write(text + "\n")

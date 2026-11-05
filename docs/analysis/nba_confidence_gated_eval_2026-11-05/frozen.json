@@ -1,0 +1,53 @@
+{
+ "spec_version": "gates-v1-2026-11-05",
+ "label": "nba",
+ "dev_seasons": [
+  2021,
+  2022,
+  2023
+ ],
+ "held_seasons": [
+  2024,
+  2025
+ ],
+ "thresholds": {
+  "version": "gates-v1-2026-11-05",
+  "label": "nba",
+  "phase_min": 20,
+  "edge_q": 0.75,
+  "sd_q": 0.3333333333333333,
+  "markets": {
+   "moneyline (home wins)": {
+    "n_dev": 3718,
+    "edge_min": 0.12186890633826708,
+    "sd_max": 3.514887300723635,
+    "agree_applicable": true,
+    "dq_share_flagged": 0.0
+   },
+   "spread (home covers)": {
+    "n_dev": 3407,
+    "edge_min": 0.14087496140866496,
+    "sd_max": 3.5164120703302,
+    "agree_applicable": true,
+    "dq_share_flagged": 0.0
+   },
+   "total (over)": {
+    "n_dev": 3310,
+    "edge_min": 0.1417094407629371,
+    "sd_max": 3.5148155783318478,
+    "agree_applicable": true,
+    "dq_share_flagged": 0.0
+   }
+  }
+ },
+ "survivors": [],
+ "dev_cells_tried": 15,
+ "dev_cells_not_applicable": [
+  "nba|moneyline (home wins)|DQ",
+  "nba|spread (home covers)|DQ",
+  "nba|total (over)|DQ"
+ ],
+ "inputs_sha": "a904af70d9d93336",
+ "frozen_at": "2026-11-05T17:34:52",
+ "frozen_sha": "0396860e32ece5aa"
+}

@@ -1,0 +1,16 @@
+{
+ "2023-12-01": {
+  "n_checked_before": 5005,
+  "leak": false,
+  "n_changed_before": 0,
+  "power_ok": true,
+  "n_changed_after": 3810
+ },
+ "2025-12-01": {
+  "n_checked_before": 7671,
+  "leak": false,
+  "n_changed_before": 0,
+  "power_ok": true,
+  "n_changed_after": 1144
+ }
+}
