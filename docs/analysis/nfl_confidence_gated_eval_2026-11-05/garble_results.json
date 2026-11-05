@@ -1,0 +1,16 @@
+{
+ "2024-10-20": {
+  "n_checked_before": 105,
+  "leak": false,
+  "n_changed_before": 0,
+  "power_ok": true,
+  "n_changed_after": 437
+ },
+ "2025-10-26": {
+  "n_checked_before": 392,
+  "leak": false,
+  "n_changed_before": 0,
+  "power_ok": true,
+  "n_changed_after": 151
+ }
+}

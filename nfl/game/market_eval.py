@@ -20,7 +20,7 @@ import pandas as pd
 from mlb_core.eval import market_scoring as ms
 from nfl.data.read import load as nfl_load
 from nfl.game.kalman_ratings import KalmanNFLTracker
-from nfl.game.model import NFLGameEngine
+from nfl.game.model import NFLGameEngine, W_KALMAN, W_ZFEAT
 from nfl.game.pbp_features import PBPFeatureStore, aggregate_team_game_pbp, compute_matchup_pbp_features
 
 log = logging.getLogger("nfl.game.market_eval")
@@ -55,7 +55,7 @@ def replay(test_seasons: List[int], pbp: Optional[pd.DataFrame] = None, sched: O
         by_game.setdefault(r.game_id, {})["home" if r.is_home else "away"] = r
     plays = pbp.groupby("game_id").size().to_dict()
 
-    tracker, store, engine = KalmanNFLTracker(), PBPFeatureStore(), NFLGameEngine()
+    tracker, store, nfl_engine = KalmanNFLTracker(), PBPFeatureStore(), NFLGameEngine()
     out: List[dict] = []
     for g in sched.itertuples(index=False):
         pair = by_game.get(g.game_id)
@@ -68,11 +68,17 @@ def replay(test_seasons: List[int], pbp: Optional[pd.DataFrame] = None, sched: O
             k = tracker.predict_game(home, away, int(g.season), int(g.week), date)
             feats = compute_matchup_pbp_features(home, away, int(g.season), int(g.week), date, store)
             line_home = -float(g.spread_line)                     # nflverse: positive = home favoured
-            priced = engine.price_game(g.game_id, k, feats, market_odds={
+            priced = nfl_engine.price_game(g.game_id, k, feats, market_odds={
                 "spreads": {"line": line_home}, "totals": {"line": float(g.total_line)}})
             out.append({
                 "game_id": g.game_id, "date": date, "season": int(g.season), "week": int(g.week), "home": home,
                 "away": away, "mu_margin": priced.mu_margin, "mu_total": priced.mu_total,
+                # confidence inputs (pre-game state only; see mlb_core.eval.gating)
+                "kal_margin": float(k.exp_margin), "kal_total": float(k.exp_total),
+                # the PBP-feature side of the margin blend (bye / QB terms are 0 here: schedules are not passed)
+                "feat_margin": float((priced.mu_margin - W_KALMAN * k.exp_margin) / W_ZFEAT),
+                "kal_std_margin": float(k.std_margin), "kal_std_total": float(k.std_total),
+                "n_prior_min": int(min(feats.home_profile.n_games, feats.away_profile.n_games)),
                 "p_home_ml": _model_p(priced, "NFL_ML", "home"), "p_home_cover": _model_p(priced, "NFL_SPREAD", "home"),
                 "p_away_cover": _model_p(priced, "NFL_SPREAD", "away"), "p_over": _model_p(priced, "NFL_TOTAL", "over"),
                 "p_under": _model_p(priced, "NFL_TOTAL", "under"), "mkt_margin": float(g.spread_line),
@@ -101,6 +107,17 @@ def _two_way(df: pd.DataFrame, a_odds: str, b_odds: str):
     return pa, da, db
 
 
+def _conf_cols(d: pd.DataFrame, kind: str) -> Dict[str, object]:
+    """Confidence inputs for mlb_core.eval.gating, on the scale of the market (all pre-game state)."""
+    nan = pd.Series(np.nan, index=d.index)
+    col = lambda name: d[name] if name in d.columns else nan          # noqa: E731  (old record files lack them)
+    if kind == "margin":
+        return {"c_kal": col("kal_margin"), "c_feat": col("feat_margin"), "c_mu": col("mu_margin"),
+                "c_line": d["mkt_margin"], "c_sd": col("kal_std_margin"), "c_phase": col("week"), "c_dq": nan}
+    return {"c_kal": col("kal_total"), "c_feat": nan, "c_mu": col("mu_total"), "c_line": d["mkt_total"],
+            "c_sd": col("kal_std_total"), "c_phase": col("week"), "c_dq": nan}
+
+
 def to_events(rec: pd.DataFrame) -> Dict[str, pd.DataFrame]:
     """Records -> per-market event frames for market_scoring.score_market (pushes / ties dropped)."""
     out: Dict[str, pd.DataFrame] = {}
@@ -109,21 +126,24 @@ def to_events(rec: pd.DataFrame) -> Dict[str, pd.DataFrame]:
     pk, da, db = _two_way(d, "home_ml", "away_ml")
     out["moneyline (home wins)"] = pd.DataFrame({
         "date": d["date"], "p_model": d["p_home_ml"], "p_mkt": pk, "y": (d["margin"] > 0).astype(int),
-        "dec_a_med": da, "dec_b_med": db, "dec_a_best": da, "dec_b_best": db}).dropna(subset=["p_mkt"])
+        "dec_a_med": da, "dec_b_med": db, "dec_a_best": da, "dec_b_best": db,
+        "season": d["season"] if "season" in d.columns else np.nan, **_conf_cols(d, "margin")}).dropna(subset=["p_mkt"])
     # spread: event = home covers the closing line
     d = rec[(rec["margin"] + (-rec["mkt_margin"])) != 0].copy()
     pk, da, db = _two_way(d, "home_sp_odds", "away_sp_odds")
     pm = d["p_home_cover"] / (d["p_home_cover"] + d["p_away_cover"])
     out["spread (home covers)"] = pd.DataFrame({
         "date": d["date"], "p_model": pm, "p_mkt": pk, "y": ((d["margin"] - d["mkt_margin"]) > 0).astype(int),
-        "dec_a_med": da, "dec_b_med": db, "dec_a_best": da, "dec_b_best": db}).dropna(subset=["p_mkt"])
+        "dec_a_med": da, "dec_b_med": db, "dec_a_best": da, "dec_b_best": db,
+        "season": d["season"] if "season" in d.columns else np.nan, **_conf_cols(d, "margin")}).dropna(subset=["p_mkt"])
     # total: event = over
     d = rec[rec["total"] != rec["mkt_total"]].copy()
     pk, da, db = _two_way(d, "over_odds", "under_odds")
     pm = d["p_over"] / (d["p_over"] + d["p_under"])
     out["total (over)"] = pd.DataFrame({
         "date": d["date"], "p_model": pm, "p_mkt": pk, "y": (d["total"] > d["mkt_total"]).astype(int),
-        "dec_a_med": da, "dec_b_med": db, "dec_a_best": da, "dec_b_best": db}).dropna(subset=["p_mkt"])
+        "dec_a_med": da, "dec_b_med": db, "dec_a_best": da, "dec_b_best": db,
+        "season": d["season"] if "season" in d.columns else np.nan, **_conf_cols(d, "total")}).dropna(subset=["p_mkt"])
     return out
 
 

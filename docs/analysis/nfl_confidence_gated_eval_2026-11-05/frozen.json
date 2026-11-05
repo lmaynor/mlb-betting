@@ -1,0 +1,54 @@
+{
+ "spec_version": "gates-v1-2026-11-05",
+ "label": "nfl",
+ "dev_seasons": [
+  2021,
+  2022,
+  2023
+ ],
+ "held_seasons": [
+  2024,
+  2025
+ ],
+ "thresholds": {
+  "version": "gates-v1-2026-11-05",
+  "label": "nfl",
+  "phase_min": 6,
+  "edge_q": 0.75,
+  "sd_q": 0.3333333333333333,
+  "markets": {
+   "moneyline (home wins)": {
+    "n_dev": 812,
+    "edge_min": 0.13347961586663665,
+    "sd_max": 8.413290498016469,
+    "agree_applicable": true,
+    "dq_share_flagged": null
+   },
+   "spread (home covers)": {
+    "n_dev": 787,
+    "edge_min": 0.16195412211431343,
+    "sd_max": 8.412773217948583,
+    "agree_applicable": true,
+    "dq_share_flagged": null
+   },
+   "total (over)": {
+    "n_dev": 807,
+    "edge_min": 0.2019791443510236,
+    "sd_max": 8.412959289810553,
+    "agree_applicable": false,
+    "dq_share_flagged": null
+   }
+  }
+ },
+ "survivors": [],
+ "dev_cells_tried": 14,
+ "dev_cells_not_applicable": [
+  "nfl|moneyline (home wins)|DQ",
+  "nfl|spread (home covers)|DQ",
+  "nfl|total (over)|AGREE",
+  "nfl|total (over)|DQ"
+ ],
+ "inputs_sha": "3da832264ef804d8",
+ "frozen_at": "2026-11-05T17:32:04",
+ "frozen_sha": "925f42329894aa52"
+}
