@@ -2,15 +2,17 @@
 
 Access is by RotoWire's agreement (the owner phoned and got a yes; get it in writing -- their terms, Article VI, bar
 automated access without written consent). Rules this module keeps so that stays defensible:
-  * one request per call, no retries, no crawling past the one page;
+  * one request per refresh, no retries, no crawling past the one page; the game model reads a small derived cache
+    (`CACHE_KEY`, names only) so its 30-minute runs never touch the site -- only `refresh_cache` (the nhl-lineups-refresh job) does;
   * an identifiable User-Agent;
-  * nothing from the page is stored: only the derived team -> goalie names are used in memory by the game model.
+  * nothing from the page is stored except that cache: team -> confirmed goalie name, the day and the fetch time.
 
 Only a goalie RotoWire marks "Confirmed" is returned by `confirmed_goalies`; "Expected" is a guess and is ignored.
 Fail-open: any error returns {} and the game model falls back to its inferred starter.
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 from datetime import datetime
@@ -20,6 +22,8 @@ from zoneinfo import ZoneInfo
 
 import requests
 
+from mlb_core import storage
+
 from nhl.config import NAME_TO_ABBREV, team_abbrev
 
 logger = logging.getLogger(__name__)
@@ -27,6 +31,8 @@ logger = logging.getLogger(__name__)
 URL = "https://www.rotowire.com/hockey/nhl-lineups.php"
 USER_AGENT = "beezy.fyi-lineups/1.0 (approved by RotoWire; one request per run)"
 TIMEOUT_S = 15
+CACHE_KEY = "EVSweep/nhl_games/confirmed_goalies.json"
+CACHE_MAX_AGE_MIN = 120  # a cache older than this is ignored (the refresh job runs every 30 min)
 
 TEAM_RE = re.compile(r"^(.+?) \((\d+-\d+-\d+)\)$")  # "Flyers (3-7-3)"
 RECORD_RE = re.compile(r"^\(\d+-\d+-\d+\)$")  # the live page writes the record as its own text node
@@ -171,8 +177,52 @@ def confirmed_goalies(date_str: str, now: Optional[datetime] = None) -> Dict[str
         return {}
 
 
-if __name__ == "__main__":
-    import sys
+def refresh_cache(now: Optional[datetime] = None) -> Dict[str, str]:
+    """Fetch TODAY's page once and write the confirmed goalies to CACHE_KEY. Raises on a fetch/write failure so the job
+    shows red; an empty page keeps the previous cache (never overwrite good data with nothing)."""
+    now = (now or datetime.now(_ET)).astimezone(_ET)
+    by_team = goalies_by_team(fetch_games(tomorrow=False))
+    confirmed = {t: v["goalie"] for t, v in by_team.items() if v["confirmed"]}
+    if not by_team:
+        raise RuntimeError("RotoWire page parsed to zero games; cache left untouched")
+    payload = {"fetched_at": now.astimezone(ZoneInfo("UTC")).isoformat(), "day": now.date().isoformat(),
+               "n_teams_on_page": len(by_team), "confirmed": confirmed}
+    storage.write_bytes(json.dumps(payload).encode("utf-8"), CACHE_KEY)
+    logger.info("rotowire cache: %d teams on page, %d confirmed", len(by_team), len(confirmed))
+    return confirmed
 
-    for team, v in sorted(goalies_by_team(fetch_games("--tomorrow" in sys.argv)).items()):
+
+def cached_confirmed_goalies(date_str: str, now: Optional[datetime] = None) -> Dict[str, str]:
+    """{team: goalie} from the cache for `date_str` (ET day), or {} when the cache is missing, for another day, or stale.
+    Never touches the network. Fail-open."""
+    try:
+        now_utc = (now or datetime.now(ZoneInfo("UTC"))).astimezone(ZoneInfo("UTC"))
+        d = json.loads(storage.read_bytes(CACHE_KEY).decode("utf-8"))
+        age_min = (now_utc - datetime.fromisoformat(d["fetched_at"])).total_seconds() / 60.0
+        if d.get("day") != date_str[:10] or age_min > CACHE_MAX_AGE_MIN or age_min < -5:
+            return {}
+        return {str(k): str(v) for k, v in (d.get("confirmed") or {}).items()}
+    except Exception as exc:  # noqa: BLE001 -- missing cache is the normal first-run state
+        logger.info("no usable confirmed-goalie cache (%s); inferring starters", exc)
+        return {}
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    import argparse
+
+    ap = argparse.ArgumentParser(description="RotoWire NHL confirmed goalies")
+    ap.add_argument("--refresh", action="store_true", help="fetch today's page once and write the GCS cache (the job)")
+    ap.add_argument("--tomorrow", action="store_true", help="print tomorrow's page (no cache write)")
+    args = ap.parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    if args.refresh:
+        confirmed = refresh_cache()
+        print(f"confirmed goalies cached: {len(confirmed)}")
+        return 0
+    for team, v in sorted(goalies_by_team(fetch_games(args.tomorrow)).items()):
         print(f"{team}  {v['goalie']}  [{v['status']}]")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

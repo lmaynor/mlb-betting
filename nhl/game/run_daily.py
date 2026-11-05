@@ -32,7 +32,7 @@ from mlb_core.odds.utils import american_to_decimal, american_to_implied_prob, d
 from nhl.config import GAMES_MASTER, GOALIE_BOX_MASTER, TEAM_BOX_MASTER, team_abbrev
 from nba.game import odds_feed
 from nhl.game.features import FeatureStore, MatchupFeatures, build_team_game_stats_from_raw
-from nhl.data.rotowire_lineups import confirmed_goalies
+from nhl.data.rotowire_lineups import cached_confirmed_goalies
 from nhl.game.goalie_model import GoalieTracker, build_goalie_tracker_from_df
 from nhl.game.kalman_ratings import KalmanTeamTracker
 from nhl.game.matrix_pricer import DistributionalNHLMatrixEngine, PricedGame, PricedMarket
@@ -291,10 +291,11 @@ def run_nhl_game_predictions(
     odds_meta["events_loaded"] = n_loaded
     odds_meta["events_for_day"] = len(target_events)
 
-    # RotoWire-confirmed starters (approved access; fail-open to {}). Off with NHL_ROTOWIRE_GOALIES=0.
+    # RotoWire-confirmed starters from the cache the nhl-lineups-refresh job writes (no network here; fail-open to {}).
+    # Off with NHL_ROTOWIRE_GOALIES=0.
     confirmed_by_team: Dict[str, str] = {}
     if os.environ.get("NHL_ROTOWIRE_GOALIES", "1") != "0":
-        confirmed_by_team = confirmed_goalies(date_str)
+        confirmed_by_team = cached_confirmed_goalies(date_str)
         odds_meta["confirmed_goalies"] = len(confirmed_by_team)
 
     priced_games: List[PricedGame] = []

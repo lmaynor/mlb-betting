@@ -80,9 +80,9 @@ def _nfl_sweep_ledger_never_reaches_gcs(request, monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _nhl_game_run_never_fetches_rotowire(monkeypatch):
-    """nhl.game.run_daily asks RotoWire for confirmed goalies (one HTTP request). Tests never touch the network: default is
-    'nothing confirmed'. A test of the wiring monkeypatches run_daily.confirmed_goalies itself."""
+    """nhl.game.run_daily reads the confirmed-goalie cache (a storage read). Tests never touch storage: default is 'nothing
+    confirmed'. A test of the wiring monkeypatches run_daily.cached_confirmed_goalies itself."""
     rd = sys.modules.get("nhl.game.run_daily")
     if rd is not None:
-        monkeypatch.setattr(rd, "confirmed_goalies", lambda date_str, now=None: {})
+        monkeypatch.setattr(rd, "cached_confirmed_goalies", lambda date_str, now=None: {})
     yield

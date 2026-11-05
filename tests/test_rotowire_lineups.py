@@ -64,3 +64,24 @@ def test_resolve_goalie_id_and_confirmed_projection():
     assert t.resolve_goalie_id("OTT", "Nobody Known") is None
     p = t.project_team_goalie("OTT", "2026-11-04", confirmed_starter_id="1", confirmed_starter_name="Samuel Ersson")
     assert p.is_confirmed and p.starter_name == "Samuel Ersson"
+
+
+def test_cache_roundtrip_staleness_and_empty_page(monkeypatch):
+    store = {}
+    monkeypatch.setattr(rw.storage, "write_bytes", lambda data, key: store.__setitem__(key, data))
+    monkeypatch.setattr(rw.storage, "read_bytes", lambda key: store[key])
+    now = datetime(2026, 11, 4, 12, tzinfo=ZoneInfo("America/New_York"))
+    monkeypatch.setattr(rw, "fetch_games", lambda tomorrow=False: rw.parse_lineups(rw.html_to_lines(HTML)))
+    assert rw.refresh_cache(now) == {"OTT": "Goalie One"}
+    assert rw.cached_confirmed_goalies("2026-11-04", now) == {"OTT": "Goalie One"}
+    assert rw.cached_confirmed_goalies("2026-11-05", now) == {}                       # another day
+    later = datetime(2026, 11, 4, 15, tzinfo=ZoneInfo("America/New_York"))
+    assert rw.cached_confirmed_goalies("2026-11-04", later) == {}                     # older than CACHE_MAX_AGE_MIN
+    before = store[rw.CACHE_KEY]
+    monkeypatch.setattr(rw, "fetch_games", lambda tomorrow=False: [])
+    try:
+        rw.refresh_cache(now)
+        raise AssertionError("an empty page must raise")
+    except RuntimeError:
+        pass
+    assert store[rw.CACHE_KEY] == before                                              # good cache kept
