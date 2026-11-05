@@ -121,6 +121,18 @@ def test_a_stale_snapshot_is_never_traded(store):
     assert rc == 0 and nc.calls == 0 and banked_counts(store)["decisions"] == 0
 
 
+def test_the_job_waits_for_a_fresh_snapshot_only_before_its_first_pass(store):
+    sleeps = []
+    sj.run(args(wait_fresh_sec=90.0, loop_seconds=30.0), store=store, nc=FakeNovig(), snapshot_fn=lambda: snapshot(age_min=40.0),
+           clock=lambda: NOW, sleep=sleeps.append, gate_source=(lambda p: [], lambda k: b""))
+    assert len(sleeps) == 3 and banked_counts(store)["decisions"] == 0          # waited 3 x 30 s, then gave up
+    seq = iter([snapshot(age_min=6.0)] + [snapshot(age_min=40.0)] * 20)
+    sleeps.clear()
+    sj.run(args(max_runtime_sec=3600.0, wait_fresh_sec=90.0, loop_seconds=30.0), store=store, nc=FakeNovig(),
+           snapshot_fn=lambda: next(seq), clock=lambda: NOW, sleep=sleeps.append, gate_source=(lambda p: [], lambda k: b""))
+    assert sleeps == [30.0]                                                     # one inter-pass sleep, no wait loop after the pass
+
+
 def test_a_fresh_enough_snapshot_is_traded(store):
     rc, nc = fire(store, snap=snapshot(age_min=22.0, p_over=0.57))      # an old snapshot widens the EV hurdle
     assert rc == 0 and nc.calls > 0 and banked_counts(store)["orders"] == 1

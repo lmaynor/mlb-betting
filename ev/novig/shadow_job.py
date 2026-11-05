@@ -196,7 +196,7 @@ def run(args, *, store=None, nc=None, snapshot_fn=None, clock=None, sleep=time.s
         window_seen = True
         age = snapshot_age_min(snap, now)
         if age > cfg.cons_max_age_min - args.fresh_margin_min:
-            if waits_left > 0:
+            if passes == 0 and waits_left > 0:          # only wait for the sweep at the START; after a pass the snapshot just aged out
                 waits_left -= 1
                 log.info("snapshot is %.1f min old (limit %.0f - margin %.0f); waiting for the sweep", age, cfg.cons_max_age_min, args.fresh_margin_min)
                 sleep(wait_step)
