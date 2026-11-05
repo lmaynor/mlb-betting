@@ -28,7 +28,7 @@ import pandas as pd
 
 from mlb_core import storage
 from mlb_core.odds.utils import american_to_decimal, american_to_implied_prob, devig_two_way
-from nba.config import GAMES_MASTER, TEAM_BOX_MASTER
+from nba.config import GAMES_MASTER, PLAYER_BOX_MASTER, TEAM_BOX_MASTER
 from nba.game import odds_feed
 from nba.game.features import FeatureStore, MatchupFeatures, build_team_game_stats_from_raw
 from nba.game.kalman_ratings import KalmanTeamTracker
@@ -55,6 +55,21 @@ def load_historical_boxscores() -> pd.DataFrame:
                     return df
             except Exception as exc:
                 log.warning("Could not read boxscores at %s: %s", key, exc)
+    return pd.DataFrame()
+
+
+def load_player_boxscores() -> pd.DataFrame:
+    """Load player boxscores master if available, or return empty DataFrame. Used to backfill the
+    2019-24 team box's NaN rebounds/turnovers in build_team_game_stats_from_raw (fail-soft)."""
+    for key in [PLAYER_BOX_MASTER, "NBA/player_boxscores_master.csv"]:
+        if storage.exists(key):
+            try:
+                df = storage.read_csv(key)
+                if not df.empty:
+                    log.info("Loaded %d player boxscores from %s", len(df), key)
+                    return df
+            except Exception as exc:
+                log.warning("Could not read player boxscores at %s: %s", key, exc)
     return pd.DataFrame()
 
 
@@ -298,7 +313,8 @@ def run_nba_game_predictions(
 
     # 1. Load historical training data
     df_box = load_historical_boxscores()
-    hist_stats = build_team_game_stats_from_raw(df_box, tips=load_tips(df_box))
+    hist_stats = build_team_game_stats_from_raw(df_box, tips=load_tips(df_box),
+                                                df_player_boxscores=load_player_boxscores())
 
     kalman = KalmanTeamTracker()
     feature_store = FeatureStore()

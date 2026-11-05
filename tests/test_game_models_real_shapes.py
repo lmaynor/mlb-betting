@@ -95,6 +95,29 @@ def test_loader_real_master_columns_pho_tips_nan_and_preseason(caplog):
     assert "ZZZ" in msg
 
 
+def test_loader_backfills_nan_rebounds_turnovers_from_player_rows(caplog):
+    """Argon fix (#183), ported from PR #186's team_table: the 2019-24 team box has NaN rebounds/turnovers;
+    played-player sums per (game_id, team_abbr) backfill them instead of dropping the team-games."""
+    rows = _box("g_nan", "2026-01-12", "BOS", "MIA", 100, 99, turnovers=np.nan, rebounds_offensive=np.nan)
+    players = []
+    for team, oreb_parts, tov_parts in [("BOS", (4.0, 6.0), (8.0, 5.0)), ("MIA", (5.0, 5.0), (6.0, 5.0))]:
+        for oreb, tov in zip(oreb_parts, tov_parts):
+            prow = {"game_id": "g_nan", "team_abbr": team, "played": True}
+            prow.update({f: 0.0 for f in STAT_FIELDS})
+            prow.update({"rebounds_offensive": oreb, "rebounds_defensive": 20.0, "turnovers": tov})
+            players.append(prow)
+    with caplog.at_level(logging.INFO, logger="nba.game.features"):
+        games = build_team_game_stats_from_raw(pd.DataFrame(rows), df_player_boxscores=pd.DataFrame(players))
+    by = {(g.game_id, g.team): g for g in games}
+    assert set(by) == {("g_nan", "BOS"), ("g_nan", "MIA")}
+    assert all(np.isfinite([g.tov_pct, g.oreb_pct, g.dreb_pct, g.possessions]).all() for g in games)
+    bos = by[("g_nan", "BOS")]
+    assert abs(bos.tov_pct - 13.0 / bos.possessions) < 1e-9          # 8 + 5 player turnovers backfilled
+    assert "backfilled rebounds/turnovers for 2 team-rows" in " ".join(r.getMessage() for r in caplog.records)
+    # without the player frame, the same game is still dropped (fail-soft, previous behavior)
+    assert build_team_game_stats_from_raw(pd.DataFrame(rows)) == []
+
+
 def test_loader_rejects_the_old_invented_schema():
     bad = pd.DataFrame([{"game_id": "g", "team_abbrev": "BOS", "game_date": "2026-01-10", "points": 100}] * 2)
     with pytest.raises(ValueError, match="missing columns"):

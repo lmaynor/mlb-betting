@@ -5,6 +5,9 @@ COVERAGE LIMIT, measured 2026-11-04: the engine's history loader (nba.game.featu
 only the games whose team box has rebounds and turnovers, which is 2025-26 onward (2,858 team-games of 18,586; 14,844 dropped
 as `nan_stats`). So this replays the engine AS DEPLOYED on the seasons it can see, not 2021-2025. The earlier research models in
 nba/games (branch feat/nba-game-models) covered 2021-2025 with a different feature set.
+UPDATE (Argon fix, #183): the loader now backfills the 2019-24 NaN rebounds/turnovers from the player box master
+(load_player_boxscores, wired into replay() below), so the full history is reachable; a full re-run on the
+backfilled history is still pending, so the 2026-11-04 coverage numbers above stand until it lands.
 
 Market per game = books whose quote was updated within 4 h before / 15 min after the scheduled tip (BettingPros keeps a last quote
 per book, some days old); >= 3 books quoting the SAME main line, both sides; the Consensus pseudo-book is excluded. p_mkt = the
@@ -27,7 +30,7 @@ from mlb_core import storage
 from mlb_core.eval import market_scoring as ms
 from nba.game.evaluate import evaluate_walk_forward
 from nba.game.features import build_team_game_stats_from_raw
-from nba.game.run_daily import load_historical_boxscores
+from nba.game.run_daily import load_historical_boxscores, load_player_boxscores
 from nba.teams import team_code
 
 log = logging.getLogger("nba.game.market_eval")
@@ -122,7 +125,8 @@ def _find(mkt: Dict[Tuple[str, str, str], dict], home: str, away: str, day: str)
 
 
 def replay(local_dir: Optional[str] = None) -> pd.DataFrame:
-    games = build_team_game_stats_from_raw(load_historical_boxscores())
+    games = build_team_game_stats_from_raw(load_historical_boxscores(),
+                                           df_player_boxscores=load_player_boxscores())
     days = sorted({g.game_date[:10] for g in games})
     mkt = market_by_game(load_quotes(days[0], (pd.Timestamp(days[-1]) + pd.Timedelta(days=1)).date().isoformat(),
                                      local_dir=local_dir))

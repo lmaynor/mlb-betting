@@ -68,3 +68,40 @@ def test_play_clock_is_a_string_column_in_real_nflverse_pbp():
     pbp["play_clock"] = pbp["play_clock"].astype("string")
     rows = aggregate_team_game_pbp(pbp)
     assert rows and all(np.isfinite(r.seconds_per_play) for r in rows)
+
+
+def test_pace_is_elapsed_game_clock_not_play_clock_remaining():
+    """Argon fix (#183): play_clock is the seconds REMAINING on the play clock at the snap (~8s here).
+    Pace must come from game_seconds_remaining diffs between consecutive plays of the same drive
+    (~27s here); averaging play_clock (the old code) would report ~8s and inflate totals."""
+    rows = []
+    for drive, team, opp, gsr0 in [(1, "KC", "BAL", 3300.0), (2, "BAL", "KC", 2900.0)]:
+        for i in range(12):
+            rows.append({"game_id": "2024_01_BAL_KC", "season": 2024, "week": 1, "game_date": "2024-09-05",
+                         "home_team": "KC", "away_team": "BAL", "posteam": team, "defteam": opp,
+                         "home_score": 27, "away_score": 20, "play_type": "pass" if i % 2 == 0 else "run",
+                         "pass": 1 if i % 2 == 0 else 0, "rush": 0 if i % 2 == 0 else 1, "down": 1,
+                         "epa": 0.1, "wp": 0.5, "score_differential": 0, "play_clock": "8",
+                         "qb_dropback": 1, "sack": 0, "qb_hit": 0, "yardline_100": 50, "touchdown": 0,
+                         "success": 1, "fumble_lost": 0, "interception": 0, "qtr": 1,
+                         "drive": drive, "game_seconds_remaining": gsr0 - 27.0 * i})
+    pbp = pd.DataFrame(rows)
+    pbp["play_clock"] = pbp["play_clock"].astype("string")
+    out = aggregate_team_game_pbp(pbp)
+    assert len(out) == 2
+    assert all(abs(r.seconds_per_play - 27.0) < 1.0 for r in out), [r.seconds_per_play for r in out]
+
+
+def test_pace_falls_back_to_40_minus_play_clock_without_game_clock():
+    """Argon's accepted alternative when game_seconds_remaining / drive are unavailable: 40 - play_clock."""
+    n = 20
+    pbp = pd.DataFrame({
+        "game_id": ["2024_01_BAL_KC"] * n, "season": 2024, "week": 1, "game_date": "2024-09-05",
+        "home_team": "KC", "away_team": "BAL", "posteam": ["KC", "BAL"] * (n // 2), "defteam": ["BAL", "KC"] * (n // 2),
+        "home_score": 27, "away_score": 20, "play_type": ["pass", "run"] * (n // 2), "pass": [1, 0] * (n // 2),
+        "rush": [0, 1] * (n // 2), "down": 1, "epa": 0.1, "wp": 0.5, "score_differential": 0,
+        "play_clock": ["12"] * n, "qb_dropback": [1, 0] * (n // 2), "sack": 0, "qb_hit": 0, "yardline_100": 50,
+        "touchdown": 0, "success": 1, "fumble_lost": 0, "interception": 0, "qtr": 2})
+    pbp["play_clock"] = pbp["play_clock"].astype("string")
+    out = aggregate_team_game_pbp(pbp)
+    assert out and all(abs(r.seconds_per_play - 28.0) < 1e-9 for r in out)
