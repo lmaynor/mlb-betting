@@ -76,3 +76,13 @@ def _nfl_sweep_ledger_never_reaches_gcs(request, monkeypatch):
     monkeypatch.setattr(sw, "_ledger_allowance", lambda pc, want, today: Allowance(True, want, "test"))
     monkeypatch.setattr(sw, "_ledger_record", lambda today, n: None)
     yield
+
+
+@pytest.fixture(autouse=True)
+def _nhl_game_run_never_fetches_rotowire(monkeypatch):
+    """nhl.game.run_daily asks RotoWire for confirmed goalies (one HTTP request). Tests never touch the network: default is
+    'nothing confirmed'. A test of the wiring monkeypatches run_daily.confirmed_goalies itself."""
+    rd = sys.modules.get("nhl.game.run_daily")
+    if rd is not None:
+        monkeypatch.setattr(rd, "confirmed_goalies", lambda date_str, now=None: {})
+    yield
