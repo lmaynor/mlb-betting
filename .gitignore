@@ -67,4 +67,8 @@ AuxData/
 
 # Kalshi RFQ shadow tape (scripts/kalshi_rfq_daemon.py --mode record)
 data/kalshi_rfq/
+
+# NHL TOI-split builder: raw API cache + local output (nhl/data/toi_splits.py); the data lake is GCS
+data/nhl_toi_cache/
+data/nhl_toi_splits/
 EV_Alerts/
