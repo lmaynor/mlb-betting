@@ -34,8 +34,9 @@ shadow modes exist to answer it at $0 risk before anything is sent.
 3. **Leg `side` matters.** A `no` leg contributes `1 - p_yes`. The spec priced every leg as YES.
 4. **Blend.** Uses `calibration.market_blend_prob` (c=0, i.e. pure market, for every NFL stat and every stat without
    a walk-forward fit) instead of a flat 85/15; the |model - market| > 0.15 guard is kept.
-5. **Fees.** ROI-on-collateral is net of a reserve using the taker formula, because the quote-creator fee schedule is
-   not documented.
+5. **Fees.** ROI-on-collateral is net of a reserve. Originally the full taker formula (the quote-creator schedule was undocumented);
+   since 2026-11-04 `fee_mult = 0.5`, from kalshi-fee-schedule-2026-07-07.pdf (KXMVE combos: maker multiplier 2 x 0.0175 = 0.035 = 0.5 x 0.07).
+   Assumes the quote creator pays the maker rate.
 6. **`game_key`** follows `ev.kalshi_map` (`nfl:2026-10-25:BUF@KC`), not `date|AWAY@HOME`.
 7. **Single-leg quoting is OFF by default** (`--quote-single-leg`): the repo's own study says passive prop making is
    -EV; the engine's thesis is combos.
@@ -340,3 +341,20 @@ entry matches nothing.
 Record: >= 2 weeks of tape, our would-be no_bid vs the price combos actually traded at afterwards. Shadow: PLAN rate,
 REJ histogram, expected P&L (sum of ev * contracts on PLAN rows -- expected, NOT realised). Live-on-demo: confirm
 latency p99 < 1 s, zero ABORT_SIDE_MISMATCH. Only then discuss production.
+
+## Fee reserve, unbiased p_true, *PROT pad (2026-11-04)
+Checked against a pasted "complete the RFQ engine" spec. What held up and was built (`ev/kalshi_rfq_pricer.py`, `ev/kalshi_props.py`):
+* **Fee reserve 1.0 -> 0.5 x taker.** The fee PDF lists KXMVE combos at maker multiplier 2 on a 0.0175 base. The spec's "0% on uncorrelated NFL combos" is
+  consistent with the PDF (that row is excluded, default maker M = 0) but "uncorrelated" is undefined there, so the reserve is not zeroed (< 0.4c anyway).
+* **p_true is now the unbiased joint**: signed correlations (bounded -0.5..+0.75), no independence floor when a pair is negative, and NO sgp pair buffer
+  (it used to carry the buffer, so recorded `p_yes_true`, `ev` and the replay's `yes_price - p_true` understated the edge on same-game combos by up to 7.5c).
+  p_cons, which sets `no_bid`, is unchanged. Replay `p_true` figures from before this date are not comparable for same-game combos.
+  Effect on quoting is small: `ev >= edge` already held (p_cons >= p_true), so REJ_LOW_ROI was almost entirely the fee reserve.
+* **`*PROT` YES legs get `prot_yes_pad = 0.008`** (both p_true and p_cons; the last-look baseline `p_leg` stays unpadded). UNVALIDATED.
+Not built, and why:
+* `LastLookAndLiabilityGuard`: `RFQMaker._last_look` + `RFQRiskGate` already do hot-game, 1.5c adverse-move, staleness, and per-quote / per-game / per-player caps.
+* Same-player different-stat table (rho 0.16-0.22): the tape measured 0.70-0.76 (NFL rec yds x receptions, NBA points x threes); see "Correlations" above.
+* Game-market x player-prop rho (0.22 / 0.28 / 0.12): no measurement behind them, and legs carry no team, so "same-team RB" cannot be evaluated.
+  Those pairs stay on the 0.15 default.
+* Soccer in `kalshi_game_banked.py`: no banked soccer game-line feed exists; soccer legs still come from the live ParlayAPI path in `kalshi_game_legs.fetch_game_rows`.
+* `p_model_yes` on prop legs: needs a model P(over) at an arbitrary rung; only NBA points/rebounds/assists/threes/pra and NHL sog have c > 0 (`BLEND_C`).

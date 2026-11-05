@@ -126,7 +126,15 @@ class PricerConfig:
     sgp_default_rho: float = 0.15
     sgp_mc_draws: int = 100_000
     model_guard: float = 0.15               # |p_model - p_cons| above this => trust the market (winner's curse)
-    fee_mult: float = 1.0                   # reserve; the quote-creator fee schedule is not documented
+    # Fee reserve as a multiple of the 0.07 taker formula. Kalshi's fee schedule (kalshi-fee-schedule-2026-07-07.pdf) charges maker orders
+    # M x 0.0175 x C x P x (1-P) and lists KXMVE combos (excluding uncorrelated NFL combos) at maker multiplier 2 / taker 1, i.e. 0.035 =
+    # 0.5 x the taker formula. Assumes the quote creator pays the MAKER rate (the schedule does not say; the demo exchange does not charge) and
+    # does not zero the reserve for NFL cross-game combos (the schedule's "uncorrelated" is undefined and the reserve is < 0.4c there anyway).
+    fee_mult: float = 0.5
+    # P(yes | the protected twin did not void) is above the base series' P(over): a player who exits hurt after the first half settles a *PROT
+    # market at the pre-game fair price instead of NO. That only hurts the LAY on a YES leg (a NO leg is already the favourable side), so the pad
+    # goes on YES legs of *PROT tickers only. A flat add is the simplest bound for the small p of a longshot leg. UNVALIDATED.
+    prot_yes_pad: float = 0.008
 
 
 @dataclass(frozen=True)
@@ -146,6 +154,7 @@ class LegFairValue:
     updated_ts: float               # epoch seconds
     is_hot_scratch: bool = False
     p_true_yes: float | None = None  # blended truth; defaults to blend(p_cons, p_model) in __post_init__
+    protected: bool = False         # a <SERIES>PROT ticker (void-on-first-half-exit twin): see PricerConfig.prot_yes_pad
 
     def __post_init__(self):
         if self.p_true_yes is None:
@@ -367,13 +376,21 @@ def _reject(rfq_id: str, kind: str, reason: str, **notes) -> QuoteDecision:
     return QuoteDecision("REJECT", reason, rfq_id=rfq_id, kind=kind, notes=notes)
 
 
-def _pair_rho(a: LegFairValue, da: int, b: LegFairValue, db: int, cfg: PricerConfig) -> float:
-    base = SGP_CORR_TABLE.get(frozenset((a.stat, b.stat)), cfg.sgp_default_rho)
-    return max(0.0, base * da * db)
+SIGNED_RHO_BOUNDS = (-0.5, 0.75)
+
+
+def _pair_rho(a: LegFairValue, da: int, b: LegFairValue, db: int, cfg: PricerConfig, signed: bool = False) -> float:
+    """Pairwise copula rho. Default: floored at 0 (ignoring a negative correlation only overprices the lay: the safe side for p_cons).
+    signed=True keeps the sign (bounded) for the unbiased p_true."""
+    base = SGP_CORR_TABLE.get(frozenset((a.stat, b.stat)), cfg.sgp_default_rho) * da * db
+    if signed:
+        return min(SIGNED_RHO_BOUNDS[1], max(SIGNED_RHO_BOUNDS[0], base))
+    return max(0.0, base)
 
 
 def _copula_joint(ps: list[float], R: np.ndarray, draws: int) -> float:
-    """P(all events) under a Gaussian copula with correlation R (deterministic: fixed seed, common draws)."""
+    """P(all events) under a Gaussian copula with correlation R (deterministic: fixed seed, common draws). Never below independence,
+    unless R carries a negative correlation (only the unbiased p_true passes one): then the Monte Carlo value stands."""
     m = len(ps)
     w, v = np.linalg.eigh(R)
     w = np.clip(w, 1e-6, None)                                   # force PSD, then renormalise to unit diagonal
@@ -385,6 +402,8 @@ def _copula_joint(ps: list[float], R: np.ndarray, draws: int) -> float:
     nd = NormalDist()
     thr = np.array([nd.inv_cdf(min(max(p, 1e-6), 1 - 1e-6)) for p in ps])
     p_mc = float(np.mean(np.all(z <= thr, axis=1)))
+    if bool((R < -1e-12).any()):
+        return min(min(ps), p_mc)
     return min(min(ps), max(p_mc, float(np.prod(ps))))           # Frechet upper bound; never below independence
 
 
@@ -480,7 +499,7 @@ class KalshiRFQPricer:
             if len(players) != len(set(players)):
                 return _reject(rfq.rfq_id, "combo", REJ_SGP_SAME_PLAYER, **notes)
 
-        p_true = self._joint(groups, pad=0.0)
+        p_true = self._joint(groups, pad=0.0, conservative=False)
         p_cons = self._joint(groups, pad=cfg.leg_safety_pad)
         if p_cons > cfg.longshot_max_p:
             return _reject(rfq.rfq_id, "combo", REJ_COMBO_NOT_LONGSHOT, p_cons=round(p_cons, 4), **notes)
@@ -502,11 +521,19 @@ class KalshiRFQPricer:
         return QuoteDecision("QUOTE", "PLAN", rfq.rfq_id, "combo", 0.0, no_bid, p_true, p_cons, edge, ev, roi,
                              contracts, (contracts or 0.0) * no_bid, snaps, notes)
 
-    def _joint(self, groups: dict, pad: float) -> float:
-        """P(every leg wins). Independent across games; Gaussian copula + per-pair buffer inside a game."""
+    def _leg_p(self, fv: LegFairValue, side: str, p: float) -> float:
+        """A leg's win probability as priced into the joint: a YES leg on a *PROT ticker carries the void-asymmetry pad."""
+        return min(0.995, p + self.cfg.prot_yes_pad) if (fv.protected and side == "yes") else p
+
+    def _joint(self, groups: dict, pad: float, conservative: bool = True) -> float:
+        """P(every leg wins). Independent across games; Gaussian copula inside a game.
+
+        conservative=True (p_cons, which SETS the no_bid): correlations floored at 0 and the capped per-pair buffer added, so it is an upper
+        bound. conservative=False (p_true, used for EV / ROI and recorded as p_yes_true): signed correlations, no buffer, no
+        independence floor when a pair is negatively correlated: the unbiased estimate, so an anti-synergy parlay shows its real edge."""
         cfg, total = self.cfg, 1.0
         for g in groups.values():
-            ps = [min(0.99, p + pad) for _, _, p in g]
+            ps = [min(0.99, self._leg_p(fv, side, p) + pad) for fv, side, p in g]
             if len(g) == 1:
                 total *= ps[0]
                 continue
@@ -515,10 +542,12 @@ class KalshiRFQPricer:
             R = np.eye(m)
             for i in range(m):
                 for j in range(i + 1, m):
-                    R[i, j] = R[j, i] = _pair_rho(g[i][0], dirs[i], g[j][0], dirs[j], cfg)
-            pairs = m * (m - 1) // 2
+                    R[i, j] = R[j, i] = _pair_rho(g[i][0], dirs[i], g[j][0], dirs[j], cfg, signed=not conservative)
             pj = _copula_joint(ps, R, cfg.sgp_mc_draws)
-            total *= min(min(ps), pj + min(cfg.sgp_buffer_cap, cfg.sgp_pair_buffer * pairs))
+            if conservative:
+                pairs = m * (m - 1) // 2
+                pj = min(min(ps), pj + min(cfg.sgp_buffer_cap, cfg.sgp_pair_buffer * pairs))
+            total *= pj
         return total
 
 

@@ -346,16 +346,18 @@ def test_same_game_combo_adds_positive_correlation_and_buffer():
     d = KalshiRFQPricer(same_game_book(), cfg).price(combo_rfq(["P", "R", "X"]), NOW)
     assert d.quoted and d.notes["same_game"]
     independent = 0.5 * 0.5 * 0.5
-    assert d.p_yes_true > independent + 0.025                              # copula lift + pair buffer
+    assert d.p_yes_true > independent                                      # copula lift (p_true carries no pair buffer)
     assert d.p_yes_true <= 0.5 * 0.5                                       # Frechet: never above the weakest pair
+    assert d.p_yes_cons > independent + 0.025                              # copula lift + pair buffer + leg pad
     assert d.p_yes_cons > d.p_yes_true
 
 
-def test_same_game_negative_table_correlation_is_clamped_to_zero():
+def test_same_game_negative_table_correlation_is_clamped_to_zero_for_p_cons_only():
     b = book_of(mk_leg("R", GK, "rb", stat="rush_yds"), mk_leg("P", GK, "qb", stat="pass_yds"),
                 mk_leg("X", "nfl:2026-10-25:A9@B9", "zz"))
     d = KalshiRFQPricer(b, PricerConfig(allow_same_game_combos=True)).price(combo_rfq(["R", "P", "X"]), NOW)
-    assert d.p_yes_true >= (0.5 * 0.5 + 0.025) * 0.5 - 1e-9                # rho clamped to 0: independence + pair buffer, never below
+    assert d.p_yes_cons >= (0.5 * 0.5 + 0.025) * 0.5 - 1e-9                # rho clamped to 0: independence + pair buffer, never below
+    assert d.p_yes_true < 0.5 * 0.5 * 0.5                                  # p_true keeps the realized -0.14: below independence
 
 
 def test_same_player_in_one_game_rejected():
@@ -1251,3 +1253,63 @@ def test_sgp_corr_table_holds_empirical_different_player_estimates():
     assert _pair_rho(a, 1, b, 1, PricerConfig()) == pytest.approx(0.04)                    # same-stat pair uses the one-element key
     assert _pair_rho(a, 1, mk_leg("C", stat="unmapped_stat", player="p3"), 1, PricerConfig()) == PricerConfig().sgp_default_rho
     assert _pair_rho(mk_leg("D", stat="rush_yds"), 1, mk_leg("E", stat="pass_yds", player="p4"), 1, PricerConfig()) == 0.0   # negative clamped
+
+
+# ------------------------------------------------------------------ fee reserve, unbiased p_true, *PROT pad (2026-11-04)
+def test_fee_reserve_defaults_to_the_documented_combo_maker_rate():
+    """kalshi-fee-schedule-2026-07-07.pdf: KXMVE combos maker multiplier 2 x 0.0175 = 0.035 = 0.5 x the 0.07 taker formula."""
+    from mlb.execution.kalshi.fees import taker_fee
+    assert PricerConfig().fee_mult == 0.5
+    d = KalshiRFQPricer(book_of(*three_cross_game(0.4)), PricerConfig()).price(combo_rfq(["T1", "T2", "T3"]), NOW)
+    assert d.quoted and d.notes["fee_reserve"] == pytest.approx(taker_fee(d.no_bid, 100, 0.5) / 100.0, abs=1e-5)
+
+
+def _same_game_pair(stat, p, **kw):
+    a, b = mk_leg("A", stat=stat, p=p, player="p1", **kw), mk_leg("B", stat=stat, p=p, player="p2", **kw)
+    return KalshiRFQPricer(book_of(a, b), PricerConfig(allow_same_game_combos=True)).price(combo_rfq(["A", "B"]), NOW)
+
+
+def test_p_true_keeps_a_negative_correlation_while_p_cons_stays_an_upper_bound():
+    """Two teammates' rush yards (realized rho -0.14): the unbiased joint sits BELOW independence, p_cons above it."""
+    d = _same_game_pair("rush_yds", 0.30)
+    assert d.p_yes_true < 0.30 * 0.30 < d.p_yes_cons
+    assert d.p_yes_cons >= 0.30 * 0.30 + PricerConfig().sgp_pair_buffer          # the pair buffer + leg pad stay on the price-setting side
+
+
+def test_p_true_carries_no_sgp_buffer_and_never_exceeds_p_cons():
+    d = _same_game_pair("unmapped_stat", 0.30)                                    # default rho 0.15
+    cfg = PricerConfig()
+    assert 0.30 * 0.30 <= d.p_yes_true < d.p_yes_cons
+    assert d.p_yes_cons - d.p_yes_true >= cfg.sgp_pair_buffer                     # p_true used to include the buffer, hiding the edge
+
+
+def test_signed_pair_rho_keeps_the_sign_and_bounds_it():
+    from ev.kalshi_rfq_pricer import _pair_rho
+    cfg = PricerConfig()
+    d, e = mk_leg("D", stat="rush_yds"), mk_leg("E", stat="pass_yds", player="p4")
+    assert _pair_rho(d, 1, e, 1, cfg, signed=True) == pytest.approx(-0.14)
+    assert _pair_rho(d, 1, e, -1, cfg, signed=True) == pytest.approx(0.14)         # a NO leg flips the sign
+    assert _pair_rho(d, 1, e, 1, cfg) == 0.0                                       # the default stays floored
+
+
+def test_protected_series_are_flagged_by_the_parser():
+    from ev.kalshi_props import parse_prop_ticker
+    assert parse_prop_ticker("KXNFLRECYDSPROT-26OCT25BUFKC-BUFJSMITH12-50").protected is True
+    assert parse_prop_ticker("KXNFLRECYDS-26OCT25BUFKC-BUFJSMITH12-50").protected is False
+
+
+def test_prot_pad_goes_on_yes_legs_only():
+    cfg = PricerConfig()
+    tickers = ["T1", "T2", "T3"]
+
+    def run(protected, sides):
+        legs = three_cross_game(0.3)
+        legs[0] = mk_leg("T1", legs[0].game_key, "p1", p=0.3, protected=protected)
+        return KalshiRFQPricer(book_of(*legs), cfg).price(combo_rfq(tickers, sides=sides), NOW)
+
+    plain, prot = run(False, None), run(True, None)
+    assert prot.p_yes_cons - plain.p_yes_cons == pytest.approx(cfg.prot_yes_pad * 0.308 * 0.308, rel=0.05)   # pad lifts the one leg's p
+    assert prot.p_yes_true > plain.p_yes_true and prot.no_bid <= plain.no_bid
+    no_side_plain, no_side_prot = run(False, ["no", "yes", "yes"]), run(True, ["no", "yes", "yes"])
+    assert no_side_prot.p_yes_cons == pytest.approx(no_side_plain.p_yes_cons)       # a NO leg is already the favourable side
+    assert prot.legs[0]["p_leg"] == plain.legs[0]["p_leg"]                          # the last-look baseline stays unpadded
