@@ -60,6 +60,7 @@ def _daily_projections_never_reach_gcs(monkeypatch):
     monkeypatch.setattr(dp, "_run_soccer_game_predictions", no_soccer_predictions)
     monkeypatch.setattr(dp, "_load_nba_spreads", lambda now: {})
     monkeypatch.setattr(dp, "_load_nba_tracking", lambda now: None)
+    monkeypatch.setattr(dp, "_nhl_lineup_context", lambda team, player, start: {"pp_unit": None, "lineup_status": None})
     yield
 
 
@@ -75,4 +76,14 @@ def _nfl_sweep_ledger_never_reaches_gcs(request, monkeypatch):
     from nba.odds.credit_ledger import Allowance
     monkeypatch.setattr(sw, "_ledger_allowance", lambda pc, want, today: Allowance(True, want, "test"))
     monkeypatch.setattr(sw, "_ledger_record", lambda today, n: None)
+    yield
+
+
+@pytest.fixture(autouse=True)
+def _nhl_game_run_never_fetches_rotowire(monkeypatch):
+    """nhl.game.run_daily reads the confirmed-goalie cache (a storage read). Tests never touch storage: default is 'nothing
+    confirmed'. A test of the wiring monkeypatches run_daily.cached_confirmed_goalies itself."""
+    rd = sys.modules.get("nhl.game.run_daily")
+    if rd is not None:
+        monkeypatch.setattr(rd, "cached_confirmed_goalies", lambda date_str, now=None: {})
     yield

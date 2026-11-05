@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
@@ -31,6 +32,7 @@ from mlb_core.odds.utils import american_to_decimal, american_to_implied_prob, d
 from nhl.config import GAMES_MASTER, GOALIE_BOX_MASTER, TEAM_BOX_MASTER, team_abbrev
 from nba.game import odds_feed
 from nhl.game.features import FeatureStore, MatchupFeatures, build_team_game_stats_from_raw
+from nhl.data.rotowire_lineups import cached_confirmed_goalies
 from nhl.game.goalie_model import GoalieTracker, build_goalie_tracker_from_df
 from nhl.game.kalman_ratings import KalmanTeamTracker
 from nhl.game.matrix_pricer import DistributionalNHLMatrixEngine, PricedGame, PricedMarket
@@ -289,6 +291,13 @@ def run_nhl_game_predictions(
     odds_meta["events_loaded"] = n_loaded
     odds_meta["events_for_day"] = len(target_events)
 
+    # RotoWire-confirmed starters from the cache the nhl-lineups-refresh job writes (no network here; fail-open to {}).
+    # Off with NHL_ROTOWIRE_GOALIES=0.
+    confirmed_by_team: Dict[str, str] = {}
+    if os.environ.get("NHL_ROTOWIRE_GOALIES", "1") != "0":
+        confirmed_by_team = cached_confirmed_goalies(date_str)
+        odds_meta["confirmed_goalies"] = len(confirmed_by_team)
+
     priced_games: List[PricedGame] = []
     board_rows: List[Dict[str, Any]] = []
     games_meta: List[Dict[str, Any]] = []
@@ -304,8 +313,8 @@ def run_nhl_game_predictions(
         gk = f"nhl:{date_str}:{a_code}@{h_code}"
 
         # Goalie projections
-        h_proj = goalie_tracker.project_team_goalie(h_code, date_str)
-        a_proj = goalie_tracker.project_team_goalie(a_code, date_str)
+        h_proj = _project_goalie(goalie_tracker, h_code, date_str, confirmed_by_team.get(h_code))
+        a_proj = _project_goalie(goalie_tracker, a_code, date_str, confirmed_by_team.get(a_code))
 
         matchup = feature_store.build_matchup_features(
             home=h_code,
@@ -340,6 +349,8 @@ def run_nhl_game_predictions(
             "exp_total": pg.exp_total,
             "home_goalie": h_proj.starter_name,
             "away_goalie": a_proj.starter_name,
+            "home_goalie_confirmed": h_proj.is_confirmed,
+            "away_goalie_confirmed": a_proj.is_confirmed,
             "is_b2b_road": matchup.fatigue.is_b2b_road,
         })
 
@@ -443,6 +454,16 @@ def get_nhl_game_predictions(
         except Exception as exc:
             log.warning("Could not parse %s: %s", OUT_KEY, exc)
     return run_nhl_game_predictions(target_date=date, write_gcs=False)
+
+
+def _project_goalie(tracker: GoalieTracker, team: str, date_str: str, confirmed_name: Optional[str]):
+    """Confirmed starter when the lineup page named one; otherwise the tracker's inferred starter."""
+    if not confirmed_name:
+        return tracker.project_team_goalie(team, date_str)
+    gid = tracker.resolve_goalie_id(team, confirmed_name)
+    if gid is None:
+        log.info("confirmed goalie %s (%s) has no history here; priced at league-average GSAx", confirmed_name, team)
+    return tracker.project_team_goalie(team, date_str, confirmed_starter_id=gid, confirmed_starter_name=confirmed_name)
 
 
 def main() -> None:

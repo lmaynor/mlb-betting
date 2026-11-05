@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import logging
 import math
+import re
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -198,6 +200,27 @@ class GoalieTracker:
         backup = (sorted_goalies[1][0], names[sorted_goalies[1][0]]) if len(sorted_goalies) > 1 else None
 
         return starter, backup
+
+    def resolve_goalie_id(self, team: str, name: str) -> Optional[str]:
+        """Map a name from an external lineup page ('Samuel Ersson', 'S. Ersson') to a goalie id seen for this team,
+        else None. Full-name match first, then surname + first initial; an ambiguous match returns None."""
+        def norm(x: str) -> str:
+            x = unicodedata.normalize("NFKD", x or "").encode("ascii", "ignore").decode().lower()
+            return re.sub(r"[^a-z ]", "", x.replace("-", " ")).strip()
+
+        t_code = team_abbrev(team) or str(team).upper()
+        seen: Dict[str, str] = {}
+        for _, _, gid, gname in self.team_starts.get(t_code, []):
+            seen[gid] = gname
+        want = norm(name).split()
+        if not want:
+            return None
+        full = [g for g, n in seen.items() if norm(n).split() == want]
+        if len(full) == 1:
+            return full[0]
+        loose = [g for g, n in seen.items()
+                 if norm(n).split()[-1:] == want[-1:] and norm(n)[:1] == want[0][:1]]
+        return loose[0] if len(loose) == 1 else None
 
     def project_team_goalie(
         self,

@@ -1514,8 +1514,27 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
         "validated": False, "engine": engine, **extra,
         **({"nba_model": NBA_MODEL} if nb is not None else {}),
     }
+    if sport == "nhl":
+        # RotoWire power-play unit / lineup status for the day: DISPLAY ONLY (no history to validate a PP multiplier against).
+        row.update(_nhl_lineup_context(team, player, start))
     row["pick_tier"] = pick_tier(row)
     return row
+
+
+_LINEUP_MEMO: dict = {}
+
+
+def _nhl_lineup_context(team, player, start) -> dict:
+    """{'pp_unit', 'lineup_status'} from the RotoWire cache for a game starting today (ET); Nones otherwise. Never raises."""
+    try:
+        from nhl.data import rotowire_lineups as rl
+        day = (start.astimezone(ZoneInfo("America/New_York")) if start else datetime.now(ZoneInfo("America/New_York"))).date().isoformat()
+        key = (day, int(time.time() // 60))                      # one storage read per minute, not one per row
+        if _LINEUP_MEMO.get("key") != key:
+            _LINEUP_MEMO.update(key=key, data=rl.cached_lineups(day))
+        return rl.player_context(_LINEUP_MEMO["data"], team, player)
+    except Exception:                                                                  # noqa: BLE001
+        return {"pp_unit": None, "lineup_status": None}
 
 
 def pick_tier(row: dict) -> str | None:
