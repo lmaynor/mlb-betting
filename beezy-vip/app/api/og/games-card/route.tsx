@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 import { OgBrandBadge, type OgPick } from "@/lib/og-brand";
+import { limitRows } from "@/lib/access";
 import { DISCORD_INVITE_LABEL } from "@/lib/links";
 export const runtime = "edge";
 
@@ -74,10 +75,15 @@ export async function GET() {
   const sd = await sr.json();
   const all: OgPick[] = Array.isArray(pd) ? pd : pd.picks ?? [];
 
-  // Game picks: F5 and NRFI only, kelly triggered, top 4 by edge
-  const picks = all
-    .filter(p => p.kelly_triggered && ["F5","NRFI","F1H","GAME"].includes(p.system))
-    .sort((a,b) => Number(b.edge) - Number(a.edge))
+  // Game picks: F5 and NRFI only, kelly triggered, top 4 by edge.
+  // Game picks are a paid set with no free rows (FREE_PREVIEW_ROWS.game_picks = 0 in lib/access.ts) and this image is
+  // public, so the selection goes through the same preview cut the picks surfaces apply, for a public viewer: while
+  // tier gating is on the card carries none of today's game picks (see the same invariant in picks-card/route.tsx);
+  // with gating off the cut is a pass-through and the card shows the top 4 as before.
+  const gamePicks = all.filter(p => p.kelly_triggered && ["F5","NRFI","F1H","GAME"].includes(p.system));
+  const picks = limitRows(gamePicks, { tier: "public", sport: null }, "game_picks", "mlb", r => Number(r.edge))
+    .rows
+    .sort((a, b) => Number(b.edge) - Number(a.edge))
     .slice(0, 4);
 
   const ov = sd?.overall ?? {};

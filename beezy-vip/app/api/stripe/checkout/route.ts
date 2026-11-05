@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe                        from 'stripe'
-import { currentUser }               from '@clerk/nextjs/server'
+import { clerkClient, currentUser }  from '@clerk/nextjs/server'
 import { getUserId }                 from '@/lib/auth'
 import { isLeague, priceIdFor }      from '@/lib/tiers'
 
@@ -35,21 +35,45 @@ export async function POST(req: NextRequest) {
   const email    = user?.emailAddresses[0]?.emailAddress
   const base     = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://beezy.fyi'
 
-  // Reuse existing Stripe customer if they have one
-  const existingCustomerId = user?.privateMetadata?.stripeCustomerId as string | undefined
-
   const stripe = getStripe()
+
+  // One user, one Stripe customer: when none is bound yet, create it and persist the binding BEFORE the session,
+  // so concurrent checkouts (double-submit, two devices, a retry before checkout.session.completed lands) converge
+  // on this customer instead of splitting across customer_email duplicates that orphan the first subscription.
+  let customerId = user?.privateMetadata?.stripeCustomerId as string | undefined
+  if (!customerId) {
+    const customer = await stripe.customers.create({
+      email,
+      metadata: { clerkUserId: userId },
+    })
+    customerId = customer.id
+    const clerk = await clerkClient()
+    await clerk.users.updateUserMetadata(userId, {
+      privateMetadata: { stripeCustomerId: customerId },
+    })
+  }
+
+  // One entitling subscription per user: a second completed checkout would double-bill and leave a subscription
+  // the billing portal cannot reach, so refuse here and point at the portal instead.
+  const existing = await stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 10 })
+  if (existing.data.some(s => s.status === 'active' || s.status === 'trialing')) {
+    return NextResponse.json({ error: 'Already subscribed', portal: '/api/stripe/portal' }, { status: 409 })
+  }
+
   const session = await stripe.checkout.sessions.create({
     mode:               'subscription',
     line_items:         [{ price: priceId, quantity: 1 }],
-    customer:           existingCustomerId,
-    customer_email:     existingCustomerId ? undefined : email,
+    customer:           customerId,
     success_url:        `${base}/dashboard/picks?checkout=success`,
     cancel_url:         `${base}/pricing`,
     metadata:           { clerkUserId: userId, priceId, tier: tier as string, ...sportMeta },
     subscription_data:  { metadata: { clerkUserId: userId, tier: tier as string, ...sportMeta } },
     allow_promotion_codes: true,
-  })
+  // The key carries the sport and a 5-minute bucket: Stripe pins an idempotency key to its first payload for 24h,
+  // so a sport-less key makes a single_sport sport switch (same priceId, different sport metadata) a 400
+  // IdempotencyError, and a bare retry hours later replays the stale first session. The bucket still collapses
+  // double-clicks, two-tab races, and network retries inside the window.
+  }, { idempotencyKey: `checkout:${userId}:${priceId}:${sport ?? 'all'}:${Math.floor(Date.now() / 300_000)}` })
 
   return NextResponse.json({ url: session.url })
 }

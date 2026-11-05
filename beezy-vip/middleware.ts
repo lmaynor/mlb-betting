@@ -83,7 +83,10 @@ export const config = {
     // surface is excluded: the ISR pages below and the /api routes that never read the viewer. Pages and routes that call
     // getViewer()/getUserTier()/auth(), and anything under the geo-gated /picks, /dashboard and /signup paths, must stay
     // matched. Keep this list in step with the `revalidate` pages.
-    '/((?!_next|api/(?:og|stats|sparkline|slate|analytics|edge-enrich|tools)(?:/|$)|results$|analytics$|tools$|models(?:/|$)|$|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|txt|xml)).*)',
-    '/(api(?!/(?:og|stats|sparkline|slate|analytics|edge-enrich|tools)(?:/|$))|trpc)(.*)',
+    // /api/slate/* and /api/stats/clv are NOT excluded: they are the data plane of the login-gated /tools pages and
+    // their handlers check the session with getUserId(), which only resolves when clerkMiddleware runs. The rest of
+    // /api/stats (the summary proxies) stays excluded: it serves public season aggregates and never reads the viewer.
+    '/((?!_next|api/(?:og|stats(?!/clv(?:/|$))|sparkline|analytics|edge-enrich|tools)(?:/|$)|results$|analytics$|tools$|models(?:/|$)|$|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|txt|xml)).*)',
+    '/(api(?!/(?:og|stats(?!/clv(?:/|$))|sparkline|analytics|edge-enrich|tools)(?:/|$))|trpc)(.*)',
   ],
 }
