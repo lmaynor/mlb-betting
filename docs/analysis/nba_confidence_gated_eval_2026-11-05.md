@@ -61,7 +61,7 @@ Minimum detectable log-loss gain: ungated 0.012-0.013, gated 0.014-0.065 nats pe
 | 2023-12-01 | 5,005 | 0 | 3,810 |
 | 2025-12-01 | 7,671 | 0 | 1,144 |
 
-**No leak.** Injected-leak unit test (an oracle reading the game's own final margin) is caught. Results: `nba_confidence_gated_eval_2026-11-05/garble_results.json` (generated before the identifier rename `engine` -> `nba_engine`, which changed no behaviour; the unit-level garble tests were re-run on this branch).
+**No leak.** Injected-leak unit test (an oracle reading the game's own final margin) is caught. Results: `nba_confidence_gated_eval_2026-11-05/garble_results.json` (re-run from this branch's own code after the `engine` -> `nba_engine` rename: identical counts).
 
 ## Limits
 - The replay passes no tip times (8,865 games used the UTC master date, so rest / back-to-back are approximate) and no injury report; not the engine as the live board runs it.
