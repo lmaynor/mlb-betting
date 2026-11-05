@@ -45,6 +45,6 @@ power-play goal), so do not simplify it. The power-play share of all NHL points 
 ## Still not available (so not modelled)
 
 Power-play TOI, PP1 vs PP2 unit deployment and even-strength / power-play shot splits: the boxscore has total TOI only.
-They would need the shift-chart endpoint. `pp_points` therefore uses trailing PP points shrunk to a position prior, not a
+They would need the shift-chart endpoint (built 2026-11-05: `nhl/data/toi_splits.py`, see `nhl-shiftcharts-and-official-toi-split.md`; the NHL also publishes EV/PP/SH TOI per game). `pp_points` therefore uses trailing PP points shrunk to a position prior, not a
 PP-TOI-share model. BettingPros has no PP-points market in this repo's catalog (`bettingpros_props.SPORTS["NHL"]`), so the
 live feed for it is ParlayAPI's `player_power_play_points` only, and only when a sweep pulls that market.

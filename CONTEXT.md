@@ -4324,6 +4324,17 @@ are PAUSED by the user's decision, so the alerts sweep idles until banking is re
   `EVSweep/nhl_props/trained_latest.json`, board flag `NHL_TRAINED_PROPS` (default OFF, NOT flipped). DEPLOYED 2026-11-02 as SHADOW jobs only (image built from clean `origin/main`: dedicated `mlb-betting-nhl-trained:nhl-12798aa`, no shared tag touched),
   bundle published from inside it, jobs `nhl-trained-{train,score}` + `nhl-paper-{snapshot,settle}` with schedulers (`deploy/setup_nhl_trained_jobs.sh`); measured ~2.2 GB / 3-4 min. Forward paper-tracking
   `python -m nhl.props.paper_track report`. Flip criteria in the analysis doc. Only saves has positive ROI (regime-dependent, UNDETERMINED); skater markets carry information but not money.
+- **NHL skater TOI splits (2026-11-05, branch `feat/nhl-shift-toi-splits`, code + tests only, NOT deployed; local output, nothing written to GCS):**
+  `nhl/data/toi_splits.py` builds per-(game, player) `toi_ev / toi_ev5 / toi_pp / toi_pk`, `pp_share` and a `pp_unit_guess` (1 / 2 / 0) from the shift chart
+  (`api.nhle.com/stats/rest/en/shiftcharts`, 1 request per game; play-by-play from the `NHL/raw/pbp` mirror via `--pbp-from-gcs`): per-second effective skater
+  counts (same pulled-goalie rule as `powerplay.py`), pinned to the pbp strength between events that agree. Resumable, raw cache under gitignored `data/nhl_toi_cache/`,
+  output `data/nhl_toi_splits/`, `--write-gcs` is the only bucket write (NOT run). Validated on 64 real games: split sums vs box TOI exact on 99.74% of rows (0.26% off,
+  3 of 64 games), within 5 s of the NHL's own published EV/PP/SH split on 99.7-100%; PP1/PP2 is a guess with no ground truth (5-man first unit in ~80% of team-games).
+  The NHL PUBLISHES the split directly (`skater/timeonice?isGame=true`, 10,000-row cap, date windows; ~150 requests for 2019-2026) -- see
+  `docs/solutions/integration-issues/nhl-shiftcharts-and-official-toi-split.md` (also: duplicate shift rows flip a game's PP/PK split). Full shift backfill = ~9,400 requests, ~3 h.
+  `nhl/props/toi_feat.py` (prior-only rolling features, leakage-tested) + `nhl/props/eval_toi_splits.py` (paired walk-forward, game-clustered SE, seed-noise control).
+  Result (210,122 skater-games 2022-26, XGBoost research models, accuracy only): goals and SOG NO measurable gain; assists/points +0.0004/+0.0006 nats per row (z 4.7/6.3,
+  5/5 seasons, MAE -0.1%) -- real but tiny, on shadow models, NOT the served hierarchical engine. Features stay OFF, serving engine untouched; `docs/analysis/nhl_toi_splits_2026-11-05.md`.
 
 ---
 
