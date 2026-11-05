@@ -68,3 +68,6 @@ AuxData/
 # Kalshi RFQ shadow tape (scripts/kalshi_rfq_daemon.py --mode record)
 data/kalshi_rfq/
 EV_Alerts/
+
+# Generated props market-residual raw results (summary tables stay committed)
+docs/analysis/props_market_residual_*_results.json
