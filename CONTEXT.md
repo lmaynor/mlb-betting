@@ -4238,6 +4238,37 @@ backbone. Full detail in `nfl/README.md`.
     (rush yds: 100.5 lighter, 120.5+ heavier), so the "Normal underprices 80+/100+ rungs" claim holds for deep tails and for high-variance
     receivers, not uniformly. Live path has no red-zone split in the game logs: vacated touches stand in for it.
 
+- **2026-11-05 drive-level Markov-chain Monte Carlo NFL game simulator (branch `feat/nfl-drive-simulator`; research tooling `nfl/sim/`, NOT wired into serving, OFF,
+  nothing deployed / provisioned / written to GCS).** One simulated joint game -> team totals, spread cover and every player prop from the SAME draws
+  (`nfl/sim/derive.py`: `team_markets`, `prop_prob`, `joint_over`). Full write-up and tables: `docs/analysis/nfl_drive_simulator_2026-11-05.md`.
+  - **Code:** `pbp_prep` (pbp -> play / drive tables, clock x score buckets), `script_state` (MEASURES the score-state response), `fit` (walk-forward MLE / empirical
+    fit from pbp of seasons < the evaluated one: play-call logit with 81 clock x score cells, 4th-down softmax, FG logistic, per-cell sack / int / completion
+    frequencies, right-censored Kaplan-Meier yard pools, clock and field-position pools), `ratings` (as-of team deltas + usage shares), `engine` (vectorised
+    simulator, regulation only), `evaluate` (`run` / `report` / `league` / `leakage` CLIs). Tests: `tests/test_nfl_sim.py` (22, offline).
+    `engine_eval.replay_hierarchical` rows now carry `player_id` / `game_id` / `team` (additive).
+  - **Measured premise** (pbp 2018-2025): trailing teams do pass more, but it is a SECOND-HALF, clock-dependent effect (first half down 1-8 vs up 1-8: +1.0%, CI
+    -0.4..+2.5; second half +29.5%; Q4 +58%; last 10 minutes +86%; down 9+ in Q4 +137%); the paper's "12-16%" is the all-plays average (+13.4%). The engine carries the
+    fitted surface and reproduces pass share by script class within ~1 point.
+  - **Verdict: leave OFF.** Held-out 2024-26 (wks 1-8), paired with the serving EWM engine on the same player-games: WORSE on pass attempts (log score -0.345, z -6.4),
+    completions (-0.322, z -5.9), rush attempts, receptions; no clear difference on pass yds / pass TDs / interceptions; better log score on rec_yds (+0.173, z +19) but that
+    is a distribution-shape effect the hierarchical engine gets identically (sim minus hierarchical +0.004, z +0.4; MAE / Brier no better) and on rush_yds (+0.048, MAE
+    worse); `anytime_td` clears the repo accuracy bar vs serving AND hierarchical (+0.018, z +3.9, Brier z +2.3, 3/3 held-out and 5/5 replayed seasons) but there is no
+    real-line check and its mean is not more accurate, so it is a CANDIDATE only. Joint structure is excellent: QB pass yds vs top receiver yds corr +0.46 simulated vs +0.46
+    empirical, team pass vs rush attempts -0.31 vs -0.37, total vs margin 0.00 vs +0.01. Game level it is NOT a pricing engine: total MAE 10.61 vs closing line 10.24, cover
+    Brier worse than a coin flip, and it under-produces key margins (|3|: 7.5% vs 11.7% realised; (3, 6, 7, 10, 14) together 28.4% vs 33.8%) because there is no
+    end-game strategy. Anchoring each offence to closing-line implied totals (`--anchor lines`) matches the line by construction, adds rec_yds to ADOPT-by-rule and
+    strengthens anytime TD (z +5.3) but leaves volume WORSE.
+  - **Gotchas learned:** (1) a plain pool of play yards understates TDs at every field position (a TD play's yards are CAPPED at the distance to goal) -- the pools are
+    right-censored (Kaplan-Meier) and capped at the current yardline in the engine; (2) taking the active skill players from `player_stats` rows of the game itself is a
+    LOOKAHEAD (rows exist only if a stat was recorded) -- it halves pass-yds MAE (67.6 -> 58.2) and is kept only as `--active oracle`; the as-of set is recent appearances minus
+    injury-report Out / Doubtful; (3) per-appearance usage with positional priors lets backups swamp the QB and starters' share (QB attempts split 64/36); usage is per team
+    game with availability, QB share cubed with a floor, role-holders at per-appearance usage; (4) a simulator fitted on 2018..S-1 under-scores a league that drifted (2024-25
+    +9% points): the as-of league calibration (points and plays per team-game of games already played) is required; (5) the held-out seasons were seen while debugging (2 structural
+    fixes above), so 2024-26 is not a clean confirmation.
+  - **Leakage:** `python -m nfl.sim.evaluate leakage --season 2024 --week 9` permutes every outcome from week 9 on and re-simulates week 9: draws bit-identical (3/3 games);
+    the same permutation one week earlier changes them (3/3), so the test has power.
+  - **Not verified:** any price / CLV / SGP price, overtime, late-game strategy, penalties, weather, rookies / traded players, 2026 beyond week 8.
+
 ---
 
 ## 21. Multi-sport infrastructure (NHL / NBA) -- 2026-10-14
