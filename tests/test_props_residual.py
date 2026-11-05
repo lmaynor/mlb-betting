@@ -157,6 +157,12 @@ def test_a_planted_residual_is_found_and_the_slope_is_near_one():
     res = R.evaluate(te, preds, n_boot=60)
     assert res["models"]["p_ridge"]["logloss"]["z"] < -4
     assert "p_auto" in res["models"]
+    g = res["models"]["p_ridge"]["roi"]["best"]["ge2"]
+    assert g["matched"]["market"]["n"] == g["n"] and g["matched"]["calibration"]["n"] == g["n"]   # same number of bets
+    v = R.verdict(res, "p_ridge")
+    assert set(v["checks"]) == {"logloss_z_vs_market", "logloss_z_vs_calibration", "slope_t", "roi_beats_matched_line_shopping_control"}
+    assert v["checks"]["logloss_z_vs_market"] and v["checks"]["logloss_z_vs_calibration"] and v["checks"]["slope_t"]
+    assert set(res["blind"]) == {"always_under", "always_over"}
 
 
 # ------------------------------------------------------------------------------------------------------- ROI / control

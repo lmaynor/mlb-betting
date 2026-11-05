@@ -41,10 +41,13 @@ from mlb_core.odds.utils import american_to_decimal
 CLIP = (0.005, 0.995)
 EDGE_BUCKETS = ((0.02, 0.04), (0.04, 0.06), (0.06, 0.08), (0.08, 9.0))
 SHARP_BOOKS = {"novig": "p_novig", "prophetx": "p_prophetx", "pinnacle": "p_pinnacle"}
-# Pre-registered bars (fixed before the held-out season was scored). A residual "beats the market" only when ALL hold on the
-# held-out season: paired log-loss z <= BARS['z_logloss'] (date-clustered), the residual-calibration slope is positive with
-# t >= BARS['t_slope'], and the best-price ROI EXCESS over market-expected ROI at >= 2% edge has a clustered CI above 0.
-BARS = {"z_logloss": -2.58, "t_slope": 2.0}
+# Bars (set after the development folds were seen and BEFORE the held-out season was scored). A residual "beats the market" only
+# when ALL hold on the held-out season: (1) paired log loss vs the market has date-clustered z <= z_logloss; (2) it also beats the
+# CALIBRATION-ONLY model (per-stat intercept + slope on logit(p_mkt), i.e. just undoing the market's own level bias) at
+# z <= z_vs_calib, so the gain is information and not recalibration; (3) the residual-calibration slope is positive with
+# t >= t_slope; (4) at the BEST price, edge >= 2%, the model's bets earn more than the no-model line-shopping control of the SAME
+# number of bets (top-K by market edge alone) with a date-clustered CI of the paired difference above 0.
+BARS = {"z_logloss": -2.58, "z_vs_calib": -1.96, "t_slope": 2.0}
 K_SHRINK = 10.0                  # games of prior-season mean the season average is shrunk toward
 FEATURES = ["eng_gap", "z_eng", "z_season", "z_l10", "z_l5", "line_move_z", "open_shift", "has_open", "log_nb", "disp",
             "hold", "m", "min_ratio"]
@@ -367,6 +370,23 @@ def predict_blend_c(mdl, test: pd.DataFrame, xte: pd.DataFrame) -> np.ndarray:
     return sigmoid(logit(test["p_mkt"]) + mdl.margin(X))
 
 
+def _ab_design(t: pd.DataFrame, x: pd.DataFrame, stat_list: list) -> np.ndarray:
+    dummies = np.column_stack([(t["stat"].to_numpy() == s).astype(float) for s in stat_list])
+    return np.column_stack([dummies, dummies * x["m"].to_numpy(float)[:, None]])
+
+
+def fit_calibration(train: pd.DataFrame, xtr: pd.DataFrame, stat_list: list):
+    """CALIBRATION-ONLY comparison: a per-stat intercept and a per-stat slope on logit(p_mkt), no other input. How much of any gain
+    is just undoing the market's own level / slope bias (the earlier (a, b) refit) rather than information."""
+    mdl = OffsetRidge(np.full(2 * len(stat_list), 10.0)).fit(_ab_design(train, xtr, stat_list), train["over"].to_numpy(float), logit(train["p_mkt"]))
+    mdl.stat_list = stat_list
+    return mdl
+
+
+def predict_calibration(mdl, test: pd.DataFrame, xte: pd.DataFrame) -> np.ndarray:
+    return sigmoid(logit(test["p_mkt"]) + mdl.margin(_ab_design(test, xte, mdl.stat_list)))
+
+
 def _gbdt_matrix(x: pd.DataFrame, stats: pd.Series, stat_list: list) -> np.ndarray:
     return np.column_stack([x[FEATURES].to_numpy(float)] + [(stats.to_numpy() == s).astype(float) for s in stat_list])
 
@@ -389,7 +409,7 @@ def predict_gbdt(mdl, test: pd.DataFrame, xte: pd.DataFrame) -> np.ndarray:
     return np.clip(mdl["bst"].predict(dm), *CLIP)
 
 
-RIDGE_GRID = [(lm, ls) for lm in (100.0, 1000.0, 10000.0) for ls in (1000.0, 30000.0)]
+RIDGE_GRID = [(lm, ls) for lm in (1e4, 1e5, 1e6) for ls in (300.0, 3000.0, 30000.0, 300000.0)]   # 1e6 / 3e5 ~ "the market"
 GBDT_GRID = [(d, r) for d in (1, 2) for r in (60, 200, 500)]
 
 
@@ -421,6 +441,7 @@ def fit_predict_fold(train: pd.DataFrame, test: pd.DataFrame, stat_list: list, h
     out = pd.DataFrame(index=test.index)
     out["p_mkt"] = np.clip(test["p_mkt"].to_numpy(float), *CLIP)
     out["p_blend_c"] = predict_blend_c(fit_blend_c(train, xtr, stat_list), test, xte)
+    out["p_calib"] = predict_calibration(fit_calibration(train, xtr, stat_list), test, xte)
     out["p_ridge"] = predict_ridge(fit_ridge(train, xtr, stat_list, *hp["ridge"]), test, xte)
     out["p_gbdt"] = predict_gbdt(fit_gbdt(train, xtr, stat_list, *hp["gbdt"], nthread=nthread), test, xte)
     return out, hp
@@ -593,8 +614,12 @@ def roi_buckets(t: pd.DataFrame, p, price: str, control: np.ndarray | None = Non
     return rows
 
 
-def roi_threshold(t: pd.DataFrame, p, price: str, thr: float = 0.02, control: np.ndarray | None = None, n_boot: int = 600) -> dict:
-    """All bets with edge >= thr (one number per rule: the headline ROI and its excess over market-expected ROI)."""
+def roi_threshold(t: pd.DataFrame, p, price: str, thr: float = 0.02, control: np.ndarray | None = None, n_boot: int = 600,
+                  controls: dict | None = None) -> dict:
+    """All bets with edge >= thr: the headline ROI and its excess over market-expected ROI. `control` = the market probability
+    (the no-model line-shopping rule at the same threshold); `controls` = {name: probability array}: each is evaluated on the SAME
+    NUMBER of bets (its top-K by its own edge, K = the model's count) so a rule that simply finds more / bigger quotes is not
+    credited, with the date-clustered CI of the paired ROI difference."""
     b = _bets(t, p, price)
     s = b[b["edge"] >= thr]
     bc = _bets(t, control, price) if control is not None else None
@@ -605,6 +630,14 @@ def roi_threshold(t: pd.DataFrame, p, price: str, thr: float = 0.02, control: np
                     "excess": float((s["profit"] - s["mkt_ev"]).mean()), **_boot(s, sc, n_boot)})
     if sc is not None:
         out.update({"ctrl_n": int(len(sc)), "ctrl_roi": float(sc["profit"].mean()) if len(sc) else float("nan")})
+    out["matched"] = {}
+    for name, pc in (controls or {}).items():
+        if not len(s):
+            break
+        cb = _bets(t, pc, price).sort_values("edge", ascending=False, kind="mergesort").head(len(s))
+        bt = _boot(s, cb, n_boot)
+        out["matched"][name] = {"n": int(len(cb)), "roi": float(cb["profit"].mean()), "diff": float(s["profit"].mean() - cb["profit"].mean()),
+                                "diff_ci": bt["diff_ci"]}
     return out
 
 
@@ -622,7 +655,7 @@ def monotonic(rows: list, key: str = "roi") -> dict:
 
 
 # ------------------------------------------------------------------------------------------------------ the evaluation
-def evaluate(test: pd.DataFrame, preds: pd.DataFrame, models=("p_ridge", "p_gbdt", "p_auto", "p_blend_c"), n_boot: int = 600) -> dict:
+def evaluate(test: pd.DataFrame, preds: pd.DataFrame, models=("p_ridge", "p_gbdt", "p_auto", "p_blend_c", "p_calib"), n_boot: int = 600) -> dict:
     """Everything the report prints for one set of held-out rows (pushes already removed). `preds` is aligned with `test`."""
     y = test["over"].to_numpy(float)
     pm = np.clip(test["p_mkt"].to_numpy(float), *CLIP)
@@ -636,13 +669,26 @@ def evaluate(test: pd.DataFrame, preds: pd.DataFrame, models=("p_ridge", "p_gbdt
         m = {"logloss": paired_logloss(y, p, pm, cl), "brier": brier_skill(y, p, pm, cl), "ece": ece(y, p),
              "slope": residual_slope(y, p, pm, cl), "quintiles": residual_deciles(y, p, pm),
              "mean_abs_gap": float(np.mean(np.abs(p - pm)))}
+        ctrls = {"market": pm}
+        if "p_calib" in preds.columns:
+            pc = np.clip(preds.loc[test.index, "p_calib"].to_numpy(float), *CLIP)
+            m["vs_calib"] = paired_logloss(y, p, pc, cl)
+            if name != "p_calib":
+                ctrls["calibration"] = pc
         m["roi"] = {price: {"buckets": roi_buckets(test, p, price, control=pm, n_boot=n_boot),
-                            "ge2": roi_threshold(test, p, price, 0.02, control=pm, n_boot=n_boot)} for price in ("med", "best")}
+                            "ge2": roi_threshold(test, p, price, 0.02, control=pm, n_boot=n_boot, controls=ctrls)} for price in ("med", "best")}
         m["monotone_best"] = monotonic(m["roi"]["best"]["buckets"])
         m["per_stat"] = per_stat(test, p, pm)
         out["models"][name] = m
     out["control"] = {price: {"buckets": roi_buckets(test, pm, price, n_boot=n_boot), "ge2": roi_threshold(test, pm, price, 0.02, n_boot=n_boot)}
                       for price in ("med", "best")}
+    z = np.zeros(len(test))
+    out["blind"] = {}
+    for label, pv in (("always_under", z), ("always_over", z + 1.0)):     # no-model, no-information rules
+        out["blind"][label] = {}
+        for price in ("med", "best"):
+            r = roi_threshold(test, pv, price, -9.0, n_boot=n_boot)
+            out["blind"][label][price] = {"n": r["n"], "roi": r.get("roi"), "roi_ci": r.get("roi_ci"), "excess": r.get("excess")}
     return out
 
 
@@ -669,11 +715,14 @@ def verdict(res: dict, model: str) -> dict:
     if not m:
         return {"clears": False, "reason": "no predictions"}
     z, ts = m["logloss"]["z"], m["slope"]["t"]
-    ex = m["roi"]["best"]["ge2"]
-    ci = ex.get("excess_ci", (float("nan"), float("nan")))
-    checks = {"logloss_z": bool(z == z and z <= BARS["z_logloss"]), "slope_t": bool(ts == ts and ts >= BARS["t_slope"] and m["slope"]["b"] > 0),
-              "excess_ci_above_0": bool(ci[0] == ci[0] and ci[0] > 0)}
-    return {"clears": all(checks.values()), "checks": checks, "z": z, "t_slope": ts, "excess_ci": ci}
+    zc = m.get("vs_calib", {}).get("z", float("nan"))
+    mc = m["roi"]["best"]["ge2"].get("matched", {}).get("market", {})
+    ci = mc.get("diff_ci", (float("nan"), float("nan")))
+    checks = {"logloss_z_vs_market": bool(z == z and z <= BARS["z_logloss"]),
+              "logloss_z_vs_calibration": bool(zc == zc and zc <= BARS["z_vs_calib"]),
+              "slope_t": bool(ts == ts and ts >= BARS["t_slope"] and m["slope"]["b"] > 0),
+              "roi_beats_matched_line_shopping_control": bool(ci[0] == ci[0] and ci[0] > 0)}
+    return {"clears": all(checks.values()), "checks": checks, "z": z, "z_vs_calib": zc, "t_slope": ts, "matched_diff_ci": ci}
 
 
 # ------------------------------------------------------------------------------------------------------ sharp skew
@@ -716,17 +765,24 @@ def _ci(c):
     return "[n/a]" if not c or c[0] != c[0] else f"[{100 * c[0]:+.1f}, {100 * c[1]:+.1f}]"
 
 
-def render_block(label: str, res: dict, models=("p_ridge", "p_gbdt", "p_auto", "p_blend_c")) -> str:
+def render_block(label: str, res: dict, models=("p_ridge", "p_gbdt", "p_auto", "p_blend_c", "p_calib")) -> str:
     L_ = [f"#### {label}", "", f"n = {res['n']:,} props, {res['n_dates']} game dates, over rate {res['over_rate']:.3f}, market ECE {res['ece_market']:.4f}", ""]
-    L_ += ["| model | LL market | LL model | d LL (SE) | z | Brier skill vs mkt (SE) | ECE model | resid slope b (t) | mean abs gap |",
-           "|---|---|---|---|---|---|---|---|---|"]
+    L_ += ["| model | LL market | LL model | d LL vs market (SE) | z | d LL vs calibration-only (z) | Brier skill vs mkt (SE) | ECE model | resid slope b (t) | mean abs gap |",
+           "|---|---|---|---|---|---|---|---|---|---|"]
     for name in models:
         m = res["models"].get(name)
         if not m:
             continue
         a, b, s = m["logloss"], m["brier"], m["slope"]
-        L_.append(f"| {name[2:]} | {a['ll_market']:.4f} | {a['ll_model']:.4f} | {a['d']:+.5f} ({a['se']:.5f}) | {a['z']:+.2f} | "
+        vc = m.get("vs_calib")
+        vcs = "n/a" if not vc or name == "p_calib" else f"{vc['d']:+.5f} ({vc['z']:+.2f})"
+        L_.append(f"| {name[2:]} | {a['ll_market']:.4f} | {a['ll_model']:.4f} | {a['d']:+.5f} ({a['se']:.5f}) | {a['z']:+.2f} | {vcs} | "
                   f"{b['bss'] * 100:+.3f}% ({b['se'] * 100:.3f}) | {m['ece']:.4f} | {s['b']:+.2f} ({s['t']:+.1f}) | {m['mean_abs_gap']:.4f} |")
+    bl = res.get("blind")
+    if bl:
+        L_.append("")
+        L_.append("No-information controls (every prop, flat 1u): " + "; ".join(
+            f"{k.replace('_', ' ')} at {price} price ROI {_pct(v[price]['roi'])} {_ci(v[price]['roi_ci'])}" for k, v in bl.items() for price in ("med", "best")) + ".")
     L_.append("")
     return "\n".join(L_)
 
@@ -752,6 +808,10 @@ def render_roi(label: str, res: dict, model: str) -> str:
         if g["n"]:
             L_.append(f"| {price} | all >= 2% | {g['n']} | {_pct(g['roi'])} {_ci(g['roi_ci'])} | | {_pct(g['mkt_ev'])} | "
                       f"{_pct(g['excess'])} {_ci(g['excess_ci'])} | {_pct(g.get('ctrl_roi'))} ({g.get('ctrl_n', 0)}) | {_ci(g.get('diff_ci'))} |")
+    g = m["roi"]["best"]["ge2"]
+    for cname, c in g.get("matched", {}).items():
+        L_.append(f"| best | >= 2%, vs `{cname}` control with the SAME number of bets (top-K by its own edge) | {c['n']} | {_pct(c['roi'])} | | | | "
+                  f"model - control {_pct(c['diff'])} | {_ci(c['diff_ci'])} |")
     mono = m["monotone_best"]
     L_.append("")
     L_.append(f"Edge-bucket monotonicity at the best price: " + ("not computable (fewer than 3 buckets with >= 30 bets)" if mono["steps"] is None else
@@ -823,14 +883,21 @@ def render_study(sport: str, res: dict) -> str:
             continue
         tag = " (HELD OUT, scored once)" if label == f"season {res['holdout_season']}" and res["report_holdout"] else ""
         L_.append(render_block(label + tag, r))
+    d = res.get("dev_pooled")
+    if d:
+        for model in ("p_ridge", "p_gbdt"):
+            L_.append(render_roi("development folds pooled", d, model))
+            L_.append(render_per_stat("development folds pooled", d, model))
+            L_.append(render_quintiles(d, model))
     h = res.get("holdout")
     if h:
         for model in ("p_ridge", "p_gbdt"):
             L_.append(render_roi(f"held-out {res['holdout_season']}", h, model))
             L_.append(render_per_stat(f"held-out {res['holdout_season']}", h, model))
             L_.append(render_quintiles(h, model))
-        L_.append("Pre-registered verdicts on the held-out season (all three checks must hold; bars: log-loss z <= "
-                  f"{BARS['z_logloss']}, residual-slope t >= {BARS['t_slope']} with b > 0, best-price ROI-excess CI above 0 at >= 2% edge):")
+        L_.append("Verdicts on the held-out season (all four checks must hold; bars set before this season was scored: log-loss z vs market <= "
+                  f"{BARS['z_logloss']}, z vs the calibration-only model <= {BARS['z_vs_calib']}, residual-slope t >= {BARS['t_slope']} with b > 0, "
+                  "best-price >= 2% ROI above the same-number-of-bets line-shopping control with the paired CI above 0):")
         L_.append("")
         for m, v in res["verdict"].items():
             L_.append(f"- {m[2:]}: {'CLEARS' if v['clears'] else 'does not clear'} | " +
