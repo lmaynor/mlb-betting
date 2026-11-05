@@ -60,7 +60,7 @@ Minimum detectable log-loss gain: ungated 0.030-0.034, gated 0.037-0.15 nats per
 | 2024-10-20 | 105 | 0 | 437 |
 | 2025-10-26 | 392 | 0 | 151 |
 
-**No leak.** Injected-leak unit test (an oracle reading the game's own final margin) is caught. The first real-data run reported 3 and 1 changed predictions before the cut-off; they were games MISSING from the garbled run, because the garble had permuted the schedule's final scores including missing ones and moved a NaN onto a played game. `garble_columns` now permutes only non-null cells (core PR), and the re-run above is clean. Results: `nfl_confidence_gated_eval_2026-11-05/garble_results.json` (generated before the identifier rename `engine` -> `nfl_engine`, which changed no behaviour; the unit-level garble tests were re-run on this branch).
+**No leak.** Injected-leak unit test (an oracle reading the game's own final margin) is caught. The first real-data run reported 3 and 1 changed predictions before the cut-off; they were games MISSING from the garbled run, because the garble had permuted the schedule's final scores including missing ones and moved a NaN onto a played game. `garble_columns` now permutes only non-null cells (core PR), and the re-run above is clean. Results: `nfl_confidence_gated_eval_2026-11-05/garble_results.json` (re-run from this branch's own code after the `engine` -> `nfl_engine` rename: identical counts).
 
 ## Limits
 - The replay calls `compute_matchup_pbp_features` without `schedules`, so bye / short-week / divisional / wind and QB terms sit at defaults: not the engine as the live board runs it.
