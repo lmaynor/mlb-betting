@@ -29,6 +29,12 @@ export default function PrivacyPage() {
           be assigned.
         </li>
         <li>
+          <strong>Launch waitlist:</strong> if you join the pre-launch waitlist, we store your email address and which
+          page you signed up from. We use it only to send you launch updates about beezy.fyi. We never sell or share
+          it, every launch email will include an unsubscribe link, and you can ask us to delete it at any time by
+          emailing <a href={`mailto:${SITE_CONFIG.supportEmail}`}>{SITE_CONFIG.supportEmail}</a>.
+        </li>
+        <li>
           <strong>Bankroll:</strong> a bankroll figure you enter is kept in your browser&apos;s local storage. If you save it
           from account settings, it is also stored in your Clerk profile metadata.
         </li>
@@ -55,6 +61,7 @@ export default function PrivacyPage() {
         <li>To provide and secure the Service, including gating paid content and syncing Discord roles.</li>
         <li>To process subscriptions and send receipts and renewal notices.</li>
         <li>To answer support requests and send service announcements.</li>
+        <li>To send launch updates to waitlist subscribers who asked for them.</li>
         <li>To prevent fraud and abuse and to comply with the law.</li>
       </ul>
 

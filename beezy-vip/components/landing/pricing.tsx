@@ -10,6 +10,7 @@ import { SITE_CONFIG } from '@/lib/site-config'
 import { SPORT_PILLARS } from '@/lib/sports'
 import { cx } from '@/utils/cx'
 import { LEAGUES, type League } from '@/lib/tiers'
+import { WaitlistForm } from '@/components/ui/waitlist-form'
 
 const CheckoutButton = dynamic(
   () => import('@/components/ui/checkout-button').then(m => m.CheckoutButton),
@@ -69,7 +70,9 @@ function Plan({ name, price, period, note, featured, children }: {
 
 function Cta({ tier, sport, label, featured }: { tier: 'single_sport' | 'pro_monthly' | 'pro_annual'; sport?: League; label: string; featured?: boolean }) {
   if (PRE_LAUNCH) {
-    return <a href={DISCORD_URL} className={cx('w-full', featured ? 'btn btn-primary' : 'btn btn-ghost')}>Join waitlist</a>
+    // Pre-launch the CTA is the waitlist: /signup carries the opt-in form
+    // (and the Discord link for picks in the meantime).
+    return <Link href="/signup" className={cx('w-full', featured ? 'btn btn-primary' : 'btn btn-ghost')}>Join waitlist</Link>
   }
   return <CheckoutButton tier={tier} sport={sport} label={label} featured={featured} />
 }
@@ -142,6 +145,19 @@ export function PricingSection() {
           <Cta tier="pro_annual" label="Get Annual Pro" />
         </Plan>
       </div>
+
+      {PRE_LAUNCH && (
+        <div className={cx(CARD, 'mt-5 px-4.5 py-4')}>
+          <div className="ui-heading mb-1.5 text-mini text-text-secondary">Launch waitlist</div>
+          <p className="mb-3.5 max-w-[560px] text-body-regular text-text-secondary">
+            Paid access opens when the first system clears the 200-bet gate. Leave your email and we will tell you the
+            day it does, at the prices above.
+          </p>
+          <div className="max-w-[480px]">
+            <WaitlistForm source="pricing" />
+          </div>
+        </div>
+      )}
 
       <div className={cx(CARD, 'mt-5')}>
         <div className="ui-heading border-b border-separator-border px-4 py-3 text-mini text-text-secondary">How the dual-engine terminal works</div>

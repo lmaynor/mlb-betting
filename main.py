@@ -884,10 +884,11 @@ def dashboard():
 
 
 # ---------------------------------------------------------------------------
-# Public API -- read-only, authenticated with X-API-Key header
-# Used by the Beezy frontend.
+# Public API -- authenticated with X-API-Key header
+# Used by the Beezy frontend. Read-only except /api/public/waitlist (POST).
 # ---------------------------------------------------------------------------
 
+from mlb.runners.waitlist import add_waitlist_signup
 from mlb.runners.public_api import (
     get_pnl_sparkline,
     get_today_picks, get_picks, get_recent_settled,
@@ -922,12 +923,12 @@ def _get_engine():
 
 
 
-def _cors_headers():
+def _cors_headers(methods="GET, OPTIONS"):
     origin = request.headers.get("Origin", "").rstrip("/")
     allow_origin = origin if origin in ALLOWED_ORIGINS else "https://beezy.fyi"
     return {
         "Access-Control-Allow-Origin":  allow_origin,
-        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Methods": methods,
         "Access-Control-Allow-Headers": "X-API-Key, Content-Type",
         "Vary": "Origin",
     }
@@ -1508,6 +1509,36 @@ def public_edge_enrich():
     resp.headers.update(_cors_headers())
     resp.headers["Cache-Control"] = "public, max-age=300"
     return resp
+
+
+@app.route("/api/public/waitlist", methods=["POST", "OPTIONS"])
+def public_waitlist():
+    """Pre-launch waitlist signup -- the public API's one write path.
+
+    The address comes from the site's own opt-in form via the beezy-vip
+    /api/waitlist proxy (which validates before forwarding); it is validated
+    again here and stored once, keyed on the normalized address. Resubmits
+    just refresh source/updated_at. The address is never logged here or in
+    mlb.runners.waitlist. No rate limiter exists on this service yet --
+    abuse control is the X-API-Key gate plus the proxy; adding a limiter is
+    a follow-up, not part of this route.
+    """
+    if request.method == "OPTIONS":
+        return "", 204, _cors_headers("POST, OPTIONS")
+    err = _auth_required(request)
+    if err:
+        return err
+    try:
+        data = request.get_json(silent=True) or {}
+        result = add_waitlist_signup(_get_engine(), data.get("email"), data.get("source"))
+        resp = jsonify({"ok": True, "status": result["status"]})
+        resp.headers.update(_cors_headers("POST, OPTIONS"))
+        return resp
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception:
+        logger.exception("public_waitlist failed")
+        return jsonify({"error": "waitlist signup failed"}), 500
 
 
 @app.route("/model-health", methods=["GET", "POST"])
