@@ -16,13 +16,13 @@ export interface Article {
 export const ARTICLES: Article[] = [
   {
     slug:        "what-is-nrfi-betting",
-    title:       "What is NRFI Betting? Complete Guide",
+    title:       "What Is NRFI Betting? Meaning, Odds and How It Works",
     category:    "Fundamentals",
     keyword:     "nrfi betting",
     datePublished: "2026-05-16",
-    dateModified: "2026-05-16",
-    description: "**NRFI** stands for \"No Run First Inning.\" It's a bet on whether both teams will fail to score in the first inning of an MLB game. YRFI is the opposite\u2014\"Yes Run",
-    content:     `# What is NRFI Betting? Complete Guide
+    dateModified: "2026-11-06",
+    description: "NRFI (No Run First Inning) is a bet on a scoreless first inning. How NRFI odds work, what drives first-inning scoring, and how Beezy's model prices it.",
+    content:     `# What Is NRFI Betting? Meaning, Odds and How It Works
 
 ## The Basics
 
@@ -30,11 +30,11 @@ export const ARTICLES: Article[] = [
 
 These are moneyline bets, not totals. You're not predicting how many runs will score—just whether the scoreboard will move at all in the opening frame.
 
+This guide owns the basics: the definition, the odds and how the bet settles. The companion piece, [NRFI betting strategy](/learn/nrfi-betting-strategy), owns the modeling side: how a first-inning probability is built and when the price is wrong.
+
 ## Why It Matters
 
 First inning runs are relatively rare. Across all MLB games, the first inning goes scoreless roughly 45–55% of the time. This creates two things bettors love: **low-probability outcomes** (where the odds offer edge) and **quick resolution** (the bet settles within 15 minutes of first pitch).
-
-NRFI has become one of DraftKings' most popular prop markets, second only to player props like strikeouts and home runs.
 
 ## The Odds
 
@@ -54,13 +54,15 @@ The key to edge here is finding **when the consensus gets it wrong**. A pitcher 
 
 ### Weather & Park
 - **Wind direction.** Outfield wind suppresses home runs and deep fly balls, increasing NRFI odds slightly. Infield wind doesn't matter much for first inning (no time to accumulate baserunners yet).
-- **Park factor.** Smaller parks (Yankee Stadium) see slightly higher first-inning run rates. Larger parks (Oakland Coliseum) suppress them.
+- **Park factor.** Smaller parks (Yankee Stadium) see slightly higher first-inning run rates. Larger parks (Petco Park) suppress them.
 
 ### Game Context
 - **Rivalry games.** High-stakes matchups sometimes see more aggressive early at-bats, slightly favoring YRFI.
 - **Revenge narrative.** A team that lost 1-0 the night before might be more aggressive. This is real but small effect.
 
-## Betting Strategy
+## Betting NRFI: The Short Version
+
+The basics of betting it are below. For the full modeling approach (a scoring system, bet timing and bankroll rules), read [NRFI betting strategy](/learn/nrfi-betting-strategy).
 
 ### Find the Edges
 The best NRFI bets come from **starter quality mismatches** paired with **lineup fatigue** or **injury news**. If a team's leadoff hitter is out and they're starting a bench player, NRFI odds often don't adjust enough.
@@ -83,13 +85,14 @@ For a 57% edge at -110 odds, you're looking at roughly 2–3% Kelly. Don't overb
 
 ## The Data
 
-Our models track first-inning runs across:
-- 2,000+ games per season
-- Per-pitcher first-inning ERA and K rate
-- Per-lineup home/away first-inning run rates
-- Weather, park, and injury adjustments
+First-inning scoring follows patterns a model can actually use. Beezy's [NRFI model](/models/nrfi) is an XGBoost ensemble with isotonic calibration, trained on pitch-level Statcast data from 2021–2025 and walk-forward validated. Its main signals:
 
-The current baseline: **NRFI hits 55% of the time** when odds are fair. Systems that identify 2–5% edge over this baseline are profitable.
+- **Both starters' first-inning tendencies:** first-inning ERA and K rate, starter form and pitch mix
+- **Top-of-order quality:** the on-base skills of the hitters due up first
+- **Umpire called-strike tendency:** a wider zone suppresses walks and runs
+- **Park and weather:** run-scoring environment, wind and temperature
+
+When the model's probability clears the book's price by its edge threshold, the play posts to the [NRFI picks](/picks/mlb/nrfi) board and settles in the public results. If your probability and the book's implied probability are the same, there is no bet, whatever the model says.
 
 ## Quick Checklist for NRFI Bets
 
@@ -112,8 +115,8 @@ Start with 50–100 bets tracked in a spreadsheet. If you're hitting 55%+ at fai
     category:    "Theory",
     keyword:     "kelly criterion",
     datePublished: "2026-05-16",
-    dateModified: "2026-10-15",
-    description: "How the Kelly Criterion sizes a bet from your win probability and the price, with a worked example and why most bettors use a fraction of it.",
+    dateModified: "2026-11-06",
+    description: "The Kelly Criterion turns a win probability and a price into a stake size: the formula, a worked -110 example, and why most bettors bet a fraction.",
     content:     `# Kelly Criterion for Sports Betting
 
 ## What it is
@@ -130,6 +133,8 @@ Where:
 - **d** = the decimal odds (-110 is 1.909, +150 is 2.50, +100 is 2.00)
 
 If p x d is 1 or less, f is zero or negative and the answer is simply: do not bet.
+
+Everything depends on p, your own probability. If converting a price into a probability is new, start with [implied probability](/learn/implied-probability-calculator).
 
 ## Worked example: 55% at -110
 
@@ -149,7 +154,7 @@ Full Kelly says bet 5.5% of your bankroll, which is $55 on $1,000. The book's pr
 
 ## Why most people bet a fraction
 
-Full Kelly is the optimum only when your probability is exactly right. If you overestimate it, you overbet, and bankroll swings get large fast. Most bettors use a fraction, usually half or a quarter. At quarter Kelly the 55% / -110 example is 1.4%, or about $14 on $1,000. The +EV Terminal on this site sizes at quarter Kelly with a 5% cap per bet.
+Full Kelly is the optimum only when your probability is exactly right. If you overestimate it, you overbet, and bankroll swings get large fast. Most bettors use a fraction, usually half or a quarter. At quarter Kelly the 55% / -110 example is 1.4%, or about $14 on $1,000. The [Odds Terminal](/ev) on this site sizes at quarter Kelly with a 5% cap per bet.
 
 ## Pitfalls
 
@@ -160,18 +165,18 @@ Full Kelly is the optimum only when your probability is exactly right. If you ov
 
 ## Try it
 
-The free Kelly Calculator at /tools/kelly-calculator does this math for any bankroll, price and win probability. Everything here is educational and paper-traded; it is not financial advice. 21+. If gambling is a problem, call 1-800-GAMBLER.
+The free [Kelly Calculator](/tools/kelly-calculator) does this math for any bankroll, price and win probability. Everything here is educational and paper-traded; it is not financial advice. 21+. If gambling is a problem, call 1-800-GAMBLER.
 `,
   },
   {
     slug:        "implied-probability-calculator",
-    title:       "How to Calculate Implied Probability from Odds",
+    title:       "Implied Probability Calculator: Convert Odds to Probability",
     category:    "Fundamentals",
-    keyword:     "implied probability",
+    keyword:     "implied probability calculator",
     datePublished: "2026-05-16",
-    dateModified: "2026-05-16",
-    description: "**Implied probability** is the probability the sportsbook is *pricing in* when it sets odds. If DraftKings prices a pitcher strikeout prop at -110, that means t",
-    content:     `# How to Calculate Implied Probability from Odds
+    dateModified: "2026-11-06",
+    description: "Convert any odds format into the probability the book is pricing in: American, decimal and fractional formulas, a quick table, and a free calculator.",
+    content:     `# Implied Probability Calculator: Convert Odds to Probability
 
 ## The Core Idea
 
@@ -240,7 +245,7 @@ Example: -110 on each side of a moneyline
 - Side B: 52.38% implied
 - Total: 104.76%
 
-That extra 4.76% is the **vig** (juice). It's the house's profit margin.
+That extra 4.76% is the **vig** (juice). It's the house's profit margin. Stripping that margin out to get fair odds is its own step: [how to remove vig](/learn/how-to-remove-vig-odds).
 
 On a fair market with no edge, the book sets odds so that roughly equal money is wagered on both sides. The vig ensures the book makes money regardless of the outcome.
 
@@ -271,7 +276,7 @@ Example:
 - The book prices it at 52.4% (-110 odds)
 - Edge = 0.56 - 0.524 = 0.036 = 3.6%
 
-If your edge is consistently positive across a large sample of bets, you have a profitable strategy.
+If your edge is consistently positive across a large sample of bets, you have a profitable strategy. An edge is a probability gap, not a stake: the [Kelly Criterion](/learn/kelly-criterion-sports-betting) is what turns it into one.
 
 ## The Vig Hurts Small Edges
 
@@ -299,9 +304,9 @@ Your job as a bettor is to find these mispricings before the sharps do.
 
 ## How to Check Your Work
 
-Use an online implied probability calculator to verify your math:
-1. Enter the American odds
-2. Calculator shows implied probability
+Use the [Odds & Vig Calculator](/tools/odds-calculator) to verify your math:
+1. Enter both sides of the market
+2. The calculator shows each side's implied probability, the vig-free fair probability and the vig
 3. Compare to your estimate
 4. If yours is higher, you have potential edge
 
@@ -350,8 +355,8 @@ Print the reference table above and keep it handy. After a few weeks, you'll hav
     category:    "Theory",
     keyword:     "remove vig",
     datePublished: "2026-05-16",
-    dateModified: "2026-10-15",
-    description: "**Vig** is the sportsbook's commission. When you see -110 odds on both sides of a bet, the book is saying:",
+    dateModified: "2026-11-06",
+    description: "How to remove the vig from a price: the formula, worked examples at -110 and plus money, and the free Odds & Vig Calculator that does it instantly.",
     content:     `# How to Remove Vig from Sports Betting Odds
 
 ## What Is Vig (Juice)?
@@ -364,7 +369,7 @@ Print the reference table above and keep it handy. After a few weeks, you'll hav
 
 That extra 4.76% is pure profit for the house—the vig.
 
-Removing vig lets you see what the *true* market probability is, stripped of the house's edge. This is critical for identifying which side is mispriced.
+Removing vig lets you see what the *true* market probability is, stripped of the house's edge. This is critical for identifying which side is mispriced. It starts from implied probability; if that conversion is new, read [how to calculate implied probability](/learn/implied-probability-calculator) first.
 
 ## Why Remove Vig?
 
@@ -453,7 +458,7 @@ Vig-free probabilities are how you compare a price you took with where the marke
 - The market closes at -120 / +100 (52.17% vig-free for the home team).
 - The market moved toward your side, so the price you took was better than the close. That is **positive closing line value**.
 
-A simple rule: if the vig-free probability at the close is higher than the probability implied by the price you took, you beat the close. See the CLV guide for more.
+A simple rule: if the vig-free probability at the close is higher than the probability implied by the price you took, you beat the close. See the [CLV guide](/learn/closing-line-value-clv) for more.
 
 ## Quick vig removal for -110 on both sides
 
@@ -479,7 +484,7 @@ Dividing each side by the total assumes the book spread its margin in proportion
 3. Divide each by the total
 4. Multiply by 100 to get percentages
 
-Or let the free Odds & Vig Calculator at /tools/odds-calculator do it.
+Or let the free [Odds & Vig Calculator](/tools/odds-calculator) do it.
 
 ## The bottom line
 
@@ -495,13 +500,13 @@ The sharps do this automatically. You should too.
   },
   {
     slug:        "mlb-strikeout-props-guide",
-    title:       "MLB Strikeout Props Betting Guide",
+    title:       "Pitcher Strikeout Props: How to Bet MLB Strikeout Over/Unders",
     category:    "Markets",
     keyword:     "strikeout props",
     datePublished: "2026-05-16",
-    dateModified: "2026-05-16",
-    description: "A **strikeout prop** on DraftKings is a bet on how many strikeouts a pitcher will record in a single game. You're betting Over/Under a specific line\u2014like \"Will ",
-    content:     `# MLB Strikeout Props Betting Guide
+    dateModified: "2026-11-06",
+    description: "How strikeout props are priced, and where the edge is: swinging-strike rate, opponent K rate, workload and umpire, plus the model that projects the line.",
+    content:     `# Pitcher Strikeout Props: How to Bet MLB Strikeout Over/Unders
 
 ## The Basics
 
@@ -523,12 +528,14 @@ Innings pitched doesn't equal strikeouts. A pitcher can throw 7 innings with 3 K
 ## The Data
 
 Across MLB:
-- **Starter average:** 8–10 strikeouts per game (7–8 IP)
+- **Starter average:** 8–10 strikeouts per 9 innings
 - **Median K/9:** 8.5 strikeouts per 9 innings
-- **Elite guys (top 10%):** 11+ K per game
-- **Weak pitchers (bottom 10%):** 5–6 K per game
+- **Elite guys (top 10%):** 11+ K/9
+- **Weak pitchers (bottom 10%):** 5–6 K/9
 
 The current market has tight pricing—sharp books price K props within 0.5 strikeouts of the true expected value.
+
+Beezy's [strikeout model](/models/k) projects every starter from these inputs (it is a Poisson regression; swinging-strike rate is its single best predictor, with opponent lineup K rate and umpire strikeout tendency close behind). Projections that clear the book's line by enough post to the [strikeout picks](/picks/mlb/k) board.
 
 ## Factors That Affect Strikeouts
 
@@ -658,13 +665,13 @@ Most professional bettors start here because it teaches patience and calibration
   },
   {
     slug:        "f5-betting-mlb",
-    title:       "First 5 Innings (F5) Betting Explained",
+    title:       "What Is F5 Betting? First 5 Innings Lines Explained",
     category:    "Markets",
     keyword:     "f5 betting",
     datePublished: "2026-05-16",
-    dateModified: "2026-05-16",
-    description: "**F5** stands for \"First 5 Innings.\" It's a moneyline bet on who will be winning after the first 5 complete innings of an MLB game.",
-    content:     `# First 5 Innings (F5) Betting Explained
+    dateModified: "2026-11-06",
+    description: "F5 is a bet on the score after five innings. Why it isolates starting pitching, how F5 lines differ from moneylines, and how the F5 model prices it.",
+    content:     `# What Is F5 Betting? First 5 Innings Lines Explained
 
 ## What Is F5?
 
@@ -673,6 +680,8 @@ Most professional bettors start here because it teaches patience and calibration
 Unlike the full-game moneyline, F5 ignores everything that happens in innings 6–9. The game could end 2-0 in 5 innings (bet settles), or it could end 2-7 in the 9th (still 2-0 at the F5 mark, bet wins).
 
 F5 markets exist on most DraftKings games during the regular season. The odds are usually close to, but slightly different from, the full-game moneyline.
+
+Beezy prices this market with a trained [F5 model](/models/f5) built on starter SIERA, opponent wOBA and umpire run context. Its plays post to the [F5 picks](/picks/mlb/f5) board and settle in the public results.
 
 ## Why It Matters
 
@@ -782,7 +791,7 @@ This is why F5 moneylines are usually close to -110/-110 even when full-game lin
 
 F5 bets have a higher win rate than full-game (roughly 52–54% for both sides combined, vs 50%). But the odds are tighter (-110 usually).
 
-Use Kelly sizing:
+Use [Kelly sizing](/learn/kelly-criterion-sports-betting):
 - 2–3% Kelly for F5 bets with edge
 - Avoid the temptation to bet big because "fewer innings = safer"
 - Variance is still meaningful (a 5-inning sample is small)
@@ -818,7 +827,7 @@ If you can model pitcher performance, F5 is where you'll find consistent edge. T
 
 Start with 30–50 F5 bets. If you're hitting 52%+ at -110, you've found an edge. That's a 2% ROI per bet—enough to be profitable long-term if you scale carefully.
 
-The pros start with moneyline betting (full game or F5) before moving to prop props because it teaches market structure and variance. Master this first.
+The pros start with moneyline betting (full game or F5) before moving to props because it teaches market structure and variance. Master this first.
 `,
   },
   {
@@ -827,15 +836,15 @@ The pros start with moneyline betting (full game or F5) before moving to prop pr
     category:    "Markets",
     keyword:     "home run props",
     datePublished: "2026-05-16",
-    dateModified: "2026-05-16",
-    description: "A **home run prop** on DraftKings is a yes/no bet on whether a specific batter will hit a home run in a single game.",
+    dateModified: "2026-11-06",
+    description: "How home run props are priced and what moves them: barrel rate, pitcher HR/9, park factor and weather, and how Beezy's home run model prices each batter.",
     content:     `# How to Bet MLB Home Run Props
 
 ## What Is a Home Run Prop?
 
 A **home run prop** on DraftKings is a yes/no bet on whether a specific batter will hit a home run in a single game.
 
-Example: "Will Shohei Ohtani hit a home run tonight? Yes (-120) or No (-120)?"
+Example: "Will Shohei Ohtani hit a home run tonight? Yes (+230)?" The No side is priced as a heavy favorite, and almost every Yes price is plus money: a home run in one specific game is never the likely outcome for any single batter.
 
 If the batter hits a home run at any point in the game (before game ends), the yes side wins. It doesn't matter if it's a solo shot or a grand slam, infield or outfield—one home run = win.
 
@@ -844,7 +853,7 @@ If the batter hits a home run at any point in the game (before game ends), the y
 1. **High variance** — home runs are rare and explosive, so odds can be favorable (+150 to +300)
 2. **Visual appeal** — everyone watches for home runs. It's engaging.
 3. **Available every day** — 15 games with 2–3 major hitters each = 30–45 prop options daily
-4. **Bankroll leverage** — if you find a +200 shot that you think is 20% (implied 33%), you're risking 1 unit to win 2
+4. **Bankroll leverage** — if you find a +200 shot that you make 40% (implied 33%), you're risking 1 unit to win 2
 
 The downside: **home run props are one of the least efficient markets** because casual bettors love the upside and chase favorites they recognize.
 
@@ -880,6 +889,8 @@ A batter with:
 
 ...has roughly 25–30% chance of a home run per game.
 
+These are the inputs Beezy's [home run model](/models/hr) weighs first: barrel rate and exit velocity for the batter, HR/9 and fly-ball rate for the pitcher, then park and platoon adjustments.
+
 ### 2. Pitcher's Fly Ball Rate and HR/9
 Some pitchers give up more home runs. This is partly because they're worse, but also because of their pitch selection.
 
@@ -895,9 +906,9 @@ Facing a pitcher who allows 1.5 HR/9 is dramatically different from facing one w
 Different parks suppress or amplify home runs:
 
 - **Most HR-friendly:** Yankee Stadium, Globe Life (Rangers), Coors Field
-- **Most HR-suppressing:** Comerica Park (Tigers), Oakland Coliseum, Petco (Padres)
+- **Most HR-suppressing:** Comerica Park (Tigers), Oracle Park (Giants), Petco Park (Padres)
 
-A 90 mph line drive that's a home run in Yankee Stadium is a double in Oakland. DK usually prices this in, but soft-book lines sometimes don't.
+A 90 mph line drive that's a home run in Yankee Stadium is a double in San Francisco. DK usually prices this in, but soft-book lines sometimes don't.
 
 Reference: [Here's a list of park factors](https://www.baseball-reference.com/play-index/). Anything above 1.0 is HR-friendly. Below 1.0 suppresses HRs.
 
@@ -926,14 +937,14 @@ DK sometimes prices this in, sometimes doesn't. Sharp bettors monitor weather up
 
 ## Home Run Prop Pricing
 
-**Typical odds:**
-- **Superstar slugger** (Judge, Ohtani, Trout): -130 to -150 (56–60% implied)
-- **Star player** (Machado, Soto): -110 to -120 (52–55% implied)
-- **Above-average hitter**: -110 (52% implied)
-- **Average hitter**: +100 to +130 (50–57% implied)
-- **Weak hitter**: +200 to +600 (33% implied or less)
+**Typical odds (the Yes side):**
+- **Superstar slugger** (Judge, Ohtani, Trout): +150 to +250 (29–40% implied)
+- **Star player** (Machado, Soto): +250 to +350 (22–29% implied)
+- **Above-average hitter**: +350 to +500 (17–22% implied)
+- **Average hitter**: +500 to +700 (12–17% implied)
+- **Weak hitter**: +700 and up (13% implied or less)
 
-Books use lazy pricing: "This guy hit 0.30 HR/game last season, so -110 implied 52% is close enough."
+Books use lazy pricing: "This guy hit 0.30 HR/game last season, so a flat plus price is close enough."
 
 But the sharp books (Pinnacle) will price:
 - Cold-weather adjustment
@@ -948,21 +959,21 @@ This is where edge lives: finding mispricings the soft books (DK) miss.
 ### Scenario 1: Cold Weather Underdog
 - Batter normally 0.25 HR/game (implied 25% per game)
 - It's 45°F and windy
-- Book still prices at -110 (52% implied)
+- Book still prices the Yes at +200 (33% implied)
 - True probability: maybe 15% in cold weather
 - **Bet: No side** (odds favor it)
 
 ### Scenario 2: Pitcher Factor
 - Batter has 0.30 HR/game on the season
 - Facing a pitcher with 1.8 HR/9 (well above average)
-- Book prices at -110 (52% implied)
+- Book prices the Yes at +300 (25% implied)
 - True probability: 35–40%
 - **Bet: Yes side** (underpriced)
 
 ### Scenario 3: Park Factor Mispricing
 - Batter has 0.25 HR/game on the season
 - Playing at Yankee Stadium (1.15 park factor)
-- Book prices at -110 (52% implied)
+- Book prices the Yes at +300 (25% implied)
 - True probability with park factor: 30–35%
 - **Bet: Yes side** (underpriced)
 
@@ -1013,6 +1024,7 @@ The house hit rate on HR props is around 45–50% on average. If you're consiste
 
 ## Tools to Help
 
+- **Beezy's [HR picks](/picks/mlb/hr)** — the batters whose model price clears the book's, posted daily
 - **Baseball Reference** — season splits, park factors, pitcher HR/9
 - **Weather.com** — check game-time temperatures
 - **Savant** — exit velo, barrel rate, player home run distances
@@ -1033,13 +1045,13 @@ The pros treat HR props as a side market, not their primary focus. They're usefu
   },
   {
     slug:        "machine-learning-sports-betting",
-    title:       "Why Most Betting Models Lose to the Closing Line",
+    title:       "Machine Learning for Sports Betting: Why Most Models Lose to the Closing Line",
     category:    "Theory",
-    keyword:     "machine learning",
+    keyword:     "machine learning sports betting",
     datePublished: "2026-05-16",
-    dateModified: "2026-10-15",
-    description: "Imagine a sports betting model trained on 5 years of data. It sees patterns humans miss\u2014park effects, weather correlations, pitcher fatigue cycles. It outputs p",
-    content:     `# Why Most Betting Models Lose to the Closing Line
+    dateModified: "2026-11-06",
+    description: "Why most betting models lose to the closing line: overfitting, leakage, stale prices, and the routine that survives (walk-forward, CLV, paper trading).",
+    content:     `# Machine Learning for Sports Betting: Why Most Models Lose to the Closing Line
 
 ## The Promise and the Reality
 
@@ -1215,7 +1227,7 @@ Calculate: Did you consistently get better odds than where the market ended up?
 clv = if (your_prob > closing_prob) then "positive" else "negative"
 \`\`\`
 
-**Real edge shows positive CLV over 100+ bets.** If your backtest shows 55% but CLV is breakeven, your edge is fake.
+**Real edge shows positive CLV over 100+ bets.** If your backtest shows 55% but CLV is breakeven, your edge is fake. The full explainer: [closing line value](/learn/closing-line-value-clv).
 
 ### Step 5: Paper Trade First
 Before risking real money, place 50–100 "paper" bets. Track them in a spreadsheet for 2 weeks. 
@@ -1237,18 +1249,18 @@ You accidentally train on data from the same game (e.g., you include "home team 
 **Fix:** Strict separation of training/test data. Do not use *any* same-game data as features.
 
 ### Pitfall 3: Market Drift
-Your model trained on 2020–2022 data. It's now 2024 and the game has changed (analytics, rule changes, player talent). Your 52% accuracy has degraded to 50.5%.
+Your model trained on 2020–2022 data and was never retrained. Seasons pass, the game changes (analytics, rule changes, player talent), and your 52% accuracy degrades to 50.5%.
 
 **Fix:** Retrain quarterly. Weight recent data 2x. Track in-season accuracy continuously.
 
 ### Pitfall 4: Underfitting to Bankroll Risk
 You found a 2% edge. You bet 10% Kelly on every game. After 100 bets, you hit a 15-bet losing streak (normal variance) and your bankroll is down 30%.
 
-**Fix:** Use half Kelly (1% per bet). This cuts growth to 75% of optimal but also cuts drawdown risk in half.
+**Fix:** Use [half Kelly](/learn/kelly-criterion-sports-betting) (about 1% per bet). This cuts growth to 75% of optimal but also cuts drawdown risk in half.
 
 ## A Hypothetical Example: A Strikeout Model
 
-The numbers in this section are illustrative, not Beezy results. For our real, settled numbers see the Results and Models pages. Here is how a careful strikeout model might be built and judged:
+The numbers in this section are illustrative, not Beezy results. For our real, settled numbers see the [Results](/results) and [Models](/models) pages. Here is how a careful strikeout model might be built and judged:
 
 **Data sources:**
 - Pitching stats (Statcast, 5 years)
@@ -1300,17 +1312,19 @@ Start small, validate religiously, and scale gradually. The boring, data-driven 
   },
   {
     slug:        "nrfi-betting-strategy",
-    title:       "NRFI Betting Strategy: A Data-Driven Approach",
+    title:       "NRFI Betting Strategy: How to Find Edge in the First Inning",
     category:    "Strategy",
     keyword:     "nrfi strategy",
     datePublished: "2026-05-16",
-    dateModified: "2026-05-16",
-    description: "You now know what NRFI is (no run first inning). You know the baseline (55% of games go scoreless). You know the factors (pitcher, lineup, weather).",
-    content:     `# NRFI Betting Strategy: A Data-Driven Approach
+    dateModified: "2026-11-06",
+    description: "How NRFI edge is found: build a first-inning probability from starters, lineups, umpire and weather, compare it with the price, and size it with Kelly.",
+    content:     `# NRFI Betting Strategy: How to Find Edge in the First Inning
 
 ## Beyond the Basics
 
-You now know what NRFI is (no run first inning). You know the baseline (55% of games go scoreless). You know the factors (pitcher, lineup, weather).
+This guide assumes you know the bet. If you need the definition, the odds format or how NRFI settles, start with [what NRFI betting is](/learn/what-is-nrfi-betting); that guide owns the basics and this one does not repeat them.
+
+Here the question is narrower: how does a scoreless-first-inning probability get built, how is it compared with the price, and when is the difference worth betting?
 
 Now comes the hard part: **how do you actually find edge?**
 
@@ -1492,6 +1506,12 @@ NRFI is less efficient in:
 
 The book struggles to price seasonal variance. Sharp bettors exploit this. You can too.
 
+## How Beezy's NRFI Model Does It
+
+The scoring system above is a hand-built screen: fixed weights, set by judgment. Beezy's production [NRFI model](/models/nrfi) does the same job with a trained XGBoost ensemble and isotonic calibration on pitch-level Statcast data (2021–2025), with the weights learned instead of chosen. The inputs match this guide's: starters' first-inning tendencies, top-of-order quality, the umpire's called-strike tendency, park and weather.
+
+When the model's probability beats the price by enough, the play posts to the [NRFI picks](/picks/mlb/nrfi) board and settles in the public results. The hand screen is the training-wheels version of that pipeline, and the discipline transfers: filter hard, size small, track everything.
+
 ## The Bottom Line
 
 NRFI strategy isn't about finding massive edges. It's about:
@@ -1512,13 +1532,13 @@ That's the NRFI game.
   },
   {
     slug:        "line-movement-sports-betting",
-    title:       "Understanding Line Movement in Sports Betting",
+    title:       "Line Movement: Why Betting Lines Move and How to Read Them",
     category:    "Theory",
     keyword:     "line movement",
     datePublished: "2026-05-16",
-    dateModified: "2026-10-15",
-    description: "**Line movement** is when sportsbook odds change between opening and closing.",
-    content:     `# Understanding Line Movement in Sports Betting
+    dateModified: "2026-11-06",
+    description: "Why lines move between open and close: sharp money, public money and new information. How to read them, and how closing line value grades your price.",
+    content:     `# Line Movement: Why Betting Lines Move and How to Read Them
 
 ## What Is Line Movement?
 
@@ -1640,7 +1660,7 @@ If you bet the Giants at +130 and the line closes at +112:
 
 If you bet the Dodgers at -130 and the line closes at -110, the market moved away from you: negative CLV.
 
-**Hit rate alone is noisy.** Over a few hundred bets a 52% win rate can be luck. At -110 the break-even win rate is 52.38%, so 52% actually loses about 0.8% per bet. A bettor who consistently takes prices better than the close is doing something repeatable, which is why CLV is tracked alongside results. See the CLV guide and the CLV Tracker at /tools/clv-tracker.
+**Hit rate alone is noisy.** Over a few hundred bets a 52% win rate can be luck. At -110 the break-even win rate is 52.38%, so 52% actually loses about 0.8% per bet. A bettor who consistently takes prices better than the close is doing something repeatable, which is why CLV is tracked alongside results. See the [CLV guide](/learn/closing-line-value-clv) and the [CLV Tracker](/tools/clv-tracker).
 
 ## Line Movement Signals
 
@@ -1667,10 +1687,11 @@ If you bet the Dodgers at -130 and the line closes at -110, the market moved awa
 ## How to Track Line Movement
 
 Tools to use:
-1. **Action Network** — shows opening, closing, and line movement history
-2. **Covers.com** — historical odds from all books
-3. **BookMaker.eu** — European odds archive (sharper than US lines)
-4. **Your own spreadsheet** — track opening and closing for every bet
+1. **Beezy's [Odds Terminal](/ev)** — every book's current price for a market on one screen, so a move at one book stands out against the rest
+2. **Action Network** — shows opening, closing, and line movement history
+3. **Covers.com** — historical odds from all books
+4. **BookMaker.eu** — European odds archive (sharper than US lines)
+5. **Your own spreadsheet** — track opening and closing for every bet
 
 **Spreadsheet columns:**
 - Date
@@ -1747,8 +1768,8 @@ The pros don't see line movement as noise. They see it as the market confessing 
     category:    "Theory",
     keyword:     "closing line value",
     datePublished: "2026-07-04",
-    dateModified: "2026-10-15",
-    description: "A positive ROI over a few hundred bets can be pure luck -- or a soft-line artifact. Closing Line Value (CLV) is the leakage-proof test of whether you are actually beating the market.",
+    dateModified: "2026-11-06",
+    description: "Closing line value compares the price you took with the closing price: why it grades a bettor, or a model, faster than ROI, and how to track it.",
     content:     `# Closing Line Value: A Better Test Than ROI
 
 ## The problem with ROI
@@ -1767,13 +1788,13 @@ Sample size does not save you either. Betting outcomes have enormous variance: a
 
 If you bet a home run prop at +450 and it closes at +400, you beat the close by about 11%. If you bet +450 and it closes +500, the market moved against you.
 
-Why does this matter more than whether the bet won? Because the closing line is the sharpest number in the market -- it has absorbed every injury report, lineup card, weather update, and every dollar of informed money. Beating the close is widely used as a test of skill: **bettors who consistently take better prices than the close tend to be profitable over time**, whatever their recent win-loss record says.
+Why does this matter more than whether the bet won? Because the closing line is the sharpest number in the market -- it has absorbed every injury report, lineup card, weather update, and every dollar of informed money. Beating the close is widely used as a test of skill: **bettors who consistently take better prices than the close tend to be profitable over time**, whatever their recent win-loss record says. The moves themselves (sharp money, public money, late information) are covered in the [line movement guide](/learn/line-movement-sports-betting).
 
 ## Why CLV is leakage-proof
 
 ROI can be inflated by accident: train a model on data that overlaps the backtest window and it will "predict" games it has already seen. CLV is much harder to fool this way, because it is measured on prices that moved after you bet. Either the line moved toward your bet, or it did not. It requires no settled outcomes, resolves within hours, and reaches statistical significance far faster than win-loss records -- a meaningful CLV signal shows up in about 100 bets, where ROI needs 1,000+.
 
-That is why CLV matters to us. Today a Beezy system needs at least 200 settled bets, a positive ROI and good calibration before it can leave paper mode, and we are moving toward a CLV requirement as well. A system that shows positive ROI but flat-or-negative CLV may be beating a soft historical line rather than the market, so we treat it as unproven. Track it yourself in the CLV Tracker at /tools/clv-tracker.
+That is why CLV matters to us. Today a Beezy system needs at least 200 settled bets, a positive ROI and good calibration before it can leave paper mode (the [Models](/models) page shows each system's sample and status), and we are moving toward a CLV requirement as well. A system that shows positive ROI but flat-or-negative CLV may be beating a soft historical line rather than the market, so we treat it as unproven. Track it yourself in the [CLV Tracker](/tools/clv-tracker).
 
 ## How to use CLV yourself
 
@@ -1791,13 +1812,13 @@ Win rate tells you what happened. CLV tells you whether it was skill. If you tra
   },
   {
     slug:        "odds-boost-ev",
-    title:       "Odds Boosts: The Most Reliable +EV Bet You Will Ever Make",
+    title:       "Odds Boosts: How to Tell If a Boost Is Actually +EV",
     category:    "Strategy",
     keyword:     "odds boost EV",
     datePublished: "2026-07-04",
-    dateModified: "2026-10-15",
-    description: "Profit boosts and promo odds are the one place a sportsbook voluntarily hands you positive expected value. Here is how to compute exactly how much a boost is worth before you tap it.",
-    content:     `# Odds Boosts: The Most Reliable +EV Bet You Will Ever Make
+    dateModified: "2026-11-06",
+    description: "A boost is +EV only when the boosted price beats the market fair price. The three-step check (devig, convert, compare) and the Boost EV Calculator.",
+    content:     `# Odds Boosts: How to Tell If a Boost Is Actually +EV
 
 ## Why boosts are different
 
@@ -1809,7 +1830,7 @@ The catch: not every boost clears the bar. A boost from -150 to -135 on a market
 
 ## The three-step calculation
 
-**Step 1 -- Find the fair probability.** Take the market's normal two-sided prices (your side and the opposite side) and remove the vig. Convert both to implied probability, then divide your side by the total:
+**Step 1 -- Find the fair probability.** Take the market's normal two-sided prices (your side and the opposite side) and remove the vig (the full method is in [how to remove vig](/learn/how-to-remove-vig-odds)). Convert both to implied probability, then divide your side by the total:
 
 > implied(-120) = 120/220 = 54.5%
 > implied(+100) = 100/200 = 50.0%
@@ -1823,7 +1844,7 @@ The catch: not every boost clears the bar. A boost from -150 to -135 on a market
 
 A +30% EV bet is enormous -- for reference, professional bettors grind out careers on 2-4% edges. This is why sharp bettors max out every qualifying boost they see: the per-bet dollar amounts are capped, but the edge per dollar is often 10x anything obtainable at normal prices.
 
-Our [Boost EV calculator](/tools/boost-ev) does all three steps -- enter the boosted price and the market's normal two-sided prices, and it returns the true EV plus a Kelly-sized stake.
+Our [Boost EV calculator](/tools/boost-ev) does all three steps -- enter the boosted price and the market's normal two-sided prices, and it returns the true EV plus a [Kelly-sized](/learn/kelly-criterion-sports-betting) stake.
 
 ## Rules of thumb
 

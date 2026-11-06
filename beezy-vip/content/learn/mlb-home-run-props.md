@@ -4,7 +4,7 @@
 
 A **home run prop** on DraftKings is a yes/no bet on whether a specific batter will hit a home run in a single game.
 
-Example: "Will Shohei Ohtani hit a home run tonight? Yes (-120) or No (-120)?"
+Example: "Will Shohei Ohtani hit a home run tonight? Yes (+230)?" The No side is priced as a heavy favorite, and almost every Yes price is plus money: a home run in one specific game is never the likely outcome for any single batter.
 
 If the batter hits a home run at any point in the game (before game ends), the yes side wins. It doesn't matter if it's a solo shot or a grand slam, infield or outfield—one home run = win.
 
@@ -13,7 +13,7 @@ If the batter hits a home run at any point in the game (before game ends), the y
 1. **High variance** — home runs are rare and explosive, so odds can be favorable (+150 to +300)
 2. **Visual appeal** — everyone watches for home runs. It's engaging.
 3. **Available every day** — 15 games with 2–3 major hitters each = 30–45 prop options daily
-4. **Bankroll leverage** — if you find a +200 shot that you think is 20% (implied 33%), you're risking 1 unit to win 2
+4. **Bankroll leverage** — if you find a +200 shot that you make 40% (implied 33%), you're risking 1 unit to win 2
 
 The downside: **home run props are one of the least efficient markets** because casual bettors love the upside and chase favorites they recognize.
 
@@ -49,6 +49,8 @@ A batter with:
 
 ...has roughly 25–30% chance of a home run per game.
 
+These are the inputs Beezy's [home run model](/models/hr) weighs first: barrel rate and exit velocity for the batter, HR/9 and fly-ball rate for the pitcher, then park and platoon adjustments.
+
 ### 2. Pitcher's Fly Ball Rate and HR/9
 Some pitchers give up more home runs. This is partly because they're worse, but also because of their pitch selection.
 
@@ -64,9 +66,9 @@ Facing a pitcher who allows 1.5 HR/9 is dramatically different from facing one w
 Different parks suppress or amplify home runs:
 
 - **Most HR-friendly:** Yankee Stadium, Globe Life (Rangers), Coors Field
-- **Most HR-suppressing:** Comerica Park (Tigers), Oakland Coliseum, Petco (Padres)
+- **Most HR-suppressing:** Comerica Park (Tigers), Oracle Park (Giants), Petco Park (Padres)
 
-A 90 mph line drive that's a home run in Yankee Stadium is a double in Oakland. DK usually prices this in, but soft-book lines sometimes don't.
+A 90 mph line drive that's a home run in Yankee Stadium is a double in San Francisco. DK usually prices this in, but soft-book lines sometimes don't.
 
 Reference: [Here's a list of park factors](https://www.baseball-reference.com/play-index/). Anything above 1.0 is HR-friendly. Below 1.0 suppresses HRs.
 
@@ -95,14 +97,14 @@ DK sometimes prices this in, sometimes doesn't. Sharp bettors monitor weather up
 
 ## Home Run Prop Pricing
 
-**Typical odds:**
-- **Superstar slugger** (Judge, Ohtani, Trout): -130 to -150 (56–60% implied)
-- **Star player** (Machado, Soto): -110 to -120 (52–55% implied)
-- **Above-average hitter**: -110 (52% implied)
-- **Average hitter**: +100 to +130 (50–57% implied)
-- **Weak hitter**: +200 to +600 (33% implied or less)
+**Typical odds (the Yes side):**
+- **Superstar slugger** (Judge, Ohtani, Trout): +150 to +250 (29–40% implied)
+- **Star player** (Machado, Soto): +250 to +350 (22–29% implied)
+- **Above-average hitter**: +350 to +500 (17–22% implied)
+- **Average hitter**: +500 to +700 (12–17% implied)
+- **Weak hitter**: +700 and up (13% implied or less)
 
-Books use lazy pricing: "This guy hit 0.30 HR/game last season, so -110 implied 52% is close enough."
+Books use lazy pricing: "This guy hit 0.30 HR/game last season, so a flat plus price is close enough."
 
 But the sharp books (Pinnacle) will price:
 - Cold-weather adjustment
@@ -117,21 +119,21 @@ This is where edge lives: finding mispricings the soft books (DK) miss.
 ### Scenario 1: Cold Weather Underdog
 - Batter normally 0.25 HR/game (implied 25% per game)
 - It's 45°F and windy
-- Book still prices at -110 (52% implied)
+- Book still prices the Yes at +200 (33% implied)
 - True probability: maybe 15% in cold weather
 - **Bet: No side** (odds favor it)
 
 ### Scenario 2: Pitcher Factor
 - Batter has 0.30 HR/game on the season
 - Facing a pitcher with 1.8 HR/9 (well above average)
-- Book prices at -110 (52% implied)
+- Book prices the Yes at +300 (25% implied)
 - True probability: 35–40%
 - **Bet: Yes side** (underpriced)
 
 ### Scenario 3: Park Factor Mispricing
 - Batter has 0.25 HR/game on the season
 - Playing at Yankee Stadium (1.15 park factor)
-- Book prices at -110 (52% implied)
+- Book prices the Yes at +300 (25% implied)
 - True probability with park factor: 30–35%
 - **Bet: Yes side** (underpriced)
 
@@ -182,6 +184,7 @@ The house hit rate on HR props is around 45–50% on average. If you're consiste
 
 ## Tools to Help
 
+- **Beezy's [HR picks](/picks/mlb/hr)** — the batters whose model price clears the book's, posted daily
 - **Baseball Reference** — season splits, park factors, pitcher HR/9
 - **Weather.com** — check game-time temperatures
 - **Savant** — exit velo, barrel rate, player home run distances

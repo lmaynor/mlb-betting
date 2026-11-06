@@ -1,6 +1,6 @@
 /**
  * Information architecture: the ONE place that says which pages exist in the top nav and which pages are views of
- * the same section. Five questions, five nav items; everything else is a tab inside one of them.
+ * the same section. Five questions, five section nav items, plus the guides; everything else is a tab inside one of them.
  *
  *   Scanner  what is mispriced right now?     /ev (Odds Terminal: every book's player-prop price) + /ev/projections (the model's lambda for every
  *            player prop and NBA / NHL game line, UNVALIDATED) + /ev/games (every game's lines and prices: board + card, UNVALIDATED) + /edge (prop research view)
@@ -9,6 +9,7 @@
  *            /picks/games (game picks) still resolves but is HIDDEN: no tab, no link, no sitemap entry, noindex.
  *   Results  what happened, and is it real?   /results (ledger)      + /analytics tabs + /models (methodology)
  *   Tools    calculators and dashboards       /tools/*
+ *   Learn    how does this market work?       /learn (the guides: one per market and concept; the system, model and tool pages link back to them)
  *   Home     proof, nothing else
  *
  * There is no global sport ribbon: it linked away from the page it sat on. A page that needs a sport filter has its own pills, built
@@ -55,6 +56,7 @@ export const NAV: NavItem[] = [
   { label: 'Picks',        href: '/picks',   prefixes: ['/picks', '/cheat-sheet', '/sports'] },
   { label: 'Results',      href: '/results', prefixes: ['/results', '/analytics', '/models'] },
   { label: 'Tools',        href: '/tools',   prefixes: ['/tools'] },
+  { label: 'Learn',        href: '/learn',   prefixes: ['/learn'] },
 ]
 
 const under = (path: string, prefix: string) => path === prefix || path.startsWith(prefix + '/')

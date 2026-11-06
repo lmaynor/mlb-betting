@@ -1,8 +1,10 @@
-# NRFI Betting Strategy: A Data-Driven Approach
+# NRFI Betting Strategy: How to Find Edge in the First Inning
 
 ## Beyond the Basics
 
-You now know what NRFI is (no run first inning). You know the baseline (55% of games go scoreless). You know the factors (pitcher, lineup, weather).
+This guide assumes you know the bet. If you need the definition, the odds format or how NRFI settles, start with [what NRFI betting is](/learn/what-is-nrfi-betting); that guide owns the basics and this one does not repeat them.
+
+Here the question is narrower: how does a scoreless-first-inning probability get built, how is it compared with the price, and when is the difference worth betting?
 
 Now comes the hard part: **how do you actually find edge?**
 
@@ -183,6 +185,12 @@ NRFI is less efficient in:
 - **September:** Weak teams in playoffs, strong hitting (more YRFI)
 
 The book struggles to price seasonal variance. Sharp bettors exploit this. You can too.
+
+## How Beezy's NRFI Model Does It
+
+The scoring system above is a hand-built screen: fixed weights, set by judgment. Beezy's production [NRFI model](/models/nrfi) does the same job with a trained XGBoost ensemble and isotonic calibration on pitch-level Statcast data (2021–2025), with the weights learned instead of chosen. The inputs match this guide's: starters' first-inning tendencies, top-of-order quality, the umpire's called-strike tendency, park and weather.
+
+When the model's probability beats the price by enough, the play posts to the [NRFI picks](/picks/mlb/nrfi) board and settles in the public results. The hand screen is the training-wheels version of that pipeline, and the discipline transfers: filter hard, size small, track everything.
 
 ## The Bottom Line
 

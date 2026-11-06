@@ -1,4 +1,4 @@
-# Understanding Line Movement in Sports Betting
+# Line Movement: Why Betting Lines Move and How to Read Them
 
 ## What Is Line Movement?
 
@@ -102,41 +102,25 @@ Sharps got -120 on Giants. Public got -115 on Dodgers. Closing settled -112.
 
 ## Closing Line Value (CLV)
 
-This is the **true measure of betting skill**.
+Closing line value compares the price you took with the price at the close. It is a better early read on skill than a short win-loss record.
 
 ```
-clv = (your_opening_odds - closing_odds)
+CLV: positive when the closing price is worse for a bettor than the price you took
 ```
 
-If you bet Dodgers at -110 opening and closing is -130:
-- You got -110 when the market eventually said -130
-- You got a *worse* deal than the sharps' consensus
-- Negative CLV
-
-If you bet Giants at +130 opening and closing is +112:
-- You got +130 when the market eventually said +112
-- You got a *better* deal than consensus
+If you bet the Dodgers at -110 and the line closes at -130:
+- You took -110 when the market finished at -130
+- The market moved toward your side, so you got the better price
 - Positive CLV
 
-**Professionals track CLV, not just hit rate.**
+If you bet the Giants at +130 and the line closes at +112:
+- You took +130 when the market finished at +112
+- The market moved toward your side, so you got the better price
+- Positive CLV
 
-Why? Because hit rate can be 50% but CLV positive (you're beating the market). Or 52% but CLV negative (you're getting bad odds).
+If you bet the Dodgers at -130 and the line closes at -110, the market moved away from you: negative CLV.
 
-### The Math:
-Over 100 bets:
-- Hit rate: 52% (you're winning 52 out of 100)
-- Closing line value: +1.5% (on average, you get 1.5% better odds than closing)
-- ROI: 52% × average_odds - 100% ≈ 2–3%
-
-That's professional territory.
-
-Without CLV:
-- Hit rate: 52%
-- Opening odds: You bet -110
-- Closing line: You got -115 (worse)
-- Effective ROI: nearly 0%
-
-Same hit rate, different skill.
+**Hit rate alone is noisy.** Over a few hundred bets a 52% win rate can be luck. At -110 the break-even win rate is 52.38%, so 52% actually loses about 0.8% per bet. A bettor who consistently takes prices better than the close is doing something repeatable, which is why CLV is tracked alongside results. See the [CLV guide](/learn/closing-line-value-clv) and the [CLV Tracker](/tools/clv-tracker).
 
 ## Line Movement Signals
 
@@ -163,10 +147,11 @@ Same hit rate, different skill.
 ## How to Track Line Movement
 
 Tools to use:
-1. **Action Network** — shows opening, closing, and line movement history
-2. **Covers.com** — historical odds from all books
-3. **BookMaker.eu** — European odds archive (sharper than US lines)
-4. **Your own spreadsheet** — track opening and closing for every bet
+1. **Beezy's [Odds Terminal](/ev)** — every book's current price for a market on one screen, so a move at one book stands out against the rest
+2. **Action Network** — shows opening, closing, and line movement history
+3. **Covers.com** — historical odds from all books
+4. **BookMaker.eu** — European odds archive (sharper than US lines)
+5. **Your own spreadsheet** — track opening and closing for every bet
 
 **Spreadsheet columns:**
 - Date

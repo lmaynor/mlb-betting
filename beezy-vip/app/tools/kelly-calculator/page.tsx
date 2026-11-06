@@ -66,7 +66,7 @@ export default function KellyCalculatorPage() {
             </div>
           </div>
           <div className="py-3.5 px-5">
-            <p className="times text-compact text-text-secondary leading-[1.6]">Half Kelly is recommended for most bettors. Full Kelly maximizes long-run growth but requires accurate probability estimates.</p>
+            <p className="times text-compact text-text-secondary leading-[1.6]">Half Kelly is recommended for most bettors. Full Kelly maximizes long-run growth but requires accurate probability estimates. New to the formula? The <a href="/learn/kelly-criterion-sports-betting" className="text-link underline">Kelly Criterion guide</a> works a full example.</p>
           </div>
         </div>
       )}
