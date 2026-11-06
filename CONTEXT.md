@@ -452,6 +452,9 @@ gs://concrete-crow-445205-m4-mlb-data/
 │   ├── {date}/{kind}_{HHMM}.csv         best-book flattened rows
 │   ├── latest.json                     pointer + status
 │   └── _credits/{YYYY-MM}.json         implicit monthly credit tally (guard)
+├── Odds/bettingpros_nhl_games/{moneyline,spread,total}/{YYYY-MM-DD}.parquet   HISTORICAL NHL GAME lines (spread = puck line), long format, 2021-01-01
+│                                       .. 2026-11-04, ONE-OFF crawl by mlb_core/odds/bettingpros_games.py (s26); not a scheduled job. Same schema as
+│                                       Odds/bettingpros_nba_games (written by nba/games/bp_games.py on feat/nba-game-models).
 ├── Odds/bettingpros_live/{sport}/latest.json   LIVE BettingPros props (nfl|nhl|nba), ParlayAPI event shape, overwritten hourly by
 │                                       bp-live-{sport}; {fetched_at, window, events, counts}. NOT the historical Odds/bettingpros_{sport}/ crawl.
 ├── Rosters/{sport}.json                Active-roster cache for the picks boards {fetched_at, source, partial, teams, players, ambiguous}
@@ -4547,3 +4550,27 @@ Code: `mlb_core/odds/props_residual.py` (model, features, expanding-window proto
   (2) BettingPros carries OPENING quotes (`is_open` rows, one per book) so open->close line movement IS available (the consensus loader drops them). (3) Best-price ROI is a quote artifact: the no-model rule returned +14.5% in NBA 2025 (7.5 books per prop vs 4.2 in 2021);
   always compare to a same-count line-shopping control. (4) The NFL over rate moves by season (45.2% .. 50.0%), so a recalibration learned in 2021-22 hurts later (calibration-only is worse than the market in NFL 2023-25). (5) The oracle-absence variants of `scripts.nba_engine_vs_market` leak the
   game being priced; this study uses `ship_noabs` only. (6) NFL identity loses ~31% of consensus rows (names that do not resolve to a player-week).
+
+## 26. NHL historical game lines (BettingPros) and the NHL game engine vs the closing line (2026-11-05)
+
+- **Backfill (WRITTEN to GCS, owner-authorised, one-off, no job / scheduler):** `mlb_core/odds/bettingpros_games.py` crawls BettingPros' `game-odds` markets
+  (NHL: moneyline 193, puck-line 195, total 194; offers exist only from 2021-01) into `Odds/bettingpros_nhl_games/{moneyline,spread,total}/{date}.parquet`
+  (`spread` = puck line; long format: one row per event x side x book x line, plus `is_open` opening rows; same schema as `Odds/bettingpros_nba_games`).
+  2021-01-01 .. 2026-11-04, 1,590 partitions per market, 543,371 rows, 54 MB, 0 errors. Resumable (existing partitions, empty ones included, are skipped),
+  polite (4 requests a day, ~6 s a day), stops on 401 / 403 / CAPTCHA (exit 3) or 5 failed days in a row. Re-run it to top up:
+  `GCS_BUCKET=<bucket> python -m mlb_core.odds.bettingpros_games --sport NHL --start 2021-01-01`. `read_games` de-duplicates, `close_quotes` defines the close
+  (real books only, last change <= scheduled start + 10 min, never an in-play re-post).
+- **Gotchas:** playoffs are `season_type == "PST"`; moneyline `line` is a meaningless 1 (stored NaN); the open is ONE quote per side (usually DraftKings), not per book;
+  `scheduled` equals the NHL schedule's `start_utc` to the minute; `LA/NJ/SJ/TB` vs `LAK/NJD/SJS/TBL` and dated ARI/UTA via `nhl.props.history.canon_team`;
+  BettingPros' Arizona moneyline / puck-line offers (2020-21 to 2023-24) carry only the opponent's selection, so ~300 ARI games have no pair; and
+  **`ARI` is not in `nhl.config.TEAMS`**, so the deployed NHL game engine raises on a Coyotes game and skips it in the Kalman update (not fixed).
+  See `docs/solutions/integration-issues/bettingpros-nhl-game-lines-history.md`.
+- **`nhl/game/market_eval.py` now runs** (it used to refuse): day-batched walk-forward replay of the engine as deployed (goalie GSAx strictly before the game),
+  priced at the market's own puck line / total, scored with `mlb_core/eval/market_scoring.py`, plus per-season tables, same-book open-to-close CLV with a no-model
+  control, realised open-price ROI, vs-the-open scoring and a validation section (`--validate`; sensitivities `--ari-as-uta`, `--fresh-hours`, `--min-books`,
+  `--exclude-book-ids`).
+- **Result (UNVALIDATED research):** the engine LOSES to the closing line on moneyline, puck line and total in every season: pooled log-loss gain -0.029 / -0.031 /
+  -0.020 (z -9.3 / -10.5 / -8.3, n ~7,400-7,900), blend weight c +0.06 / +0.04 / +0.00 (z 1.2 / 0.9 / 0.1), over-confident (ECE 5-8 points vs the market's 1), edge
+  buckets not rising, all robust to ARI-as-UTA / 6 h freshness / 5 books. Lead, not edge: the model's lean predicts open-to-close drift (same-book CLV vs a blind
+  control +0.5 to +0.9%, z 6.6 to 10.7) yet realised ROI at the open is -1.6% to -3.5%. Replay leakage is pinned by a scramble test.
+  See docs/analysis/nhl_game_line_harness_2026-11-05.md.
