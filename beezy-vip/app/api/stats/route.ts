@@ -10,5 +10,7 @@ export async function GET(req: NextRequest) {
     next: { revalidate: 300 },
   })
   const data = await res.json()
-  return NextResponse.json(data)
+  // Anonymous season aggregates (no viewer is read here): let the CDN share the response for the same
+  // 300s window the upstream fetch already uses, with SWR covering the refresh.
+  return NextResponse.json(data, { headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' } })
 }

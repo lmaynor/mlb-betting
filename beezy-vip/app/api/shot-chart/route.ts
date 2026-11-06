@@ -14,7 +14,9 @@ export async function GET(req: NextRequest) {
   try {
     const res = await fetch(`${API_URL}/api/public/edge/shotchart${qs ? `?${qs}` : ''}`, {
       headers: { 'X-API-Key': API_KEY },
-      cache: 'no-store',
+      // Shot charts are historical aggregates: share one upstream fetch for 300s (the window
+      // lib/betting-api.ts uses server-side). The access gate above still runs per request.
+      next: { revalidate: 300 },
     })
     return NextResponse.json(await res.json(), { status: res.ok ? 200 : res.status })
   } catch {

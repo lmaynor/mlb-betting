@@ -12,7 +12,10 @@ export async function GET(req: NextRequest) {
   const qs = req.nextUrl.searchParams.toString()
   const res = await fetch(`${API_URL}/api/public/ev/feed${qs ? `?${qs}` : ''}`, {
     headers: { 'X-API-Key': API_KEY },
-    cache: 'no-store',
+    // Share ONE upstream fetch across viewers for 60s (the same window lib/betting-api.ts uses server-side for
+    // this endpoint; the backend alert loop itself runs on a 15-minute cadence). The per-viewer cut below
+    // still runs on every request, so no response is ever shared across viewers.
+    next: { revalidate: 60 },
   })
   const data = await res.json()
   // Live rows are the Pro surface (lib/access.ts); this public proxy must not hand out what the page withholds.

@@ -19,5 +19,7 @@ export async function GET(req: NextRequest) {
   }
 
   const result = kellyStake(bankroll, odds, prob)
-  return NextResponse.json(result)
+  // Pure function of the query params (no viewer, no upstream): the CDN may share the response, so repeat
+  // calculations cost no function invocation at all.
+  return NextResponse.json(result, { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } })
 }

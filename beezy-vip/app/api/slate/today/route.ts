@@ -12,7 +12,10 @@ export async function GET(_req: NextRequest) {
   if (!API_URL) return NextResponse.json({ error: 'API not configured' }, { status: 500 })
   const res = await fetch(`${API_URL}/api/public/slate/today`, {
     headers: { 'X-API-Key': API_KEY },
-    cache: 'no-store',
+    // The slate payload is the same for every signed-in viewer, so the upstream fetch can be shared for
+    // 300s (the window lib/betting-api.ts uses server-side). The login gate above still runs on every
+    // request and the response itself is never CDN-shared.
+    next: { revalidate: 300 },
   })
   const data = await res.json()
   return NextResponse.json(data)

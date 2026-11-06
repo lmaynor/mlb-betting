@@ -14,7 +14,9 @@ export async function GET(req: NextRequest) {
   try {
     const res = await fetch(`${API_URL}/api/public/projections${qs ? `?${qs}` : ''}`, {
       headers: { 'X-API-Key': API_KEY },
-      cache: 'no-store',
+      // Share ONE upstream fetch across viewers for 60s (the same window lib/betting-api.ts uses server-side
+      // for this endpoint). The per-viewer cut below still runs on every request.
+      next: { revalidate: 60 },
     })
     const data = await res.json()
     const sport = req.nextUrl.searchParams.get('sport') ?? ''

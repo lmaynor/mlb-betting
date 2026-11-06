@@ -14,7 +14,9 @@ export async function GET(req: NextRequest) {
   try {
     const res = await fetch(`${API_URL}/api/public/edge-enrich?${qs.toString()}`, {
       headers: { 'X-API-Key': API_KEY },
-      cache: 'no-store',
+      // Enrichment (season stats, recent form, weather) is slow-moving: share one upstream fetch for 300s
+      // (the window lib/betting-api.ts uses server-side for this endpoint).
+      next: { revalidate: 300 },
     })
     if (!res.ok) return NextResponse.json({ date, players: {} })
     return NextResponse.json(await res.json())

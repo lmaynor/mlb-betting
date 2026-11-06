@@ -28,5 +28,7 @@ export async function GET(req: NextRequest) {
       fairOdds:        formatOdds(probToAmerican(fair2)),
     },
     vig: `${vig.toFixed(2)}%`,
-  })
+  // Pure function of the query params (no viewer, no upstream): the CDN may share the response, so repeat
+  // calculations cost no function invocation at all.
+  }, { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } })
 }
