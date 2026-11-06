@@ -10,7 +10,8 @@ import { EdgeEvLegend } from '@/components/ui/edge-ev-legend'
 import { SportTabs } from '@/components/picks/sport-tabs'
 import { SystemMethodology } from '@/components/picks/system-methodology'
 import { SystemStrip } from '@/components/picks/system-strip'
-import { getViewer } from '@/lib/auth'
+import { connection } from 'next/server'
+import { gatingOn } from '@/lib/access'
 import { apiGetStats } from '@/lib/betting-api'
 import { withCounts } from '@/lib/board-games'
 import { applyPickFilters } from '@/lib/board-rows'
@@ -18,7 +19,7 @@ import { siteDateKey } from '@/lib/dates'
 import type { PickSystem } from '@/lib/pick-systems'
 import { liveAccuracy } from '@/lib/prop-model-specs'
 import { parsePickFilters } from '@/lib/picks-filters'
-import { loadSportBoard } from '@/lib/sport-board-data'
+import { loadSportBoardForPage } from '@/lib/board-page-loader'
 import { SPORT_PILLARS, type ProjectionSport } from '@/lib/sports'
 import { SURFACE_CARD, SYSTEM_COLOR } from '@/lib/tokens'
 
@@ -37,8 +38,11 @@ export async function SystemPage({ system, searchParams }: { system: PickSystem;
   const color = SYSTEM_COLOR[system.key] ?? pillar.accent
   const f = parsePickFilters(await searchParams)
   const today = siteDateKey()
+  // Same rule as the sport board: a per-viewer cut (gating on) is never cached; gating off, the loader
+  // serves its 60s result cache and never resolves the Clerk session.
+  if (gatingOn()) await connection()
   const [board, allStats] = await Promise.all([
-    system.gap ? null : getViewer().then(v => loadSportBoard(sport, v, { day: f.day, date: f.date, view: 'picks' })),
+    system.gap ? null : loadSportBoardForPage(sport, { day: f.day, date: f.date, view: 'picks' }),
     tracked ? apiGetStats().then(s => s.bySystem).catch(() => []) : Promise.resolve([]),
   ])
   const base = board ? board.rows.filter(r => r.system === system.key) : []

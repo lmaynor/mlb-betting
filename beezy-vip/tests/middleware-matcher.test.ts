@@ -36,7 +36,35 @@ describe('middleware matcher coverage for session-reading API routes', () => {
     '/api/analytics',
     '/results',
     '/',
+    // Self-authenticating routes: the Stripe webhook verifies its signature, the cron checks CRON_SECRET.
+    '/api/webhooks/stripe',
+    '/api/cron/stripe-reconcile',
+    // Purely static public pages: no session read, not geo-gated paths.
+    '/learn',
+    '/learn/f5-betting-mlb',
+    '/about',
+    '/legal/privacy',
+    '/pricing',
+    '/compare/oddsjam-alternative',
+    '/blocked',
+    '/tools/kelly-calculator',
+    '/tools/odds-calculator',
+    '/tools/boost-ev',
   ])('middleware stays excluded for the public surface %s', (path) => {
     expect(runs(path)).toBe(false)
+  })
+
+  it.each([
+    // Member tools stay matched even though other /tools pages are excluded.
+    '/tools/bet-tracker',
+    '/tools/clv-tracker',
+    '/tools/slate',
+    '/api/user/bankroll',
+    '/api/picks',
+    '/api/ev',
+    '/login',
+    '/signup',
+  ])('middleware still runs for %s', (path) => {
+    expect(runs(path)).toBe(true)
   })
 })

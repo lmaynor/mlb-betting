@@ -1,3 +1,5 @@
+// Per-request rendering, same as the sport board page: SystemPage reads searchParams. Canonical no-query
+// URLs are CDN-cached at the edge while gating is off (middleware.ts); the loader is result-cached.
 export const dynamic = 'force-dynamic'
 
 import type { Metadata } from 'next'
