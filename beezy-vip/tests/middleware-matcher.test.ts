@@ -34,6 +34,7 @@ describe('middleware matcher coverage for session-reading API routes', () => {
     '/api/og/games-card',
     '/api/og/picks-card',
     '/api/analytics',
+    '/api/collect',
     '/results',
     '/',
   ])('middleware stays excluded for the public surface %s', (path) => {

@@ -86,7 +86,9 @@ export const config = {
     // /api/slate/* and /api/stats/clv are NOT excluded: they are the data plane of the login-gated /tools pages and
     // their handlers check the session with getUserId(), which only resolves when clerkMiddleware runs. The rest of
     // /api/stats (the summary proxies) stays excluded: it serves public season aggregates and never reads the viewer.
-    '/((?!_next|api/(?:og|stats(?!/clv(?:/|$))|sparkline|analytics|edge-enrich|tools)(?:/|$)|results$|analytics$|tools$|models(?:/|$)|$|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|txt|xml)).*)',
-    '/(api(?!/(?:og|stats(?!/clv(?:/|$))|sparkline|analytics|edge-enrich|tools)(?:/|$))|trpc)(.*)',
+    // /api/collect is excluded for the same reason as /api/analytics: it only classifies request headers and never
+    // reads the viewer, so spending a middleware run on it would be pure Active CPU cost.
+    '/((?!_next|api/(?:og|stats(?!/clv(?:/|$))|sparkline|analytics|collect|edge-enrich|tools)(?:/|$)|results$|analytics$|tools$|models(?:/|$)|$|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|txt|xml)).*)',
+    '/(api(?!/(?:og|stats(?!/clv(?:/|$))|sparkline|analytics|collect|edge-enrich|tools)(?:/|$))|trpc)(.*)',
   ],
 }
