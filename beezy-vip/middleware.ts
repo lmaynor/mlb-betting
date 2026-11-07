@@ -119,9 +119,10 @@ export const config = {
     // CRON_SECRET itself) -- neither reads a Clerk session, so a middleware run bought them nothing. The purely
     // static public pages (learn, about, legal, pricing, compare, blocked, the three calculator pages) read no
     // session and are not geo-gated paths, so they are excluded too; /picks stays matched because the geo
-    // redirect above applies to it. NOTE for whoever merges the anon-traffic PR: keep /api/collect excluded
-    // from this same list when it lands -- the two exclusion sets compose.
-    '/((?!_next|api/(?:og|stats(?!/clv(?:/|$))|sparkline|analytics|edge-enrich|tools|webhooks|cron)(?:/|$)|results$|analytics$|tools$|tools/(?:boost-ev|kelly-calculator|odds-calculator)$|models(?:/|$)|learn(?:/|$)|about$|legal(?:/|$)|pricing$|compare(?:/|$)|blocked$|$|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|txt|xml)).*)',
-    '/(api(?!/(?:og|stats(?!/clv(?:/|$))|sparkline|analytics|edge-enrich|tools|webhooks|cron)(?:/|$))|trpc)(.*)',
+    // redirect above applies to it.
+    // /api/collect is excluded for the same reason as /api/analytics: it only classifies request headers and never
+    // reads the viewer, so spending a middleware run on it would be pure Active CPU cost.
+    '/((?!_next|api/(?:og|stats(?!/clv(?:/|$))|sparkline|analytics|collect|edge-enrich|tools|webhooks|cron)(?:/|$)|results$|analytics$|tools$|tools/(?:boost-ev|kelly-calculator|odds-calculator)$|models(?:/|$)|learn(?:/|$)|about$|legal(?:/|$)|pricing$|compare(?:/|$)|blocked$|$|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|txt|xml)).*)',
+    '/(api(?!/(?:og|stats(?!/clv(?:/|$))|sparkline|analytics|collect|edge-enrich|tools|webhooks|cron)(?:/|$))|trpc)(.*)',
   ],
 }
