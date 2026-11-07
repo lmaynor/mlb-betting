@@ -34,6 +34,7 @@ describe('middleware matcher coverage for session-reading API routes', () => {
     '/api/og/games-card',
     '/api/og/picks-card',
     '/api/analytics',
+    '/api/collect',
     '/results',
     '/',
     // Self-authenticating routes: the Stripe webhook verifies its signature, the cron checks CRON_SECRET.

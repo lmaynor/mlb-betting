@@ -14,6 +14,7 @@ import { LiveTicker } from '@/components/layout/live-ticker'
 import { Footer } from '@/components/layout/footer'
 import { BottomNav } from '@/components/layout/bottom-nav'
 import { SectionTabs } from '@/components/layout/section-tabs'
+import { AnonTrafficBeacon } from '@/components/anon-traffic-beacon'
 import { Suspense } from 'react'
 import { jsonLdString, ORGANIZATION_LD, WEBSITE_LD } from '@/lib/seo'
 
@@ -67,6 +68,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <main>{children}</main>
           <Footer />
           <BottomNav />
+          <AnonTrafficBeacon />
         </div>
       </body>
     </html>
