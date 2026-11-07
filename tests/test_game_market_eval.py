@@ -50,9 +50,12 @@ def test_nba_market_reduction_uses_fresh_books_on_the_modal_line_and_drops_conse
     assert nba_me._tri("PHO") == "PHX" and nba_me._tri("NOR") == "NOP" and nba_me._tri("UTH") == "UTA"
 
 
-def test_nhl_refuses_without_odds(capsys):
-    assert nhl_me.main([]) == 2
-    assert "No NHL historical game-line odds" in capsys.readouterr().err
+def test_nhl_refuses_a_too_small_events_table(tmp_path, capsys):
+    """NHL now reads the banked BettingPros game lines (tests/test_nhl_market_eval.py); the prebuilt-table path still refuses tiny samples."""
+    p = tmp_path / "ev.csv"
+    pd.DataFrame({"date": ["2024-01-01"] * 5, "p_model": 0.5, "p_mkt": 0.5, "y": 1}).to_csv(p, index=False)
+    assert nhl_me.main(["--events", str(p)]) == 2
+    assert "need >=" in capsys.readouterr().out
 
 
 def test_play_clock_is_a_string_column_in_real_nflverse_pbp():
