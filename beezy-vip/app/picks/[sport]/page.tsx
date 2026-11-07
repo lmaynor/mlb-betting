@@ -1,3 +1,7 @@
+// Per-request rendering: SportBoardPage reads searchParams (filters/day), which is a dynamic API, so this
+// route cannot be ISR while filters are server-side. The CPU fix for the canonical no-query URLs is at the
+// edge instead: middleware puts a short CDN cache on them while tier gating is off (see middleware.ts), and
+// the board loader itself is result-cached (lib/sport-board-data.ts loadSportBoardForPage).
 export const dynamic = 'force-dynamic'
 
 import type { Metadata } from 'next'

@@ -9,13 +9,15 @@ import { SportProjectionsBoard } from '@/components/picks/sport-projections-boar
 import { SportTabs, type SportView } from '@/components/picks/sport-tabs'
 import { ScoreLegend } from '@/components/ui/score-legend'
 import { EdgeEvLegend } from '@/components/ui/edge-ev-legend'
-import { getViewer } from '@/lib/auth'
+import { connection } from 'next/server'
+import { gatingOn } from '@/lib/access'
 import { withCounts } from '@/lib/board-games'
 import { applyPickFilters, isOfficialRow, isOutlierRow, pickRows } from '@/lib/board-rows'
 import { siteDateKey } from '@/lib/dates'
 import type { PickKind } from '@/lib/pick-systems'
 import { activeFilterCount, parsePickFilters } from '@/lib/picks-filters'
-import { loadSportBoard, type BoardView } from '@/lib/sport-board-data'
+import { loadSportBoardForPage } from '@/lib/board-page-loader'
+import { type BoardView } from '@/lib/sport-board-data'
 import { SPORT_PILLARS, STATUS_LABEL, type ProjectionSport, type SportSlug } from '@/lib/sports'
 
 const COPY: Record<BoardView, { h1: (s: string) => string; sub: string; what: string }> = {
@@ -36,7 +38,11 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
   const rawParams = await searchParams
   const f = parsePickFilters(rawParams)
   const tierParam = rawParams.tier || 'all'
-  const board = await loadSportBoard(sport, await getViewer(), { day: f.day, date: f.date, view, kind })
+  // Tier gating on = the board is cut per viewer: connection() guarantees per-request rendering so the cut
+  // can never be cached or shared (the loader also branches on gatingOn). Gating off, the loader serves a
+  // 60s result cache and never resolves the Clerk session.
+  if (gatingOn()) await connection()
+  const board = await loadSportBoardForPage(sport, { day: f.day, date: f.date, view, kind })
   const copy = COPY[view]
   const today = siteDateKey()
 

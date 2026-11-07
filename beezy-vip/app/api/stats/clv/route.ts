@@ -14,7 +14,10 @@ export async function GET(req: NextRequest) {
   const url = `${API_URL}/api/public/stats/clv${qs ? `?${qs}` : ''}`
   const res = await fetch(url, {
     headers: { 'X-API-Key': API_KEY },
-    cache: 'no-store',
+    // The payload is global CLV aggregates (days/systems), not per-user data, so the upstream fetch can be
+    // shared for 300s (the window lib/betting-api.ts uses server-side). The login gate above still runs on
+    // every request and the response itself is never CDN-shared.
+    next: { revalidate: 300 },
   })
   const data = await res.json()
   return NextResponse.json(data)
