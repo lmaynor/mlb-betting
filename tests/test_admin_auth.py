@@ -161,6 +161,11 @@ class TestSchedulerAuthWhenEnabled:
 
     def test_malformed_bearer_token_rejected_not_crashed(self, m, monkeypatch):
         monkeypatch.setenv("ENFORCE_SCHEDULER_AUTH", "true")
+
+        def not_a_jwt(token, request, *a, **k):      # what google-auth raises for a non-JWT, without fetching Google's certs
+            raise ValueError("Wrong number of segments in token")
+
+        monkeypatch.setattr("google.oauth2.id_token.verify_oauth2_token", not_a_jwt)
         with m.app.test_request_context("/run", headers={"Authorization": "Bearer not-a-real-jwt"}):
             err = m._scheduler_auth_required(m.request)
             assert err is not None

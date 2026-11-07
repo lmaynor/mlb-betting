@@ -4475,6 +4475,9 @@ Catch-up for 20 commits (6835c26..2408d6a) that had no CONTEXT entry, plus the a
   Validated live against ParlayAPI on the same (row, book) pairs: 51 NBA pairs 28 identical / 23 within 5%, 35 NHL pairs 29 identical / 5 within 5% / 1 within 20%,
   zero >= 20%, no flipped sides. Row semantics: `docs/solutions/integration-issues/bestbook-game-line-row-semantics.md`.
 - **Test hygiene rule:** never put test detection (`PYTEST_CURRENT_TEST`) in production code; isolate with fixtures (`tests/conftest.py`).
+  The conftest also (2026-11-05) clears `MLB_GCS_BUCKET` / `GCS_BUCKET` / `MLB_DB_URL` per test, sets `SKIP_STARTUP_JITTER`, and BLOCKS every non-loopback
+  DNS / connect, failing the test at teardown with the host it tried to reach: stub the fetcher in the test, never allow the network. Module-level
+  `os.environ` edits in a test file are order-dependent state: use `monkeypatch`.
 
 ## 23. Tracked model picks for NFL / NBA / NHL props (2026-11-02)
 

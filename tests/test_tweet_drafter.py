@@ -34,6 +34,7 @@ def _no_discord_pacing(monkeypatch):
     TWO_DAYS_AGO = (ct_today - timedelta(days=2)).isoformat()
     monkeypatch.setattr(td.time, "sleep", lambda s: None)
     monkeypatch.setattr(td, "build_window_summary", lambda: "")      # never call the live API from a test
+    monkeypatch.setattr(td, "get_projections", lambda sport: {})     # main(picks) enriches from the projections API
 
 YESTERDAY = (date.today() - timedelta(days=1)).isoformat()
 TWO_DAYS_AGO = (date.today() - timedelta(days=2)).isoformat()
