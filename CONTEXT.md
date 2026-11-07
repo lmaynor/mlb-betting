@@ -1,6 +1,6 @@
 # Project Context
 
-_Last updated: 2026-11-02 CST_
+_Last updated: 2026-11-05 CST_
 
 The standing architectural and conventions document for `lmaynor/mlb-betting` (the repo) -- which hosts **beezy.fyi**, a multi-sport betting platform. Read this first at the start of any new session before touching code.
 
@@ -374,6 +374,8 @@ mlb-betting/
 │   │                             props_config.py. GCS output EVSweep/nfl_props/{ET day}/: cycle_*.csv (every
 │   │                             comparable row), book_outliers_*.csv (Sink A), pooled_*.csv (exact vs pooled).
 │                             props_exec --refresh-consensus = opt-in per-game consensus refresh (s15.11).
+│                             ev/novig/shadow_bank.py + shadow_job.py = durable GCS bank of the Novig shadow ledger + the scheduled
+│                             Cloud Run Job `novig-shadow-nfl` (deploy/setup_novig_shadow.sh; s15.11).
 ├── scripts/                      One-off ops scripts (cleanup_discord, debug_ops, ...).
 │                                 bettingpros_api.py = local CLI for the HR/multi-market
 │                                 odds scrape (Cloud Run Job is mlb-backfill-bettingpros).
@@ -455,6 +457,7 @@ gs://concrete-crow-445205-m4-mlb-data/
 ├── Odds/bettingpros_live/{sport}/latest.json   LIVE BettingPros props (nfl|nhl|nba), ParlayAPI event shape, overwritten hourly by
 │                                       bp-live-{sport}; {fetched_at, window, events, counts}. NOT the historical Odds/bettingpros_{sport}/ crawl.
 ├── Rosters/{sport}.json                Active-roster cache for the picks boards {fetched_at, source, partial, teams, players, ambiguous}
+├── Novig/shadow_ledger/{ET day}/{run}_{hash}.jsonl.gz   banked Novig SHADOW ledger (orders/decisions/fills/grp holds), create-only chunks; _verdicts/latest.json = derived forward-CLV verdicts (s15.11)
 ├── EVSweep/{sport}_props/projections_latest.json   the board payload (rewritten every 30 min by the daily-projections job)
 ├── EVSweep/{sport}_props/archive/{YYYY-MM-DD}.json one file per America/Chicago GAME day: each row's last pre-game state + that day's games
 ├── Alerts/{YYYY-MM-DD}/                Per-day state for the intraday +EV pagers
@@ -3583,8 +3586,29 @@ Kai-Wei Teng, Sawyer Gipson-Long. `player_map.json` keys and
   shadow fill** -- that fill is the only source of forward CLV (gating it would deadlock at n=0). No order client or live path
   was added (a test scans the new modules for order/network/credential code). **Current verdict: every slice CLOSED** -- the ledger
   holds 2 filled Novig plans (NFL rec_yds, 2026-10-12), mean CLV -1.10% vs Novig's own close / +2.70% vs closing consensus, 1 game
-  day, no CI. Missing: a running shadow loop, a durable (GCS) copy of the ledger, any non-NFL Novig mapper. See
-  docs/analysis/novig_exec_gate_2026-11-05.md.
+  day, no CI. Missing then: a running shadow loop, a durable (GCS) copy of the ledger (both built 2026-11-05, next bullet), any non-NFL
+  Novig mapper (still missing). See docs/analysis/novig_exec_gate_2026-11-05.md.
+- **Novig shadow banking + scheduled shadow job (2026-11-05, shadow/paper only).** Closes two of the gate's three gaps (a running loop,
+  a durable ledger). `ev/novig/shadow_bank.py`: banks the `novig`/`novig_paper` ledger rows (orders, decisions, fills, plus the `grp:*`
+  position-hold markers; NOT the kill switch) to `Novig/shadow_ledger/{ET day}/{run_id}_{sha8}.jsonl.gz`. Chunks are CREATE-ONLY
+  (`if_generation_match=0`), hold only rows not already banked, and every row has a natural key (orders `intent_id`, fills `fill_id`,
+  decisions = hash of the row, kv key), so banking twice writes nothing and a duplicate writer is deduped on restore. Read path:
+  `shadow_bank.banked_ledger(store)` (in-memory `Ledger`), `restore_into`, CLI `python -m ev.novig.shadow_bank {bank,restore,status}`,
+  `python -m ev.novig.clv_gate compute --bank --gcs-raw` (the gate over the banked copy + GCS closing payloads; `--raw-store`/`--store`
+  pick ADC `gcs`, the `gcloud` CLI, or `dir:PATH`). Laptop: `python -m ev.props_exec bank` (one-off) or `run ... --bank` (each pass).
+  `ev/novig/shadow_job.py` = Cloud Run Job `novig-shadow-nfl` (`deploy/setup_novig_shadow.sh`, `PAUSE=1`, run.invoker per job, feeds image,
+  Chicago-time crons 6 min after each NFL sweep cycle on Sun/Mon/Thu/Fri/Sat game windows): restores the day's orders/fills/holds from
+  the bank, reads the SWEEP's `EVSweep/nfl_props/consensus.json` (no Kalshi join -- Kalshi's CDN blocks some Cloud Run IPs and the
+  Novig pass does not use it), reads the PUBLIC Novig catalog/books (`NovigClient("public-data")`, no key), runs the unchanged
+  `ev.novig.exec.run_pass` with `paper_venue=None`, banks after every pass, and prints one `NOVIG_CLV_GATE ...` status line (slice status,
+  n, game days, mean CLV, lower CI, consensus CLV; recomputed only when a new fill arrived, else the banked verdict is reused). The only
+  secret it mounts is `MLB_GCS_BUCKET`. It works only on a snapshot younger than `cons_max_age_min` (25 min) minus a 2 min margin, so it
+  fires right after a sweep; a firing with no game in the window, a stale snapshot, or an unchanged held position is a no-op. Exit 1 (a
+  FAILED execution) on: missing consensus, Novig unreachable for every pass, any banking failure. NOT included, deliberately: the Novig
+  PAPER-sandbox mirror (needs the paper trading key, not in Secret Manager), `--refresh-consensus` (ParlayAPI credits), any live path,
+  any change to the gate thresholds (n >= 250, clustered CI). Do not run the laptop loop and the job against the same games at once:
+  intent ids are deterministic so the bank dedupes, but the two would each pay the same ask. Image: build a TAG
+  (`cloudbuild.yaml` now takes `_TAG`, default `latest`) so `mlb-betting-feeds:latest` is not moved by a feature branch.
 
 ---
 

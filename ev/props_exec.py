@@ -13,6 +13,9 @@ risk caps and kill switch as the MLB executor (mlb.execution.kalshi.*), and:
   --novig-paper-orders mirrors each Novig PLAN (decided on the PRODUCTION public book) as a signed IOC order on the
   Novig PAPER sandbox with the trading key in ~/.novig/paper.env -- plumbing validation, never edge (paper books
   are synthetic). Requires --novig; production Novig is refused in code.
+  python -m ev.props_exec bank [--bank-store gcs|gcloud]   # bank this ledger to GCS Novig/shadow_ledger/ (append-only, idempotent)
+  python -m ev.props_exec run --novig --bank ...           # same, after every pass (laptop loop); the scheduled Cloud Run job is
+                                                           # ev.novig.shadow_job (deploy/setup_novig_shadow.sh)
   python -m ev.props_exec pnl            # grade shadow fills on Kalshi's own settled result
   python -m ev.props_exec status
   --refresh-consensus  re-pull a candidate's book consensus for just that game (one ParlayAPI event pull, len(PARLAY_MARKETS) = 10 credits)
@@ -399,12 +402,17 @@ def main(argv=None) -> int:
                    help="refresh when the consensus is older than this (cons_max_age_min still hard-rejects)")
     r.add_argument("--refresh-max-credits", type=int, default=300, help="ParlayAPI credit cap for refreshes, per process")
     r.add_argument("--env-file", default=None)
+    r.add_argument("--bank", action="store_true",
+                   help="bank the ledger to GCS (Novig/shadow_ledger/) after every pass; failures are logged, never fatal")
+    r.add_argument("--bank-store", default="gcloud", help="gcs (Application Default Credentials) | gcloud (CLI) | dir:PATH")
     r.add_argument("--db", default=DEFAULT_DB)
     r.add_argument("--loop-seconds", type=int, default=0)
     r.add_argument("--until", default="")
-    for name in ("pnl", "status"):
+    for name in ("pnl", "status", "bank"):
         p = sub.add_parser(name)
         p.add_argument("--db", default=DEFAULT_DB)
+        if name == "bank":
+            p.add_argument("--bank-store", default="gcloud", help="gcs (Application Default Credentials) | gcloud (CLI) | dir:PATH")
     a = ap.parse_args(argv)
     if a.cmd == "run" and a.novig_paper_orders and not a.novig:
         ap.error("--novig-paper-orders requires --novig (decisions are made on the production Novig book)")
@@ -414,6 +422,10 @@ def main(argv=None) -> int:
     ledger = Ledger(a.db)
     data_client = KalshiClient(PUBLIC_DATA_ENV, None, None)
 
+    if a.cmd == "bank":
+        from ev.novig import shadow_bank as sb
+        print(json.dumps(sb.bank(ledger, sb.make_store(a.bank_store, _bucket())), indent=1, default=str))
+        return 0
     if a.cmd == "pnl":
         print("kalshi shadow:", json.dumps(grade(ledger, data_client), indent=1))
         from ev.novig import exec as nx
@@ -444,6 +456,10 @@ def main(argv=None) -> int:
     paper_venue = paper_risk = paper_legs = None
     legs_loaded = 0.0
     refresher = None
+    bank_store = bank_known = None
+    if a.bank:
+        from ev.novig import shadow_bank as sb
+        bank_store = sb.make_store(a.bank_store, _bucket())
     if a.refresh_consensus:
         from nba.odds.parlayapi import ParlayApiClient
         try:
@@ -509,6 +525,15 @@ def main(argv=None) -> int:
                     log.info("  %s", e)
             except Exception:                                                        # noqa: BLE001
                 log.exception("pass failed; retrying next cycle")
+        if bank_store is not None:
+            try:                                                                     # banking must never stop the shadow loop
+                if bank_known is None:
+                    bank_known = sb.load_known(bank_store)
+                br = sb.bank(ledger, bank_store, known=bank_known)
+                if br["chunks"]:
+                    log.info("BANKED %s", br["new_rows"])
+            except Exception:                                                        # noqa: BLE001
+                log.exception("banking failed; will retry next cycle")
         if not a.loop_seconds or (until and datetime.now(timezone.utc) >= until) or risk.killed:
             return 1 if risk.killed else 0
         sys.stdout.flush()

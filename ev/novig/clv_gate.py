@@ -26,7 +26,8 @@ Bets without a usable close are dropped from n (and counted in `coverage`) -- su
 the point is not a clean close.
 
 Verdict persistence: a local JSON file (NOVIG_GATE_VERDICT_FILE).  A missing, unreadable or stale file means CLOSED.
-No network, no GCS write, no credentials anywhere in this module.
+Inputs: a local ledger file, or (CLI `--bank`) the GCS-banked copy written by ev.novig.shadow_bank; closing lines from a local
+raw mirror or (`--gcs-raw`) GCS.  This module only READS those; no GCS write, no order path, no credentials anywhere in it.
 """
 
 from __future__ import annotations
@@ -399,9 +400,15 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Novig forward-CLV gate (offline; reads a LOCAL ledger + LOCAL raw mirror)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("compute", help="build the verdict table from a ledger and a local raw-payload mirror")
-    c.add_argument("--db", required=True, help="shadow ledger sqlite (opened read-only)")
+    src = c.add_mutually_exclusive_group(required=True)
+    src.add_argument("--db", help="shadow ledger sqlite (opened read-only)")
+    src.add_argument("--bank", action="store_true", help="read the BANKED ledger (ev.novig.shadow_bank, GCS) instead of a local file")
+    c.add_argument("--store", default="gcs", help="with --bank / --gcs-raw: gcs (ADC) | gcloud (CLI) | dir:PATH")
+    c.add_argument("--bucket", default=None, help="with --bank / --gcs-raw: bucket (default MLB_GCS_BUCKET)")
     c.add_argument("--raw-dir", default=None, help="local mirror laid out <dir>/raw/<ET day>/<event>_<HHMMSS>.json "
                                                   "(gcloud storage cp of EVSweep/nfl_props/raw/<day>/*); omit = no closing data")
+    c.add_argument("--gcs-raw", action="store_true", help="read the closing-line payloads straight from GCS (EVSweep/nfl_props/raw/)")
+    c.add_argument("--raw-store", default="gcs", help="with --gcs-raw: gcs (ADC) | gcloud (CLI) -- independent of --store")
     c.add_argument("--start", default=None)
     c.add_argument("--end", default=None)
     c.add_argument("--out", default=None, help="write the verdict JSON here (default: print only)")
@@ -416,11 +423,21 @@ def main(argv=None) -> int:
         if gate.verdicts:
             print(render(gate.verdicts))
         return 0
-    bets = ledger_bets(_readonly_conn(a.db))
+    if a.bank:
+        from ev.novig import shadow_bank as sb
+        store = sb.make_store(a.store, a.bucket)
+        bets = ledger_bets(sb.banked_ledger(store, tables=("orders", "decisions", "fills"))._c)
+    else:
+        bets = ledger_bets(_readonly_conn(a.db))
     series = books = None
-    if a.raw_dir:
+    if a.raw_dir or a.gcs_raw:
         from nfl.props import lines as L
-        lister, reader = _dir_source(a.raw_dir)
+        if a.raw_dir:
+            lister, reader = _dir_source(a.raw_dir)
+        else:
+            from ev.novig import shadow_bank as sb
+            st = sb.make_store(a.raw_store, a.bucket)
+            lister, reader = st.list, st.read
         series, books, _ = L.build_from_source(lister, reader, a.start, a.end, 0.0, False)
     v = compute_verdicts(bets, series, books, cfg)
     print(render(v))
