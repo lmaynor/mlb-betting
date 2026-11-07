@@ -1,4 +1,4 @@
-# How Machine Learning Models Beat the Books
+# Machine Learning for Sports Betting: Why Most Models Lose to the Closing Line
 
 ## The Promise and the Reality
 
@@ -174,7 +174,7 @@ Calculate: Did you consistently get better odds than where the market ended up?
 clv = if (your_prob > closing_prob) then "positive" else "negative"
 ```
 
-**Real edge shows positive CLV over 100+ bets.** If your backtest shows 55% but CLV is breakeven, your edge is fake.
+**Real edge shows positive CLV over 100+ bets.** If your backtest shows 55% but CLV is breakeven, your edge is fake. The full explainer: [closing line value](/learn/closing-line-value-clv).
 
 ### Step 5: Paper Trade First
 Before risking real money, place 50–100 "paper" bets. Track them in a spreadsheet for 2 weeks. 
@@ -196,18 +196,18 @@ You accidentally train on data from the same game (e.g., you include "home team 
 **Fix:** Strict separation of training/test data. Do not use *any* same-game data as features.
 
 ### Pitfall 3: Market Drift
-Your model trained on 2020–2022 data. It's now 2024 and the game has changed (analytics, rule changes, player talent). Your 52% accuracy has degraded to 50.5%.
+Your model trained on 2020–2022 data and was never retrained. Seasons pass, the game changes (analytics, rule changes, player talent), and your 52% accuracy degrades to 50.5%.
 
 **Fix:** Retrain quarterly. Weight recent data 2x. Track in-season accuracy continuously.
 
 ### Pitfall 4: Underfitting to Bankroll Risk
 You found a 2% edge. You bet 10% Kelly on every game. After 100 bets, you hit a 15-bet losing streak (normal variance) and your bankroll is down 30%.
 
-**Fix:** Use half Kelly (1% per bet). This cuts growth to 75% of optimal but also cuts drawdown risk in half.
+**Fix:** Use [half Kelly](/learn/kelly-criterion-sports-betting) (about 1% per bet). This cuts growth to 75% of optimal but also cuts drawdown risk in half.
 
-## Real-World Example: The Strikeout Model
+## A Hypothetical Example: A Strikeout Model
 
-Here's how a winner model beats the market on pitcher strikeouts:
+The numbers in this section are illustrative, not Beezy results. For our real, settled numbers see the [Results](/results) and [Models](/models) pages. Here is how a careful strikeout model might be built and judged:
 
 **Data sources:**
 - Pitching stats (Statcast, 5 years)
@@ -228,13 +228,12 @@ Here's how a winner model beats the market on pitcher strikeouts:
 - Walk-forward: Train on every month, test next month
 - Compare to DK opening and closing odds
 
-**Results:**
+**Illustrative results (hypothetical):**
 - Backtest accuracy: 53%
-- 2023 hold-out accuracy: 52.2%
-- CLV: +0.8% (for every 100 bets, bet 1 unit, get 0.8 units profit)
-- ROI at half Kelly: +1.6%
+- Hold-out accuracy: 52.2%, which is below the 52.4% needed to break even at -110, so it would not be profitable on its own
+- CLV: a positive average means you took better prices than the close; it is a price gain, not a profit figure
 
-This model works because:
+A model like this is only worth trusting if:
 1. Validation against realistic future data
 2. Conservative Kelly sizing
 3. Focus on a niche market (strikeouts) with less competition
@@ -243,7 +242,7 @@ This model works because:
 
 ## The Bottom Line
 
-Machine learning models *can* beat the books, but it requires:
+Machine learning models can sometimes find an edge, but most do not, and it requires:
 
 1. **Better data than the market** — real-time injury feeds, detailed umpire data
 2. **Or better analysis** — smarter feature engineering and validation

@@ -132,6 +132,7 @@ export default async function ModelsPage({ searchParams }: { searchParams: Promi
         ].map((p, i) => (
           <p key={i} className={cx('text-body-2-regular text-text-secondary', i < 2 && 'mb-2.5')}>{p}</p>
         ))}
+        <p className="text-body-2-regular text-text-secondary mt-2.5">Why the routine matters, and how models fail without it: <Link href="/learn/machine-learning-sports-betting" className="text-link no-underline hover:underline">machine learning for sports betting</Link>.</p>
       </section>
 
       <SportSection sport="mlb" open={!sp.sport || sp.sport === 'mlb'}>

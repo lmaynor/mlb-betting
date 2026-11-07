@@ -1,4 +1,4 @@
-# First 5 Innings (F5) Betting Explained
+# What Is F5 Betting? First 5 Innings Lines Explained
 
 ## What Is F5?
 
@@ -7,6 +7,8 @@
 Unlike the full-game moneyline, F5 ignores everything that happens in innings 6–9. The game could end 2-0 in 5 innings (bet settles), or it could end 2-7 in the 9th (still 2-0 at the F5 mark, bet wins).
 
 F5 markets exist on most DraftKings games during the regular season. The odds are usually close to, but slightly different from, the full-game moneyline.
+
+Beezy prices this market with a trained [F5 model](/models/f5) built on starter SIERA, opponent wOBA and umpire run context. Its plays post to the [F5 picks](/picks/mlb/f5) board and settle in the public results.
 
 ## Why It Matters
 
@@ -116,7 +118,7 @@ This is why F5 moneylines are usually close to -110/-110 even when full-game lin
 
 F5 bets have a higher win rate than full-game (roughly 52–54% for both sides combined, vs 50%). But the odds are tighter (-110 usually).
 
-Use Kelly sizing:
+Use [Kelly sizing](/learn/kelly-criterion-sports-betting):
 - 2–3% Kelly for F5 bets with edge
 - Avoid the temptation to bet big because "fewer innings = safer"
 - Variance is still meaningful (a 5-inning sample is small)
@@ -152,4 +154,4 @@ If you can model pitcher performance, F5 is where you'll find consistent edge. T
 
 Start with 30–50 F5 bets. If you're hitting 52%+ at -110, you've found an edge. That's a 2% ROI per bet—enough to be profitable long-term if you scale carefully.
 
-The pros start with moneyline betting (full game or F5) before moving to prop props because it teaches market structure and variance. Master this first.
+The pros start with moneyline betting (full game or F5) before moving to props because it teaches market structure and variance. Master this first.

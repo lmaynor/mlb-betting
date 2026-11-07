@@ -58,7 +58,7 @@ export default function OddsCalculatorPage() {
 
       <div className="border border-separator-border rounded-control bg-background-primary-default p-5">
         <div className="mono text-micro text-text-secondary mb-2.5">How it works</div>
-        <p className="times text-compact text-text-secondary leading-[1.6] mb-2">Books build a margin (vig) into their lines. Removing the vig reveals the true probability each side wins.</p>
+        <p className="times text-compact text-text-secondary leading-[1.6] mb-2">Books build a margin (vig) into their lines. Removing the vig reveals the true probability each side wins. The full method, with worked examples, is in <a href="/learn/how-to-remove-vig-odds" className="text-link underline">how to remove vig</a>.</p>
         <p className="times text-compact text-text-secondary leading-[1.6]">If your model assigns a higher probability than the fair probability, you have an edge. Use the <a href="/tools/kelly-calculator" className="text-link underline">Kelly Calculator</a> to size your stake.</p>
       </div>
     </div>

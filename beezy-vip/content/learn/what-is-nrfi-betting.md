@@ -1,4 +1,4 @@
-# What is NRFI Betting? Complete Guide
+# What Is NRFI Betting? Meaning, Odds and How It Works
 
 ## The Basics
 
@@ -6,11 +6,11 @@
 
 These are moneyline bets, not totals. You're not predicting how many runs will score—just whether the scoreboard will move at all in the opening frame.
 
+This guide owns the basics: the definition, the odds and how the bet settles. The companion piece, [NRFI betting strategy](/learn/nrfi-betting-strategy), owns the modeling side: how a first-inning probability is built and when the price is wrong.
+
 ## Why It Matters
 
 First inning runs are relatively rare. Across all MLB games, the first inning goes scoreless roughly 45–55% of the time. This creates two things bettors love: **low-probability outcomes** (where the odds offer edge) and **quick resolution** (the bet settles within 15 minutes of first pitch).
-
-NRFI has become one of DraftKings' most popular prop markets, second only to player props like strikeouts and home runs.
 
 ## The Odds
 
@@ -30,13 +30,15 @@ The key to edge here is finding **when the consensus gets it wrong**. A pitcher 
 
 ### Weather & Park
 - **Wind direction.** Outfield wind suppresses home runs and deep fly balls, increasing NRFI odds slightly. Infield wind doesn't matter much for first inning (no time to accumulate baserunners yet).
-- **Park factor.** Smaller parks (Yankee Stadium) see slightly higher first-inning run rates. Larger parks (Oakland Coliseum) suppress them.
+- **Park factor.** Smaller parks (Yankee Stadium) see slightly higher first-inning run rates. Larger parks (Petco Park) suppress them.
 
 ### Game Context
 - **Rivalry games.** High-stakes matchups sometimes see more aggressive early at-bats, slightly favoring YRFI.
 - **Revenge narrative.** A team that lost 1-0 the night before might be more aggressive. This is real but small effect.
 
-## Betting Strategy
+## Betting NRFI: The Short Version
+
+The basics of betting it are below. For the full modeling approach (a scoring system, bet timing and bankroll rules), read [NRFI betting strategy](/learn/nrfi-betting-strategy).
 
 ### Find the Edges
 The best NRFI bets come from **starter quality mismatches** paired with **lineup fatigue** or **injury news**. If a team's leadoff hitter is out and they're starting a bench player, NRFI odds often don't adjust enough.
@@ -59,13 +61,14 @@ For a 57% edge at -110 odds, you're looking at roughly 2–3% Kelly. Don't overb
 
 ## The Data
 
-Our models track first-inning runs across:
-- 2,000+ games per season
-- Per-pitcher first-inning ERA and K rate
-- Per-lineup home/away first-inning run rates
-- Weather, park, and injury adjustments
+First-inning scoring follows patterns a model can actually use. Beezy's [NRFI model](/models/nrfi) is an XGBoost ensemble with isotonic calibration, trained on pitch-level Statcast data from 2021–2025 and walk-forward validated. Its main signals:
 
-The current baseline: **NRFI hits 55% of the time** when odds are fair. Systems that identify 2–5% edge over this baseline are profitable.
+- **Both starters' first-inning tendencies:** first-inning ERA and K rate, starter form and pitch mix
+- **Top-of-order quality:** the on-base skills of the hitters due up first
+- **Umpire called-strike tendency:** a wider zone suppresses walks and runs
+- **Park and weather:** run-scoring environment, wind and temperature
+
+When the model's probability clears the book's price by its edge threshold, the play posts to the [NRFI picks](/picks/mlb/nrfi) board and settles in the public results. If your probability and the book's implied probability are the same, there is no bet, whatever the model says.
 
 ## Quick Checklist for NRFI Bets
 

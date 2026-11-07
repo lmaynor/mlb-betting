@@ -1,4 +1,4 @@
-# How to Calculate Implied Probability from Odds
+# Implied Probability Calculator: Convert Odds to Probability
 
 ## The Core Idea
 
@@ -67,7 +67,7 @@ Example: -110 on each side of a moneyline
 - Side B: 52.38% implied
 - Total: 104.76%
 
-That extra 4.76% is the **vig** (juice). It's the house's profit margin.
+That extra 4.76% is the **vig** (juice). It's the house's profit margin. Stripping that margin out to get fair odds is its own step: [how to remove vig](/learn/how-to-remove-vig-odds).
 
 On a fair market with no edge, the book sets odds so that roughly equal money is wagered on both sides. The vig ensures the book makes money regardless of the outcome.
 
@@ -98,7 +98,7 @@ Example:
 - The book prices it at 52.4% (-110 odds)
 - Edge = 0.56 - 0.524 = 0.036 = 3.6%
 
-If your edge is consistently positive across a large sample of bets, you have a profitable strategy.
+If your edge is consistently positive across a large sample of bets, you have a profitable strategy. An edge is a probability gap, not a stake: the [Kelly Criterion](/learn/kelly-criterion-sports-betting) is what turns it into one.
 
 ## The Vig Hurts Small Edges
 
@@ -126,9 +126,9 @@ Your job as a bettor is to find these mispricings before the sharps do.
 
 ## How to Check Your Work
 
-Use an online implied probability calculator to verify your math:
-1. Enter the American odds
-2. Calculator shows implied probability
+Use the [Odds & Vig Calculator](/tools/odds-calculator) to verify your math:
+1. Enter both sides of the market
+2. The calculator shows each side's implied probability, the vig-free fair probability and the vig
 3. Compare to your estimate
 4. If yours is higher, you have potential edge
 

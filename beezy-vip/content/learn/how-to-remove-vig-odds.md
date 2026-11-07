@@ -10,7 +10,7 @@
 
 That extra 4.76% is pure profit for the house—the vig.
 
-Removing vig lets you see what the *true* market probability is, stripped of the house's edge. This is critical for identifying which side is mispriced.
+Removing vig lets you see what the *true* market probability is, stripped of the house's edge. This is critical for identifying which side is mispriced. It starts from implied probability; if that conversion is new, read [how to calculate implied probability](/learn/implied-probability-calculator) first.
 
 ## Why Remove Vig?
 
@@ -82,88 +82,54 @@ This is where vig removal becomes powerful:
 Which book is more confident in the home team?
 
 Remove vig from Book A:
-- Home: 52.38% / 1.0476 = 50%
+- Total: 52.38% + 52.38% = 104.76%
+- Home: 52.38% / 1.0476 = 50.00%
 
 Remove vig from Book B:
-- Home: 54.55% / 1.0545 = 51.71%
+- Total: 54.55% + 50.00% = 104.55%
+- Home: 54.55% / 1.0455 = 52.17%
 
-**Book B is more confident in the home team** (51.71% vs 50%). The -120 odds aren't just worse for you—they indicate the book actually thinks the home team is more likely.
+**Book B is more confident in the home team** (52.17% vs 50.00%, a gap of 2.17 points). The -120 price is not just worse for a home bettor; it says the book thinks the home team is more likely to win.
 
-## The CRA Method (Closing Line Algorithm)
+## Using vig-free prices to measure closing line value
 
-Professional bettors use vig removal to track **closing line value** (CLV)—how your win probability compares to where the market settled.
+Vig-free probabilities are how you compare a price you took with where the market finished.
 
-```
-1. Get vig-free probability at time of bet
-2. Get vig-free probability at closing line (game time)
-3. If you bet higher than closing, you have CLV
-```
+- You bet the home team when the market was -110 / -110 (50.00% vig-free).
+- The market closes at -120 / +100 (52.17% vig-free for the home team).
+- The market moved toward your side, so the price you took was better than the close. That is **positive closing line value**.
 
-Example:
-- You bet home team at -110 (52.38% implied, 50% vig-free)
-- Market closes at -120 (54.55% implied, 51.71% vig-free)
-- Your estimated prob: 52% (0.52 vig-free)
-- You bet at 50% vig-free, market closed at 51.71% vig-free
-- You got worse odds than the market eventually settled on—no CLV
+A simple rule: if the vig-free probability at the close is higher than the probability implied by the price you took, you beat the close. See the [CLV guide](/learn/closing-line-value-clv) for more.
 
-## Quick Vig Removal for -110 Both Sides
+## Quick vig removal for -110 on both sides
 
-When you see -110 on both sides, the vig-free breakdown is **50-50**.
+When you see -110 on both sides, the vig-free breakdown is **50-50**. The two implied probabilities add to 104.76%, so about 2.38 points of vig sits on each side.
 
-Just remember: **At -110/-110, remove 4.76% from each side.**
+- 52.38% becomes 50.00%
+- Any other pair of odds: use the full formula above
 
-- 52.38% → 50%
-- Any other odds: use the full formula above
+## Vig removal for moneyline pairs
 
-## Vig Removal for Moneyline Pairs
+**If the odds are symmetric (-115 / -115):** the fair price is still 50-50, and the vig is larger (the two sides add to 106.98%).
 
-DraftKings and FanDuel always show a sportsbook moneyline. Here's the fast way:
+**If the odds are asymmetric (for example -150 / +120):** use the formula. 60.00% + 45.45% = 105.45%, so the fair split is 56.90% / 43.10%. Do not skip this: asymmetric odds can hide real market disagreement.
 
-**If the odds are close to -110/-110:**
-- Just split the difference. If it's -110/-110, vig-free is 50-50.
-- If it's -115/-115, vig-free is roughly 49.5-50.5 (slightly higher vig).
+## The caveat: proportional removal is a simplification
 
-**If the odds are asymmetric (e.g., -150/+120):**
-- Use the formula above. Don't skip this—asymmetric odds can hide real market disagreement.
+Dividing each side by the total assumes the book spread its margin in proportion to each side's probability. Books often shade favorites and longshots differently, and thin markets (props) can be mispriced on both sides at once. Other methods exist, but proportional removal is the common default.
 
-## The Closing Line Value (CLV) Concept
+## Tools to help
 
-Track your bets against closing line:
-
-```
-if vig_free_opening > vig_free_closing:
-    you_have_positive_clv = True
-```
-
-Pros with consistent positive CLV are the ones who beat the market long-term. Your closing line value (not just hit rate) is the real measure of edge.
-
-Example:
-- You bet Pitcher K Over at -120 (54.55% implied, 51.71% vig-free)
-- You estimate 56% true probability
-- Market closes at -130 (56.86% implied, 54.0% vig-free)
-- You got a better deal than the market eventually agreed to
-- Positive CLV
-
-## The Caveat: Vig Removal Is Additive
-
-Vig removal assumes the book's probabilities are proportional. In reality, books sometimes misprice both sides (e.g., if a prop is illiquid, they might quote -120/-120 instead of -110/-110).
-
-Vig removal smooths this out *as if* both sides were mispriced equally. It's not perfect, but it's the industry standard.
-
-## Tools to Help
-
-Most modern sports betting apps show implied probability already. If you want to remove vig:
-
-1. Calculate implied probability for each side
+1. Calculate the implied probability for each side
 2. Add them together
 3. Divide each by the total
 4. Multiply by 100 to get percentages
 
-Or use an online calculator (search "vig removal calculator").
+Or let the free [Odds & Vig Calculator](/tools/odds-calculator) do it.
 
-## The Bottom Line
+## The bottom line
 
-Removing vig lets you compare how different books value the same bet. A book pricing -120 isn't just offering worse odds—it's saying the outcome is 1.71 percentage points more likely (in vig-free terms).
+Removing vig lets you compare how different books value the same bet. A book pricing the home team at -120 / +100 is saying the home team is 2.17 points more likely than a book at -110 / -110.
 
 For serious bettors:
 - **Remove vig from every pair of odds you compare**

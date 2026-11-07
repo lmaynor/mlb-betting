@@ -1,4 +1,4 @@
-# MLB Strikeout Props Betting Guide
+# Pitcher Strikeout Props: How to Bet MLB Strikeout Over/Unders
 
 ## The Basics
 
@@ -20,12 +20,14 @@ Innings pitched doesn't equal strikeouts. A pitcher can throw 7 innings with 3 K
 ## The Data
 
 Across MLB:
-- **Starter average:** 8–10 strikeouts per game (7–8 IP)
+- **Starter average:** 8–10 strikeouts per 9 innings
 - **Median K/9:** 8.5 strikeouts per 9 innings
-- **Elite guys (top 10%):** 11+ K per game
-- **Weak pitchers (bottom 10%):** 5–6 K per game
+- **Elite guys (top 10%):** 11+ K/9
+- **Weak pitchers (bottom 10%):** 5–6 K/9
 
 The current market has tight pricing—sharp books price K props within 0.5 strikeouts of the true expected value.
+
+Beezy's [strikeout model](/models/k) projects every starter from these inputs (it is a Poisson regression; swinging-strike rate is its single best predictor, with opponent lineup K rate and umpire strikeout tendency close behind). Projections that clear the book's line by enough post to the [strikeout picks](/picks/mlb/k) board.
 
 ## Factors That Affect Strikeouts
 

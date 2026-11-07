@@ -86,7 +86,8 @@ export default function BoostEvPage() {
             <p className="times text-compact text-text-secondary leading-[1.5]">
               {ev > 0
                 ? 'Positive EV: the boosted price pays more than the fair probability implies. Max out the boost limit if the Kelly fraction supports it.'
-                : 'Negative EV: even boosted, this price is below fair value. Skip it.'}
+                : 'Negative EV: even boosted, this price is below fair value. Skip it.'}{' '}
+              New to boosts? <a href="/learn/odds-boost-ev" className="text-link underline">How to tell if a boost is actually +EV</a>.
             </p>
           </div>
         </div>

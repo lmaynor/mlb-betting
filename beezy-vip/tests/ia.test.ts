@@ -25,8 +25,10 @@ describe('information architecture', () => {
     for (const s of SECTIONS) for (const t of s.tabs) expect(routeExists(t.href)).toBe(true)
   })
 
-  it('the five nav questions are the only top-level items', () => {
-    expect(NAV.map(n => n.label)).toEqual(['Home', 'Odds Terminal', 'Picks', 'Results', 'Tools'])
+  it('the five nav questions plus Learn are the only top-level items', () => {
+    expect(NAV.map(n => n.label)).toEqual(['Home', 'Odds Terminal', 'Picks', 'Results', 'Tools', 'Learn'])
+    expect(navActive('/learn/f5-betting-mlb', NAV[5])).toBe(true)
+    expect(sectionFor('/learn')).toBeNull()   // like Tools: a nav item, not a section with tabs
   })
 
   it('Prop Research is a view of the Scanner, Analytics and Models are views of Results, Daily Card of Picks', () => {
