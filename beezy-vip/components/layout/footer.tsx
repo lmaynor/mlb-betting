@@ -6,7 +6,9 @@ import { XMark } from '@/components/ui/x-mark'
 import { DISCORD_URL } from '@/lib/links'
 import { X_URL } from '@/lib/links'
 import { SITE_CONFIG } from '@/lib/site-config'
+import { PRE_LAUNCH } from '@/lib/launch'
 import { InstallAppButton } from '@/components/layout/install-app-button'
+import { WaitlistForm } from '@/components/ui/waitlist-form'
 
 const SOCIAL_BOX = 'button-press-motion inline-flex size-9 items-center justify-center rounded-2lg border border-separator-border bg-background-primary-default no-underline hover:bg-background-primary-hover'
 
@@ -32,6 +34,12 @@ export function Footer() {
               </a>
               <InstallAppButton />
             </div>
+            {PRE_LAUNCH && (
+              <div className="mt-6 max-w-[320px]">
+                <div className="ui-heading mb-2 text-mini text-text-secondary">Launch waitlist</div>
+                <WaitlistForm source="footer" label="Notify me" />
+              </div>
+            )}
           </div>
           {[
             { title: 'Picks',   links: [['Odds Terminal','/ev'],['Projections','/ev/projections'],['Prop Research','/edge'],['Top Signals','/picks'],['Graded History','/picks/history'],['Daily Card','/cheat-sheet'],['Results','/results'],['Analytics','/analytics']] },
