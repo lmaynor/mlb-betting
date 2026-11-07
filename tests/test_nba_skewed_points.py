@@ -4,7 +4,8 @@ The construction is the closed form of PR #186's simulator points marginal (poin
 points) at the board's own (mu, sd): see the block above p_over in ev/daily_projections.py and
 docs/analysis/nba_joint_simulator_2026-11-05.md. Pins: exact mean / variance preservation, positive skew with
 the expected P(over) directions vs the Normal it replaces, the whole-line push convention of the repo's other
-count families, the degenerate-input fallbacks, the NBA_SKEWED_POINTS kill switch (off = the exact old Normal
+count families, the PR #191 refusal fallbacks (inputs the split cannot carry, non-finite inputs, and lines
+below mu - sd all price the exact Normal), the NBA_SKEWED_POINTS kill switch (off = the exact old Normal
 everywhere), and a shape check of the closed form against the simulator's own draws.
 """
 import math
@@ -68,7 +69,9 @@ def test_cdf_is_a_cdf_and_whole_lines_push():
     ks = np.arange(-2, 80)
     cdf = np.array([dp.nba_points_skew_cdf(k, mu, sd, mu3, sd3) for k in ks])
     assert np.all(np.diff(cdf) >= -1e-12)
-    assert cdf[0] == 0.0 and cdf[-1] > 0.999
+    # far-left ks sit below mu - sd, where PR #191's low-line guard prices the exact Normal instead of
+    # the discrete split (whose support starts at 0): cdf[-2] is the Normal's small left tail, not 0.0.
+    assert cdf[0] == norm.cdf((ks[0] - mu) / sd) and cdf[-1] > 0.999
     # whole-number line: P(over) = 1 - CDF(line) (the push mass belongs to neither side), the same
     # convention as the NegBin branch of p_over; a half line just above it prices identically.
     p_int = dp.p_over("normal", mu, 24.0, CTX, sd=sd, mu3=mu3, sd3=sd3)
@@ -76,23 +79,89 @@ def test_cdf_is_a_cdf_and_whole_lines_push():
     assert p_int == pytest.approx(dp.p_over("normal", mu, 24.5, CTX, sd=sd, mu3=mu3, sd3=sd3))
 
 
-def test_degenerate_inputs_stay_valid_distributions():
+def test_refused_splits_price_the_exact_normal():
+    # PR #191: the split REFUSES inputs it cannot carry and every consumer prices the exact Normal.
+    # (Before the patch these cases took fallback ladders -- a total-only component, a threes-variance
+    # shrink, a single discretised gamma -- that lost log score on the ~8% of held-out rows hitting them.)
     cases = [
-        (25.0, 7.5, 0.0, 0.0),        # no threes leg at all: the total is the nonthree component
-        (20.0, 6.4, 3.6, 2.74),       # inconsistent board pair (threes dispersion too big for the points sd)
-        (12.0, 3.0, 3.4, 2.9),        # deeply inconsistent: single discretised-gamma fallback
-        (30.0, 36.0, 4.0, 3.0),       # cv > 1
-        (5.0, 1.2, 0.2, 0.5),         # small mu, tight sd
+        (25.0, 7.5, 0.0, 0.0),        # no threes leg at all (mu3 = sd3 = 0)
+        (20.0, 6.4, 3.6, 2.74),       # inconsistent board pair: 9 sd3^2 > sd^2, no residual variance
+        (12.0, 3.0, 3.4, 2.9),        # deeply inconsistent on both guards
+        (5.0, 1.2, 0.2, 0.5),         # small mu, tight sd: residual variance under the floor
     ]
     for mu, sd, mu3, sd3 in cases:
-        mass, mean, var, skew = _moments(mu, sd, mu3, sd3)
-        assert mass == pytest.approx(1.0, abs=1e-3)          # the cv > 1 case's tail outruns the pmf window
-        assert mean == pytest.approx(mu, rel=0.02)
-        assert var == pytest.approx(sd * sd, rel=0.05)
-        assert skew > 0.0
-        for line in (0.5, mu - 1.5, mu + 0.5, mu + 3 * sd):
-            p = dp.p_over("normal", mu, line, CTX, sd=sd, mu3=mu3, sd3=sd3)
-            assert 0.0 <= p <= 1.0
+        assert dp._nba_points_skew_components(mu, sd, mu3, sd3) is None
+        for k in (0.5, mu - 1.5, mu + 0.5, mu + 3 * sd):
+            assert dp.nba_points_skew_cdf(k, mu, sd, mu3, sd3) == norm.cdf((k - mu) / sd)
+            assert dp.p_over("normal", mu, k, CTX, sd=sd, mu3=mu3, sd3=sd3) == 1.0 - norm.cdf((k - mu) / sd)
+        lo, hi = dp.proj_range("normal", mu, CTX, sd=sd, mu3=mu3, sd3=sd3)
+        assert lo == max(norm.ppf(0.10, mu, sd), 0.0) and hi == norm.ppf(0.90, mu, sd)
+
+
+def test_valid_split_survives_extreme_dispersion():
+    # cv > 1 still passes every guard, so it keeps the skewed split and stays a valid distribution.
+    mu, sd, mu3, sd3 = (30.0, 36.0, 4.0, 3.0)
+    assert dp._nba_points_skew_components(mu, sd, mu3, sd3) is not None
+    mass, mean, var, skew = _moments(mu, sd, mu3, sd3)
+    assert mass == pytest.approx(1.0, abs=1e-3)          # the cv > 1 case's tail outruns the pmf window
+    assert mean == pytest.approx(mu, rel=0.02)
+    assert var == pytest.approx(sd * sd, rel=0.05)
+    assert skew > 0.0
+    for line in (0.5, mu - 1.5, mu + 0.5, mu + 3 * sd):
+        p = dp.p_over("normal", mu, line, CTX, sd=sd, mu3=mu3, sd3=sd3)
+        assert 0.0 <= p <= 1.0
+
+
+def test_nonfinite_inputs_fall_back_to_the_exact_normal():
+    # PR #191: a NaN threes projection crashed the old split inside int(nbinom.ppf(...)) with a
+    # ValueError. Non-finite inputs now refuse the split and price the exact Normal, without raising.
+    mu, sd = 20.0, 6.0
+    for mu3, sd3 in [(float("nan"), 1.5), (1.5, float("nan")), (float("inf"), 1.5), (1.5, float("inf"))]:
+        assert dp._nba_points_skew_components(mu, sd, mu3, sd3) is None
+        assert dp.nba_points_skew_cdf(19.5, mu, sd, mu3, sd3) == norm.cdf((19.5 - mu) / sd)
+        assert dp.p_over("normal", mu, 20.5, CTX, sd=sd, mu3=mu3, sd3=sd3) == 1.0 - norm.cdf((20.5 - mu) / sd)
+        lo, hi = dp.proj_range("normal", mu, CTX, sd=sd, mu3=mu3, sd3=sd3)
+        assert lo == max(norm.ppf(0.10, mu, sd), 0.0) and hi == norm.ppf(0.90, mu, sd)
+
+
+def test_residual_mean_floor_refusal_does_not_inflate_the_mean():
+    # PR #191's AJ Green row: the old code floored the residual mean at 0.05 mu and the implied total
+    # mean jumped 10.45 -> 11.63. With 3 mu3 > 0.95 mu the split now refuses, and the priced
+    # distribution is the Normal centred exactly on mu.
+    mu, sd, mu3, sd3 = 10.45, 5.0, 3.4, 1.0
+    assert 3.0 * mu3 > 0.95 * mu and mu - 3.0 * mu3 < 0.05 * mu
+    assert dp._nba_points_skew_components(mu, sd, mu3, sd3) is None
+    assert dp.nba_points_skew_cdf(mu, mu, sd, mu3, sd3) == 0.5
+    for k in (5.5, 10.5, 15.5):
+        assert dp.nba_points_skew_cdf(k, mu, sd, mu3, sd3) == norm.cdf((k - mu) / sd)
+    lo, hi = dp.proj_range("normal", mu, CTX, sd=sd, mu3=mu3, sd3=sd3)
+    assert lo == max(norm.ppf(0.10, mu, sd), 0.0) and hi == norm.ppf(0.90, mu, sd)
+
+
+def test_low_lines_price_as_the_exact_normal():
+    # PR #191: the closed form has no zero-point injury / early-exit spike (P(0) 0.3% vs 2.9%
+    # realised) and lost -0.0166 log score at z = -1.5, so lines below mu - sd price as the Normal.
+    # The first half-line at or above mu - sd stays on the skewed marginal.
+    mu, sd, mu3, sd3 = ARCHETYPES[0]                       # mu - sd = 18.05
+    assert dp._nba_points_skew_components(mu, sd, mu3, sd3) is not None
+    for line in (10.5, 17.5):
+        assert line < mu - sd
+        assert dp.nba_points_skew_cdf(line, mu, sd, mu3, sd3) == norm.cdf((line - mu) / sd)
+        assert dp.p_over("normal", mu, line, CTX, sd=sd, mu3=mu3, sd3=sd3) == 1.0 - norm.cdf((line - mu) / sd)
+    line = 18.5
+    assert line > mu - sd
+    assert dp.p_over("normal", mu, line, CTX, sd=sd, mu3=mu3, sd3=sd3) != 1.0 - norm.cdf((line - mu) / sd)
+
+
+def test_kill_switch_value_parsing(monkeypatch):
+    for off in ("0", "false", "no", "off", "", "FALSE", " Off "):
+        monkeypatch.setenv("NBA_SKEWED_POINTS", off)
+        assert not dp.nba_skewed_points_enabled(), off
+    for on in ("1", "true", "yes"):
+        monkeypatch.setenv("NBA_SKEWED_POINTS", on)
+        assert dp.nba_skewed_points_enabled(), on
+    monkeypatch.delenv("NBA_SKEWED_POINTS")
+    assert dp.nba_skewed_points_enabled()                  # the default stays ON
 
 
 def test_no_split_is_the_exact_old_normal():
