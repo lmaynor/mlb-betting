@@ -4174,6 +4174,8 @@ separate, later effort. Full detail lives in `nba/README.md`; plan + decisions i
   5.95 points a game (the engine's oracle-absence boost), so player-vs-game-total pair events are not a clean test. Details, tables, what was not verified:
   `docs/analysis/nba_joint_simulator_2026-11-05.md` (+ `docs/analysis/nba_joint_simulator/`); tests `tests/test_nba_joint_sim.py`.
 
+- **NBA gated eval (2026-11-05, `nba/game/{gated_eval,leak_check}.py` + confidence inputs in `nba/game/{evaluate,market_eval}.py`, branch `feat/nba-gated-eval`, stacked on `feat/gated-eval-core`, research only):** NBA adapter for the core protocol, on 2021-26 BettingPros closes (full history via the player-box backfill). Result: 0 of 15 pre-registered gate cells pass the dev screen or show a positive held-out log-loss gain; every gate's 95% upper bound is <= +0.0007 nats; the EDGE gate is worse than ungated in 3 of 3 markets; verdict NO (a +3% ROI is not excluded: needs 6-16k gated games). Garble leakage test: NO leak in the NBA replay. Also replaces an O(N^2) away-game lookup in the replay. See docs/analysis/nba_confidence_gated_eval_2026-11-05.md.
+
 When NBA gains odds + a model it graduates to the full "adding a new system"
 checklist (§6); until then keep it out of the MLB registry/monitors.
 
