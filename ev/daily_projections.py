@@ -37,7 +37,9 @@ load them. It runs an empirical estimator instead -- engine "empirical_ewm_v2":
             -- the pool of players a book quotes is selected on high trailing usage and regresses ~3-7% in every season
     dist  = NegBin (counts) / Normal (yards, points, saves) / Poisson at-least-one (anytime TD); the spread parameter is
             fit from the league's own within-player game-to-game variance in the same master. The NORMAL family's spread
-            is tied to the UNCALIBRATED mean (cv was measured against raw trailing means).
+            is tied to the UNCALIBRATED mean (cv was measured against raw trailing means). One exception: NBA points
+            prices the right-skewed 3 x threes + nonthree marginal from the PR #186 study (same mu, same sd, skewed
+            shape; NBA_SKEWED_POINTS=0 reverts), see the block above p_over.
     evidence: python -m nfl.props.engine_eval (walk-forward replay of THIS code, accuracy only -- see
             docs/solutions/conventions/nfl-projection-engine-changes-need-walkforward-evidence.md)
 
@@ -68,7 +70,7 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
-from scipy.stats import nbinom, norm
+from scipy.stats import gamma, nbinom, norm
 
 from ev import rosters as _rosters
 from ev.props import DFS_BOOKS, OFFSHORE_BOOKS, build_consensus, parse_event_props
@@ -165,6 +167,15 @@ def trained_enabled() -> bool:
     player's game; anything else (the default) leaves the board on the empirical engine."""
     import os
     return os.environ.get("NHL_TRAINED_PROPS", "").strip() in ("1", "true", "yes", "on")
+
+
+def nba_skewed_points_enabled() -> bool:
+    """NBA_SKEWED_POINTS=0/false/no/off (or empty) reverts NBA points pricing to the symmetric Normal; anything else
+    (the default) prices points with the right-skewed 3 x threes + nonthree marginal from the PR #186 calibration
+    study (see _nba_component, which only supplies the threes split while this is on, so every consumer falls back
+    to the exact old Normal when it is off)."""
+    import os
+    return os.environ.get("NBA_SKEWED_POINTS", "1").strip().lower() not in ("0", "false", "no", "off", "")
 
 
 def load_trained(now: datetime | None = None) -> dict:
@@ -885,12 +896,136 @@ def project_mu(hist: list, halflife: float, opp_factor: float = 1.0, ewm_weight:
     return {"mu": max(mu * opp_factor, 0.0), "n_games": n, "usage_proj": usage_proj, "opp_factor": opp_factor}
 
 
+# -------------------------------------------------------------------------------- NBA points skewed marginal
+# The PR #186 walk-forward (nba/sim, docs/analysis/nba_joint_simulator_2026-11-05.md) found the board's symmetric
+# Normal for NBA points badly calibrated (ECE 0.047 at the L10 proxy line) where the simulator's points draws --
+# points built as 3 x threes + nonthree points, each leg calibrated to the engine's own (mu, sd) -- cut ECE to
+# 0.005 and gained +0.0047 / +0.0071 log score (z +9.0 / +25.3) on 34,429 held-out player-games. This is the closed
+# form of that marginal at the board's (mu, sd), so the projected mean and the measured spread are preserved
+# exactly and only the shape changes:
+#   threes leg    = the board's own NegBin threes marginal (mu3, sd3 from the player's threes component);
+#   nonthree leg  = residual mean mu - 3 mu3 and residual variance sd^2 - 9 sd3^2 under independence (the
+#                   simulator's measured corr(threes, nonthree) in its draws is 0.05-0.13, second-order), as a
+#                   NegBin when over-dispersed and a continuity-corrected gamma (nba.props.dist's device for
+#                   points) when it is not.
+# PR #191's held-out verification of this marginal (34,451 player-games, 11,828 real book lines) found the
+# original degenerate-input handling cost more than it saved, so the split now REFUSES inputs it cannot carry
+# and every consumer prices the exact Normal instead:
+#   - non-finite or non-positive inputs (a NaN threes projection crashed int(nbinom.ppf(...)) outright);
+#   - mu - 3 mu3 < 0.05 mu (the old code floored the residual mean at 0.05 mu, inflating the total mean: one
+#     verified row's mean jumped 10.45 -> 11.63);
+#   - sd^2 - 9 sd3^2 < _SKEW_NT_VAR_FRAC (mu - 3 mu3) (the old threes-variance-shrink and single-gamma ladders
+#     lost -0.006..-0.010 log score on the ~8% of rows that hit them);
+#   - and any line below mu - sd, where the closed form has no zero-point injury / early-exit spike
+#     (P(0) 0.3% vs 2.9% realised) and lost -0.0166 log score at z = -1.5.
+# On the rows the split does carry, the same study measured it gaining +0.0055..+0.0069 log score over the
+# Normal. Kill switch: NBA_SKEWED_POINTS=0/false/no/off (see nba_skewed_points_enabled); _nba_component then
+# supplies no split and every price is the old Normal.
+_SKEW_NT_VAR_FRAC = 0.35          # floor on the nonthree leg's variance, as a fraction of its mean
+
+
+def _negbin_n_p(mu: float, var: float) -> tuple[float, float]:
+    """(n, p) of a NegBin with this mean and variance (alpha clipped at 1e-6, the nba.sim.Marginal convention)."""
+    a = max((var - mu) / max(mu * mu, 1e-9), 1e-6)
+    n = 1.0 / a
+    return n, n / (n + mu)
+
+
+def _gamma_disc_params(mu: float, var: float) -> tuple[float, float]:
+    """(shape, scale) of a gamma to be read through the continuity correction P(Y <= k) = F(k + 0.5): binning a
+    continuous density onto the integers adds ~1/12 of variance (Sheppard), so the shape is fit to var - 1/12."""
+    gv = var - 1.0 / 12.0 if var > 0.5 else var
+    gv = max(gv, 1e-6)
+    return mu * mu / gv, gv / mu
+
+
+def _skew_comp_cdf(comp: tuple, k) -> np.ndarray:
+    """P(Y <= k) for integer k (array) under a ("negbin", n, p) or ("gamma", shape, scale) component; k < 0 -> 0."""
+    kind, a, b = comp
+    if kind == "negbin":
+        return nbinom.cdf(k, a, b)
+    return gamma.cdf(np.asarray(k, dtype=float) + 0.5, a, scale=b)
+
+
+def _nba_points_skew_components(mu: float, sd: float, mu3: float, sd3: float):
+    """(threes, nonthree) components of the skewed points marginal, or None when the split cannot be carried:
+    any input non-finite or non-positive, a residual mean mu - 3 mu3 under the 0.05 mu floor, or a residual
+    variance sd^2 - 9 sd3^2 under _SKEW_NT_VAR_FRAC of the residual mean (see the block above). None means
+    every consumer prices the exact Normal; there are no partial-split fallback ladders (PR #191 measured
+    the ladders this replaced losing log score on the rows that hit them)."""
+    if not all(math.isfinite(x) for x in (mu, sd, mu3, sd3)):
+        return None
+    if mu <= 0 or sd <= 0 or mu3 <= 0 or sd3 <= 0:
+        return None
+    mu_nt = mu - 3.0 * mu3
+    if mu_nt < 0.05 * mu:
+        return None
+    var_nt = sd * sd - 9.0 * sd3 * sd3
+    if var_nt < _SKEW_NT_VAR_FRAC * mu_nt:
+        return None
+    t = ("negbin",) + _negbin_n_p(mu3, sd3 * sd3)
+    nt = ("negbin",) + _negbin_n_p(mu_nt, var_nt) if var_nt >= mu_nt else ("gamma",) + _gamma_disc_params(mu_nt, var_nt)
+    return t, nt
+
+
+def nba_points_skew_cdf(k: float, mu: float, sd: float, mu3: float, sd3: float) -> float:
+    """P(X <= k) for NBA points X = 3T + N under the skewed marginal above. On the split path k is floored,
+    matching the count families' convention in p_over: a whole-number line is a push, neither over nor under.
+    When the split refuses the inputs, or the line sits below mu - sd (the closed form carries no zero-point
+    spike down there, PR #191), the price is the exact Normal at the line as passed -- which is what makes
+    p_over's delegation to this function price its own fallbacks identically."""
+    comps = _nba_points_skew_components(mu, sd, mu3, sd3)
+    if comps is None or k < mu - 1.0 * sd:
+        return float(norm.cdf((k - mu) / max(sd, 1e-6)))
+    k = math.floor(k)
+    t, nt = comps
+    top = int(nbinom.ppf(1.0 - 1e-10, t[1], t[2])) + 2
+    ts = np.arange(top + 1)
+    pmf = nbinom.pmf(ts, t[1], t[2])
+    return float(np.sum(pmf * _skew_comp_cdf(nt, k - 3.0 * ts)))
+
+
+def _nba_points_skew_pmf(mu: float, sd: float, mu3: float, sd3: float, kmax: int) -> np.ndarray:
+    """P(X = x) for x = 0..kmax under the skewed marginal (proj_range's quantiles)."""
+    out = np.zeros(kmax + 1)
+    xs = np.arange(kmax + 1)
+    comps = _nba_points_skew_components(mu, sd, mu3, sd3)
+    if comps is None:
+        # the split refused the inputs: the pmf of the exact Normal nba_points_skew_cdf falls back to,
+        # read onto the integers through the same continuity correction the gamma legs use.
+        cdf = norm.cdf(xs + 0.5, mu, max(sd, 1e-6)) if mu > 0 else (xs >= 0).astype(float)
+        out[0] = cdf[0]
+        out[1:] = np.diff(cdf)
+        return out
+    t, nt = comps
+    if nt[0] == "negbin":
+        pmf_n = nbinom.pmf(xs, nt[1], nt[2])
+    else:
+        cdfn = gamma.cdf(xs + 0.5, nt[1], scale=nt[2])
+        pmf_n = np.empty(kmax + 1)
+        pmf_n[0] = cdfn[0]
+        pmf_n[1:] = np.diff(cdfn)
+    top = int(nbinom.ppf(1.0 - 1e-10, t[1], t[2])) + 2
+    for tt in range(top + 1):
+        w = float(nbinom.pmf(tt, t[1], t[2]))
+        if w <= 1e-13:
+            continue
+        shift = 3 * tt
+        if shift > kmax:
+            break
+        out[shift:] += w * pmf_n[:kmax + 1 - shift]
+    return out
+
+
 def p_over(family: str, mu: float, line: float, ctx: StatContext, sd_mu: float | None = None,
-           sd: float | None = None, alpha: float | None = None, zi: float = 0.0) -> float | None:
+           sd: float | None = None, alpha: float | None = None, zi: float = 0.0,
+           mu3: float | None = None, sd3: float | None = None) -> float | None:
     """P(X > line) under the stat's family. `line` is the book's number (x.5 for nearly everything). `sd_mu` is the mean
     the NORMAL family's spread is computed from (default: mu) -- a calibrated mean keeps the uncalibrated spread.
     `sd` / `alpha` (NBA hierarchical path) replace the league-wide Normal sd / NegBin dispersion outright. `zi` > 0 makes
-    the NegBin zero-inflated while keeping `mu` the overall mean (the NegBin part has mean mu / (1 - zi))."""
+    the NegBin zero-inflated while keeping `mu` the overall mean (the NegBin part has mean mu / (1 - zi)).
+    `mu3` / `sd3` (the player's own threes marginal, supplied only by _nba_component and only for NBA points) switch
+    the price to the skewed 3 x threes + nonthree marginal above; without them the price is exactly what it was."""
     if mu is None or not math.isfinite(mu) or line is None:
         return None
     if family == "anytime":
@@ -905,6 +1040,8 @@ def p_over(family: str, mu: float, line: float, ctx: StatContext, sd_mu: float |
             m = mu / (1.0 - zi)
             return float((1.0 - zi) * (1.0 - nbinom.cdf(math.floor(line), n, n / (n + m))))
         return float(1.0 - nbinom.cdf(math.floor(line), n, n / (n + mu)))
+    if mu3 is not None and sd3 is not None and sd is not None:
+        return float(1.0 - nba_points_skew_cdf(line, mu, sd, mu3, sd3))
     if sd is not None:
         return float(1.0 - norm.cdf((line - mu) / max(sd, 1e-6)))
     ref = mu if sd_mu is None else sd_mu
@@ -998,7 +1135,8 @@ def blend_side_ev(p_blend_over: float | None, side: str | None, best: dict) -> t
 
 
 def proj_range(family: str, mu: float, ctx: StatContext, lo: float = 0.10, hi: float = 0.90,
-               sd_mu: float | None = None, sd: float | None = None, alpha: float | None = None, zi: float = 0.0):
+               sd_mu: float | None = None, sd: float | None = None, alpha: float | None = None, zi: float = 0.0,
+               mu3: float | None = None, sd3: float | None = None):
     """(floor, ceiling) = the lo / hi quantiles of the projection's own distribution, or (None, None) for the
     one-sided anytime market. Yards are floored at 0 (the board shows a rate-style range, not a loss). These describe
     the MODEL'S spread (league-wide within-player variance), not an interval with validated coverage."""
@@ -1019,6 +1157,15 @@ def proj_range(family: str, mu: float, ctx: StatContext, lo: float = 0.10, hi: f
     if sd is None:
         ref = mu if sd_mu is None else sd_mu
         sd = max(ctx.cv * ref, MIN_SD_FRAC * ref, 1e-6)
+    if mu3 is not None and sd3 is not None:
+        # NBA points: quantiles of the same skewed marginal p_over prices, so the shown range and the shown
+        # probabilities describe one distribution. When the split refuses the inputs, the range is the
+        # Normal's, exactly like the prices (PR #191).
+        if _nba_points_skew_components(mu, sd, mu3, sd3) is None:
+            return float(max(norm.ppf(lo, mu, sd), 0.0)), float(norm.ppf(hi, mu, sd))
+        kmax = int(mu + 12.0 * sd) + 20
+        cdf = np.cumsum(_nba_points_skew_pmf(mu, sd, mu3, sd3, kmax))
+        return float(min(int(np.searchsorted(cdf, lo)), kmax)), float(min(int(np.searchsorted(cdf, hi)), kmax))
     return float(max(norm.ppf(lo, mu, sd), 0.0)), float(norm.ppf(hi, mu, sd))
 
 
@@ -1202,6 +1349,7 @@ def _nba_days(logs: GameLogs, start) -> tuple:
 
 def _nba_component(stat: str, pn: str, rows: list, logs: GameLogs, team, opp, gk, start) -> dict | None:
     """One NBA stat's calibrated marginal -> {"mu", "family", "sd", "alpha", "proj"} or None (thin history).
+    Points rows also carry "mu3" / "sd3" (the player's threes marginal) while NBA_SKEWED_POINTS is on.
 
     mu = engine EWM (threes: EWM(3PA) x shrunk 3P%) x opponent factor x the stat's role-redistribution multiplier x the
     minutes factor (blowout / back-to-back trim). The spread is the league-wide one (Normal: cv, floored; NegBin: alpha),
@@ -1247,6 +1395,7 @@ def _nba_component(stat: str, pn: str, rows: list, logs: GameLogs, team, opp, gk
         extra = md["extra_rel_var"]
     alpha = sd = None
     zi = 0.0
+    mu3 = sd3 = None
     if family == "negbin":
         if NBA_FEATURES["zinb"] and stat in ("steals", "blocks") and ctx.nba_zi_pi > 0 and ctx.nba_zi_alpha:
             zi = ctx.nba_zi_pi
@@ -1261,7 +1410,14 @@ def _nba_component(stat: str, pn: str, rows: list, logs: GameLogs, team, opp, gk
         if stat == "points":
             sd *= _hier.shot_diet_sd_scale(prior)
         sd = math.sqrt(sd * sd + extra * mu * mu)
-    return {"mu": mu, "family": family, "sd": sd, "alpha": alpha, "zi": zi, "proj": proj}
+    if stat == "points" and nba_skewed_points_enabled():
+        # the threes split of the skewed points marginal (see the block above p_over): the player's OWN threes
+        # component, so the points leg and the threes leg share one threes distribution. Left None when the kill
+        # switch is off, and every consumer then prices the exact old Normal.
+        t3 = _nba_component("threes", pn, rows, logs, team, opp, gk, start)
+        if t3 is not None:
+            mu3, sd3 = t3["mu"], t3["sd"]
+    return {"mu": mu, "family": family, "sd": sd, "alpha": alpha, "zi": zi, "proj": proj, "mu3": mu3, "sd3": sd3}
 
 
 def _nba_projection(stat: str, pn: str, rows: list, logs: GameLogs, team, opp, gk, start) -> dict | None:
@@ -1459,9 +1615,15 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
 
     mu = mu_raw * mult
     if nb is not None:
-        p_model_over = (p_over(nb["family"], mu, line, ctx, sd=nb["sd"], alpha=nb["alpha"], zi=nb["zi"])
+        # NBA points only: the threes split of the skewed marginal, scaled like mu itself (the spread is not
+        # scaled, as with sd). Combo dicts carry no split, so pra / pr / pa keep the Normal.
+        s_mu3 = nb["mu3"] * mult if nb.get("mu3") is not None else None
+        s_sd3 = nb.get("sd3")
+        p_model_over = (p_over(nb["family"], mu, line, ctx, sd=nb["sd"], alpha=nb["alpha"], zi=nb["zi"],
+                               mu3=s_mu3, sd3=s_sd3)
                         if line is not None else None)
-        p_floor, p_ceil = proj_range(nb["family"], mu, ctx, sd=nb["sd"], alpha=nb["alpha"], zi=nb["zi"])
+        p_floor, p_ceil = proj_range(nb["family"], mu, ctx, sd=nb["sd"], alpha=nb["alpha"], zi=nb["zi"],
+                                     mu3=s_mu3, sd3=s_sd3)
     elif dist is not None:
         p_model_over = dist.p_over(line) if line is not None else None
         p_floor, p_ceil = dist.ppf(0.10), dist.ppf(0.90)

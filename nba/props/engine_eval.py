@@ -131,7 +131,7 @@ def _logp(res: dict, y: float) -> float:
 
 def _p_over(res: dict, line: float, ctx) -> float:
     return DP.p_over(res["family"], res["mu"], line, ctx, sd=res.get("sd"), alpha=res.get("alpha"),
-                     zi=res.get("zi", 0.0)) or 0.0
+                     zi=res.get("zi", 0.0), mu3=res.get("mu3"), sd3=res.get("sd3")) or 0.0
 
 
 def old_projection(stat: str, prior: list, ctx, opp: str, wt: float) -> dict | None:
