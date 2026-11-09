@@ -3,6 +3,9 @@
  * The canonical picks boards are CDN-cached at the edge ONLY under the exact conditions middleware.ts
  * documents: GET, no query string, tier gating off, no Clerk session cookie, a real sport slug, and not
  * the systems/projections subpaths. Anything else must come back without a shared Cache-Control header.
+ * Both headers are pinned together: Cache-Control for spec-compliant consumers, and CDN-Cache-Control
+ * because the force-dynamic board render overwrites Cache-Control with a private value while Vercel's
+ * edge CDN still obeys CDN-Cache-Control (the #205 follow-up fix).
  * (The matcher test mocks Clerk the same way; here the callback itself is exercised.)
  */
 jest.mock('@clerk/nextjs/server', () => ({
@@ -28,12 +31,18 @@ function req(path: string, opts: { cookie?: string; method?: string } = {}) {
 const cacheControl = async (path: string, opts?: { cookie?: string; method?: string }) =>
   (await handler(async () => ({ userId: null }), req(path, opts)))?.headers.get('cache-control') ?? ''
 
+const cdnCacheControl = async (path: string, opts?: { cookie?: string; method?: string }) =>
+  (await handler(async () => ({ userId: null }), req(path, opts)))?.headers.get('cdn-cache-control') ?? ''
+
 beforeEach(() => { delete process.env.ENFORCE_TIERS })
 
 describe('board CDN cache (middleware)', () => {
   it.each(['/picks/nfl', '/picks/mlb', '/picks/mlb/sb', '/picks/nba/points'])(
     'caches the canonical board %s',
-    async (path) => { expect(await cacheControl(path)).toContain('s-maxage=60') },
+    async (path) => {
+      expect(await cacheControl(path)).toContain('s-maxage=60')
+      expect(await cdnCacheControl(path)).toBe('public, s-maxage=60, stale-while-revalidate=300')
+    },
   )
 
   it.each([
@@ -47,18 +56,22 @@ describe('board CDN cache (middleware)', () => {
     '/picks/golf',                // not a registered sport
   ])('does not cache %s', async (path) => {
     expect(await cacheControl(path)).not.toContain('s-maxage')
+    expect(await cdnCacheControl(path)).not.toContain('s-maxage')
   })
 
   it('never caches for a signed-in visitor (session cookie present)', async () => {
     expect(await cacheControl('/picks/nfl', { cookie: 'sess_123' })).not.toContain('s-maxage')
+    expect(await cdnCacheControl('/picks/nfl', { cookie: 'sess_123' })).not.toContain('s-maxage')
   })
 
   it('never caches a non-GET', async () => {
     expect(await cacheControl('/picks/nfl', { method: 'POST' })).not.toContain('s-maxage')
+    expect(await cdnCacheControl('/picks/nfl', { method: 'POST' })).not.toContain('s-maxage')
   })
 
   it('stops caching the moment tier gating turns on', async () => {
     process.env.ENFORCE_TIERS = '1'
     expect(await cacheControl('/picks/nfl')).not.toContain('s-maxage')
+    expect(await cdnCacheControl('/picks/nfl')).not.toContain('s-maxage')
   })
 })

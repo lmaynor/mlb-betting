@@ -75,6 +75,11 @@ function withBoardCdnCache(req: NextRequest, res: NextResponse): NextResponse {
   if (parts.length === 3 && (parts[2] === 'systems' || parts[2] === 'projections')) return res
   if (req.cookies.get('__session')) return res
   res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300')
+  // The board pages are force-dynamic, so their own render emits `Cache-Control: private, no-store`, which
+  // overwrites the header above on the way out (verified live after #205: /picks/nba stayed private + MISS).
+  // Vercel's edge CDN obeys CDN-Cache-Control independently of that private Cache-Control, so this second
+  // header is what actually lets the edge cache the canonical board response under the same conditions.
+  res.headers.set('CDN-Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300')
   return res
 }
 
