@@ -7,7 +7,9 @@ Official Card Gate (Tier 1):
       n_books >= 4 (thick reference consensus)
       0.030 <= market_ev <= 0.100 (sweet-spot EV; cuts out adverse selection traps > 10%)
       model_edge >= 0.015 (at least +1.5% model probability edge)
-      beezy_score >= 68
+      beezy_score >= 40 (CONFLUENCE_MIN_SCORE, calibrated 2026-11-09; the old 68 sat above the
+        observed maximum score of any otherwise-qualifying prop row -- see
+        docs/analysis write-up daily-play-calibration-2026-11-09)
   - MLB Validated Systems:
       validated is True (or validated system)
       0.030 <= edge <= 0.100
@@ -48,6 +50,13 @@ from mlb_core import storage
 log = logging.getLogger("ev.daily_card")
 
 _CT = ZoneInfo("America/Chicago")
+
+# Score cut for the confluence (props) path of the Tier 1 gate. Calibrated 2026-11-09 on the
+# Nov 4-9 archived boards: otherwise-qualifying prop rows scored 18-63 (median 42), so the old
+# 68 admitted none of them; at 40 the would-have-qualified rows ran +7.0% flat ROI (n=62
+# settled) and the full official stack yields ~2 plays/day. The MLB validated-systems path
+# keeps its own 68 cut in is_mlb_validated_play -- its rows are a different population.
+CONFLUENCE_MIN_SCORE = 40
 
 OFFSHORE_BOOKS = {
     "bovada", "betfair", "pinnacle", "betonline", "betonlineag",
@@ -132,7 +141,7 @@ def is_confluence_play(r: dict[str, Any]) -> bool:
         return False
 
     score = parse_beezy_score(r)
-    if score < 68:
+    if score < CONFLUENCE_MIN_SCORE:
         return False
 
     return True
@@ -195,7 +204,7 @@ def is_dislocation_fallback_play(r: dict[str, Any]) -> bool:
 def is_official_card_play(r: dict[str, Any], allow_dislocation: bool = False) -> bool:
     """
     Tier 1 gate: checks whether a row qualifies as an Official Card Play.
-    - NFL / NBA / NHL Projections: confluence=True, n_books>=4, 3%-10% EV, model_edge>=1.5%, score>=68.
+    - NFL / NBA / NHL Projections: confluence=True, n_books>=4, 3%-10% EV, model_edge>=1.5%, score>=40 (CONFLUENCE_MIN_SCORE).
     - MLB Bets: validated=True, 3%-10% edge, score>=68.
     - Pure Market Dislocations: only when allow_dislocation=True (slate has < 2 confluence plays).
     """
