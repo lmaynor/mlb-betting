@@ -41,6 +41,17 @@ from mlb_core.risk.calibration import market_blend_prob
 _GAME_SERIES = re.compile(r"^KX([A-Z0-9]+?)(?:GAME|SPREAD|TOTAL)-")
 _COVERED_LEAGUES = {"NFL": "nfl", "NBA": "nba", "NHL": "nhl"}
 
+# Soccer series that EXIST on Kalshi but are deliberately unpriced (why_unmapped -> 'known_series_unpriced', never
+# 'unknown_series'). The series tickers were verified in Kalshi's own /series listing (scripts/probe_soccer_odds.py,
+# probe of 2026-11-10: KXEPL1H, KXEPL1HBTTS, KXEPLBTTS, KXUCL1H, KXUCL1HBTTS, KXUCLBTTS all present), but no open-market
+# ticker sample was captured for them, so the market-ticker tail grammar (outcome suffixes) is UNVERIFIED -- and for
+# first-half shapes the feeds carry no first-half consensus at all (boards are full-game h2h / totals / btts only).
+# Guessing a mapping here would price legs off the wrong contract, so these stay unpriced until a live probe verifies
+# the grammar; full-game BTTS rows exist in the fair book but under a placeholder {prefix}BTTS- ticker that no real
+# Kalshi leg can match (ev/kalshi_game_legs.soccer_slate_rows).
+_KNOWN_UNPRICED_SERIES = frozenset(
+    f"{prefix}{suffix}" for prefix in ("KXEPL", "KXUCL") for suffix in ("1H", "1HBTTS", "BTTS"))
+
 # ---- reject codes -------------------------------------------------------------------------------------
 REJ_UNMAPPED_TICKER = "REJ_UNMAPPED_TICKER"
 REJ_LOW_BOOKS = "REJ_LOW_BOOKS"
@@ -248,12 +259,15 @@ class InMemoryFairBook:
         if ticker in self._dyn:
             return self._dyn[ticker]
         out: tuple = (None, "not_a_prop_ticker")
-        if self._prop_indices:
-            from ev.kalshi_props import ParsedPropTicker, parse_prop_ticker
-            parsed = parse_prop_ticker(ticker)
-            if not isinstance(parsed, ParsedPropTicker):
-                out = (None, "not_a_prop_ticker")
-            elif parsed.sport not in self._prop_indices:
+        from ev.kalshi_props import ParsedPropTicker, parse_prop_ticker
+        parsed = parse_prop_ticker(ticker)
+        if isinstance(parsed, ParsedPropTicker):
+            if parsed.sport not in self._prop_indices:
+                # A registered prop series whose sport index is not attached RIGHT NOW (the feed was stale or missing
+                # when indices were loaded). The Nov 3 coverage replay booked ~7.5k of these (KXNFLRECYDS / KXNFLREC)
+                # as unknown_series because the miss fell through to the game-series check; the truth is that the
+                # lookup had no index to resolve against, which is a snapshot gap, not an unknown series. Diagnostic
+                # only: pricing is unchanged (the leg is unmapped either way).
                 out = (None, "no_sport_index")
             else:
                 out = self._prop_indices[parsed.sport].resolve_why(parsed)
@@ -262,13 +276,17 @@ class InMemoryFairBook:
 
     def why_unmapped(self, ticker: str) -> str | None:
         """Why a ticker has no fair value, for the tape: player props -> no_game / no_player / ambiguous_player / team_mismatch /
-        no_stat / no_rung; game markets -> no_rung (we price that game, not that rung) / no_game_line (a covered league, but no
-        line for that game: not on the slate yet, started, or a team we cannot map) / sport_not_covered; else unknown_series."""
+        no_stat / no_rung, or no_sport_index (a registered prop series whose sport index is not attached, i.e. a snapshot gap);
+        game markets -> no_rung (we price that game, not that rung) / no_game_line (a covered league, but no line for that game:
+        not on the slate yet, started, or a team we cannot map) / sport_not_covered; known-but-deliberately-unpriced series
+        (soccer first-half / BTTS shapes) -> known_series_unpriced; else unknown_series."""
         if ticker in self._legs:
             return None
         why = self._resolve_prop_why(ticker)[1]
-        if why not in ("not_a_prop_ticker", "no_sport_index"):
+        if why != "not_a_prop_ticker":
             return why
+        if (ticker or "").split("-", 1)[0] in _KNOWN_UNPRICED_SERIES:
+            return "known_series_unpriced"
         m = _GAME_SERIES.match(ticker or "")
         if not m:
             return "unknown_series"

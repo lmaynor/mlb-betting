@@ -15,7 +15,7 @@ from mlb.execution.kalshi.rfq_client import (
     KalshiRFQStream, QuoteInvariantError, RFQClient, backoff_delay, validate_quote_prices, ws_headers,
 )
 from mlb.execution.kalshi.rfq_maker import (
-    RFQConfig, RFQLedger, RFQMaker, RFQRecorder, RFQRiskGate, RFQTape,
+    RFQConfig, RFQLedger, RFQMaker, RFQRecorder, RFQRiskGate, RFQTape, fetch_trades_after,
 )
 
 NOW = 1_800_000_000.0
@@ -633,6 +633,89 @@ def test_recorder_writes_tape_and_schedules_followup(tmp_path):
     assert lines[1]["trades"][0]["count_fp"] == "5.00"
 
 
+# Combo follow-up matching (2026-11-10): the RFQ's market_ticker is KXMVECROSSCATEGORY0-... but combo trades print
+# under KXMVECROSSCATEGORY-... (demo tape 2026-10-26), so the old single-ticker follow-up attached zero trades to
+# every combo. The traded ticker is resolved from the collection series by exact leg-set match.
+RFQ_TICKER = "KXMVECROSSCATEGORY0-26OCT26AAA"
+TRADED_TICKER = "KXMVECROSSCATEGORY-26OCT26AAA"
+
+
+class ComboFollowupClient:
+    """Trades exist ONLY under the traded combo ticker; the collection series lists the real combo market beside a
+    different-legs decoy. Reproduces the demo-tape ticker mismatch."""
+
+    def __init__(self):
+        self.trade_queries = []
+
+    def request(self, method, path, **kw):
+        assert method == "GET" and kw["auth"] is False
+        if path == "/markets":
+            assert kw["params"]["series_ticker"] == "KXMVECROSSCATEGORY"
+            return {"markets": [
+                {"ticker": "KXMVECROSSCATEGORY-26OCT26ZZZ", "mve_selected_legs": [
+                    {"event_ticker": "E9", "market_ticker": "OTHERLEG", "side": "yes"}]},
+                {"ticker": TRADED_TICKER, "mve_selected_legs": [
+                    {"event_ticker": "E", "market_ticker": t, "side": "yes"} for t in ("T1", "T2", "T3")]}],
+                "cursor": ""}
+        assert path == "/markets/trades"
+        tk = kw["params"]["ticker"]
+        self.trade_queries.append(tk)
+        if tk == TRADED_TICKER:
+            return {"trades": [{"trade_id": "tr1", "ticker": TRADED_TICKER, "yes_price_dollars": "0.4500",
+                                "count_fp": "100.00"}]}
+        return {"trades": []}
+
+
+def _demo_combo_msg():
+    msg = combo_rfq(["T1", "T2", "T3"], "r1", 10.0)
+    msg["market_ticker"] = RFQ_TICKER
+    msg["mve_collection_ticker"] = "KXMVECROSSCATEGORY"
+    return msg
+
+
+def test_recorder_followup_resolves_the_traded_combo_ticker(tmp_path):
+    client = ComboFollowupClient()
+    scheduled = []
+    tape = RFQTape(str(tmp_path), clock=lambda: NOW)
+    rec = RFQRecorder(KalshiRFQPricer(book_of(*three_cross_game())), tape, client,
+                      schedule=lambda delay, fn: scheduled.append((delay, fn)), clock=lambda: NOW)
+    assert rec.on_event("rfq_created", _demo_combo_msg(), NOW).quoted
+    scheduled[0][1]()
+    lines = [json.loads(l) for l in open(tape.path())]
+    assert [l["kind"] for l in lines] == ["rfq", "followup"]
+    assert lines[1]["trades"] == [{"trade_id": "tr1", "ticker": TRADED_TICKER,
+                                   "yes_price_dollars": "0.4500", "count_fp": "100.00"}]   # markout can now attach
+    assert lines[1]["market_ticker"] == RFQ_TICKER              # the record still keys on the RFQ's own ticker
+    assert client.trade_queries == [RFQ_TICKER, TRADED_TICKER]  # own ticker first, then the resolved traded ticker
+
+
+def test_recorder_followup_degrades_when_combo_resolution_fails(tmp_path):
+    class DownClient:
+        def request(self, method, path, **kw):
+            if path == "/markets":
+                raise RuntimeError("cdn 403")
+            return {"trades": []}
+
+    scheduled = []
+    tape = RFQTape(str(tmp_path), clock=lambda: NOW)
+    rec = RFQRecorder(KalshiRFQPricer(book_of(*three_cross_game())), tape, DownClient(),
+                      schedule=lambda delay, fn: scheduled.append((delay, fn)), clock=lambda: NOW)
+    rec.on_event("rfq_created", _demo_combo_msg(), NOW)
+    scheduled[0][1]()                                           # must not raise
+    lines = [json.loads(l) for l in open(tape.path())]
+    assert lines[1]["kind"] == "followup" and lines[1]["trades"] == []
+
+
+def test_fetch_trades_after_dedupes_across_tickers():
+    class C:
+        def request(self, method, path, **kw):
+            tr = {"trade_id": "x", "ticker": kw["params"]["ticker"]}
+            return {"trades": [tr, dict(tr)]}
+
+    out = fetch_trades_after(C(), "A", NOW, extra_tickers=["B", "A"])
+    assert len(out) == 1 and out[0]["trade_id"] == "x"
+
+
 # ------------------------------------------------------------------------------------------ hygiene
 @pytest.mark.parametrize("path", ["mlb/execution/kalshi/rfq_client.py", "mlb/execution/kalshi/rfq_maker.py",
                                   "ev/kalshi_rfq_pricer.py", "scripts/kalshi_rfq_daemon.py", "tests/test_kalshi_rfq.py", "ev/kalshi_game_legs.py", "ev/kalshi_rfq_props.py", "ev/kalshi_props.py", "ev/sports/__init__.py"])
@@ -1194,6 +1277,32 @@ def test_unmapped_reasons_for_game_tickers():
     assert b.why_unmapped("KXEPLGAME-26OCT31AVLFUL-FUL") == "sport_not_covered"
     assert b.why_unmapped("KXBTC15M-26OCT251945-45") == "unknown_series"
     assert b.why_unmapped("KXNFLGAME-26OCT25BUFKC-KC") is None                       # priced
+
+
+def test_prop_series_without_an_attached_index_is_no_sport_index_not_unknown_series():
+    # Nov 3 coverage replay caveat (a): ~7.5k KXNFLRECYDS / KXNFLREC legs were booked MISS_unknown_series when the
+    # real cause was the NFL prop index being absent at lookup time. Diagnostic only: the legs stay unmapped.
+    tk = "KXNFLRECYDS-26OCT25BUFKC-BUFJSMITH12-50"
+    b = InMemoryFairBook(clock=lambda: NOW)                                        # no indices attached at all
+    assert b.get(tk, NOW) is None and b.why_unmapped(tk) == "no_sport_index"
+    assert b.why_unmapped("KXNFLREC-26OCT25BUFKC-BUFJSMITH12-5") == "no_sport_index"   # the PROT twin too
+    assert b.why_unmapped("KXNFLRECYDSPROT-26OCT25BUFKC-BUFJSMITH12-50") == "no_sport_index"
+    from datetime import datetime, timezone
+    other = _prop_book({"nba": [_nba_event("Milwaukee Bucks", "Boston Celtics", "Jayson Tatum",
+                                           "player_points", [24.5])]}, datetime(2026, 10, 26, 12, tzinfo=timezone.utc))
+    assert other.why_unmapped(tk) == "no_sport_index"                              # NBA index attached, NFL absent
+    assert other.why_unmapped("KXNBAPTS-26OCT26BOSMIL-BOSJTATUM0-60") == "no_rung"  # attached index: unchanged
+
+
+def test_known_soccer_shapes_are_known_series_unpriced_not_unknown_series():
+    # KXUCL1H (~13k legs) and KXUCLBTTS (~7k) in the Nov 3 replay: the series exist on Kalshi (verified in the
+    # /series listing, probe 2026-11-10) but their market-ticker grammar is unverified and no first-half consensus
+    # exists, so they stay unpriced -- classified distinctly, never priced by guessing a mapping.
+    b = InMemoryFairBook(clock=lambda: NOW)
+    for tk in ("KXUCL1H-26OCT28XXXYYY-YYY", "KXEPL1H-26OCT31AVLFUL-FUL", "KXUCLBTTS-26OCT28XXXYYY-YES",
+               "KXEPLBTTS-26OCT31AVLFUL-YES", "KXUCL1HBTTS-26OCT28XXXYYY-YES"):
+        assert b.get(tk, NOW) is None and b.why_unmapped(tk) == "known_series_unpriced", tk
+    assert b.why_unmapped("KXEPLGAME-26OCT31AVLFUL-FUL") == "sport_not_covered"    # full-game shapes unchanged
 
 
 # ------------------------------------------------------------------------------------------ quote more (2026-11-01)
