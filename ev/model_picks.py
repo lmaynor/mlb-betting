@@ -70,14 +70,20 @@ OFFICIAL_MIN_BLEND_EV = 0.025
 #   NBA threes +0.19 (t 8.4), rebounds +0.13 (t 9.4), assists +0.09 (t 5.7)      nba_engine_vs_market_2026-11-01.md, `ship_noabs`
 #   NHL saves  +0.48 pooled on the board engine (-0.23 / +0.84 / +0.19 by season: regime-dependent)   nhl_engine_vs_market_2026-11-01.md
 #   NFL rush_yds +0.25 (t 2.9) -- measured on the HIERARCHICAL engine only, so only rows that engine priced
+#   NFL rec_yds / pass_tds (2026-11-09, PROVISIONAL): no forward Daily Play record yet (3 funnel candidates, 0 publicly settled in the
+# Oct 27-Nov 9 replay, docs in the PR / nhl-nfl-allowlist-measurement-2026-11-09); admitted on the hierarchical engine's own evidence
+# gate (nfl/props/hierarchical_allowlist.json: log-score and Brier gains at real book lines, holdout-confirmed -- rec_yds d_logscore
+# +0.1766, n=3,329; pass_tds +0.0237, n=1,075), the same rule that gated the engine's pricing and admitted rush_yds. Legacy-engine
+# NFL rows stay excluded whatever the stat.
 # EXCLUDED on evidence: NBA points +0.02 / pra +0.02 (forward audit -9.5% / -26.5%), NHL goals +0.03 / assists +0.06 / points +0.03 on the
-# board engine. NOT measured at all (no real lines to test them on): NBA pr / pa / ra / steals / blocks, NHL sog / blocked_shots on the
-# board engine, every other NFL stat -- unmeasured is not allowed, whatever a prior says.
+# board engine (the Oct 27-Nov 9 forward replay agrees: board points 4-1 on n=5 settled with negative CLV cannot overturn the study;
+# board sog 1-10, -77.4% ROI, the largest forward sample). NOT measured at all (no real lines to test them on): NBA pr / pa / ra /
+# steals / blocks, NHL sog / blocked_shots on the board engine, every other NFL stat -- unmeasured is not allowed, whatever a prior says.
 PROPS_SIGNAL_ALLOWLIST = {
     "nba": frozenset({"threes", "rebounds", "assists"}),
     "nhl": frozenset({"saves"}),
 }
-NFL_HIER_SIGNAL = frozenset({"rush_yds"})
+NFL_HIER_SIGNAL = frozenset({"rush_yds", "rec_yds", "pass_tds"})
 # NHL rows served from the TRAINED models (NHL_TRAINED_PROPS on): measured c goals +0.37, assists +0.34, points +0.175, saves +0.75
 # (docs/analysis/nhl_trained_serving_2026-11-01.md). Information, not money -- the blend_ev gate still has to clear.
 NHL_TRAINED_SIGNAL = frozenset({"goals", "assists", "points", "saves"})

@@ -116,10 +116,13 @@ def test_nhl_rows_served_from_the_trained_models_carry_the_measured_trained_sign
     assert MP.qualifies(row(sport="nhl", stat="sog", nhl_model="trained_v1")) == "tracked"
 
 
-def test_nfl_only_rush_yds_priced_by_the_hierarchical_engine_counts():
-    assert MP.qualifies(row(sport="nfl", stat="rush_yds", engine="empirical_ewm_v2+hierarchical_v1")) == "official"
-    assert MP.qualifies(row(sport="nfl", stat="rush_yds", engine="empirical_ewm_v2")) == "tracked"       # c was not measured on it
-    for stat in ("pass_yds", "rec_yds", "pass_tds", "anytime_td", "receptions", "pass_attempts"):
+def test_nfl_only_the_hierarchical_evidence_gated_stats_priced_by_that_engine_count():
+    # 2026-11-09: rec_yds / pass_tds admitted (provisional) on the hierarchical engine's own evidence gate
+    # (nfl/props/hierarchical_allowlist.json) -- the stats that engine is allowed to price, priced by it.
+    for stat in ("rush_yds", "rec_yds", "pass_tds"):
+        assert MP.qualifies(row(sport="nfl", stat=stat, engine="empirical_ewm_v2+hierarchical_v1")) == "official", stat
+        assert MP.qualifies(row(sport="nfl", stat=stat, engine="empirical_ewm_v2")) == "tracked", stat   # not measured on the legacy engine
+    for stat in ("pass_yds", "anytime_td", "receptions", "pass_attempts"):
         assert MP.qualifies(row(sport="nfl", stat=stat, engine="empirical_ewm_v2+hierarchical_v1")) == "tracked", stat
 
 
