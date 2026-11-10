@@ -85,9 +85,22 @@ def test_official_card_gate_requires_confluence():
     row_thin_edge = _proj_row(model_edge=0.010)
     assert not is_official_card_play(row_thin_edge)
 
-    # beezy_score < 68 rejected
-    row_low_score = _proj_row(beezy_score=65)
+    # beezy_score below the calibrated confluence cut (40) rejected
+    row_low_score = _proj_row(beezy_score=39)
     assert not is_official_card_play(row_low_score)
+
+
+def test_official_card_gate_confluence_score_boundary():
+    # Calibrated 2026-11-09: the confluence (props) score cut is 40, not 68. On the
+    # Nov 4-9 archived boards, otherwise-qualifying prop rows scored 18-63 (median 42),
+    # so 68 admitted zero of them in six days; rows at >= 40 ran +7.0% flat ROI (n=62).
+    assert is_official_card_play(_proj_row(beezy_score=40))
+    assert is_official_card_play(_proj_row(beezy_score=65))
+    assert not is_official_card_play(_proj_row(beezy_score=39))
+
+    # The MLB validated-systems path keeps its own 68 cut: the recalibration is props-scoped.
+    assert not is_official_card_play(_mlb_row(beezy_score=67))
+    assert is_official_card_play(_mlb_row(beezy_score=68))
 
 
 def test_official_card_gate_rejects_unvalidated_game_engine_rows():
