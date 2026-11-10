@@ -76,6 +76,38 @@ def test_bestbook_live_setup_is_ungated_and_has_pause_and_resume_switches():
     assert "gcloud scheduler jobs pause" in s and "gcloud scheduler jobs resume" in s and "RESUME" in s
 
 
+def _daily_projections_generated_env(**overrides):
+    """Evaluate only the env-construction lines of setup_daily_projections_job.sh (the script itself is never run here)."""
+    import os
+
+    text = (DEPLOY / "setup_daily_projections_job.sh").read_text()
+    prefixes = ('NFL_ENGINE="${', 'NFL_HIER_LAYERS="${', 'NFL_HIER_WEATHER="${',
+                'NHL_TRAINED_PROPS="${', 'ENV_VARS="GCP_PROJECT=')
+    lines = [line for line in text.splitlines() if line.startswith(prefixes)]
+    assert len(lines) == 5, lines
+    env = {"PATH": os.environ["PATH"], "PROJECT_ID": "test-project", "REGION": "us-central1"}
+    env.update(overrides)
+    script = "\n".join(['PROJECT_ID="test-project"', 'REGION="us-central1"', *lines, "printf '%s' \"$ENV_VARS\""])
+    r = subprocess.run([shutil.which("bash"), "-c", script], env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    return r.stdout
+
+
+def test_daily_projections_setup_carries_nhl_trained_props_by_default():
+    text = (DEPLOY / "setup_daily_projections_job.sh").read_text()
+    assert 'NHL_TRAINED_PROPS="${NHL_TRAINED_PROPS:-1}"' in text
+    env = _daily_projections_generated_env()
+    for token in ("GCP_PROJECT=test-project", "GCP_REGION=us-central1", "NFL_ENGINE=hierarchical",
+                  "NFL_HIER_LAYERS=none", "NFL_HIER_WEATHER=0", "NHL_TRAINED_PROPS=1"):
+        assert token in env.split(","), token
+    assert '--set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest"' in text
+
+
+def test_daily_projections_setup_respects_an_explicit_nhl_trained_props_off():
+    env = _daily_projections_generated_env(NHL_TRAINED_PROPS="0")
+    assert "NHL_TRAINED_PROPS=0" in env.split(",")
+
+
 def test_alert_sweep_jobs_that_log_bets_are_wired_for_the_database():
     """sport_alerts.log_sport_alert_bets writes the bets table; a job without MLB_DB_URL + Cloud SQL used to lose every row."""
     for name in ("setup_props_alerts.sh", "setup_nfl_sweep_schedule.sh", "setup_fast_alert.sh", "setup_model_picks.sh"):
