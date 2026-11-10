@@ -21,6 +21,17 @@ class SportAdapter:
     tie_policy: str = "none"        # 'half' => a tie resolves to $0.50 per team (NFL); 'none' => no ties
     # kinds the mapper must refuse, kind -> reason (a rules difference vs the sportsbook proposition)
     disabled: dict = field(default_factory=dict)
+    # kind -> the league's real series ticker, ONLY where it breaks the kalshi_prefix + kind rule (NCAAF total:
+    # KXNCAFTOTAL). Read through series_prefix(); series() stays the concatenation for every other use.
+    series_tickers: dict = field(default_factory=dict)
 
     def series(self, kind: str) -> str:
         return self.kalshi_prefix + {"ml": "GAME", "spread": "SPREAD", "total": "TOTAL"}[kind]
+
+    def series_prefix(self, kind: str) -> str:
+        """The bare series TICKER for a kind, where it differs from kalshi_prefix + kind. Kalshi's NCAAF total series
+        is KXNCAFTOTAL (one A), not the KXNCAFTOTAL the concatenation would build; adapters whose series tickers do
+        not follow the prefix rule carry the real ones in `series_tickers` and everything that PRINTS or MATCHES a
+        series ticker must go through here. Default: the concatenation (every pro league)."""
+        tickers = getattr(self, "series_tickers", None) or {}
+        return tickers.get(kind, self.series(kind))
