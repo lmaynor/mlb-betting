@@ -37,7 +37,7 @@ def test_rejections(kw):
 
 def test_official_tier_needs_the_cards_own_gate():
     assert MP.qualifies(row()) == "official"                       # ev 8.65%, model edge 5%, 6 books, score 72
-    assert MP.qualifies(row(beezy_score=50)) == "tracked"          # below the card's score floor
+    assert MP.qualifies(row(beezy_score=39)) == "tracked"          # below the card's score floor (40 since the 2026-11-09 calibration)
     assert MP.qualifies(row(n_books=3)) == "tracked"               # below the card's 4-book floor
 
 
@@ -48,7 +48,7 @@ def test_official_tier_also_needs_the_market_anchored_blend_to_clear_the_bar():
     r = row()
     r.pop("blend_ev")
     assert MP.qualifies(r) == "tracked"
-    assert MP.qualifies(row(blend_ev=0.5, beezy_score=50)) == "tracked"      # the card's own gate still applies first
+    assert MP.qualifies(row(blend_ev=0.5, beezy_score=39)) == "tracked"      # the card's own gate still applies first
 
 
 def test_under_side_uses_the_under_quote():
