@@ -45,6 +45,7 @@ from datetime import datetime, timedelta, timezone
 from ev import daily_card as DC
 from ev import daily_projections as DP
 from ev.props import DFS_BOOKS
+from nhl.props import saves_hardening as SH
 
 log = logging.getLogger("ev.model_picks")
 
@@ -176,6 +177,19 @@ def is_shadow_cohort(r: dict) -> bool:
     return shadow_cohort(r) is not None
 
 
+def _saves_hardening_stamp(r: dict) -> dict | None:
+    """The saves-hardening audit dict for a pick (stamps + gate verdict + reasons), or None when the row
+    is not an NHL saves row or carries no hardening stamps (a pre-hardening board)."""
+    if r.get("sport") != "nhl" or r.get("stat") != "saves":
+        return None
+    verdict = SH.officials_gate_from_row(r)
+    if verdict is None:
+        return None
+    keys = SH.ROW_STAMPS + ("saves_starter_gate_reason", "saves_regime_over_rate",
+                            "saves_center_residual", "saves_calibrated")
+    return {**{k: r.get(k) for k in keys}, "gate_ok": verdict.ok, "gate_reasons": list(verdict.reasons)}
+
+
 def _num(x):
     try:
         v = float(x)
@@ -216,6 +230,15 @@ def qualifies(r: dict, now: datetime | None = None) -> str | None:
     # lower than the pack: monitored, never staked. A board with no sharp fields (older schema) passes the sharp test (fail-open).
     if not has_measured_signal(r) or r.get("sharp_agrees") is False:
         return "tracked"
+    # NHL saves hardening gates (Argon Props D1 / Pack 4 D1 / Data D2, nhl.props.saves_hardening): a saves row the
+    # current board stamped must ALSO clear dual starter confirmation (RotoWire + second source; the ESPN second
+    # source is a fail-closed stub, so stamped rows cannot be official until a real fetcher replaces it), the
+    # trailing-14-day regime gate, and the >= 4-book median price gate (>= 3.0pp). A row with NO hardening stamps
+    # (a board written before hardening) passes here, the same fail-open-on-old-schema rule as the sharp test.
+    if r.get("sport") == "nhl" and r.get("stat") == "saves":
+        verdict = SH.officials_gate_from_row(r)
+        if verdict is not None and not verdict.ok:
+            return "tracked"
     # a board written before `blend_ev` existed (or a row with no blend) cannot show the engine clears the bar: not official
     blend_ev = _num(r.get("blend_ev"))
     return "official" if blend_ev is not None and blend_ev >= OFFICIAL_MIN_BLEND_EV else "tracked"
@@ -237,6 +260,8 @@ def to_pick(r: dict) -> dict:
         "engine": r.get("engine"), "team": r.get("team"), "opp": r.get("opp"), "row_key": DP.row_key(r),
         "player_id": r.get("player_id"),
         "shadow_cohort": shadow_cohort(r),
+        # saves hardening audit trail (stamps + gate verdict): why a saves row was / was not official.
+        "saves_hardening": _saves_hardening_stamp(r),
     }
 
 
@@ -340,6 +365,7 @@ def log_picks(sport: str, picks: list[dict], tracker=None) -> list[dict]:
                     "p_fair": p["p_fair"], "ev": p["ev"], "score": p["score"],
                     "p_blend": p.get("p_blend"), "blend_ev": p.get("blend_ev"),
                     "shadow_cohort": p.get("shadow_cohort"),
+                    "saves_hardening": p.get("saves_hardening"),
                 }, default=str),
             )
             if bid is not None and bid > 0:
