@@ -144,6 +144,154 @@ def market_blend_prob(p_mkt: float, p_model: float, sport: str, stat: str, a: fl
     return min(max(p, float(p_mkt) - max_shift), float(p_mkt) + max_shift)
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# Pre-blend calibration + winner's-curse concave shrinkage (Argon 2026-11-10: model-improvement D2 and
+# data-methods D4). D4: "Fit isotonic / temperature scaling PRE-BLEND to ECE <= 0.015" and the concave
+# damping below; D2: "Per-stat isotonic calibration ECE <= 0.015, concave damping above 8%".
+# ---------------------------------------------------------------------------------------------------------------------
+ECE_TARGET = 0.015
+
+
+def expected_calibration_error(y, p, n_bins: int = 10) -> float:
+    """Expected Calibration Error with equal-count (quantile) bins: sum over bins of
+    (bin share) * |mean outcome - mean predicted|. Same estimator as mlb_core.odds.props_residual.ece.
+    NaN when there are too few rows to bin honestly (< 5 per bin)."""
+    import numpy as np
+    y = np.asarray(y, dtype=float)
+    p = np.asarray(p, dtype=float)
+    if len(y) < n_bins * 5:
+        return float("nan")
+    order = np.argsort(p, kind="mergesort")
+    return float(sum(len(i) / len(y) * abs(y[i].mean() - p[i].mean()) for i in np.array_split(order, n_bins)))
+
+
+class IsotonicCalibrator:
+    """Isotonic (monotone) probability calibrator fit by the pool-adjacent-violators algorithm.
+
+    Duck-types the calibrator contract of apply() above (predict(list) -> list) so a fitted instance
+    can serve either path. Pure numpy; the artifact is two small arrays (thresholds, values)."""
+
+    def __init__(self):
+        self.x_: object = None      # sorted training probabilities (bin edges)
+        self.y_: object = None      # fitted (monotone) values at x_
+
+    def fit(self, p, y) -> "IsotonicCalibrator":
+        import numpy as np
+        p = np.asarray(p, dtype=float)
+        y = np.asarray(y, dtype=float)
+        order = np.argsort(p, kind="mergesort")
+        xs, ys = p[order], y[order].copy()
+        # PAVA: pool adjacent blocks whose means violate monotonicity.
+        stack_x, stack_v, stack_w, stack_idx = [], [], [], []
+        for idx in range(len(xs)):
+            cx, cv, cw, ci = xs[idx], ys[idx], 1.0, [idx]
+            while stack_v and stack_v[-1] > cv:
+                px, pv, pw, pi = stack_x.pop(), stack_v.pop(), stack_w.pop(), stack_idx.pop()
+                cv = (cv * cw + pv * pw) / (cw + pw)
+                cw = cw + pw
+                ci = pi + ci
+                cx = px
+            stack_x.append(cx)
+            stack_v.append(cv)
+            stack_w.append(cw)
+            stack_idx.append(ci)
+        fitted = np.empty(len(ys))
+        edges = np.empty(len(stack_v))
+        for j, idxs in enumerate(stack_idx):
+            fitted[idxs] = stack_v[j]
+            edges[j] = xs[idxs[-1]]
+        self.x_ = edges
+        self.y_ = np.asarray(stack_v, dtype=float)
+        self._fitted_at_train_ = fitted
+        return self
+
+    def predict(self, probs):
+        import numpy as np
+        if self.x_ is None:
+            raise RuntimeError("IsotonicCalibrator.predict before fit")
+        p = np.asarray(probs, dtype=float)
+        idx = np.searchsorted(self.x_, p, side="left")
+        idx = np.clip(idx, 0, len(self.y_) - 1)
+        out = self.y_[idx]
+        return out.tolist() if np.ndim(probs) else float(out)
+
+
+def fit_pre_blend_calibrator(y_cal, p_cal) -> IsotonicCalibrator:
+    """Fit the pre-blend isotonic calibrator on a CALIBRATION slice (never the rows being scored)."""
+    return IsotonicCalibrator().fit(p_cal, y_cal)
+
+
+def calibration_report(y_val, p_val, calibrator=None) -> dict:
+    """ECE before / after calibration on a VALIDATION slice, against ECE_TARGET (0.015).
+
+    Honest reporting contract: `meets_target` is computed from the measured validation ECE, never
+    assumed; when the slice is too small to bin, ece is NaN and meets_target is False."""
+    import numpy as np
+    p_val = np.asarray(p_val, dtype=float)
+    ece_before = expected_calibration_error(y_val, p_val)
+    out = {"n": int(len(p_val)), "ece_before": ece_before, "ece_after": ece_before,
+           "ece_target": ECE_TARGET, "meets_target": bool(ece_before == ece_before and ece_before <= ECE_TARGET)}
+    if calibrator is not None:
+        p_cal = np.asarray(calibrator.predict(list(p_val)), dtype=float)
+        ece_after = expected_calibration_error(y_val, p_cal)
+        out.update(ece_after=ece_after,
+                   meets_target=bool(ece_after == ece_after and ece_after <= ECE_TARGET))
+    return out
+
+
+# Per-(sport, stat) pre-blend calibrators, registered by the training / refit job that fit them.
+# EMPTY by default: with nothing registered, pre_blend_calibrate() is a passthrough and every serving
+# path behaves exactly as before (the same fail-open contract as apply() above).
+_PRE_BLEND: dict = {}
+
+
+def register_pre_blend_calibrator(sport: str, stat: str, calibrator) -> None:
+    _PRE_BLEND[(str(sport).lower(), str(stat).lower())] = calibrator
+
+
+def clear_pre_blend_calibrators() -> None:
+    _PRE_BLEND.clear()
+
+
+def pre_blend_calibrate(prob, sport: str | None, stat: str | None) -> tuple:
+    """(calibrated_prob, was_calibrated): apply the registered pre-blend calibrator for (sport, stat)
+    to a MODEL probability BEFORE it enters the market blend. Passthrough (prob, False) when no
+    calibrator is registered or on any error -- fail-open, like apply()."""
+    if prob is None or sport is None or stat is None:
+        return prob, False
+    calibrator = _PRE_BLEND.get((str(sport).lower(), str(stat).lower()))
+    if calibrator is None:
+        return float(prob), False
+    try:
+        p = float(calibrator.predict([float(prob)])[0])
+        return min(max(p, 0.01), 0.99), True
+    except Exception as exc:
+        logger.warning("calibration: pre-blend predict failed for %s/%s -- passthrough: %s", sport, stat, exc)
+        return float(prob), False
+
+
+# Winner's-curse concave shrinkage (Argon data-methods D4, exact form):
+#     edge_shrunk = edge_blend * exp(-max(0, |gap_raw| - 0.08) / 0.04)
+# gap_raw is the RAW model-vs-market gap (probability points) before blending. At |gap| <= 0.08 the
+# factor is exactly 1 (no shrinkage); above it the claimed blended edge decays exponentially with a
+# 0.04 scale. Distinct from shrink_edge() above (the older linear knee for Kelly sizing): this one is
+# the D4 formula, applied to the blended edge in the picks path.
+WINNERS_CURSE_KNEE = 0.08
+WINNERS_CURSE_TAU = 0.04
+
+
+def concave_shrink_edge(edge_blend: float, gap_raw: float, knee: float = WINNERS_CURSE_KNEE,
+                        tau: float = WINNERS_CURSE_TAU) -> float:
+    """edge_blend * exp(-max(0, |gap_raw| - knee) / tau), exactly the Argon D4 form."""
+    import math
+    if edge_blend is None or edge_blend != edge_blend:
+        return 0.0
+    if gap_raw is None or gap_raw != gap_raw:
+        return float(edge_blend)
+    excess = max(0.0, abs(float(gap_raw)) - float(knee))
+    return float(edge_blend) * math.exp(-excess / float(tau))
+
+
 def reset_cache() -> None:
     """Clear the process-local calibrator cache (tests)."""
     _CACHE.clear()
