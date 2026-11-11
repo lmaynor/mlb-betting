@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SYNTHETIC FIXTURE: hand-built for parser tests, NOT fetched (0 live fetches).
+     Item fields follow the documented RSS shape: title, pubDate, description, link, guid. -->
+<rss version="2.0"><channel>
+<title>RotoWire NBA News</title><link>https://www.rotowire.com/basketball/</link>
+<item>
+  <title>Kawhi Leonard: Remains on minutes limit Monday</title>
+  <pubDate>Mon, 13 Jan 2025 18:30:00 GMT</pubDate>
+  <description>Head coach Tyronn Lue confirmed that Leonard (knee) will remain under a minutes restriction during Monday's game against the Heat, independent NBA writer Justin Russo reports.</description>
+  <link>https://www.rotowire.com/basketball/player/kawhi-leonard-3195</link>
+  <guid isPermaLink="false">rotowire-nba-20250113-3195-1</guid>
+</item>
+<item>
+  <title>Joel Embiid: Hopeful for regular-season return</title>
+  <pubDate>Wed, 27 Mar 2024 16:05:00 GMT</pubDate>
+  <description>Coach Nick Nurse said Wednesday that Embiid (knee) has a "very good" chance of playing before the end of the regular season, Tim Bontemps of ESPN.com reports.</description>
+  <link>https://www.rotowire.com/basketball/player/joel-embiid-3572</link>
+  <guid isPermaLink="false">rotowire-nba-20240327-3572-1</guid>
+</item>
+</channel></rss>
