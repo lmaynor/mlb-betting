@@ -2,10 +2,16 @@
 # setup_ncaab_banking.sh -- provision the NCAAB game-line banking jobs (BettingPros + Kalshi). BestBook's cbb crawl is
 # deploy/setup_bestbook_live.sh (bb-live-cbb).
 #
-#   ncaab-bank-bp       python -m ev.ncaab_banker --source bettingpros   hourly at :35, Nov-Apr
+#   ncaab-bank-bp       python -m ev.ncaab_banker --source bettingpros   every 20 min, Nov-Apr (see CADENCE below)
 #   ncaab-bank-kalshi   python -m ev.ncaab_banker --source kalshi        hourly at :40, Nov-Apr
 #   ncaab-board         python -m ev.ncaab_board                         hourly at :55, Nov-Apr (joins the three banked feeds + BestBook's
 #                                                                        cbb file into EVSweep/ncaab_games/odds_board_latest.json, the Game Lines board)
+#
+# CADENCE (changed 2026-11-10 with the RFQ fair-book wiring): the BettingPros bank now also feeds the Kalshi RFQ fair
+# book (ev.kalshi_game_banked), whose leg staleness gate is 1500 s -- an hourly bank leaves its rows usable only
+# ~25 min of each hour (NCAA coverage measurement, 2026-11-10). The BP row therefore runs every 20 min in season.
+# The Kalshi bank and the board stay hourly: the board's join horizon is 180 min and Kalshi rows never enter a
+# consensus. Re-running this script applies the new cron; nothing else about the jobs changes.
 #
 # Each writes Odds/{source}_live/ncaab/game_lines_latest.json (BestBook's ladder shape; the previous good file is kept when a
 # crawl finds no priced games). Both feeds are free and unauthenticated: no ParlayAPI credits. Sources keep their own team codes
@@ -26,7 +32,7 @@ SCHED_SA="scheduler-invoker@${PROJECT_ID}.iam.gserviceaccount.com"
 
 # job|module args|cron (America/Chicago); the board runs after the :35 / :40 banks and BestBook's :50 crawl
 ROWS=(
-  "ncaab-bank-bp|ev.ncaab_banker,--source,bettingpros|35 * * 11-12,1-4 *"
+  "ncaab-bank-bp|ev.ncaab_banker,--source,bettingpros|*/20 * * 11-12,1-4 *"
   "ncaab-bank-kalshi|ev.ncaab_banker,--source,kalshi|40 * * 11-12,1-4 *"
   "ncaab-board|ev.ncaab_board|55 * * 11-12,1-4 *"
 )
@@ -54,7 +60,7 @@ for row in "${ROWS[@]}"; do
          --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest"
          --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION}"
          --command="python" --args="-m,$MODARGS"
-         --task-timeout="600s" --max-retries=1 --memory="512Mi" --cpu="1")
+         --task-timeout="900s" --max-retries=1 --memory="512Mi" --cpu="1")
   if gcloud run jobs describe "$JOB" --region="$REGION" --project="$PROJECT_ID" --quiet >/dev/null 2>&1; then
     echo "Updating Cloud Run job $JOB..."
     gcloud run jobs update "$JOB" "${FLAGS[@]}" --project="$PROJECT_ID" --quiet

@@ -12,7 +12,10 @@ Also spreads (KX<LG>SPREAD-<tail>-<CODE><N>) and totals (KX<LG>TOTAL-<tail>-<N>)
 
 Tickers are BUILT from the book event and round-tripped through ev.kalshi_map.parse_event, so the grammar is the strict
 mapper's, and a team name that does not resolve to a code in the league's complete Kalshi code table drops the game (fail
-closed -- a wrong code is a wrong price). Not covered (stay unpriced): NCAAF/NCAAWB/MLS game winners, spreads, totals.
+closed -- a wrong code is a wrong price). NCAAF / NCAAB (men's) game winners, spreads and totals ARE covered as of
+2026-11-10 (ev.sports.ncaaf / ncaab adapters + ev.sports.ncaa_teams census tables; the live-slate name path resolves
+only verbatim Kalshi school names -- the priced route is the BettingPros banked feed in ev.kalshi_game_banked).
+Not covered (stay unpriced): NCAAWB (women's) / MLS game winners, spreads, totals.
 NFL ties settle $0.50 per team on Kalshi; a two-way de-vig ignores them (a ~0.5pp effect, inside the safety pad).
 """
 
@@ -40,7 +43,14 @@ log = logging.getLogger("ev.kalshi_game_legs")
 # books' de-vigged probabilities. UNVALIDATED: the sd values are rough league-typical figures, not fitted to this repo's data; rows are
 # tagged pooled=True, inherit the thinnest anchor's n_books, and carry extra dispersion that grows with the distance from the nearest
 # quoted line, so the leg gate rejects the far ones. Nothing beyond GAME_INTERP_MAX_SD standard deviations from a quoted line is emitted.
-GAME_SD = {"nfl": {"margin": 13.5, "total": 12.0}, "nba": {"margin": 12.0, "total": 18.0}, "nhl": {"margin": 2.3, "total": 2.5}}
+GAME_SD = {"nfl": {"margin": 13.5, "total": 12.0}, "nba": {"margin": 12.0, "total": 18.0}, "nhl": {"margin": 2.3, "total": 2.5},
+           # NCAA (2026-11-10): UNVALIDATED league-typical starting points in the same sense as the rows above -- NOT fitted.
+           # College margins run wider than the pros' (blowout-heavy schedules): FBS margin sd is commonly put near 15-16
+           # points with totals near 13-14; D1 basketball margins near 11 with totals near 13-14. No settled-outcome fit
+           # exists in this repo for either (the banked NCAA files carry lines, not results), so treat exactly like the
+           # pro entries: pooled rows inherit the thinnest anchor's books and grow dispersion with distance, and the far
+           # rungs fail the leg gate by construction. Fit before trusting; see the coverage measurement of 2026-11-10.
+           "ncaaf": {"margin": 15.5, "total": 13.5}, "ncaab": {"margin": 11.0, "total": 13.5}}
 GAME_INTERP_MAX_SD = 1.0
 DISP_PER_SD = 0.02
 P_LO, P_HI = 0.01, 0.99
@@ -58,6 +68,12 @@ def team_code_fn(sport: str):
         base = lambda name: TEAM_NAMES.get(name)                    # noqa: E731
     elif sport == "nhl":
         from nhl.config import team_abbrev as base
+    elif sport in ("ncaaf", "ncaab"):
+        # Only a VERBATIM Kalshi school name resolves (ev.sports.ncaa_teams census). Book feeds that carry mascots or
+        # their own spellings fail closed here; the BettingPros banked path does not come through this function at all
+        # (it translates BettingPros CODES through the crosswalk in ev.kalshi_game_banked).
+        from ev.sports.ncaa_teams import name_to_kalshi
+        return lambda name: name_to_kalshi(sport, name)
     else:
         from nba.teams import team_code as base
     return lambda name: kalshi_code(sport, base(name))
@@ -321,14 +337,21 @@ def _interp_spread_rows(sport: str, spr: dict, home_n: str, game_key: str | None
     return out
 
 
-def slate_rows(slate: list, sport: str, now: float, team_code=None) -> tuple[list[dict], dict]:
+def slate_rows(slate: list, sport: str, now: float, team_code=None, valid_codes=None) -> tuple[list[dict], dict]:
     """ParlayAPI slate events (h2h / spreads / totals) -> ([feed row per Kalshi market], stats). `now` stamps updated_ts.
+
+    `valid_codes` is the set of team codes an event's resolved teams must belong to; it defaults to the adapter's
+    (parse) codes. NCAA callers pass the FULL census instead: their codes arrive pre-translated through the
+    name-verified crosswalk, never by splitting a separator-free ticker blob, so parse-dropped schools price
+    normally there while parse_event below still round-trips the built tickers against the adapter's parse set
+    (a blob that only splits through a dropped code is still refused, never guessed).
 
     KX<LG>GAME   -<tail>-<CODE>    yes == CODE wins
     KX<LG>SPREAD -<tail>-<CODE><N> yes == CODE wins by over N-0.5   (== the book's CODE -(N-0.5), de-vigged against the other side)
     KX<LG>TOTAL  -<tail>-<N>       yes == Over N-0.5                (never emitted when the adapter disables totals: NHL shootout rule)
     """
     adapter = ADAPTERS[sport]
+    valid = adapter.codes if valid_codes is None else valid_codes
     team_code = team_code or team_code_fn(sport)
     rows: list[dict] = []
     stats = {"events": 0, "games_priced": 0, "dropped_unknown_team": 0, "dropped_thin": 0, "spread_rows": 0, "total_rows": 0,
@@ -337,7 +360,7 @@ def slate_rows(slate: list, sport: str, now: float, team_code=None) -> tuple[lis
         stats["events"] += 1
         home_n, away_n = ev.get("home_team"), ev.get("away_team")
         home, away = team_code(home_n), team_code(away_n)
-        if home not in adapter.codes or away not in adapter.codes or home == away or not ev.get("commence_time"):
+        if home not in valid or away not in valid or home == away or not ev.get("commence_time"):
             stats["dropped_unknown_team"] += 1
             continue
         start = datetime.fromisoformat(ev["commence_time"].replace("Z", "+00:00")).astimezone(_ET)
@@ -393,7 +416,7 @@ def slate_rows(slate: list, sport: str, now: float, team_code=None) -> tuple[lis
                     r_dict["p_model_yes"] = p_mod
                 rows.append(r_dict)
         for pt, vals in tot.items():
-            add(f"{adapter.series('total')}-{tail}-{int(pt + 0.5)}", "game_total", "total", pt, vals)
+            add(f"{adapter.series_prefix('total')}-{tail}-{int(pt + 0.5)}", "game_total", "total", pt, vals)
             stats["total_rows"] += 1
         for (fav_name, line), vals in spr.items():
             code = home if fav_name == home_n else away
@@ -409,7 +432,7 @@ def slate_rows(slate: list, sport: str, now: float, team_code=None) -> tuple[lis
             rows.append(r_dict)
             stats["spread_rows"] += 1
         for N, x, p, n, disp in _interp_total_rows(sport, tot, game_key=gk):
-            rows.append({"ticker": f"{adapter.series('total')}-{tail}-{N}", "sport": sport, "game_key": gk,
+            rows.append({"ticker": f"{adapter.series_prefix('total')}-{tail}-{N}", "sport": sport, "game_key": gk,
                          "market_class": "game_total", "player_norm": None, "stat": "total", "strike": x, "p_yes": p,
                          "n_books": n, "disp": disp, "pooled": True, "updated_ts": now})
             stats["total_interp"] += 1

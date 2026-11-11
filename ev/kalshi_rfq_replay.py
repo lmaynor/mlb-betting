@@ -397,6 +397,32 @@ def store_from_game_lines(sport: str, snaps) -> SnapshotStore:
     return SnapshotStore(out, sport=sport)
 
 
+def store_from_bettingpros_ladders(sport: str, snaps) -> SnapshotStore:
+    """[(ts, banked ladder games)] -> SnapshotStore for an NCAA sport from its BettingPros banker file(s), via the SAME
+    conversion the live fair book uses (ev.kalshi_game_banked.events_from_bettingpros -> slate_rows): BettingPros codes are
+    translated through the name-joined crosswalk, unmapped schools drop out, and the commence map is keyed by the Kalshi
+    game key so a started game is never priced. The banker keeps only a `latest` file (no history), so in practice this
+    builds a single-snapshot store stamped with the file's own fetched_at -- point-in-time honest for combos created
+    after that stamp, silent (NO_SNAPSHOT) for anything earlier."""
+    from datetime import datetime, timezone
+    from ev.kalshi_game_banked import events_from_bettingpros
+    from ev.kalshi_game_legs import slate_rows
+    from ev.kalshi_map import game_key as kx_game_key
+    out = []
+    for ts, games in snaps:
+        now_dt = datetime.fromtimestamp(ts, timezone.utc)
+        events, _ = events_from_bettingpros(sport, games, now_dt)
+        from ev.sports.ncaa_teams import NCAAF_KALSHI_CODES, NCAAB_KALSHI_CODES
+        census = NCAAF_KALSHI_CODES if sport == "ncaaf" else NCAAB_KALSHI_CODES
+        rows, _ = slate_rows(events, sport, ts, team_code=lambda c, _c=census: c, valid_codes=census)
+        commence = {}
+        for ev in events:
+            start = datetime.fromisoformat(str(ev["commence_time"]).replace("Z", "+00:00"))
+            commence[kx_game_key(sport, start.date().isoformat(), ev["away_team"], ev["home_team"])] = start.timestamp()
+        out.append((ts, [lf for lf in (leg_from_row(r, ts) for r in rows) if lf is not None], None, commence))
+    return SnapshotStore(out, sport=sport)
+
+
 def fetch_cycle_frames(days, storage=None, workers: int = 12):
     """Read every banked NFL sweep cycle for the given 'YYYY-MM-DD' folders (missing folders are skipped). Needs GCS_BUCKET /
     MLB_GCS_BUCKET set, otherwise mlb_core.storage looks in a local directory and finds nothing."""

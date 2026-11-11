@@ -39,7 +39,11 @@ from mlb.execution.kalshi.fees import taker_fee
 from mlb_core.risk.calibration import market_blend_prob
 
 _GAME_SERIES = re.compile(r"^KX([A-Z0-9]+?)(?:GAME|SPREAD|TOTAL)-")
-_COVERED_LEAGUES = {"NFL": "nfl", "NBA": "nba", "NHL": "nhl"}
+# NCAAF total series is KXNCAFTOTAL (one A, verified in Kalshi's /series listing 2026-11-10): the lazy group parses
+# it as 'NCAF', so 'NCAF' maps to ncaaf too (harmless: no other league's series parses to NCAF). NCAAB men's group is
+# 'NCAAMB'; the women's 'NCAAWB' is deliberately ABSENT (no source carries women's lines) so those legs classify
+# sport_not_covered and stay unpriced.
+_COVERED_LEAGUES = {"NFL": "nfl", "NBA": "nba", "NHL": "nhl", "NCAAF": "ncaaf", "NCAF": "ncaaf", "NCAAMB": "ncaab"}
 
 # Soccer series that EXIST on Kalshi but are deliberately unpriced (why_unmapped -> 'known_series_unpriced', never
 # 'unknown_series'). The series tickers were verified in Kalshi's own /series listing (scripts/probe_soccer_odds.py,

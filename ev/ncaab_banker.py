@@ -73,16 +73,18 @@ def _f(v) -> float | None:
 # ---------------------------------------------------------------------------------------------------------------- BettingPros
 
 
-def bp_parse_event(event: dict, offers: list) -> list[dict]:
+def bp_parse_event(event: dict, offers: list, markets: dict | None = None) -> list[dict]:
     """One BettingPros event's ML / spread / total offers -> per-book two-way quotes.
 
     Offer selections are one per side (ML / spread: participant = the team code; total: selection 'over' / 'under'); each carries
     books[{id, lines[{cost, line, active, is_off}]}]. A spread selection's `line` is that TEAM's own handicap, so the home line is
-    read from the home team's selection (or the negated away line when only that side is posted)."""
+    read from the home team's selection (or the negated away line when only that side is posted). `markets` overrides the
+    market-id table (the NCAAF sibling passes its own ids; the parse is sport-agnostic)."""
     away, home = event.get("away"), event.get("home")
     out: dict[tuple, dict] = {}
+    markets = BP_MARKETS if markets is None else markets
     for o in offers or []:
-        market = BP_MARKETS.get(o.get("market_id"))
+        market = markets.get(o.get("market_id"))
         if market is None or o.get("player_id") is not None:
             continue
         for sel in o.get("selections") or []:

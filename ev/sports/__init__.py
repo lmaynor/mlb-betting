@@ -1,10 +1,12 @@
 from ev.sports.base import SportAdapter
 from ev.sports.nba import NBA
+from ev.sports.ncaab import NCAAB
+from ev.sports.ncaaf import NCAAF
 from ev.sports.nfl import NFL
 from ev.sports.nhl import NHL
 from ev.sports.soccer import SOCCER
 
-ADAPTERS = {"nfl": NFL, "nba": NBA, "nhl": NHL, "soccer": SOCCER}
+ADAPTERS = {"nfl": NFL, "nba": NBA, "nhl": NHL, "soccer": SOCCER, "ncaaf": NCAAF, "ncaab": NCAAB}
 
 
 def get_adapter(sport: str) -> SportAdapter:

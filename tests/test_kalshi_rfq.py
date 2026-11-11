@@ -1273,7 +1273,8 @@ def test_unmapped_reasons_for_game_tickers():
     b.load_rows(rows, NOW)
     assert b.why_unmapped("KXNFLSPREAD-26OCT25BUFKC-KC30") == "no_rung"             # we price that game, not that rung
     assert b.why_unmapped("KXNFLGAME-26NOV01PHIWAS-WAS") == "no_game_line"           # covered league, game not on our slate
-    assert b.why_unmapped("KXNCAAFSPREAD-26OCT31NWORE-ORE10") == "sport_not_covered"
+    assert b.why_unmapped("KXNCAAFSPREAD-26OCT31NWORE-ORE10") == "no_game_line"        # NCAAF covered since 2026-11-10 (BettingPros banker); game not on our slate
+    assert b.why_unmapped("KXNCAAWBGAME-26OCT31LSUNC-NC") == "sport_not_covered"       # women's basketball: no source carries it, stays unpriced
     assert b.why_unmapped("KXEPLGAME-26OCT31AVLFUL-FUL") == "sport_not_covered"
     assert b.why_unmapped("KXBTC15M-26OCT251945-45") == "unknown_series"
     assert b.why_unmapped("KXNFLGAME-26OCT25BUFKC-KC") is None                       # priced
