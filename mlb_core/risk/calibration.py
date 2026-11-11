@@ -179,30 +179,28 @@ class IsotonicCalibrator:
         import numpy as np
         p = np.asarray(p, dtype=float)
         y = np.asarray(y, dtype=float)
-        order = np.argsort(p, kind="mergesort")
-        xs, ys = p[order], y[order].copy()
-        # PAVA: pool adjacent blocks whose means violate monotonicity.
-        stack_x, stack_v, stack_w, stack_idx = [], [], [], []
+        # Aggregate to UNIQUE x values first (weighted mean outcome per distinct probability):
+        # without this, rows sharing one x form separate PAVA blocks and prediction at that x
+        # returns an arbitrary block's mean instead of the pooled rate at that probability.
+        xs, inv, counts = np.unique(p, return_inverse=True, return_counts=True)
+        sums = np.bincount(inv, weights=y, minlength=len(xs))
+        ys = sums / counts
+        wts = counts.astype(float)
+        # Weighted PAVA: pool adjacent blocks whose means violate monotonicity.
+        stack_x, stack_v, stack_w = [], [], []
         for idx in range(len(xs)):
-            cx, cv, cw, ci = xs[idx], ys[idx], 1.0, [idx]
+            cx, cv, cw = xs[idx], ys[idx], wts[idx]
             while stack_v and stack_v[-1] > cv:
-                px, pv, pw, pi = stack_x.pop(), stack_v.pop(), stack_w.pop(), stack_idx.pop()
+                _px, pv, pw = stack_x.pop(), stack_v.pop(), stack_w.pop()
                 cv = (cv * cw + pv * pw) / (cw + pw)
                 cw = cw + pw
-                ci = pi + ci
-                cx = px
+                # the merged block's right edge stays cx: x are processed in increasing
+                # order, so the current segment's x is the merged block's largest x.
             stack_x.append(cx)
             stack_v.append(cv)
             stack_w.append(cw)
-            stack_idx.append(ci)
-        fitted = np.empty(len(ys))
-        edges = np.empty(len(stack_v))
-        for j, idxs in enumerate(stack_idx):
-            fitted[idxs] = stack_v[j]
-            edges[j] = xs[idxs[-1]]
-        self.x_ = edges
+        self.x_ = np.asarray(stack_x, dtype=float)
         self.y_ = np.asarray(stack_v, dtype=float)
-        self._fitted_at_train_ = fitted
         return self
 
     def predict(self, probs):

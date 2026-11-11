@@ -158,6 +158,7 @@ def test_pre_blend_isotonic_calibration_reaches_ece_target_on_validation():
 def test_pre_blend_calibration_passthrough_until_registered_and_applies_in_the_blend():
     from ev import daily_projections as DP
     base = DP.blend_p_over(0.70, 0.50, sport="nba", stat="rebounds")
+    base_other = DP.blend_p_over(0.70, 0.50, sport="nba", stat="threes")
     p_cal, applied = C.pre_blend_calibrate(0.70, "nba", "rebounds")
     assert (p_cal, applied) == (0.70, False)                       # nothing registered: passthrough
     # an identity-ish calibrator (fitted on data where p was already the truth) changes the blend path
@@ -169,7 +170,7 @@ def test_pre_blend_calibration_passthrough_until_registered_and_applies_in_the_b
     moved = DP.blend_p_over(0.70, 0.50, sport="nba", stat="rebounds")
     assert moved != base and moved < base                          # calibrated model prob feeds the blend
     other = DP.blend_p_over(0.70, 0.50, sport="nba", stat="threes")
-    assert other == DP.blend_p_over(0.70, 0.50, sport="nhl", stat="saves")   # other stats untouched
+    assert other == base_other                                     # other stats untouched by the registration
 
 
 # ------------------------------------------------------------------------------------------------- Official Card caps (picks path)
