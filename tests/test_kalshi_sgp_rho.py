@@ -50,6 +50,22 @@ def test_mle_rho_recovers_a_planted_correlation():
     assert abs(m.mle_rho(p1, p2, o1, o2_indep)) < 0.06
 
 
+def test_pricer_rho_is_relation_keyed_with_per_relation_defaults():
+    """scripts/kalshi_sgp_rho.pricer_rho reads the taxonomy table: same stat pair, different relations, different rho;
+    unmeasured different-player -> pooled 0.081; unmeasured same-player -> None (no default prices it)."""
+    m = _mod()
+    assert m.pricer_rho("points", "threes", "same_player") == pytest.approx(0.70)
+    assert m.pricer_rho("points", "threes", "same_team_diff_player") == pytest.approx(0.18)
+    assert m.pricer_rho("points", "threes", "cross_team") == pytest.approx(0.18)
+    assert m.pricer_rho("points", "threes") == pytest.approx(0.18)                    # default relation = pooled different-player bucket
+    assert m.pricer_rho("blocks", "steals", "cross_team") == pytest.approx(0.081)
+    assert m.pricer_rho("blocks", "steals", "same_player") is None
+    l1 = {"player": "p1", "team": "BUF"}
+    assert m._pair_relation(l1, {"player": "p1", "team": "BUF"}) == "same_player"
+    assert m._pair_relation(l1, {"player": "p2", "team": "KC"}) == "cross_team"
+    assert m._pair_relation({"player": "p1"}, {"player": "p2"}) == "same_team_diff_player"   # legacy legs files carry no team
+
+
 def test_fetch_results_maps_yes_no_and_skips_unsettled():
     m = _mod()
 

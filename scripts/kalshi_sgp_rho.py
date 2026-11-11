@@ -11,7 +11,8 @@ implied   2-leg combos whose both legs are priced. The traded YES price y is the
           (independent by construction) give the baseline `y / (q1 q2)`; the margin-adjusted rho divides y by it.
 realized  all pairs of distinct priced legs inside one game (YES/YES), outcomes from the settled leg markets, rho by Gaussian-copula MLE with the
           fair p as marginals, game-clustered bootstrap CI. Pairs are NOT chosen by retail (only the legs are), so there is no combo-selection bias.
-Compare both with what the pricer assumes (SGP_CORR_TABLE, else sgp_default_rho).
+Compare both with what the pricer assumes (SGP_CORR_TABLE keyed by (relation, stat_a, stat_b), else the per-relation pooled
+default: 0.081 for different-player pairs, NO default for unmeasured same-player pairs -- see ev.kalshi_rfq_pricer.lookup_sgp_rho).
 """
 import argparse
 import json
@@ -24,7 +25,12 @@ from itertools import combinations
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from ev.kalshi_rfq_pricer import PricerConfig, SGP_CORR_TABLE  # noqa: E402
+from ev.kalshi_rfq_pricer import (  # noqa: E402
+    SGP_RELATION_SAME_TEAM_DIFF_PLAYER,
+    PricerConfig,
+    derive_sgp_relation,
+    lookup_sgp_rho,
+)
 
 SQRT = math.sqrt
 _GL_X, _GL_W = np.polynomial.legendre.leggauss(24)
@@ -66,8 +72,19 @@ def _q(leg):
     return leg["p_yes"] if leg["side"] == "yes" else 1.0 - leg["p_yes"]
 
 
-def pricer_rho(stat_a, stat_b, cfg=PricerConfig()):
-    return SGP_CORR_TABLE.get(frozenset((stat_a, stat_b)), cfg.sgp_default_rho)
+def pricer_rho(stat_a, stat_b, relation=SGP_RELATION_SAME_TEAM_DIFF_PLAYER, cfg=None):
+    """What the pricer assumes for a (relation, stat pair): the measured cell, else the per-relation pooled default
+    (0.081 different-player; None for an unmeasured same-player pair -- no default prices it). The default relation is
+    the pooled different-player bucket, which is what every pre-taxonomy caller meant; pass the pair's real relation
+    (derive_sgp_relation over the legs' player / team) wherever the legs carry it."""
+    return lookup_sgp_rho(relation, stat_a, stat_b, cfg if cfg is not None else PricerConfig())
+
+
+def _pair_relation(l1, l2):
+    """Relation of a banked leg pair, via the pricer's own mapping (derive_sgp_relation). Banked legs carry `player`
+    and, since the taxonomy change, `team` when known; older legs files have no `team`, and those pairs fall back to
+    the pooled different-player bucket exactly as the pricer's legs do."""
+    return derive_sgp_relation(l1.get("player"), l1.get("team"), l2.get("player"), l2.get("team"))
 
 
 def cmd_implied(a):
@@ -86,9 +103,11 @@ def cmd_implied(a):
     by = defaultdict(list)
     for r in same:
         l1, l2 = r["legs"]
-        by[tuple(sorted((f"{l1['stat']}:{l1['side']}", f"{l2['stat']}:{l2['side']}")))].append(r)
+        # Group by (relation, stat pair): the taxonomy key. A stat pair alone conflates same-player pairs (rho ~0.70) with
+        # different-player pairs (rho ~0.1-0.3), which is the hole this grouping now closes.
+        by[(tuple(sorted((f"{l1['stat']}:{l1['side']}", f"{l2['stat']}:{l2['side']}"))), _pair_relation(l1, l2))].append(r)
     out = []
-    for k, rs in by.items():
+    for (k, rel), rs in by.items():
         if len(rs) < a.min_n:
             continue
         q1 = np.array([_q(r["legs"][0]) for r in rs]); q2 = np.array([_q(r["legs"][1]) for r in rs]); y = np.array([r["yes_price"] for r in rs])
@@ -96,16 +115,17 @@ def cmd_implied(a):
         rho_adj, ok2 = implied_rho(q1, q2, y / base)
         l = y / np.maximum(q1 * q2, 1e-6)
         a_stat, b_stat = k[0].split(":")[0], k[1].split(":")[0]
-        out.append((len(rs), k, float(np.median(q1)), float(np.median(q2)), float(np.median(l)), float(np.median(rho_raw[ok])) if ok.any() else float("nan"),
-                    float(np.median(rho_adj[ok2])) if ok2.any() else float("nan"), float(np.mean(ok)), pricer_rho(a_stat, b_stat), len({r["day"] for r in rs})))
+        out.append((len(rs), k, rel, float(np.median(q1)), float(np.median(q2)), float(np.median(l)), float(np.median(rho_raw[ok])) if ok.any() else float("nan"),
+                    float(np.median(rho_adj[ok2])) if ok2.any() else float("nan"), float(np.mean(ok)), pricer_rho(a_stat, b_stat, rel), len({r["day"] for r in rs})))
     out.sort(reverse=True)
-    print(f"\n{'n':>5} {'pair (stat:side)':46s} {'q1':>5} {'q2':>5} {'lift':>5} {'rho_imp':>8} {'rho_adj':>8} {'in-bnd':>6} {'pricer':>6} {'days':>4}")
-    for n, k, m1, m2, lf, ra, rj, fr, pr, nd in out[:a.top]:
-        print(f"{n:5d} {' x '.join(k):46s} {m1:5.2f} {m2:5.2f} {lf:5.2f} {ra:8.3f} {rj:8.3f} {fr:6.2f} {pr:6.2f} {nd:4d}")
+    print(f"\n{'n':>5} {'pair (stat:side)':46s} {'relation':24s} {'q1':>5} {'q2':>5} {'lift':>5} {'rho_imp':>8} {'rho_adj':>8} {'in-bnd':>6} {'pricer':>6} {'days':>4}")
+    for n, k, rel, m1, m2, lf, ra, rj, fr, pr, nd in out[:a.top]:
+        pr_s = f"{pr:6.2f}" if pr is not None else "  none"          # an unmeasured same-player cell: the pricer has NO value for it
+        print(f"{n:5d} {' x '.join(k):46s} {rel:24s} {m1:5.2f} {m2:5.2f} {lf:5.2f} {ra:8.3f} {rj:8.3f} {fr:6.2f} {pr_s} {nd:4d}")
     allq1 = np.array([_q(r["legs"][0]) for r in same]); allq2 = np.array([_q(r["legs"][1]) for r in same]); ally = np.array([r["yes_price"] for r in same])
     if len(same):
         ra, ok = implied_rho(allq1, allq2, ally); rj, ok2 = implied_rho(allq1, allq2, ally / base)
-        print(f"\nALL same-game 2-leg: n={len(same)} median implied rho {np.median(ra[ok]):.3f} | margin-adjusted {np.median(rj[ok2]):.3f} | pricer default {PricerConfig().sgp_default_rho}")
+        print(f"\nALL same-game 2-leg: n={len(same)} median implied rho {np.median(ra[ok]):.3f} | margin-adjusted {np.median(rj[ok2]):.3f} | pricer different-player default {PricerConfig().sgp_diff_player_default_rho}")
 
 
 def fetch_results(tickers, session=None, pause=0.3):
@@ -168,7 +188,8 @@ def cmd_realized(a):
     for tk, ls in legs.items():
         if tk in res:
             ps = sorted(x["p_yes"] for x in ls)
-            by_game[ls[0]["game_key"]].append({"ticker": tk, "stat": ls[0]["stat"], "player": ls[0]["player"], "p": ps[len(ps) // 2], "o": res[tk]})
+            by_game[ls[0]["game_key"]].append({"ticker": tk, "stat": ls[0]["stat"], "player": ls[0]["player"], "team": ls[0].get("team"),
+                                               "p": ps[len(ps) // 2], "o": res[tk]})
     rng = np.random.default_rng(3)
     pairs = defaultdict(lambda: {"p1": [], "p2": [], "o1": [], "o2": [], "g": []})
     for g, ls in by_game.items():
@@ -176,11 +197,14 @@ def cmd_realized(a):
         if len(cand) > a.max_pairs_per_game:
             cand = [cand[i] for i in rng.choice(len(cand), a.max_pairs_per_game, replace=False)]
         for x, y in cand:
-            k = tuple(sorted((x["stat"], y["stat"]))) + (("same player",) if x["player"] == y["player"] else ("different players",))
+            # The pair key IS the taxonomy key: (stat, stat, relation). Pre-taxonomy runs labelled the third element
+            # "same player" / "different players"; legs banked before the taxonomy carry no `team`, so their
+            # different-player pairs land in the pooled same_team_diff_player bucket via derive_sgp_relation.
+            k = tuple(sorted((x["stat"], y["stat"]))) + (derive_sgp_relation(x["player"], x["team"], y["player"], y["team"]),)
             if x["stat"] != k[0]:
                 x, y = y, x
             d = pairs[k]; d["p1"].append(x["p"]); d["p2"].append(y["p"]); d["o1"].append(x["o"]); d["o2"].append(y["o"]); d["g"].append(g)
-    print(f"\n{'pair (stat x stat / players, YES/YES)':48s} {'pairs':>6} {'games':>5} {'emp P11':>8} {'indep':>7} {'lift':>5} {'rho_mle':>8} {'95% CI (game bootstrap)':>26} {'pricer':>6}")
+    print(f"\n{'pair (stat x stat / relation, YES/YES)':48s} {'pairs':>6} {'games':>5} {'emp P11':>8} {'indep':>7} {'lift':>5} {'rho_mle':>8} {'95% CI (game bootstrap)':>26} {'pricer':>6}")
     for k, d in sorted(pairs.items(), key=lambda kv: -len(kv[1]["g"])):
         n = len(d["g"])
         if n < a.min_n:
@@ -198,7 +222,9 @@ def cmd_realized(a):
         lo, hi = np.percentile(boots, [2.5, 97.5])
         emp = float((o1 * o2).mean()); ind = float((p1 * p2).mean())
         n = len(g)
-        print(f"{' x '.join(k[:2]) + ' / ' + k[2]:48s} {n:6d} {len(games):5d} {emp:8.3f} {ind:7.3f} {emp / ind:5.2f} {rho:8.3f} {f'[{lo:.3f}, {hi:.3f}]':>26} {pricer_rho(k[0], k[1]):6.2f}")
+        pr = pricer_rho(k[0], k[1], k[2])
+        pr_s = f"{pr:6.2f}" if pr is not None else "  none"          # an unmeasured same-player cell: the pricer has NO value for it
+        print(f"{' x '.join(k[:2]) + ' / ' + k[2]:48s} {n:6d} {len(games):5d} {emp:8.3f} {ind:7.3f} {emp / ind:5.2f} {rho:8.3f} {f'[{lo:.3f}, {hi:.3f}]':>26} {pr_s}")
 
 
 def cmd_calibration(a):

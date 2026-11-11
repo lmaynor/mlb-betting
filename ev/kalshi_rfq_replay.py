@@ -449,6 +449,7 @@ def leg_records(combo: dict, store, max_age: float = MAX_SNAPSHOT_AGE_SEC) -> di
         fv = book.get(tk, t)
         if fv is not None:
             legs.append({"ticker": tk, "side": side, "stat": fv.stat, "game_key": fv.game_key, "player": fv.player_norm,
+                         "team": fv.team,          # SGP relation taxonomy: lets future rho runs stratify different-player pairs by team
                          "p_yes": round(float(fv.p_true_yes), 5), "n_books": fv.n_books, "disp": round(float(fv.disp), 4),
                          "pooled": bool(fv.pooled)})
     if not legs:
