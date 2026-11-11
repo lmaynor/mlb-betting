@@ -10,10 +10,22 @@ Event shape emitted:
      bookmakers: [{key, title, markets: [{key: 'player_points', outcomes: [{name: 'Over', ...}]}]}]}
 
 Storage: Odds/bestbook_live/{sport}/latest.json = {sport, fetched_at, window, events, counts}.
+
+DERIVATIVE ARCHIVE (Workstream B, derivative-archive-plan-2026-11-11.md): the same snapshots carry period markets and
+team totals that the game-line parser discards. Each crawl also captures them (ev.bestbook_game_lines.derivative_quotes)
+and write_latest banks them RAW-FIRST under the OddsAccum layout, mirroring nba/odds/accumulator.py:
+
+    OddsAccum/{sport_long}/raw/{ET date}/derivatives_{HHMM}.json   raw lines-section rows, written BEFORE any parsing output
+    OddsAccum/{sport_long}/{ET date}/derivatives_{HHMM}.csv        normalized archive rows (one per book quote)
+    OddsAccum/{sport_long}/latest_derivatives.json                 pointer (latest_game_lines.json shape)
+
+Zero extra requests, zero ParlayAPI credits, no new job: everything rides the existing crawl's snapshots.
 """
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import logging
 import random
@@ -32,6 +44,104 @@ _ET = ZoneInfo("America/New_York")
 SPORTS = ("nfl", "nhl", "nba", "cbb")
 OUT_KEY = "Odds/bestbook_live/{sport}/latest.json"
 GAME_LINES_KEY = "Odds/bestbook_live/{sport}/game_lines_latest.json"   # full-game ML / spread / total ladders (ev.bestbook_game_lines)
+
+# Derivative archive (see module docstring): short sport -> the long OddsAccum sport key.
+DERIV_SPORT_LONG = {"nfl": "americanfootball_nfl", "nba": "basketball_nba", "nhl": "icehockey_nhl", "cbb": "basketball_ncaab"}
+DERIV_RAW_KEY = "OddsAccum/{sport}/raw/{date}/derivatives_{hhmm}.json"
+DERIV_CSV_KEY = "OddsAccum/{sport}/{date}/derivatives_{hhmm}.csv"
+DERIV_LATEST_KEY = "OddsAccum/{sport}/latest_derivatives.json"
+DERIV_COLUMNS = ["event_id", "sport", "commence_time", "snapshot_ts", "mins_to_kickoff", "snapshot_class",
+                 "market", "period", "period_scope", "team_scope", "book", "book_kind", "line",
+                 "price_a", "price_b", "price_draw", "n_outcomes", "source", "raw_family"]
+
+
+def snapshot_class(mins_to_kickoff: float | None) -> str:
+    """Snapshot class from minutes to kickoff (derivative-archive-plan Section 3). The true `open` (first banked
+    snapshot for the event) and `close` (last at or before kickoff) need cross-run state a single crawl does not
+    have, so v1 assigns only the honest time bands: <=5 min is the close band, 5-25 is t15, 45-75 is t60, and
+    everything else (including post-kickoff by-product rows) is intra, the open-to-close path."""
+    if mins_to_kickoff is None:
+        return "intra"
+    if mins_to_kickoff < 0:
+        return "intra"
+    if mins_to_kickoff <= 5:
+        return "close"
+    if mins_to_kickoff <= 25:
+        return "t15"
+    if 45 <= mins_to_kickoff <= 75:
+        return "t60"
+    return "intra"
+
+
+def derivative_archive_rows(derivative_games: list, sport: str, fetched_at: str) -> list[dict]:
+    """Enrich parsed derivative quotes with the archive context fields (event / sport / snapshot timing / class)."""
+    long_sport = DERIV_SPORT_LONG.get(sport, sport)
+    try:
+        snap_ts = datetime.fromisoformat(str(fetched_at).replace("Z", "+00:00"))
+        if snap_ts.tzinfo is None:
+            snap_ts = snap_ts.replace(tzinfo=timezone.utc)
+    except ValueError:
+        snap_ts = None
+    out: list[dict] = []
+    for g in derivative_games or []:
+        commence = g.get("commence_time")
+        mins = None
+        if snap_ts is not None and commence:
+            try:
+                start = datetime.fromisoformat(str(commence).replace("Z", "+00:00"))
+                if start.tzinfo is None:
+                    start = start.replace(tzinfo=timezone.utc)
+                mins = round((start - snap_ts).total_seconds() / 60.0, 1)
+            except ValueError:
+                mins = None
+        for q in g.get("quotes") or []:
+            out.append({"event_id": g.get("bb_key"), "sport": long_sport, "commence_time": commence,
+                        "snapshot_ts": fetched_at, "mins_to_kickoff": mins, "snapshot_class": snapshot_class(mins),
+                        **q})
+    return out
+
+
+def write_derivative_archive(result: dict) -> dict | None:
+    """Bank one crawl's derivative capture RAW-FIRST: the raw lines-section rows land before the normalized CSV
+    and the pointer, and they land even when parsing yielded zero derivative rows, so no fetched data is lost
+    again. Returns the pointer payload, or None when the crawl captured no games at all."""
+    from mlb_core import storage
+
+    games = result.get("derivative_games") or []
+    if not games:
+        return None
+    sport = DERIV_SPORT_LONG.get(result["sport"], result["sport"])
+    fetched_at = result["fetched_at"]
+    try:
+        ts = datetime.fromisoformat(str(fetched_at).replace("Z", "+00:00"))
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+    except ValueError:
+        ts = datetime.now(timezone.utc)
+    et = ts.astimezone(_ET)
+    date, hhmm = et.date().isoformat(), et.strftime("%H%M")
+    raw_key = DERIV_RAW_KEY.format(sport=sport, date=date, hhmm=hhmm)
+    csv_key = DERIV_CSV_KEY.format(sport=sport, date=date, hhmm=hhmm)
+    # 1. RAW FIRST: the unmodified lines section of every fetched snapshot in this crawl.
+    storage.write_bytes(json.dumps({
+        "sport": sport, "source": "bestbook", "fetched_at": fetched_at,
+        "games": [{"bb_key": g.get("bb_key"), "away_team": g.get("away_team"), "home_team": g.get("home_team"),
+                   "commence_time": g.get("commence_time"), "rows": g.get("raw_rows") or []} for g in games],
+    }, default=str).encode(), raw_key)
+    # 2. Normalized archive rows (possibly zero: the raw write above already happened).
+    rows = derivative_archive_rows(games, result["sport"], fetched_at)
+    buf = io.StringIO()
+    w = csv.DictWriter(buf, fieldnames=DERIV_COLUMNS, extrasaction="ignore")
+    w.writeheader()
+    for r in rows:
+        w.writerow(r)
+    storage.write_bytes(buf.getvalue().encode(), csv_key)
+    # 3. Pointer, same shape family as latest_game_lines.json.
+    pointer = {"sport": sport, "fetched_at": fetched_at, "raw_key": raw_key, "csv_key": csv_key,
+               "games": len(games), "quotes": len(rows),
+               "unknown_family": sum(g.get("unknown_family", 0) for g in games)}
+    storage.write_bytes(json.dumps(pointer, default=str).encode(), DERIV_LATEST_KEY.format(sport=sport))
+    return pointer
 
 DEFAULT_DAYS = {"nfl": 7, "nhl": 3, "nba": 7, "cbb": 3}    # ET calendar days INCLUDING today (today .. today + days - 1)
 MAX_CONSECUTIVE_FETCH_FAILURES = 3
@@ -205,10 +315,14 @@ def build_events_from_snapshots(
     now: datetime,
     canon=None,
     game_lines: list | None = None,
+    derivative_games: list | None = None,
 ) -> tuple[list[dict], dict]:
     """Pure transform: converts slate games and snapshots into ParlayAPI-shaped event dicts.
     Returns (events, counts). When `game_lines` is a list, each game's full-game ML / spread / total ladders (ev.bestbook_game_lines)
     are appended to it as {bb_key, away_team, home_team, commence_time, quotes}, read from the SAME snapshot (no extra request).
+    When `derivative_games` is a list, each game's RAW lines-section rows are captured into it BEFORE the derivative parser
+    runs (raw-first: a parser failure keeps the raw rows and yields zero quotes for that game, never a lost snapshot), as
+    {bb_key, away_team, home_team, commence_time, raw_rows, quotes, unknown_family}.
 
     `snapshots` is a {game_key: snapshot} dict OR a callable game_key -> snapshot. The crawler passes a callable so each game's
     multi-MB snapshot is fetched only for games that pass the started / unknown-team filters, turned into its event, and
@@ -229,6 +343,9 @@ def build_events_from_snapshots(
         "events_priced": 0,
         "game_lines_games": 0,
         "game_lines_quotes": 0,
+        "derivative_games": 0,
+        "derivative_quotes": 0,
+        "derivative_unknown_family": 0,
         "quotes": 0,
         "books": set(),
     }
@@ -274,6 +391,25 @@ def build_events_from_snapshots(
                                    "commence_time": start.astimezone(timezone.utc).isoformat(), "quotes": gl_quotes})
                 counts["game_lines_games"] += 1
                 counts["game_lines_quotes"] += len(gl_quotes)
+
+        if derivative_games is not None and start is not None:
+            # RAW FIRST: capture the snapshot's lines section before any derivative parsing touches it.
+            raw_rows = [r for r in rows if isinstance(r, dict)
+                        and (r.get("section") == "lines" or str(r.get("section") or "").startswith("periods"))]
+            dstats: dict = {}
+            try:
+                d_quotes = bgl.derivative_quotes(rows, dstats)
+            except Exception:  # noqa: BLE001 -- a parser failure must not lose the raw snapshot or sink the crawl
+                log.exception("bestbook %s event %s: derivative parser failed; raw rows kept, zero quotes banked",
+                              sport, game_key)
+                d_quotes = []
+            derivative_games.append({"bb_key": game_key, "away_team": away, "home_team": home,
+                                     "commence_time": start.astimezone(timezone.utc).isoformat(),
+                                     "raw_rows": raw_rows, "quotes": d_quotes,
+                                     "unknown_family": dstats.get("unknown_family", 0)})
+            counts["derivative_games"] += 1
+            counts["derivative_quotes"] += len(d_quotes)
+            counts["derivative_unknown_family"] += dstats.get("unknown_family", 0)
 
         # Group rows by (player_norm, stat) to detect main line vs alternates
         player_stat_rows: dict[tuple[str, str], list[dict]] = {}
@@ -442,7 +578,9 @@ def crawl_sport(
         return snap
 
     game_lines: list[dict] = []
-    events, counts = build_events_from_snapshots(sp, target_games, fetch_one, now, game_lines=game_lines)
+    derivative_games: list[dict] = []
+    events, counts = build_events_from_snapshots(sp, target_games, fetch_one, now, game_lines=game_lines,
+                                                 derivative_games=derivative_games)
     counts["events_upcoming"] = len(sport_games)
     counts["events_fetch_failed"] = state["failed"]
 
@@ -452,6 +590,7 @@ def crawl_sport(
         "window": {"days": max_days},
         "events": events,
         "game_lines": game_lines,
+        "derivative_games": derivative_games,
         "counts": counts,
         "seconds": round(time.monotonic() - t0, 1),
     }
@@ -472,7 +611,9 @@ def write_latest(result: dict, key: str | None = None) -> str:
 
     default_path = key is None
     key = key or OUT_KEY.format(sport=result["sport"])
-    props = {k: v for k, v in result.items() if k != "game_lines"}      # the props reader never parses the ladders
+    if default_path:
+        write_derivative_archive(result)          # RAW-FIRST: the derivative archive lands before every other write
+    props = {k: v for k, v in result.items() if k not in ("game_lines", "derivative_games")}      # the props reader never parses the ladders
     storage.write_bytes(json.dumps(props, default=str).encode(), key)
     games = result.get("game_lines") or []
     if default_path and games:                                          # an empty crawl keeps the previous good file
