@@ -59,7 +59,7 @@ def test_trained_nhl_rows_use_the_measured_trained_weights_and_everything_else_i
     assert dp.blend_c("nhl", "assists", trained=True) == 0.34 and dp.blend_c("nhl", "points", trained=True) == 0.175
     assert dp.blend_c("nhl", "saves", trained=True) == 0.35                          # weakest season, not the pooled +0.75
     assert dp.blend_c("nhl", "sog", trained=True) == dp.blend_c("nhl", "sog")         # not a trained stat -> the engine's own entry
-    assert dp.blend_c("nba", "threes", trained=True) == 0.19
+    assert dp.blend_c("nba", "threes", trained=True) == 0.07          # Argon props D3 walk-forward value (was 0.19)
     assert dp.blend_p_over(0.30, 0.20, sport="nhl", stat="goals", trained=True) > dp.blend_p_over(0.30, 0.20, sport="nhl", stat="goals")
 
 
@@ -98,9 +98,10 @@ def test_the_book_we_would_bet_at_cannot_confirm_its_own_price():
 # ----------------------------------------------------------------------------------- Official-tier signal allowlist
 def test_zero_signal_stats_are_tracked_never_official():
     assert MP.qualifies(row(stat="rebounds")) == "official"
-    for stat in ("points", "pra", "blocks", "steals", "pr", "pa", "ra"):
+    # Argon props D3 (2026-11-10): assists joined the zero-signal set (2025 walk-forward c +0.01, now noise)
+    for stat in ("points", "pra", "blocks", "steals", "pr", "pa", "ra", "assists"):
         assert MP.qualifies(row(stat=stat)) == "tracked", stat             # still logged at stake 0, never staked or posted
-    for stat in ("threes", "assists"):
+    for stat in ("threes",):
         assert MP.qualifies(row(stat=stat)) == "official", stat
 
 
@@ -111,19 +112,21 @@ def test_nhl_board_engine_skater_stats_have_no_measured_signal_but_saves_does():
 
 
 def test_nhl_rows_served_from_the_trained_models_carry_the_measured_trained_signal():
-    for stat in ("goals", "assists", "points", "saves"):
-        assert MP.qualifies(row(sport="nhl", stat=stat, nhl_model="trained_v1")) == "official", stat
+    # Argon props D4 (2026-11-10): trained skater goals / assists / points are OUT of standalone official
+    # eligibility (display / tracked / shadow cohort only); trained saves keeps the measured trained signal.
+    assert MP.qualifies(row(sport="nhl", stat="saves", nhl_model="trained_v1")) == "official"
+    for stat in ("goals", "assists", "points"):
+        assert MP.qualifies(row(sport="nhl", stat=stat, nhl_model="trained_v1")) == "tracked", stat
     assert MP.qualifies(row(sport="nhl", stat="sog", nhl_model="trained_v1")) == "tracked"
 
 
-def test_nfl_only_the_hierarchical_evidence_gated_stats_priced_by_that_engine_count():
-    # 2026-11-09: rec_yds / pass_tds admitted (provisional) on the hierarchical engine's own evidence gate
-    # (nfl/props/hierarchical_allowlist.json) -- the stats that engine is allowed to price, priced by it.
-    for stat in ("rush_yds", "rec_yds", "pass_tds"):
-        assert MP.qualifies(row(sport="nfl", stat=stat, engine="empirical_ewm_v2+hierarchical_v1")) == "official", stat
-        assert MP.qualifies(row(sport="nfl", stat=stat, engine="empirical_ewm_v2")) == "tracked", stat   # not measured on the legacy engine
-    for stat in ("pass_yds", "anytime_td", "receptions", "pass_attempts"):
+def test_nfl_no_stat_counts_as_signal_on_either_engine():
+    # Argon model-improvement D3 (2026-11-10) supersedes the 2026-11-09 provisional admission: ALL hierarchical
+    # stats failed the vs-market benchmark, NFL_HIER_SIGNAL is empty, and hierarchical rows are additionally
+    # gated off the published board in ev.daily_projections. No NFL row can be official.
+    for stat in ("rush_yds", "rec_yds", "pass_tds", "pass_yds", "anytime_td", "receptions", "pass_attempts"):
         assert MP.qualifies(row(sport="nfl", stat=stat, engine="empirical_ewm_v2+hierarchical_v1")) == "tracked", stat
+        assert MP.qualifies(row(sport="nfl", stat=stat, engine="empirical_ewm_v2")) == "tracked", stat
 
 
 def test_a_sharp_book_against_the_side_demotes_to_tracked_and_an_old_board_passes():
