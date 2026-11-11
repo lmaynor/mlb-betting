@@ -67,17 +67,14 @@ NFL_ENGINE="${NFL_ENGINE:-hierarchical}"
 NFL_HIER_LAYERS="${NFL_HIER_LAYERS:-none}"
 NFL_HIER_WEATHER="${NFL_HIER_WEATHER:-0}"
 
-# NHL trained models on the board. UNSET (the default) = the board stays on the empirical engine and a served trained_latest.json is
-# ignored. It is deliberately NOT switched on here: docs/analysis/nhl_trained_serving_2026-11-01.md lists four conditions (>= 6 clean scheduled
+# NHL trained models on the board. The four conditions in docs/analysis/nhl_trained_serving_2026-11-01.md (>= 6 clean scheduled
 # nhl-trained-score runs over >= 2 Central days, a successful weekly retrain loaded by a later score run, the code in the feeds image, a
-# first read of the paper-tracking report) and none could be confirmed the day the jobs were deployed. When they hold, either
-#   NHL_TRAINED_PROPS=1 PROJECT_ID=... CONFIRM_IMAGE_HAS_LIVE_LINES=1 bash deploy/setup_daily_projections_job.sh
-# or gcloud run jobs update daily-projections --region=us-central1 --update-env-vars NHL_TRAINED_PROPS=1. GOTCHA: this script uses
-# --set-env-vars (a full replace), so a flag set only through `gcloud ... --update-env-vars` is DROPPED the next time the script runs
-# without NHL_TRAINED_PROPS in its environment; pass it every time once it is on. Revert = run without it (no redeploy).
-NHL_TRAINED_PROPS="${NHL_TRAINED_PROPS:-}"
-ENV_VARS="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION},NFL_ENGINE=${NFL_ENGINE},NFL_HIER_LAYERS=${NFL_HIER_LAYERS},NFL_HIER_WEATHER=${NFL_HIER_WEATHER}"
-[ -z "$NHL_TRAINED_PROPS" ] || ENV_VARS="${ENV_VARS},NHL_TRAINED_PROPS=${NHL_TRAINED_PROPS}"
+# first read of the paper-tracking report) were verified on 2026-11-09, and NHL_TRAINED_PROPS=1 was set on the live job with
+# `gcloud run jobs update ... --update-env-vars`. This script defaults the flag to 1 so its --set-env-vars full replace preserves that
+# production state on reruns. Turning trained serving off is now deliberate:
+#   NHL_TRAINED_PROPS=0 PROJECT_ID=... CONFIRM_IMAGE_HAS_LIVE_LINES=1 bash deploy/setup_daily_projections_job.sh
+NHL_TRAINED_PROPS="${NHL_TRAINED_PROPS:-1}"
+ENV_VARS="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION},NFL_ENGINE=${NFL_ENGINE},NFL_HIER_LAYERS=${NFL_HIER_LAYERS},NFL_HIER_WEATHER=${NFL_HIER_WEATHER},NHL_TRAINED_PROPS=${NHL_TRAINED_PROPS}"
 
 FLAGS=(--image="$IMAGE" --region="$REGION" --service-account="$SA_EMAIL"
        --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest"
