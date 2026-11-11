@@ -539,11 +539,34 @@ class RFQTape:
                      "since_ts": since_ts, "trades": trades})
 
 
-def fetch_trades_after(client, market_ticker: str, since_ts: float) -> list[dict]:
-    """Public trade tape for one market since `since_ts` (unsigned GET). Used 15 s after an RFQ is seen."""
+def _trades_for(client, market_ticker: str, since_ts: float) -> list[dict]:
     data = client.request("GET", "/markets/trades", params={"ticker": market_ticker, "min_ts": int(since_ts),
                                                             "limit": 100}, auth=False)
     return data.get("trades", []) or []
+
+
+def fetch_trades_after(client, market_ticker: str, since_ts: float, extra_tickers=()) -> list[dict]:
+    """Public trade tape since `since_ts` (unsigned GET) for `market_ticker` plus any `extra_tickers`, de-duplicated
+    by trade id. Used 15 s after an RFQ is seen.
+
+    Why more than one ticker: the RFQ's `market_ticker` is NOT the ticker combo trades print under. On the demo
+    tape (2026-10-26) RFQs carried `KXMVECROSSCATEGORY0-...` while the trades printed under
+    `KXMVECROSSCATEGORY-...`, so a follow-up keyed on the RFQ ticker alone attached zero trades to every combo and
+    markout was unmeasurable. The traded ticker is not derivable from the RFQ ticker by string surgery (Kalshi
+    assigns series namespaces; the two shapes share no computable mapping), so combo callers resolve the traded
+    ticker(s) from the exchange (RFQRecorder._combo_trade_tickers) and pass them here. Single-market RFQs print
+    under their own ticker and need no extras."""
+    out: list[dict] = []
+    seen: set = set()
+    for tk in dict.fromkeys(t for t in (market_ticker, *extra_tickers) if t):
+        for tr in _trades_for(client, tk, since_ts):
+            tid = tr.get("trade_id") or tr.get("id")
+            if tid is not None:
+                if tid in seen:
+                    continue
+                seen.add(tid)
+            out.append(tr)
+    return out
 
 
 class RFQRecorder:
@@ -571,9 +594,45 @@ class RFQRecorder:
             self._schedule(self.FOLLOWUP_SEC, lambda: self._followup(rfq, now))
         return d
 
+    def _combo_trade_tickers(self, rfq) -> list[str]:
+        """The traded market ticker(s) of a combo RFQ's MVE market, resolved from the exchange: page the RFQ's
+        collection series (`mve_collection_ticker`) and keep the markets whose selected legs are exactly this RFQ's
+        legs (market tickers must match as a set; event tickers must also match wherever both sides carry them).
+        [] for single-market RFQs, when the RFQ names no collection, and on any lookup failure -- the caller still
+        queries the RFQ's own ticker, so a failed resolution degrades to the old behaviour, never to silence."""
+        if not rfq.is_combo or not rfq.collection:
+            return []
+        want = {l.ticker for l in rfq.legs}
+        want_ev = {(l.event_ticker, l.ticker) for l in rfq.legs if l.event_ticker}
+        out: list[str] = []
+        cursor = None
+        try:
+            for _ in range(10):                                        # bounded: 10 pages x 200 markets
+                params = {"series_ticker": rfq.collection, "limit": 200}
+                if cursor:
+                    params["cursor"] = cursor
+                data = self.client.request("GET", "/markets", params=params, auth=False)
+                for mk in data.get("markets", []) or []:
+                    legs = mk.get("mve_selected_legs") or []
+                    if not legs or {str(l.get("market_ticker") or "") for l in legs} != want:
+                        continue
+                    ev = {(l.get("event_ticker"), str(l.get("market_ticker") or "")) for l in legs if l.get("event_ticker")}
+                    if want_ev and ev and ev != want_ev:
+                        continue
+                    tk = str(mk.get("ticker") or "")
+                    if tk and tk != rfq.market_ticker:
+                        out.append(tk)
+                cursor = data.get("cursor")
+                if not cursor:
+                    break
+        except Exception:                                              # noqa: BLE001 -- evidence only, never fatal
+            return []
+        return out
+
     def _followup(self, rfq, since_ts: float) -> None:
         try:
-            trades = fetch_trades_after(self.client, rfq.market_ticker, since_ts)
+            trades = fetch_trades_after(self.client, rfq.market_ticker, since_ts,
+                                        extra_tickers=self._combo_trade_tickers(rfq))
         except Exception as e:                                          # noqa: BLE001 -- evidence only, never fatal
             trades = [{"error": repr(e)[:200]}]
         self.tape.record_trades(rfq.rfq_id, rfq.market_ticker, trades, since_ts)
