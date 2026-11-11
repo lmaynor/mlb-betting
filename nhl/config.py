@@ -78,6 +78,25 @@ TEAMS = [
     ("WSH", "Washington Capitals", "WSH"), ("WPG", "Winnipeg Jets", "WPG"),
 ]
 
+# -- Historical aliases: franchises that no longer play under this code ----------------------------------------------
+# ARI (Arizona Coyotes) played through 2024-04 and became the Utah franchise (UTA, in TEAMS above) from 2024-09;
+# the dated canonicalisation lives in nhl/props/history.py::canon_team (ARI before 2024-07-01, UTA after).
+# ARI is deliberately NOT in TEAMS: TEAMS is the CURRENT 32-team table, pinned to the live standings by
+# tests (test_nhl_players_teams.py::test_team_table_is_32_unique_and_matches_kalshi_adapter, and the harness doc's
+# test_team_table_matches_standings), and every current-team consumer (teams master, rosters, board assets) must
+# keep seeing exactly those 32. ARI exists here so historical replay can PRICE Coyotes games instead of skipping
+# them (~301 games with a market went unpriced while the engine raised `Unknown team code` on ARI): the Kalman
+# tracker seeds a state for it at the league prior (see nhl/game/kalman_ratings.py), and UTA starts FRESH at the
+# prior (no franchise-continuity seeding; the --ari-as-uta sensitivity run showed the closing-line verdict is
+# unchanged either way). Provider hole, unchanged by this alias: BettingPros carries no ARI side for Coyotes
+# games, so the alias mostly restores totals rows and opponent rating updates in the replay.
+HISTORICAL_TEAMS = [
+    ("ARI", "Arizona Coyotes", "ARI"),
+]
+
+# Every code the engine may ever have to price: the current 32 plus the historical aliases.
+ALL_TEAMS = TEAMS + HISTORICAL_TEAMS
+
 
 def _fold(s: str) -> str:
     return unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower().strip()
@@ -86,10 +105,16 @@ def _fold(s: str) -> str:
 NAME_TO_ABBREV = {_fold(n): a for a, n, _ in TEAMS}
 KALSHI_OF = {a: k for a, _, k in TEAMS}
 ABBREV_OF_KALSHI = {k: a for a, _, k in TEAMS}
+HISTORICAL_ABBREVS = frozenset(a for a, _, _ in HISTORICAL_TEAMS)
+_HISTORICAL_NAME_TO_ABBREV = {_fold(n): a for a, n, _ in HISTORICAL_TEAMS}
+_HISTORICAL_KALSHI_OF = {a: k for a, _, k in HISTORICAL_TEAMS}
+_HISTORICAL_ABBREV_OF_KALSHI = {k: a for a, _, k in HISTORICAL_TEAMS}
 
 
 def team_abbrev(name_or_abbrev: str):
-    """'Montreal Canadiens' (accented forms too) / 'MTL' / 'LA' (Kalshi) -> NHL-API abbrev, or None."""
+    """'Montreal Canadiens' (accented forms too) / 'MTL' / 'LA' (Kalshi) -> NHL-API abbrev, or None.
+    Historical aliases resolve too: 'ARI' / 'Arizona Coyotes' -> 'ARI' (see HISTORICAL_TEAMS). Current-team
+    resolution is checked first and is unchanged by the aliases."""
     s = (name_or_abbrev or "").strip()
     if not s:
         return None
@@ -98,4 +123,8 @@ def team_abbrev(name_or_abbrev: str):
         return up
     if up in ABBREV_OF_KALSHI:
         return ABBREV_OF_KALSHI[up]
-    return NAME_TO_ABBREV.get(_fold(s))
+    if up in HISTORICAL_ABBREVS:
+        return up
+    if up in _HISTORICAL_ABBREV_OF_KALSHI:
+        return _HISTORICAL_ABBREV_OF_KALSHI[up]
+    return NAME_TO_ABBREV.get(_fold(s)) or _HISTORICAL_NAME_TO_ABBREV.get(_fold(s))
