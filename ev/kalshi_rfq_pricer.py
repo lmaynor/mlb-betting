@@ -195,12 +195,23 @@ class PricerConfig:
     max_ticker_contracts: float = 500.0
     tick: float = 0.01
     quote_single_leg: bool = False          # single-leg props are -EV to make passively (market_making_2026-10-12)
-    allow_same_game_combos: bool = False
+    # Argon Candidate 1 (verbatim directions, 2026-11-10): the shipped SGP-OFF default refused the same-game segment, which is
+    # the only segment with a positive lay point estimate (+12.5c/contract) and ~83% of the fully priced pool, while every
+    # measured run (replay QUOTE_CFG, the recorder) ran with SGP on. Default now matches the tested configuration.
+    allow_same_game_combos: bool = True
     max_legs: int = 16
     # A combo may carry up to this many legs we cannot price (unmapped / thin / dispersed / stale). Such a leg is DROPPED from
     # the joint, which is a sound UPPER bound on P(YES) (a leg's probability is <= 1), so the lay quote only gets more
     # conservative. 0 = strict (any unpriced leg rejects the combo). A HOT (scratch/injury) leg always rejects the combo.
-    max_unpriced_legs: int = 0
+    # Argon Candidate 1 cap: 3, not the ad-hoc 16 of the measured runs -- bounded pricing graded +7.4c/contract at 2-3 unpriced
+    # legs and decayed to -1.0c at 16+. Bounded pricing additionally requires an SGP anchor (a priced same-game pair; see
+    # _price_combo): a pure cross-game combo keeps the hard rejection / effective max_unpriced_legs = 0 (cross-game graded
+    # -5.4c/contract), per the same direction.
+    max_unpriced_legs: int = 3
+    # The SGP-anchor requirement for bounded pricing above, as a switch so the replay's MEASURE pass can disable it: the
+    # measure pass is the grading instrument for every population (including the bounded cross-game tail Argon's metric
+    # compares against), so it must stay permissive. Quote-path configs leave this True.
+    bounded_requires_sgp_anchor: bool = True
     longshot_max_p: float = 0.35
     per_leg_edge: float = 0.015
     min_combo_edge: float = 0.035
@@ -597,7 +608,7 @@ class KalshiRFQPricer:
                 resolved.append((fv, l.side, fv.p_true_yes if l.side == "yes" else 1.0 - fv.p_true_yes))
         n_unpriced = k - len(resolved)
         notes = {"legs_status": status, "n_priced": len(resolved), "n_unpriced": n_unpriced}
-        if hot or bad_side or not resolved or n_unpriced > cfg.max_unpriced_legs:
+        if hot or bad_side or not resolved:
             return _reject(rfq.rfq_id, "combo", REJ_COMBO_LEG_UNVALIDATED, **notes)
 
         groups: dict[str, list[tuple[LegFairValue, str, float]]] = {}
@@ -606,6 +617,11 @@ class KalshiRFQPricer:
         sgp = any(len(g) > 1 for g in groups.values())
         if sgp and not cfg.allow_same_game_combos:
             return _reject(rfq.rfq_id, "combo", REJ_SGP_DISABLED, **notes)
+        # Bounded pricing (dropping unpriced legs) is SGP-anchored only (Argon Candidate 1, 2026-11-10): a pure cross-game
+        # combo -- no priced same-game pair -- keeps the hard rejection, i.e. its effective max_unpriced_legs is 0. A fully
+        # priced cross-game combo is unaffected and still quotes on its own legs.
+        if n_unpriced > cfg.max_unpriced_legs or (n_unpriced > 0 and not sgp and cfg.bounded_requires_sgp_anchor):
+            return _reject(rfq.rfq_id, "combo", REJ_COMBO_LEG_UNVALIDATED, **notes)
         for g in groups.values():
             players = [fv.player_norm for fv, _, _ in g if fv.player_norm]
             if len(players) != len(set(players)):

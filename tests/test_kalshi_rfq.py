@@ -336,9 +336,38 @@ def same_game_book():
                    mk_leg("X", "nfl:2026-10-25:A9@B9", "zz", stat="rec_yds"))
 
 
-def test_same_game_combo_disabled_by_default():
-    d = KalshiRFQPricer(same_game_book()).price(combo_rfq(["P", "R", "X"]), NOW)
+def test_same_game_combo_disabled_when_explicitly_off():
+    # Argon Candidate 1 (2026-11-10): SGP is ON by default (see test_candidate1_defaults_ship_sgp_on_and_the_unpriced_cap);
+    # the REJ_SGP_DISABLED gate still applies to a caller that explicitly turns it off.
+    d = KalshiRFQPricer(same_game_book(), PricerConfig(allow_same_game_combos=False)).price(combo_rfq(["P", "R", "X"]), NOW)
     assert d.reason == "REJ_SGP_DISABLED"
+
+
+# ------------------------------------------------------------------------------------------ Argon Candidate 1 defaults
+def test_candidate1_defaults_ship_sgp_on_and_the_unpriced_cap():
+    cfg = PricerConfig()
+    assert cfg.allow_same_game_combos is True
+    assert cfg.max_unpriced_legs == 3                       # the 2-3 leg bounded band, NOT the ad-hoc 16 of the measured runs
+    d = KalshiRFQPricer(same_game_book()).price(combo_rfq(["P", "R", "X"]), NOW)
+    assert d.quoted and d.notes["same_game"]                # an SGP combo quotes at defaults, no overrides
+
+
+def test_candidate1_pure_cross_game_bounded_combo_is_still_rejected():
+    # No SGP anchor among the priced legs: bounded pricing does not apply, so one unpriced leg hard-rejects the combo
+    # (the pure cross-game segment graded -5.4c/contract). A FULLY priced cross-game combo still quotes on its own legs.
+    legs = three_cross_game()[:2]                                           # T3 is not in the book
+    d = KalshiRFQPricer(book_of(*legs)).price(combo_rfq(["T1", "T2", "T3"]), NOW)
+    assert d.reason == "REJ_COMBO_LEG_UNVALIDATED" and d.notes["n_unpriced"] == 1
+    ok = KalshiRFQPricer(book_of(*three_cross_game())).price(combo_rfq(["T1", "T2", "T3"]), NOW)
+    assert ok.quoted and not ok.notes["same_game"]
+
+
+def test_candidate1_sgp_anchored_combo_quotes_with_up_to_three_unpriced_legs_at_defaults():
+    tickers = ["P", "R", "X", "U1", "U2", "U3"]              # same-game pair + one priced cross leg + 3 unpriceable legs
+    d = KalshiRFQPricer(same_game_book()).price(combo_rfq(tickers), NOW)
+    assert d.quoted and d.notes["bounded"] and d.notes["n_unpriced"] == 3 and d.notes["same_game"]
+    over = KalshiRFQPricer(same_game_book()).price(combo_rfq(tickers + ["U4"]), NOW)
+    assert over.reason == "REJ_COMBO_LEG_UNVALIDATED" and over.notes["n_unpriced"] == 4     # the cap is 3, not 16
 
 
 def test_same_game_combo_adds_positive_correlation_and_buffer():
@@ -881,15 +910,19 @@ def test_every_combo_decision_records_per_leg_status():
 
 
 def test_unpriced_legs_are_dropped_as_an_upper_bound_up_to_the_limit():
-    legs = three_cross_game()[:2]                                           # T3 is not in the book
-    rfq = combo_rfq(["T1", "T2", "T3"])
-    assert KalshiRFQPricer(book_of(*legs)).price(rfq, NOW).reason == "REJ_COMBO_LEG_UNVALIDATED"      # strict by default
+    # Bounded pricing is SGP-anchored (Argon Candidate 1): the priced legs must contain a same-game pair. The pair here is
+    # pass_yds x rec_yds (different players, measured rho 0.26), so the joint sits ABOVE the independence product.
+    legs = [mk_leg("P", GK, "qb", stat="pass_yds"), mk_leg("R", GK, "wr", stat="rec_yds")]   # T3 is not in the book
+    rfq = combo_rfq(["P", "R", "T3"])
+    cross = KalshiRFQPricer(book_of(*three_cross_game()[:2]))
+    assert cross.price(combo_rfq(["T1", "T2", "T3"]), NOW).reason == "REJ_COMBO_LEG_UNVALIDATED"  # no SGP anchor: hard reject
     p = KalshiRFQPricer(book_of(*legs), PricerConfig(max_unpriced_legs=1))
     d = p.price(rfq, NOW)
     assert d.quoted and d.notes["bounded"] and d.notes["n_unpriced"] == 1
-    assert d.p_yes_true == pytest.approx(0.25)                              # the unknown leg contributes a factor of 1.0
-    assert d.p_yes_cons == pytest.approx(0.508 ** 2)
-    assert d.no_bid == floor_to_tick((1 - 0.508 ** 2) - 0.045)              # edge still scales with ALL 3 legs
+    assert 0.25 < d.p_yes_true <= 0.5                                       # the unknown leg contributes a factor of 1.0;
+                                                                            # the priced pair keeps its copula lift over 0.25
+    assert d.p_yes_cons > d.p_yes_true
+    assert d.no_bid == floor_to_tick((1 - d.p_yes_cons) - 0.045)            # edge still scales with ALL 3 legs
     assert d.legs and len(d.legs) == 2                                      # last-look baseline covers only priced legs
     two_missing = KalshiRFQPricer(book_of(*legs[:1]), PricerConfig(max_unpriced_legs=1))
     assert two_missing.price(rfq, NOW).reason == "REJ_COMBO_LEG_UNVALIDATED"                          # over the limit
@@ -906,7 +939,8 @@ def test_hot_leg_always_rejects_even_when_unpriced_legs_are_allowed():
 
 
 def test_long_combo_with_a_few_unpriced_legs_quotes_a_conservative_lay():
-    legs = [mk_leg(f"T{i}", f"nfl:2026-10-25:A{i}@B{i}", f"p{i}", p=0.6) for i in range(1, 13)]
+    # 12 priced legs as six SGP pairs (bounded pricing needs the SGP anchor, Argon Candidate 1) + 2 unpriceable legs.
+    legs = [mk_leg(f"T{i}", f"nfl:2026-10-25:A{i // 2}@B{i // 2}", f"p{i}", p=0.6) for i in range(12)]
     tickers = [l.ticker for l in legs] + ["X1", "X2"]                       # 14 legs, 2 unpriceable
     d = KalshiRFQPricer(book_of(*legs), PricerConfig(max_unpriced_legs=2)).price(combo_rfq(tickers), NOW)
     assert d.quoted and d.notes["n_unpriced"] == 2 and d.no_bid >= 0.9

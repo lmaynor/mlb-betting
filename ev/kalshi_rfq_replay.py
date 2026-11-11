@@ -41,7 +41,8 @@ KEEP = ("ticker", "close_time", "created_time", "volume_fp", "last_price_dollars
 # snapshots refresh every ~30 min, so the live 1500 s staleness gate would reject half of them
 MAX_SNAPSHOT_AGE_SEC = 2400.0
 MEASURE_CFG = PricerConfig(allow_same_game_combos=True, max_unpriced_legs=10 ** 6, longshot_max_p=1.0, min_collateral_roi=-1.0,
-                           max_staleness_sec=MAX_SNAPSHOT_AGE_SEC, max_legs=10 ** 6, sgp_mc_draws=20_000)
+                           max_staleness_sec=MAX_SNAPSHOT_AGE_SEC, max_legs=10 ** 6, sgp_mc_draws=20_000,
+                           bounded_requires_sgp_anchor=False)   # measure pass grades every population, incl. bounded cross-game
 QUOTE_CFG = PricerConfig(allow_same_game_combos=True, max_unpriced_legs=16, max_staleness_sec=MAX_SNAPSHOT_AGE_SEC,
                          sgp_mc_draws=20_000)
 
