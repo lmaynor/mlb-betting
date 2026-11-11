@@ -142,12 +142,18 @@ def test_tracked_rows_are_still_selected_and_logged_for_the_forward_record():
 
 
 # ------------------------------------------------------------------------------------------------- deploy script
-def test_projections_job_script_never_switches_the_trained_nhl_board_on_by_default():
+def test_projections_job_script_defaults_trained_nhl_board_on_deliberately():
+    # PR #211 (2026-11-11): the four serving conditions were verified on 2026-11-09 and NHL_TRAINED_PROPS=1 was
+    # already set on the live job, so the script defaults the flag to 1 deliberately -- a rerun's --set-env-vars
+    # full replace must preserve that production state, not silently switch the trained board off. Turning it
+    # off is the explicit operator action now.
     from pathlib import Path
     text = (Path(__file__).resolve().parent.parent / "deploy" / "setup_daily_projections_job.sh").read_text()
-    assert 'NHL_TRAINED_PROPS="${NHL_TRAINED_PROPS:-}"' in text                      # unset unless the operator passes it
-    assert '[ -z "$NHL_TRAINED_PROPS" ] ||' in text                                  # only appended to the env when non-empty
-    assert 'NHL_TRAINED_PROPS=1,' not in text and 'NHL_TRAINED_PROPS=1"' not in text
+    assert 'NHL_TRAINED_PROPS="${NHL_TRAINED_PROPS:-1}"' in text                     # defaults to 1, not unset
+    assert 'NHL_TRAINED_PROPS=${NHL_TRAINED_PROPS}' in text                          # ENV_VARS always carries it explicitly
+    assert "This script defaults the flag to 1" in text                              # the default-on is documented, not accidental
+    assert "Turning trained serving off is now deliberate:" in text
+    assert 'NHL_TRAINED_PROPS=0 PROJECT_ID=...' in text                              # the operator revert path is documented
 
 
 # ------------------------------------------------------------------------------------------------ refit script
