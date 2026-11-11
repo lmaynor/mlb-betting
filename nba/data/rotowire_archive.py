@@ -10,8 +10,8 @@ With either gate closed, `run_historic_pull` / `run_rss_snapshot` return {"statu
 ZERO HTTP requests and ZERO storage writes -- they only build a dry-run plan. Nothing in this module
 fetches at import time, and there is no __main__ entry point here (use scripts/pull_rotowire_prose.py).
 
-Why this exists: the verification check (~/workspace/beezy/rotowire-historic-prose-check-2026-11-11.md,
-corrected version) proved RotoWire's per-player news archive serves dated, full-text factual blurbs
+Why this exists: a verification check (2026-11-11, corrected version)
+proved RotoWire's per-player news archive serves dated, full-text factual blurbs
 continuously back through 2021-22, so the minutes-restriction text arm is backtestable on the same span
 as the structured arm. The same check is explicit that explicit pre-return minutes-cap language appeared
 in 0 of 3 sampled return windows -- the corpus's value is trajectory / ramp-up language, not stated caps
@@ -42,10 +42,10 @@ Storage (via mlb_core.storage, like the other banking code):
     NBA/news/rotowire_archive/rss/{ET day}/rss_{HHMMSS}.xml          raw RSS snapshot (verbatim)
     NBA/news/rotowire_archive/rss/{ET day}/rss_{HHMMSS}.jsonl        parsed RSS records, same shape
 
-Politeness / identification: every request carries User-Agent exactly
-"Beezy Research (beezy.fyi; research@beezy.fyi)" and requests are paced >= 2.5 s apart by default
-(configurable; optional jitter). Estimated full default run: ~1,700-2,400 requests, ~200-280 MB raw,
-~1.5 h at default pacing (see the check, section 3).
+Politeness: every request carries a generic desktop browser User-Agent and no
+identifying headers -- no login, no cookies, no project or contact tokens. Requests are paced
+>= 2.5 s apart by default (configurable; optional jitter). Estimated full default run:
+~1,700-2,400 requests, ~200-280 MB raw, ~1.5 h at default pacing (see the check, section 3).
 
 Player IDs: the puller takes an input player map (CSV or JSON: player name, rotowire_id, slug).
 `build_case_set` emits the case list + the distinct player list from banked box scores; `resolve_player`
@@ -82,7 +82,10 @@ log = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-USER_AGENT = "Beezy Research (beezy.fyi; research@beezy.fyi)"
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
 HEADERS = {"User-Agent": USER_AGENT}
 ENABLE_ENV = "ROTOWIRE_PULL_ENABLED"
 

@@ -140,7 +140,13 @@ def test_user_agent_header_on_every_request():
     rw.fetch_player_archive(session, KAWHI, sleeper=lambda s: None)
     assert session.calls
     for call in session.calls:
-        assert call["headers"]["User-Agent"] == "Beezy Research (beezy.fyi; research@beezy.fyi)"
+        # Generic desktop browser UA only; no identifying headers of any kind.
+        assert call["headers"] == {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+            )
+        }
 
 
 def test_pacing_sleeps_at_least_configured_delay_between_requests():
