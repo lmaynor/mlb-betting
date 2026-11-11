@@ -10,8 +10,13 @@
 # `docker inspect --format='{{index .RepoDigests 0}}' python:3.11-slim`.
 FROM python:3.11-slim@sha256:d1e9ca7c4e78d1e8ecadb5d44bfc8e956e7a65b659a9950f569f243d72b326d0
 
-# No system build deps needed: pg8000 is pure-Python (no libpq),
-# all pip packages install from prebuilt manylinux wheels.
+# System deps: poppler-utils only -- `pdftotext -bbox` is required by
+# nba/data/nba_injury_report.py (official NBA injury report parser, banked by
+# scripts/bank_nba_designations.py). Without it the parser fails closed
+# (PdfToolMissing, never a guessed parse). No build deps: pg8000 is
+# pure-Python (no libpq), all pip packages install from prebuilt manylinux wheels.
+RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -38,6 +43,8 @@ COPY ev/            ./ev/
 COPY scripts/backfill_ev_history.py ./scripts/backfill_ev_history.py
 # Kalshi RFQ recorder (Cloud Run Job mlb-kalshi-rfq-recorder, deploy/setup_kalshi_rfq_recorder.sh): production-readonly, GET-only.
 COPY scripts/kalshi_rfq_daemon.py ./scripts/kalshi_rfq_daemon.py
+# NBA designation banker (official injury reports; disabled by default -- needs --execute + MINUTES_RUN_ENABLED=1).
+COPY scripts/bank_nba_designations.py ./scripts/bank_nba_designations.py
 COPY main.py          .
 COPY tweet_drafter.py .
 # Out-of-sample accuracy of the projection engine; tweet_drafter's reply_ammo analysis quotes it (optional there).
