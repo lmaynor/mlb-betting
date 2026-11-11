@@ -612,7 +612,11 @@ def write_latest(result: dict, key: str | None = None) -> str:
     default_path = key is None
     key = key or OUT_KEY.format(sport=result["sport"])
     if default_path:
-        write_derivative_archive(result)          # RAW-FIRST: the derivative archive lands before every other write
+        try:
+            write_derivative_archive(result)      # RAW-FIRST: the derivative archive lands before every other write
+        except Exception:  # noqa: BLE001 -- an archive-write failure must never sink the crawl's primary writes
+            log.exception("bestbook %s: derivative archive write failed; continuing with latest.json",
+                          result.get("sport"))
     props = {k: v for k, v in result.items() if k not in ("game_lines", "derivative_games")}      # the props reader never parses the ladders
     storage.write_bytes(json.dumps(props, default=str).encode(), key)
     games = result.get("game_lines") or []

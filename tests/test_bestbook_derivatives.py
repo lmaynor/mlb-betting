@@ -198,6 +198,19 @@ def test_write_latest_archives_before_the_latest_pointer_and_hides_raw_from_prop
     assert "derivative_games" not in json.loads(written["Odds/bestbook_live/nba/latest.json"])
 
 
+def test_an_archive_write_failure_never_sinks_the_primary_writes(monkeypatch):
+    dg: list = []
+    bbe.build_events_from_snapshots("nba", _slate(), {GAME: {"rows": deriv_rows()}}, NOW, derivative_games=dg)
+    result = {"sport": "nba", "fetched_at": NOW.isoformat(), "window": {"days": 7}, "events": [], "game_lines": [],
+              "derivative_games": dg, "counts": {}}
+    monkeypatch.setattr(bbe, "write_derivative_archive",
+                        lambda r: (_ for _ in ()).throw(RuntimeError("gcs down")))
+    written: dict[str, bytes] = {}
+    with patch("mlb_core.storage.write_bytes", side_effect=lambda b, k: written.__setitem__(k, b)):
+        key = bbe.write_latest(result)
+    assert key == "Odds/bestbook_live/nba/latest.json" and key in written
+
+
 def test_snapshot_class_bands():
     assert bbe.snapshot_class(3) == "close"
     assert bbe.snapshot_class(15) == "t15"
