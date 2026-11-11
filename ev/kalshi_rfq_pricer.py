@@ -55,37 +55,114 @@ REJ_LOW_ROI = "REJ_LOW_ROI"
 REJ_NO_EDGE = "REJ_NO_EDGE"
 REJ_SINGLE_LEG_OFF = "REJ_SINGLE_LEG_OFF"
 
-# Same-game pairwise correlation of the two events happening, both in the "more / yes" direction, DIFFERENT PLAYERS (the pricer rejects a combo
-# holding two legs of one player). NFL / NBA entries are the realized Gaussian-copula MLE on 8,881 settled Kalshi legs (169k real combos, 10-16..11-02,
-# game-clustered bootstrap; scripts/kalshi_sgp_rho.py realized, docs/analysis/kalshi_rfq_combo_lay_2026-10-25.md): point estimates rounded to 0.02, only
-# where the 95% CI is not wider than ~0.3 (the rest fall to sgp_default_rho). The earlier MLB study (research/sgp-empirical-rho) says nothing about these
-# sports. k_over x nrfi is still the spec's value. Negative entries are clamped to 0 at use (ignoring a negative correlation only overprices the lay).
+# ---- SGP correlation taxonomy (Workstream G, sgp-proxy-sweep-2026-11-11.md Part 3 section 3.2) -------------------------------------------
+# A same-game pair is identified by (relation, stat_a, stat_b), NOT by the stat pair alone: the old frozenset(stat_a, stat_b) key conflated
+# relations whose measured rho differs by ~4x (NBA points x threes: 0.70 same-player vs 0.18 different-player). relation is one of:
+SGP_RELATION_SAME_PLAYER = "same_player"                        # both legs are the same player (player_norm equal)
+SGP_RELATION_SAME_TEAM_DIFF_PLAYER = "same_team_diff_player"    # different players, same team
+SGP_RELATION_CROSS_TEAM = "cross_team"                          # different players, opposing teams in the same game
+SGP_RELATIONS = frozenset((SGP_RELATION_SAME_PLAYER, SGP_RELATION_SAME_TEAM_DIFF_PLAYER, SGP_RELATION_CROSS_TEAM))
+
+# Pooled measured default for an UNMEASURED different-player pair: the Nov 2 pooled same-game different-player implied rho was 0.108 raw /
+# 0.081 margin-adjusted (cross-game baseline divided out), and 0.081 is the honest default for its class. It replaces the old flat
+# sgp_default_rho = 0.15, which priced every unmeasured pair. Same-player unmeasured pairs get NO default (None): they stay in Argon
+# Candidate 2's grade-first path and fail closed (see lookup_sgp_rho / _pair_rho).
+SGP_DIFF_PLAYER_DEFAULT_RHO = 0.081
+SGP_DEFAULT_RHO_BY_RELATION = {
+    SGP_RELATION_SAME_TEAM_DIFF_PLAYER: SGP_DIFF_PLAYER_DEFAULT_RHO,
+    SGP_RELATION_CROSS_TEAM: SGP_DIFF_PLAYER_DEFAULT_RHO,
+    SGP_RELATION_SAME_PLAYER: None,
+}
+
+
+def sgp_corr_key(relation: str, stat_a: str, stat_b: str) -> tuple:
+    """Canonical SGP_CORR_TABLE key: (relation, stat_lo, stat_hi) with the stats sorted, so a pair resolves the same in either leg order."""
+    if relation not in SGP_RELATIONS:
+        raise ValueError(f"unknown SGP relation {relation!r}")
+    lo, hi = sorted((stat_a, stat_b))
+    return (relation, lo, hi)
+
+
+def derive_sgp_relation(player_a, team_a, player_b, team_b) -> str:
+    """The relation of a same-game pair from its two legs' identities (the mapping every lookup call site uses).
+
+    same player id -> same_player. Different players whose teams are both known -> same_team_diff_player / cross_team by team equality.
+    Otherwise (a team is unknown, or a leg carries no player at all, e.g. a game-line leg) -> same_team_diff_player, the pooled
+    different-player bucket: such a pair cannot be same_player, and both different-player classes share every measured value and the
+    pooled default today, so the fallback cannot change a price; it only stops an unknown-team pair from being misread as cross-team."""
+    if player_a is not None and player_b is not None and player_a == player_b:
+        return SGP_RELATION_SAME_PLAYER
+    if team_a is not None and team_b is not None:
+        return SGP_RELATION_SAME_TEAM_DIFF_PLAYER if team_a == team_b else SGP_RELATION_CROSS_TEAM
+    return SGP_RELATION_SAME_TEAM_DIFF_PLAYER
+
+
+def sgp_relation(a: "LegFairValue", b: "LegFairValue") -> str:
+    """derive_sgp_relation for two fair-book legs (team comes from the ticker / feed row when known; see LegFairValue.team)."""
+    return derive_sgp_relation(a.player_norm, a.team, b.player_norm, b.team)
+
+
+def lookup_sgp_rho(relation: str, stat_a: str, stat_b: str, cfg: "PricerConfig | None" = None) -> float | None:
+    """Measured rho for (relation, stat pair), else the per-relation pooled default.
+
+    Returns None for an unmeasured same-player pair: NO numeric default may price it (fail closed; Argon Candidate 2's grade-first
+    path owns those cells). Different-player classes fall back to the pooled margin-adjusted 0.081 (cfg.sgp_diff_player_default_rho)."""
+    v = SGP_CORR_TABLE.get(sgp_corr_key(relation, stat_a, stat_b))
+    if v is not None:
+        return v
+    if relation == SGP_RELATION_SAME_PLAYER:
+        return None
+    return cfg.sgp_diff_player_default_rho if cfg is not None else SGP_DIFF_PLAYER_DEFAULT_RHO
+
+
+# Same-game pairwise correlation of the two events happening, both in the "more / yes" direction.
+# NFL / NBA different-player entries are the realized Gaussian-copula MLE on 8,881 settled Kalshi legs (169k real combos, 10-16..11-02,
+# game-clustered bootstrap; scripts/kalshi_sgp_rho.py realized, docs/analysis/kalshi_rfq_combo_lay_2026-10-25.md): point estimates rounded
+# to 0.02, only where the 95% CI is not wider than ~0.3. The earlier MLB study (research/sgp-empirical-rho) says nothing about these sports.
+# The Nov 2 run stratified pairs by PLAYER only (same player vs different players) -- it carried no team field, so a different-player
+# measurement pools teammates and opponents. Those entries are therefore registered under BOTH different-player relations at the same
+# measured value: assigning them to only one class would silently reprice the other class off a measurement that included it. A future
+# team-stratified re-measurement (legs now carry `team`; kalshi_rfq_replay exports it) can split them. k_over x nrfi_yes is still the
+# spec's value (not Nov 2-measured): a pitcher prop x a game-line leg can never derive cross_team (the NRFI leg has no team), so it is
+# registered under same_team_diff_player only, which is the relation derive_sgp_relation returns for that pair shape.
+# Negative entries are clamped to 0 at use (ignoring a negative correlation only overprices the lay).
+_SGP_DIFF_PLAYER_MEASURED = {
+    # NFL (receiving-corps different-player pairs realized ~0; pass pairs higher)
+    ("pass_yds", "rec_yds"): 0.26,          # the spec said 0.38; realized 0.26 [0.15, 0.35]
+    ("pass_yds", "receptions"): 0.18,
+    ("pass_yds", "rush_yds"): -0.14,
+    ("rec_yds", "receptions"): 0.06,
+    ("rec_yds", "rush_yds"): 0.00,
+    ("receptions", "rush_yds"): 0.02,
+    ("rec_yds", "rec_yds"): 0.04,           # same-stat pair (two different players)
+    ("receptions", "receptions"): 0.06,
+    ("rush_yds", "rush_yds"): -0.14,        # teammates split the carries
+    ("pass_tds", "rec_yds"): 0.08,
+    ("pass_tds", "receptions"): 0.08,
+    ("pass_tds", "rush_yds"): 0.04,
+    # NBA (different-player pairs realized 0.14-0.28)
+    ("points", "points"): 0.14,
+    ("points", "rebounds"): 0.16,
+    ("points", "threes"): 0.18,
+    ("assists", "points"): 0.14,
+    ("rebounds", "threes"): 0.14,
+    ("assists", "rebounds"): 0.20,
+    ("assists", "threes"): 0.28,
+    ("rebounds", "rebounds"): 0.16,
+    ("threes", "threes"): 0.22,
+    ("assists", "assists"): 0.20,
+}
+
 SGP_CORR_TABLE = {
-    frozenset(("k_over", "nrfi_yes")): 0.22,
-    # NFL
-    frozenset(("pass_yds", "rec_yds")): 0.26,          # the spec said 0.38; realized 0.26 [0.15, 0.35]
-    frozenset(("pass_yds", "receptions")): 0.18,
-    frozenset(("rush_yds", "pass_yds")): -0.14,
-    frozenset(("rec_yds", "receptions")): 0.06,
-    frozenset(("rec_yds", "rush_yds")): 0.00,
-    frozenset(("receptions", "rush_yds")): 0.02,
-    frozenset(("rec_yds",)): 0.04,                      # rec_yds x rec_yds (a one-element set is a same-stat pair)
-    frozenset(("receptions",)): 0.06,
-    frozenset(("rush_yds",)): -0.14,                    # teammates split the carries
-    frozenset(("pass_tds", "rec_yds")): 0.08,
-    frozenset(("pass_tds", "receptions")): 0.08,
-    frozenset(("pass_tds", "rush_yds")): 0.04,
-    # NBA
-    frozenset(("points",)): 0.14,
-    frozenset(("points", "rebounds")): 0.16,
-    frozenset(("points", "threes")): 0.18,
-    frozenset(("assists", "points")): 0.14,
-    frozenset(("rebounds", "threes")): 0.14,
-    frozenset(("assists", "rebounds")): 0.20,
-    frozenset(("assists", "threes")): 0.28,
-    frozenset(("rebounds",)): 0.16,
-    frozenset(("threes",)): 0.22,
-    frozenset(("assists",)): 0.20,
+    **{sgp_corr_key(rel, a, b): v for (a, b), v in _SGP_DIFF_PLAYER_MEASURED.items()
+       for rel in (SGP_RELATION_SAME_TEAM_DIFF_PLAYER, SGP_RELATION_CROSS_TEAM)},
+    sgp_corr_key(SGP_RELATION_SAME_TEAM_DIFF_PLAYER, "k_over", "nrfi_yes"): 0.22,
+    # Same-player measured cells (Nov 2): previously unreachable -- the pricer hard-rejects same-player combos (REJ_SGP_SAME_PLAYER,
+    # Argon Candidate 2, flag default False) -- and recorded here so the taxonomy holds them for the grade-first path, NOT so the
+    # pricer starts pricing them. Values: sweep Part 3 section 3.2 layer L1 (NBA points x threes 0.70 [0.60, 0.80]; NFL rec_yds x
+    # receptions 0.78 -- the 2026-10-25 analysis table prints 0.76 for the same cell; the sweep's 0.78 is used and the gap is flagged).
+    sgp_corr_key(SGP_RELATION_SAME_PLAYER, "points", "threes"): 0.70,
+    sgp_corr_key(SGP_RELATION_SAME_PLAYER, "rec_yds", "receptions"): 0.78,
 }
 
 
@@ -120,10 +197,14 @@ class PricerConfig:
     sgp_pair_buffer: float = 0.025
     # The buffer is per PAIR, so it grows with m^2 and saturated at the Frechet bound min(p) for any same-game group of 4+ priced
     # legs (13 props + winner => p_cons ~ 0.5 > longshot_max_p => every long SGP rejected as NOT_LONGSHOT). The copula already
-    # runs at rho 0.15, ~3x the empirical prop correlation (research/sgp-empirical-rho: ~1.08-1.10x pairwise lift), so the buffer
+    # runs at the measured / pooled rho (sgp_diff_player_default_rho 0.081 for unmeasured different-player pairs), above the
+    # empirical prop correlation (research/sgp-empirical-rho: ~1.08-1.10x pairwise lift), so the buffer
     # is a second layer. Cap the total (3 pairs' worth leaves groups of <= 3 legs unchanged). UNVALIDATED.
     sgp_buffer_cap: float = 0.075
-    sgp_default_rho: float = 0.15
+    # Per-relation pooled fallback for UNMEASURED different-player pairs (Nov 2 pooled margin-adjusted 0.081; Workstream G section
+    # 3.2). Replaces the old flat sgp_default_rho = 0.15. Same-player unmeasured pairs deliberately have NO field here: lookup_sgp_rho
+    # returns None for them and the pair fails closed, so no config value can price them.
+    sgp_diff_player_default_rho: float = SGP_DIFF_PLAYER_DEFAULT_RHO
     sgp_mc_draws: int = 100_000
     model_guard: float = 0.15               # |p_model - p_cons| above this => trust the market (winner's curse)
     # Fee reserve as a multiple of the 0.07 taker formula. Kalshi's fee schedule (kalshi-fee-schedule-2026-07-07.pdf) charges maker orders
@@ -155,6 +236,9 @@ class LegFairValue:
     is_hot_scratch: bool = False
     p_true_yes: float | None = None  # blended truth; defaults to blend(p_cons, p_model) in __post_init__
     protected: bool = False         # a <SERIES>PROT ticker (void-on-first-half-exit twin): see PricerConfig.prot_yes_pad
+    team: str | None = None         # player's team code when known (prop ticker / feed row `team`); drives the SGP relation taxonomy
+                                    # (sgp_relation): None = unknown, and an unknown-team pair falls back to the pooled different-player
+                                    # bucket in derive_sgp_relation rather than guessing cross-team
 
     def __post_init__(self):
         if self.p_true_yes is None:
@@ -195,7 +279,7 @@ def leg_from_row(row: dict, now: float | None = None) -> LegFairValue | None:
 
     Accepts an ev.sweep_nfl_props row (YES == the book's OVER, so `p_over` is P(YES)) or the generic keys
     {ticker, sport, game_key, market_class, player_norm, stat, strike, p_yes, n_books, disp, p_model_yes, pooled,
-    updated_ts}."""
+    updated_ts}; a `team` key, when the row carries one, becomes LegFairValue.team (the SGP relation taxonomy)."""
     now = time.time() if now is None else now
     ticker = row.get("ticker")
     p = _num(row.get("p_yes", row.get("p_over")))
@@ -206,7 +290,8 @@ def leg_from_row(row: dict, now: float | None = None) -> LegFairValue | None:
     pooled = bool(row.get("pooled")) or row.get("consensus_src") == "pooled"
     return LegFairValue(
         ticker=str(ticker), sport=sport, game_key=gk, market_class=str(row.get("market_class") or "player_prop"),
-        player_norm=row.get("player_norm") or None, stat=str(row.get("stat") or ""),
+        player_norm=row.get("player_norm") or None, team=(str(row["team"]) if row.get("team") else None),
+        stat=str(row.get("stat") or ""),
         strike=_num(row.get("strike"), 0.0), p_cons_yes=p, n_books=int(row.get("n_books") or 0),
         disp=_num(row.get("disp"), 1.0), p_model_yes=_num(row.get("p_model_yes")), pooled=pooled,
         updated_ts=_ts(row.get("updated_ts", row.get("ts")), now))
@@ -379,10 +464,15 @@ def _reject(rfq_id: str, kind: str, reason: str, **notes) -> QuoteDecision:
 SIGNED_RHO_BOUNDS = (-0.5, 0.75)
 
 
-def _pair_rho(a: LegFairValue, da: int, b: LegFairValue, db: int, cfg: PricerConfig, signed: bool = False) -> float:
-    """Pairwise copula rho. Default: floored at 0 (ignoring a negative correlation only overprices the lay: the safe side for p_cons).
-    signed=True keeps the sign (bounded) for the unbiased p_true."""
-    base = SGP_CORR_TABLE.get(frozenset((a.stat, b.stat)), cfg.sgp_default_rho) * da * db
+def _pair_rho(a: LegFairValue, da: int, b: LegFairValue, db: int, cfg: PricerConfig, signed: bool = False) -> float | None:
+    """Pairwise copula rho for a same-game pair, keyed by (relation, stat_a, stat_b) via sgp_relation + lookup_sgp_rho (Workstream G
+    section 3.2 taxonomy). Default: floored at 0 (ignoring a negative correlation only overprices the lay: the safe side for p_cons).
+    signed=True keeps the sign (bounded) for the unbiased p_true.
+    Returns None when the pair has NO priceable rho -- an unmeasured same-player pair, which gets no default and fails closed."""
+    rho = lookup_sgp_rho(sgp_relation(a, b), a.stat, b.stat, cfg)
+    if rho is None:
+        return None
+    base = rho * da * db
     if signed:
         return min(SIGNED_RHO_BOUNDS[1], max(SIGNED_RHO_BOUNDS[0], base))
     return max(0.0, base)
@@ -501,6 +591,11 @@ class KalshiRFQPricer:
 
         p_true = self._joint(groups, pad=0.0, conservative=False)
         p_cons = self._joint(groups, pad=cfg.leg_safety_pad)
+        if p_true is None or p_cons is None:
+            # Fail closed: a pair in the joint has no priceable rho (an unmeasured same-player pair -- no default may price it).
+            # Unreachable today because the duplicate-player check above already rejects every same-player group; this is the
+            # defence in depth that keeps the joint fail-closed if that gate ever changes (Argon Candidate 2 owns those cells).
+            return _reject(rfq.rfq_id, "combo", REJ_SGP_SAME_PLAYER, why="unmeasured same-player pair has no rho", **notes)
         if p_cons > cfg.longshot_max_p:
             return _reject(rfq.rfq_id, "combo", REJ_COMBO_NOT_LONGSHOT, p_cons=round(p_cons, 4), **notes)
         edge = min(cfg.max_combo_edge, max(cfg.min_combo_edge, k * cfg.per_leg_edge))
@@ -525,8 +620,9 @@ class KalshiRFQPricer:
         """A leg's win probability as priced into the joint: a YES leg on a *PROT ticker carries the void-asymmetry pad."""
         return min(0.995, p + self.cfg.prot_yes_pad) if (fv.protected and side == "yes") else p
 
-    def _joint(self, groups: dict, pad: float, conservative: bool = True) -> float:
-        """P(every leg wins). Independent across games; Gaussian copula inside a game.
+    def _joint(self, groups: dict, pad: float, conservative: bool = True) -> float | None:
+        """P(every leg wins). Independent across games; Gaussian copula inside a game. Returns None when any same-game pair has no
+        priceable rho (an unmeasured same-player pair): the joint fails closed rather than pricing that pair off a default.
 
         conservative=True (p_cons, which SETS the no_bid): correlations floored at 0 and the capped per-pair buffer added, so it is an upper
         bound. conservative=False (p_true, used for EV / ROI and recorded as p_yes_true): signed correlations, no buffer, no
@@ -542,7 +638,10 @@ class KalshiRFQPricer:
             R = np.eye(m)
             for i in range(m):
                 for j in range(i + 1, m):
-                    R[i, j] = R[j, i] = _pair_rho(g[i][0], dirs[i], g[j][0], dirs[j], cfg, signed=not conservative)
+                    rho = _pair_rho(g[i][0], dirs[i], g[j][0], dirs[j], cfg, signed=not conservative)
+                    if rho is None:
+                        return None
+                    R[i, j] = R[j, i] = rho
             pj = _copula_joint(ps, R, cfg.sgp_mc_draws)
             if conservative:
                 pairs = m * (m - 1) // 2

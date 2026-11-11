@@ -1245,14 +1245,95 @@ def test_a_14_leg_64_contract_rfq_fits_the_scaffolding_defaults_but_not_the_old_
 
 
 def test_sgp_corr_table_holds_empirical_different_player_estimates():
-    from ev.kalshi_rfq_pricer import SGP_CORR_TABLE, PricerConfig, _pair_rho
-    assert SGP_CORR_TABLE[frozenset(("pass_yds", "rec_yds"))] == 0.26                    # the spec's 0.38 was too high (realized 0.26)
-    assert SGP_CORR_TABLE[frozenset(("assists", "threes"))] == 0.28 and SGP_CORR_TABLE[frozenset(("rec_yds",))] == 0.04
-    assert all(1 <= len(k) <= 2 and -0.5 <= v <= 0.9 for k, v in SGP_CORR_TABLE.items())
+    from ev.kalshi_rfq_pricer import SGP_CORR_TABLE, PricerConfig, _pair_rho, sgp_corr_key
+    assert SGP_CORR_TABLE[sgp_corr_key("same_team_diff_player", "pass_yds", "rec_yds")] == 0.26   # the spec's 0.38 was too high (realized 0.26)
+    assert SGP_CORR_TABLE[sgp_corr_key("cross_team", "pass_yds", "rec_yds")] == 0.26               # Nov 2 pooled teammates + opponents: both classes carry it
+    assert SGP_CORR_TABLE[sgp_corr_key("same_team_diff_player", "assists", "threes")] == 0.28
+    assert SGP_CORR_TABLE[sgp_corr_key("same_team_diff_player", "rec_yds", "rec_yds")] == 0.04     # same-stat pair of two different players
+    assert all(len(k) == 3 and k[0] in ("same_player", "same_team_diff_player", "cross_team") and k[1] <= k[2]
+               and -0.5 <= v <= 0.9 for k, v in SGP_CORR_TABLE.items())
     a, b = mk_leg("A", stat="rec_yds"), mk_leg("B", stat="rec_yds", player="p2")
-    assert _pair_rho(a, 1, b, 1, PricerConfig()) == pytest.approx(0.04)                    # same-stat pair uses the one-element key
-    assert _pair_rho(a, 1, mk_leg("C", stat="unmapped_stat", player="p3"), 1, PricerConfig()) == PricerConfig().sgp_default_rho
+    assert _pair_rho(a, 1, b, 1, PricerConfig()) == pytest.approx(0.04)                    # same-stat different-player pair
+    assert _pair_rho(a, 1, mk_leg("C", stat="unmapped_stat", player="p3"), 1, PricerConfig()) == PricerConfig().sgp_diff_player_default_rho
     assert _pair_rho(mk_leg("D", stat="rush_yds"), 1, mk_leg("E", stat="pass_yds", player="p4"), 1, PricerConfig()) == 0.0   # negative clamped
+
+
+# ------------------------------------------------------------------ SGP relation taxonomy (Workstream G section 3.2)
+def test_sgp_relation_derivation_from_the_two_legs():
+    from ev.kalshi_rfq_pricer import derive_sgp_relation, sgp_relation
+    assert derive_sgp_relation("p1", "BUF", "p1", "BUF") == "same_player"
+    assert derive_sgp_relation("p1", "BUF", "p2", "BUF") == "same_team_diff_player"
+    assert derive_sgp_relation("p1", "BUF", "p2", "KC") == "cross_team"
+    assert derive_sgp_relation("p1", None, "p2", None) == "same_team_diff_player"          # unknown teams: pooled diff-player bucket, never a cross-team guess
+    assert derive_sgp_relation(None, None, "p2", "KC") == "same_team_diff_player"          # a game-line leg cannot be same_player
+    a = mk_leg("A", stat="points", player="p1", team="BUF")
+    assert sgp_relation(a, mk_leg("B", stat="threes", player="p1", team="BUF")) == "same_player"
+    assert sgp_relation(a, mk_leg("B", stat="threes", player="p2", team="KC")) == "cross_team"
+
+
+def test_sgp_taxonomy_same_stat_pair_resolves_differently_by_relation():
+    """The old conflation is gone: ONE stat pair, three relations, the same-player cell is NOT the different-player value."""
+    from ev.kalshi_rfq_pricer import PricerConfig, _pair_rho, lookup_sgp_rho
+    cfg = PricerConfig()
+    same = _pair_rho(mk_leg("A", stat="points", player="p1", team="BUF"), 1,
+                     mk_leg("B", stat="threes", player="p1", team="BUF"), 1, cfg)
+    teammate = _pair_rho(mk_leg("A", stat="points", player="p1", team="BUF"), 1,
+                         mk_leg("B", stat="threes", player="p2", team="BUF"), 1, cfg)
+    opponent = _pair_rho(mk_leg("A", stat="points", player="p1", team="BUF"), 1,
+                         mk_leg("B", stat="threes", player="p2", team="KC"), 1, cfg)
+    assert same == pytest.approx(0.70)          # NBA same-player points x threes, Nov 2 realized 0.70 [0.60, 0.80]
+    assert teammate == pytest.approx(0.18) and opponent == pytest.approx(0.18)
+    assert same != teammate
+    # NFL rec_yds x receptions: same-player 0.78 vs different-player 0.06 -- the pair the old key priced at 0.06 for everyone
+    assert lookup_sgp_rho("same_player", "rec_yds", "receptions", cfg) == pytest.approx(0.78)
+    assert lookup_sgp_rho("same_team_diff_player", "receptions", "rec_yds", cfg) == pytest.approx(0.06)   # leg order does not matter
+    assert lookup_sgp_rho("cross_team", "rec_yds", "receptions", cfg) == pytest.approx(0.06)
+
+
+def test_sgp_unmeasured_different_player_pairs_use_the_pooled_0081_not_015():
+    from ev.kalshi_rfq_pricer import PricerConfig, _pair_rho, lookup_sgp_rho
+    cfg = PricerConfig()
+    assert cfg.sgp_diff_player_default_rho == pytest.approx(0.081)
+    assert not hasattr(cfg, "sgp_default_rho")                                          # the flat 0.15 fallback is gone
+    assert lookup_sgp_rho("same_team_diff_player", "blocks", "steals", cfg) == pytest.approx(0.081)
+    assert lookup_sgp_rho("cross_team", "blocks", "steals", cfg) == pytest.approx(0.081)
+    a = mk_leg("A", stat="blocks", player="p1", team="BUF")
+    assert _pair_rho(a, 1, mk_leg("B", stat="steals", player="p2", team="KC"), 1, cfg) == pytest.approx(0.081)
+    assert _pair_rho(a, 1, mk_leg("B", stat="steals", player="p2", team="BUF"), 1, cfg) == pytest.approx(0.081)
+
+
+def test_sgp_unmeasured_same_player_pairs_have_no_default_and_fail_closed():
+    from ev.kalshi_rfq_pricer import PricerConfig, _pair_rho, lookup_sgp_rho
+    cfg = PricerConfig()
+    assert lookup_sgp_rho("same_player", "points", "rebounds", cfg) is None             # measured same-player cells exist; this pair is not one
+    assert lookup_sgp_rho("same_player", "pass_yds", "pass_tds", cfg) is None
+    a = mk_leg("A", stat="points", player="p1", team="BUF")
+    assert _pair_rho(a, 1, mk_leg("B", stat="rebounds", player="p1", team="BUF"), 1, cfg) is None
+    assert _pair_rho(a, 1, mk_leg("B", stat="rebounds", player="p1", team="BUF"), 1, cfg, signed=True) is None
+    # ... and the pricer's hard rejection of same-player combos is unchanged (they never reach a numeric rho in the pricing path)
+    d = KalshiRFQPricer(book_of(mk_leg("A", stat="points", player="p1"), mk_leg("B", stat="rebounds", player="p1")),
+                        PricerConfig(allow_same_game_combos=True)).price(combo_rfq(["A", "B"]), NOW)
+    assert not d.quoted and d.reason == "REJ_SGP_SAME_PLAYER"
+
+
+def test_sgp_taxonomy_migration_preserves_every_legacy_different_player_value():
+    """Every pre-taxonomy table entry, at its measured value, under the different-player relations (the Nov 2 measurement pooled
+    teammates and opponents, so both classes carry it). k_over x nrfi_yes is the one exception in shape, not value: a game-line
+    leg derives the pooled bucket only."""
+    from ev.kalshi_rfq_pricer import lookup_sgp_rho
+    legacy = {("k_over", "nrfi_yes"): 0.22, ("pass_yds", "rec_yds"): 0.26, ("pass_yds", "receptions"): 0.18,
+              ("pass_yds", "rush_yds"): -0.14, ("rec_yds", "receptions"): 0.06, ("rec_yds", "rush_yds"): 0.00,
+              ("receptions", "rush_yds"): 0.02, ("rec_yds", "rec_yds"): 0.04, ("receptions", "receptions"): 0.06,
+              ("rush_yds", "rush_yds"): -0.14, ("pass_tds", "rec_yds"): 0.08, ("pass_tds", "receptions"): 0.08,
+              ("pass_tds", "rush_yds"): 0.04, ("points", "points"): 0.14, ("points", "rebounds"): 0.16,
+              ("points", "threes"): 0.18, ("assists", "points"): 0.14, ("rebounds", "threes"): 0.14,
+              ("assists", "rebounds"): 0.20, ("assists", "threes"): 0.28, ("rebounds", "rebounds"): 0.16,
+              ("threes", "threes"): 0.22, ("assists", "assists"): 0.20}
+    for (sa, sb), v in legacy.items():
+        assert lookup_sgp_rho("same_team_diff_player", sa, sb) == pytest.approx(v), (sa, sb)
+    for (sa, sb), v in legacy.items():
+        if (sa, sb) != ("k_over", "nrfi_yes"):
+            assert lookup_sgp_rho("cross_team", sa, sb) == pytest.approx(v), (sa, sb)
 
 
 # ------------------------------------------------------------------ fee reserve, unbiased p_true, *PROT pad (2026-11-04)
@@ -1277,7 +1358,7 @@ def test_p_true_keeps_a_negative_correlation_while_p_cons_stays_an_upper_bound()
 
 
 def test_p_true_carries_no_sgp_buffer_and_never_exceeds_p_cons():
-    d = _same_game_pair("unmapped_stat", 0.30)                                    # default rho 0.15
+    d = _same_game_pair("unmapped_stat", 0.30)                                    # unmeasured different-player pair: pooled default rho 0.081
     cfg = PricerConfig()
     assert 0.30 * 0.30 <= d.p_yes_true < d.p_yes_cons
     assert d.p_yes_cons - d.p_yes_true >= cfg.sgp_pair_buffer                     # p_true used to include the buffer, hiding the edge
