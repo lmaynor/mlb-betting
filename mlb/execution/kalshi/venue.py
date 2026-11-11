@@ -7,8 +7,10 @@ mlb.execution.kalshi.venue -- one order interface, two implementations.
     KalshiVenue -- Kalshi DEMO: real signed orders with fake money.
 
 Both take the same OrderIntent so the decision code is identical in shadow and demo (the
-"seam" idea from ~/market-maker's ExecutionVenue). TAKER ONLY: every order is
-immediate_or_cancel; there is no resting-order path.
+"seam" idea from ~/market-maker's ExecutionVenue). The taker path (`submit`) is
+immediate_or_cancel only, unchanged. KalshiVenue additionally has a resting path
+(`submit_resting`): a good_till_canceled, post_only limit order (verified on the
+Kalshi demo exchange 2026-11-11). PaperVenue has no resting path.
 
 Kalshi v2 prices everything in YES terms: side 'bid' = buy YES at price p; side 'ask' = sell
 YES at p, which is the same exposure as buying NO at 1 - p. So:
@@ -64,7 +66,7 @@ class FillRec:
 class Ack:
     order_id: str | None
     client_order_id: str
-    status: str                   # FILLED | PARTIAL | NO_FILL | ERROR
+    status: str                   # FILLED | PARTIAL | NO_FILL | RESTING | ERROR
     fill_count: float = 0.0
     filled_cost: float = 0.0      # price*count + fee, all-in
     fee: float = 0.0
@@ -136,6 +138,42 @@ class KalshiVenue:
         filled = sum(f.count for f in fills) or float(resp.get("fill_count") or 0)
         cost = sum(f.count * f.price + f.fee for f in fills)
         return Ack(order_id, coid, _status(filled, intent.contracts), filled, round(cost, 4),
+                   round(sum(f.fee for f in fills), 4), fills, raw=resp)
+
+    def submit_resting(self, intent: OrderIntent) -> Ack:
+        """Place a RESTING maker order: good_till_canceled + post_only=True.
+
+        Unlike `submit` (the unchanged IOC taker path), this order stays on the
+        book until filled, cancelled, or expired. post_only means the exchange
+        rejects rather than crosses, so placement itself cannot take liquidity.
+
+        The client_order_id is the same deterministic client_order_id(intent_id)
+        as the taker path: reconciliation keys on it. That matters because of the
+        ~1s read-after-write visibility lag verified on demo (2026-11-11) -- a
+        get_orders() / queue-position read issued in the same second as this POST
+        may show nothing. Never treat a fast empty read as a rejection; reconcile
+        on client_order_id instead.
+
+        Status: RESTING when nothing has filled yet (the normal outcome),
+        PARTIAL / FILLED if the response already reports fills.
+        """
+        coid = client_order_id(intent.intent_id)
+        book_side, price = self.to_api(intent)
+        try:
+            resp = self.client.create_order(
+                ticker=intent.ticker, client_order_id=coid, book_side=book_side,
+                count=float(intent.contracts), price=price,
+                time_in_force="good_till_canceled", post_only=True,
+                exchange_index=intent.exchange_index)
+        except Exception as e:                                        # noqa: BLE001
+            return Ack(None, coid, "ERROR", error=repr(e)[:400])
+
+        order_id = resp.get("order_id")
+        fills = self._fills_for(order_id, intent) if order_id else []
+        filled = sum(f.count for f in fills) or float(resp.get("fill_count") or 0)
+        cost = sum(f.count * f.price + f.fee for f in fills)
+        status = _status(filled, intent.contracts) if filled > 0 else "RESTING"
+        return Ack(order_id, coid, status, filled, round(cost, 4),
                    round(sum(f.fee for f in fills), 4), fills, raw=resp)
 
     def _fills_for(self, order_id: str, intent: OrderIntent) -> list[FillRec]:
