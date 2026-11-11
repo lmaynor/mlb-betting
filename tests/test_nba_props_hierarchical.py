@@ -323,9 +323,10 @@ def test_replay_cutoff_is_what_removes_late_rows_and_live_serving_keeps_every_ro
 
 # --------------------------------------------------------------------------------------------- 5. blend weights
 def test_blend_weights_are_per_sport_and_stat_with_defaults():
-    # measured c of THIS engine on 362,777 real props (nba_engine_vs_market_2026-11-01.md, ship_noabs); ra / blocks are unmeasured priors
-    assert dp.blend_c("nba", "threes") == 0.19 and dp.blend_c("nba", "rebounds") == 0.13 and dp.blend_c("nba", "assists") == 0.09
-    assert dp.blend_c("nba", "pra") == 0.02 and dp.blend_c("nba", "points") == 0.02
+    # Argon props D3 (2026-11-10): the five core NBA stats carry the empirical walk-forward constants
+    # (superseding the nba_engine_vs_market_2026-11-01.md ship_noabs values); ra / blocks are unmeasured priors
+    assert dp.blend_c("nba", "threes") == 0.07 and dp.blend_c("nba", "rebounds") == 0.14 and dp.blend_c("nba", "assists") == 0.03
+    assert dp.blend_c("nba", "pra") == 0.06 and dp.blend_c("nba", "points") == 0.06
     assert dp.blend_c("nba", "ra") == 0.11 and dp.blend_c("nba", "blocks") == 0.05
     assert dp.blend_c("nhl", "sog") == 0.30 and dp.blend_c("nhl", "goals") == 0.03       # NHL goals measured +0.03 (nhl_engine_vs_market)
     assert dp.blend_c("nhl", "shots_unlisted") == dp.BLEND_C
@@ -365,7 +366,9 @@ def test_blend_side_ev_prices_the_best_quote_at_the_blended_posterior():
 
 
 def test_a_low_c_stat_earns_far_less_blended_ev_than_a_high_c_stat_on_the_same_model_gap():
-    """points (c 0.02) barely moves off the market; threes (c 0.19) does: the point of gating Official on blend_ev."""
+    """assists (c 0.03 under Argon props D3) barely moves off the market; rebounds (c 0.14) does: the point of
+    gating Official on blend_ev. (The pre-D3 pair, points 0.02 vs threes 0.19, no longer spans: D3 set both to
+    ~0.06-0.07.)"""
     best = {"over": ("fanduel", 2.0, 100), "under": None}
-    ev = {st: dp.blend_side_ev(dp.blend_p_over(0.62, 0.50, dp.blend_c("nba", st)), "over", best)[1] for st in ("points", "threes")}
-    assert ev["points"] < 0.025 < ev["threes"]
+    ev = {st: dp.blend_side_ev(dp.blend_p_over(0.62, 0.50, dp.blend_c("nba", st)), "over", best)[1] for st in ("assists", "rebounds")}
+    assert ev["assists"] < 0.025 < ev["rebounds"]

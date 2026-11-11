@@ -204,13 +204,17 @@ def load_trained(now: datetime | None = None) -> dict:
 #   shipped engine with no absence info, the live pricer's closest variant): NBA threes +0.19, rebounds +0.13, assists +0.09,
 #   pra +0.02, points +0.02. NHL (docs/analysis/nhl_engine_vs_market_2026-11-01.md): goals +0.03, assists +0.06, points +0.03;
 #   saves pooled +0.48 but regime-dependent (-0.23 / +0.84 / +0.19 by season), so it keeps the 0.15 prior.
+#   NBA SUPERSEDED 2026-11-10 (Argon props direction D3): the five core NBA stats now carry the empirical WALK-FORWARD
+#   values from that direction -- rebounds .14, threes .07, assists .03, points .06, pra .06 -- replacing the single-study
+#   values above for those stats only. Assists' .03 is a blend weight, not eligibility: assists is OUT of the official
+#   signal allowlist (ev.model_picks) under the same direction.
 #   NOT measured (BettingPros carries no NBA pr / pa / ra / steals / blocks, no NHL blocks / pp_points line): NBA ra .11, pr .06,
 #   pa .05, steals .05, blocks .05 and NHL blocked_shots .10, pp_points .05 are priors set at or below the components' measured c
 #   (the 2026-11-02 review's values), NHL sog .30 is the TRAINED SOG model's measured c applied as a prior. NFL has no table: the
 #   BLEND_C default applies (the one measured NFL c is rush_yds +0.25, t 2.9, from the hierarchical-engine real-line study).
 BLEND_C_BY_SPORT_STAT = {
-    "nba": {"threes": 0.19, "rebounds": 0.13, "assists": 0.09, "ra": 0.11, "pr": 0.06, "pa": 0.05, "pra": 0.02,
-            "points": 0.02, "steals": 0.05, "blocks": 0.05},
+    "nba": {"threes": 0.07, "rebounds": 0.14, "assists": 0.03, "ra": 0.11, "pr": 0.06, "pa": 0.05, "pra": 0.06,
+            "points": 0.06, "steals": 0.05, "blocks": 0.05},
     "nhl": {"sog": 0.30, "saves": 0.15, "blocked_shots": 0.10, "points": 0.03, "goals": 0.03, "assists": 0.06,
             "pp_points": 0.05},
 }
@@ -228,6 +232,82 @@ BLEND_MAX_SHIFT = 0.08                                # the study's clamp: the b
 # books, left out the book we would bet at, price OUR side meaningfully lower than the whole pack does. UNVALIDATED as a filter.
 SHARP_BOOKS = frozenset({"pinnacle", "novig", "prophetx"})
 SHARP_TOLERANCE = 0.010
+# ------------------------------------------------------------------------------------------------ NFL live-serving gate
+# Argon model-improvement direction D3 (2026-11-10): the hierarchical NFL stats FAILED the vs-market benchmark
+# (LL gain -0.0066..-0.0447) and are removed from LIVE SERVING. The two Argon texts name different stat sets --
+# props D2: rec_yds, receptions, pass_yds, pass_tds; the verbatim Pack-4 audit surface: rush_yds (rushing yards),
+# rush_attempts (rushing attempts), rec_yds (receiving yards), pass_tds -- and the shipped allowlist
+# (nfl/props/hierarchical_allowlist.json) actually serves pass_tds / rec_yds / rush_yds today. The conservative
+# reconciliation is an ENGINE gate, not a stat list: no NFL row priced by the hierarchical engine is published,
+# whatever its stat and whatever $NFL_HIER_STATS says. The models and the offline rebuild / replay path are
+# untouched; the engine may still RUN (its rows are dropped at board assembly and at the serving read path), so
+# production is safe even while the daily-projections job env sets NFL_ENGINE=hierarchical. Legacy-engine NFL rows
+# are not hierarchical rows and are not touched by this gate. NOTE: the board-fed PROPS paper ledger
+# (ev.model_picks) reads this same published board, so hierarchical rows stop entering it too; the separate
+# Kalshi/Novig shadow executors (ev.props_exec, ev.novig) do not read this board and are unaffected.
+NFL_HIER_AUDIT_STATS = frozenset({"rush_yds", "rush_attempts", "rec_yds", "pass_tds", "receptions", "pass_yds"})
+
+
+def is_hierarchical_nfl_row(r: dict) -> bool:
+    """True for an NFL board row priced by the hierarchical engine (row `engine` carries the hierarchical id)."""
+    return str(r.get("sport") or "") == "nfl" and "hierarchical" in str(r.get("engine") or "")
+
+
+def live_served_rows(rows: list) -> list:
+    """The rows allowed on the published board: `rows` minus hierarchical NFL rows (see the gate above). Pure."""
+    return [r for r in rows if not is_hierarchical_nfl_row(r)]
+
+
+# -------------------------------------------------------------------------------- NHL trained-skater shadow cohort (D4)
+# Argon props direction D4 (2026-11-10): trained skater goals / assists / points are OUT of standalone official
+# eligibility (ev.model_picks), display-only. Goals + assists ONLY get a SHADOW cohort: a row enters it when an
+# exchange (Novig / Kalshi) or soft-book (Fliff / Betr) two-sided quote on its line carries hold < 4.5%. Points
+# has NO cohort. Judged 2026-12-28 or n=150: promote iff control-adjusted ROI >= +2.0% and mean CLV >= +1.5%
+# (the judging constants live with the paper ledger in ev.model_picks). These sets mirror ev.model_picks'
+# NHL_SHADOW_* constants; test_argon_d3_d4_gates asserts they stay equal.
+NHL_SHADOW_STATS = frozenset({"goals", "assists"})
+NHL_SHADOW_EXCHANGE_BOOKS = frozenset({"novig", "kalshi"})
+NHL_SHADOW_SOFT_BOOKS = frozenset({"fliff", "betr"})
+NHL_SHADOW_BOOKS = NHL_SHADOW_EXCHANGE_BOOKS | NHL_SHADOW_SOFT_BOOKS
+NHL_SHADOW_MAX_HOLD = 0.045
+
+
+def _quote_book_prices(q) -> tuple:
+    """(book, over_american, under_american) from a Quote object or a quote dict; (None, None, None) if unusable."""
+    if isinstance(q, dict):
+        book, over, under = q.get("book"), q.get("over"), q.get("under")
+        over = q.get("over_odds", over) if over is None else over
+        under = q.get("under_odds", under) if under is None else under
+    else:
+        book, over, under = getattr(q, "book", None), getattr(q, "over", None), getattr(q, "under", None)
+    try:
+        return (str(book).strip().lower(), int(over), int(under)) if book and over is not None and under is not None else (None, None, None)
+    except (TypeError, ValueError):
+        return None, None, None
+
+
+def nhl_shadow_cohort_fields(stat: str, trained: bool, quotes) -> dict:
+    """Shadow-cohort stamp for one board row: {'shadow_cohort', 'shadow_book', 'shadow_hold', 'shadow_source'}.
+
+    Only a TRAINED skater goals/assists row can enter, and only on a two-sided quote from an exchange / soft book
+    in NHL_SHADOW_BOOKS whose own hold (implied P(over) + implied P(under) - 1) is < NHL_SHADOW_MAX_HOLD. The
+    lowest-hold qualifying quote wins. Anything else stamps shadow_cohort=False with Nones."""
+    out = {"shadow_cohort": False, "shadow_book": None, "shadow_hold": None, "shadow_source": None}
+    if not trained or stat not in NHL_SHADOW_STATS:
+        return out
+    from mlb_core.odds.utils import american_to_implied_prob
+    best = None
+    for q in quotes or []:
+        book, over, under = _quote_book_prices(q)
+        if book is None or book not in NHL_SHADOW_BOOKS:
+            continue
+        hold = american_to_implied_prob(over) + american_to_implied_prob(under) - 1.0
+        if hold < NHL_SHADOW_MAX_HOLD and (best is None or hold < best[1]):
+            best = (book, hold)
+    if best is not None:
+        out.update(shadow_cohort=True, shadow_book=best[0], shadow_hold=round(float(best[1]), 5),
+                   shadow_source="exchange" if best[0] in NHL_SHADOW_EXCHANGE_BOOKS else "soft_book")
+    return out
 # NBA engine feature switches, consulted at projection time; `nba_features(...)` flips them for a replay. A switch is ON only
 # where nba/props/engine_eval.py showed a held-out gain past its bar (selected on 2023-24, scored on 2024-25 / 2025-26:
 # docs/analysis/nba_engine_walkforward_2026-11-01.md): eta_scale 0.4 with steals / blocks excluded (the spec's 0.55-0.65
@@ -1327,7 +1407,7 @@ def build_line_rows(sport: str, events: list, logs: GameLogs, now: datetime, ros
                 continue                                   # traded / stale roster: do not project against a guess
             opp = None if team is None else (home if team == away else away)
             row = make_row(sport, stat, qs[0].player, pn, rows, sdef, logs, pt, cons, at_pt, team, opp, gk, start, mins,
-                           roster=roster)
+                           roster=roster, all_quotes=qs)
             if row is None:
                 st["thin_history"] += 1
                 continue
@@ -1570,7 +1650,7 @@ def project_nhl(stat: str, rows: list, sdef: tuple, logs: GameLogs, team, opp, a
 
 
 def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team, opp, gk, start, mins,
-             has_line: bool = True, roster=None) -> dict | None:
+             has_line: bool = True, roster=None, all_quotes=None) -> dict | None:
     family = PROJECT_STATS[sport][stat]
     as_of = nhl_as_of(start) if sport == "nhl" else None
     ctx = logs.context(stat, as_of)
@@ -1679,6 +1759,9 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
     if sport == "nhl":
         # RotoWire power-play unit / lineup status for the day: DISPLAY ONLY (no history to validate a PP multiplier against).
         row.update(_nhl_lineup_context(team, player, start))
+        # D4 shadow cohort: search ALL quotes for this player/stat (not just the main-line real books in at_pt --
+        # Fliff / Betr are DFS-classed and never reach at_pt or the consensus), falling back to at_pt.
+        row.update(nhl_shadow_cohort_fields(stat, extra.get("nhl_model") == "trained_v1", all_quotes or at_pt))
     row["pick_tier"] = pick_tier(row)
     return row
 
@@ -2243,6 +2326,14 @@ def run_sport(sport: str, now: datetime | None = None, logs: GameLogs | None = N
     except Exception as exc:                                                           # noqa: BLE001
         log.warning("%s rotation fallback failed: %s", sport, exc)
     rows, cut = order_and_cut(line_rows + rot)
+    if sport == "nfl":
+        # Live-serving gate (Argon D3, see NFL_HIER_AUDIT_STATS): hierarchical rows never reach the published
+        # board, regardless of NFL_ENGINE / NFL_HIER_STATS. The rows were still computed above (the engine runs;
+        # only publication is gated), and they are counted here so a silent disappearance is visible in the summary.
+        served = live_served_rows(rows)
+        if len(served) != len(rows):
+            lstats["hier_rows_gated"] = len(rows) - len(served)
+            rows = served
     game_list = build_games(sport, sched, events, now)
     per_game: dict = {}
     for r in rows:
@@ -2473,7 +2564,11 @@ def get_daily_projections(sport: str, limit: int = MAX_ROWS, allow_compute: bool
             _kick_background(sport)
     if not payload:
         return None
-    rows = payload.get("rows") or []
+    # Serving gate on the READ path too: a board written before the gate existed (or by any other writer) must
+    # not serve hierarchical NFL rows either. See NFL_HIER_AUDIT_STATS.
+    rows = live_served_rows(payload.get("rows") or [])
+    if len(rows) != len(payload.get("rows") or []):
+        payload = {**payload, "rows": rows, "count": len(rows)}
     return payload if len(rows) <= limit else {**payload, "rows": rows[:limit]}
 
 

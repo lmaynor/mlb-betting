@@ -79,14 +79,43 @@ OFFICIAL_MIN_BLEND_EV = 0.025
 # board engine (the Oct 27-Nov 9 forward replay agrees: board points 4-1 on n=5 settled with negative CLV cannot overturn the study;
 # board sog 1-10, -77.4% ROI, the largest forward sample). NOT measured at all (no real lines to test them on): NBA pr / pa / ra /
 # steals / blocks, NHL sog / blocked_shots on the board engine, every other NFL stat -- unmeasured is not allowed, whatever a prior says.
+#
+# 2026-11-10 Argon directions SUPERSEDE the allowlists above where they conflict:
+#   Props D3 (NBA): assists is REMOVED from the signal allowlist immediately (2025 walk-forward c +0.01, was +0.05 in
+#   2022 -- now noise). Points / pra were already out and stay out (display-only). Blend constants for rebounds /
+#   threes / assists / points / pra were replaced with the empirical walk-forward values in ev.daily_projections.
+#   Props D4 (NHL trained skaters): goals / assists / points are REMOVED from standalone official eligibility
+#   (pooled ROI5 -0.2% / -0.3% / -1.2% despite c +0.34..+0.39; the hold on 0.5 / 1.5 lines eats the edge at sharp
+#   prices). Saves officials are untouched. Goals + assists get the SHADOW cohort below; points gets none.
+#   Model-improvement D3 (NFL): ALL hierarchical stats failed the vs-market benchmark, so NFL_HIER_SIGNAL is now
+#   EMPTY and ev.daily_projections additionally gates hierarchical NFL rows out of the published board entirely.
+#   No NFL row, on either engine, can be official. Demoted stats stay on the board (display) and in the tracked
+#   tier (paper tracking keeps running) exactly as the general rule above describes.
 PROPS_SIGNAL_ALLOWLIST = {
-    "nba": frozenset({"threes", "rebounds", "assists"}),
+    "nba": frozenset({"threes", "rebounds"}),
     "nhl": frozenset({"saves"}),
 }
-NFL_HIER_SIGNAL = frozenset({"rush_yds", "rec_yds", "pass_tds"})
+NFL_HIER_SIGNAL = frozenset()
 # NHL rows served from the TRAINED models (NHL_TRAINED_PROPS on): measured c goals +0.37, assists +0.34, points +0.175, saves +0.75
-# (docs/analysis/nhl_trained_serving_2026-11-01.md). Information, not money -- the blend_ev gate still has to clear.
-NHL_TRAINED_SIGNAL = frozenset({"goals", "assists", "points", "saves"})
+# (docs/analysis/nhl_trained_serving_2026-11-01.md). Information, not money -- and since 2026-11-10 only saves is
+# official-eligible; the skater stats are display / tracked / shadow-cohort only (see NHL_SHADOW_* below).
+NHL_TRAINED_SIGNAL = frozenset({"saves"})
+
+# NHL trained-skater SHADOW cohort (Argon props D4): goals + assists ONLY (points has no cohort), on exchange
+# (Novig / Kalshi) or soft-book (Fliff / Betr) prices with that book's two-sided hold < 4.5%. Cohort picks are
+# logged in this same paper ledger (tier 'tracked', notes carry the cohort stamp) so the cohort can be judged on
+# 2026-12-28 or at n=150: promote iff control-adjusted ROI >= +2.0% and mean CLV >= +1.5%, else remove from the
+# watchlist entirely. ev.daily_projections stamps the same fields on the board row from its per-book quotes;
+# these constants mirror its NHL_SHADOW_* sets (a unit test asserts they stay equal).
+NHL_SHADOW_STATS = frozenset({"goals", "assists"})
+NHL_SHADOW_EXCHANGE_BOOKS = frozenset({"novig", "kalshi"})
+NHL_SHADOW_SOFT_BOOKS = frozenset({"fliff", "betr"})
+NHL_SHADOW_BOOKS = NHL_SHADOW_EXCHANGE_BOOKS | NHL_SHADOW_SOFT_BOOKS
+NHL_SHADOW_MAX_HOLD = 0.045
+NHL_SHADOW_JUDGE_DATE = "2026-12-28"
+NHL_SHADOW_JUDGE_N = 150
+NHL_SHADOW_PROMOTE_MIN_ROI = 0.02          # control-adjusted
+NHL_SHADOW_PROMOTE_MIN_CLV = 0.015
 
 
 def has_measured_signal(r: dict) -> bool:
@@ -97,6 +126,54 @@ def has_measured_signal(r: dict) -> bool:
     if sport == "nfl":
         return stat in NFL_HIER_SIGNAL and "hierarchical" in str(r.get("engine") or "")
     return stat in PROPS_SIGNAL_ALLOWLIST.get(sport, ())
+
+
+def two_way_hold(over_odds, under_odds) -> float | None:
+    """A book's two-sided hold: implied P(over) + implied P(under) - 1; None when either price is missing/bad."""
+    from mlb_core.odds.utils import american_to_implied_prob
+    try:
+        return float(american_to_implied_prob(int(over_odds)) + american_to_implied_prob(int(under_odds)) - 1.0)
+    except (TypeError, ValueError):
+        return None
+
+
+def shadow_cohort(r: dict) -> dict | None:
+    """The D4 shadow-cohort stamp for a board row, or None when the row is not in the cohort.
+
+    A row is in the cohort iff it is an NHL TRAINED skater row (nhl_model == 'trained_v1') on goals or assists
+    (never points, never saves, never the board engine) AND a qualifying price exists: an exchange / soft-book
+    two-sided quote with hold < NHL_SHADOW_MAX_HOLD. Quote sources, in order: the board row's own stamp
+    (shadow_cohort / shadow_book / shadow_hold, written by ev.daily_projections from its per-book quotes), an
+    explicit `shadow_quotes` / `quotes` list of {book, over, under} dicts, and the row's best over+under pair
+    when both sides sit at the same qualifying book."""
+    if r.get("sport") != "nhl" or r.get("stat") not in NHL_SHADOW_STATS or r.get("nhl_model") != "trained_v1":
+        return None
+    if r.get("shadow_cohort") and str(r.get("shadow_book") or "").strip().lower() in NHL_SHADOW_BOOKS:
+        hold = _num(r.get("shadow_hold"))
+        if hold is not None and hold < NHL_SHADOW_MAX_HOLD:
+            book = str(r["shadow_book"]).strip().lower()
+            return {"book": book, "hold": hold,
+                    "source": "exchange" if book in NHL_SHADOW_EXCHANGE_BOOKS else "soft_book"}
+    candidates = []
+    for q in r.get("shadow_quotes") or r.get("quotes") or []:
+        if isinstance(q, dict):
+            candidates.append((q.get("book"), q.get("over", q.get("over_odds")), q.get("under", q.get("under_odds"))))
+    if r.get("best_over_book") and str(r.get("best_over_book")).strip().lower() == str(r.get("best_under_book") or "").strip().lower():
+        candidates.append((r.get("best_over_book"), r.get("best_over_odds"), r.get("best_under_odds")))
+    best = None
+    for book, over, under in candidates:
+        b = str(book or "").strip().lower()
+        if b not in NHL_SHADOW_BOOKS:
+            continue
+        hold = two_way_hold(over, under)
+        if hold is not None and hold < NHL_SHADOW_MAX_HOLD and (best is None or hold < best["hold"]):
+            best = {"book": b, "hold": hold, "source": "exchange" if b in NHL_SHADOW_EXCHANGE_BOOKS else "soft_book"}
+    return best
+
+
+def is_shadow_cohort(r: dict) -> bool:
+    """True when the board row belongs to the NHL trained-skater shadow cohort (see shadow_cohort)."""
+    return shadow_cohort(r) is not None
 
 
 def _num(x):
@@ -159,6 +236,7 @@ def to_pick(r: dict) -> dict:
         "commence": r.get("commence"), "mins_to_start": r.get("mins_to_start"), "proj_mean": _num(r.get("proj_mean")),
         "engine": r.get("engine"), "team": r.get("team"), "opp": r.get("opp"), "row_key": DP.row_key(r),
         "player_id": r.get("player_id"),
+        "shadow_cohort": shadow_cohort(r),
     }
 
 
@@ -261,6 +339,7 @@ def log_picks(sport: str, picks: list[dict], tracker=None) -> list[dict]:
                     "row_key": p["row_key"], "engine": p["engine"], "commence": p["commence"],
                     "p_fair": p["p_fair"], "ev": p["ev"], "score": p["score"],
                     "p_blend": p.get("p_blend"), "blend_ev": p.get("blend_ev"),
+                    "shadow_cohort": p.get("shadow_cohort"),
                 }, default=str),
             )
             if bid is not None and bid > 0:

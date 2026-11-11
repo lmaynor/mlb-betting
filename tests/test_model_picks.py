@@ -53,31 +53,33 @@ def test_official_tier_also_needs_the_market_anchored_blend_to_clear_the_bar():
 
 def test_measured_signal_allowlist_by_sport_stat_and_engine():
     sig = MP.has_measured_signal
-    # NBA: unchanged by the 2026-11-09 NHL/NFL expansion
+    # NBA (Argon props D3, 2026-11-10): assists REMOVED from the allowlist; points / pra stay out (display-only)
     assert sig(row())                                                   # rebounds, board engine
-    assert sig(row(stat="threes")) and sig(row(stat="assists"))
+    assert sig(row(stat="threes"))
+    assert not sig(row(stat="assists"))
     assert not sig(row(stat="points")) and not sig(row(stat="pra"))
     # NHL board engine: saves only; the forward replay kept every skater stat out
     assert sig(row(sport="nhl", stat="saves"))
     for stat in ("goals", "assists", "points", "sog", "blocked_shots", "pp_points"):
         assert not sig(row(sport="nhl", stat=stat)), stat
-    # NHL trained rows: the trained allowlist applies (behind NHL_TRAINED_PROPS in production)
-    for stat in ("goals", "assists", "points", "saves"):
-        assert sig(row(sport="nhl", stat=stat, nhl_model="trained_v1")), stat
-    assert not sig(row(sport="nhl", stat="sog", nhl_model="trained_v1"))
-    # NFL: the hierarchical engine's evidence-gated stats, that engine only
-    for stat in ("rush_yds", "rec_yds", "pass_tds"):
-        assert sig(row(sport="nfl", stat=stat, engine="hierarchical_v1")), stat
-        assert not sig(row(sport="nfl", stat=stat, engine="empirical_ewm_v2")), stat
-    # NFL stats outside the hierarchical evidence gate stay out on either engine
-    for stat in ("pass_yds", "receptions", "interceptions", "anytime_td"):
+    # NHL trained rows (Argon props D4, 2026-11-10): saves ONLY is official-eligible; trained skater
+    # goals / assists / points are display / tracked / shadow-cohort only
+    assert sig(row(sport="nhl", stat="saves", nhl_model="trained_v1"))
+    for stat in ("goals", "assists", "points", "sog"):
+        assert not sig(row(sport="nhl", stat=stat, nhl_model="trained_v1")), stat
+    # NFL (Argon model-improvement D3, 2026-11-10): the hierarchical signal set is EMPTY -- no NFL row,
+    # on either engine, carries measured signal any more
+    for stat in ("rush_yds", "rec_yds", "pass_tds", "pass_yds", "receptions", "interceptions", "anytime_td"):
         assert not sig(row(sport="nfl", stat=stat, engine="hierarchical_v1")), stat
+        assert not sig(row(sport="nfl", stat=stat, engine="empirical_ewm_v2")), stat
 
 
-def test_nfl_hierarchical_rec_yds_and_pass_tds_can_be_official():
-    assert MP.qualifies(row(sport="nfl", stat="rec_yds", engine="hierarchical_v1", line=62.5)) == "official"
-    assert MP.qualifies(row(sport="nfl", stat="pass_tds", engine="hierarchical_v1", line=1.5)) == "official"
-    # the same stats priced by the legacy engine are tracked only
+def test_nfl_hierarchical_rows_are_tracked_never_official():
+    # Argon model-improvement D3: hierarchical NFL stats are out of live serving (ev.daily_projections gates
+    # them off the published board); a stale board row that still reaches selection is tracked, never official.
+    assert MP.qualifies(row(sport="nfl", stat="rec_yds", engine="hierarchical_v1", line=62.5)) == "tracked"
+    assert MP.qualifies(row(sport="nfl", stat="pass_tds", engine="hierarchical_v1", line=1.5)) == "tracked"
+    # the same stats priced by the legacy engine are tracked only too
     assert MP.qualifies(row(sport="nfl", stat="rec_yds", engine="empirical_ewm_v2", line=62.5)) == "tracked"
     # and an NHL board-engine points row is still tracked only after the expansion
     assert MP.qualifies(row(sport="nhl", stat="points", line=0.5)) == "tracked"
