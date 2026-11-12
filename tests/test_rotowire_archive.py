@@ -349,16 +349,67 @@ def test_player_map_and_url_helpers():
     assert rw.slugify("Paolo Banchero") == "paolo-banchero"
 
 
-def test_resolver_uses_injectable_session_and_player_url_pattern():
-    class SearchSession:
-        def __init__(self):
-            self.calls = []
+class TypeaheadSession:
+    """Serves one canned typeahead payload (shape = the live responses probed 2026-11-11)."""
 
-        def get(self, url, params=None, headers=None, timeout=None):
-            self.calls.append(url)
-            return FakeResponse(text='<a href="/basketball/player/paolo-banchero-5700">Paolo Banchero</a>')
+    def __init__(self, payload, status_code=200):
+        self.calls = []
+        self._payload = payload
+        self._status = status_code
 
-    s = SearchSession()
+    def get(self, url, params=None, headers=None, timeout=None):
+        self.calls.append({"url": url, "params": dict(params or {}), "headers": dict(headers or {})})
+        return FakeResponse(text=json.dumps(self._payload), payload=self._payload,
+                            status_code=self._status)
+
+
+def _ta_entry(name, rid, slug=None, team="PHI"):
+    return {"rotoPlayerID": str(rid), "link": f"/basketball/player/{slug or rw.slugify(name)}-{rid}",
+            "logo": "", "alt": team, "name": name, "span": "C", "text": team}
+
+
+def test_resolver_typeahead_exact_match_and_request_shape():
+    s = TypeaheadSession({"success": True, "players": [_ta_entry("Paolo Banchero", 5700, team="ORL")]})
     ref = rw.resolve_player(s, "Paolo Banchero")
     assert ref == rw.PlayerRef("Paolo Banchero", 5700, "paolo-banchero")
-    assert s.calls == [rw.SEARCH_URL]
+    assert len(s.calls) == 1
+    call = s.calls[0]
+    assert call["url"] == rw.TYPEAHEAD_URL
+    assert call["params"] == {"searchTerm": "Paolo Banchero", "sport": "NBA"}
+    assert call["headers"] == rw.HEADERS  # anonymized posture, unchanged by the rework
+
+
+def test_resolver_picks_exact_slug_out_of_several_results():
+    payload = {"success": True, "players": [
+        _ta_entry("Jaylen Brown", 3850, team="BOS"), _ta_entry("Jaylen Wells", 7801, team="MEM"),
+        _ta_entry("Jalen Brunson", 4155, team="NYK")]}
+    s = TypeaheadSession(payload)
+    assert rw.resolve_player(s, "Jaylen Brown") == rw.PlayerRef("Jaylen Brown", 3850, "jaylen-brown")
+    assert rw.resolve_player(s, "Jaylen Martin") is None  # absent name never falls back to a near hit
+
+
+def test_resolver_punctuation_slug_matches_live_shape():
+    # Live probe 2026-11-11: "P.J. Tucker" -> link slug "pj-tucker" (punctuation dropped,
+    # not hyphenated), id 2708. The fixture carries the live slug verbatim.
+    entry = _ta_entry("P.J. Tucker", 2708, slug="pj-tucker", team="NYK")
+    s = TypeaheadSession({"success": True, "players": [entry]})
+    assert rw.resolve_player(s, "P.J. Tucker") == rw.PlayerRef("P.J. Tucker", 2708, "pj-tucker")
+
+
+def test_resolver_empty_result_and_ambiguity_return_none():
+    assert rw.resolve_player(TypeaheadSession({"success": True, "players": []}), "Nobody Here") is None
+    dup = {"success": True, "players": [_ta_entry("Chris Smith", 111), _ta_entry("Chris Smith", 222)]}
+    assert rw.resolve_player(TypeaheadSession(dup), "Chris Smith") is None
+
+
+def test_resolver_id_field_disagreeing_with_link_is_not_a_match():
+    bad = _ta_entry("Joel Embiid", 3572)
+    bad["rotoPlayerID"] = "9999"
+    s = TypeaheadSession({"success": True, "players": [bad]})
+    assert rw.resolve_player(s, "Joel Embiid") is None
+
+
+def test_resolver_non_200_fails_loudly():
+    s = TypeaheadSession({"success": False}, status_code=429)
+    with pytest.raises(RuntimeError):
+        rw.resolve_player(s, "Joel Embiid")

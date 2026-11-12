@@ -49,9 +49,9 @@ identifying headers -- no login, no cookies, no project or contact tokens. Reque
 
 Player IDs: the puller takes an input player map (CSV or JSON: player name, rotowire_id, slug).
 `build_case_set` emits the case list + the distinct player list from banked box scores; `resolve_player`
-can populate rotowire_id/slug from the player-page URL pattern when a future run assembles the map
-(it performs ONE search-page fetch per name through the injectable session -- it is never called by the
-disabled paths and was not run while building this module).
+can populate rotowire_id/slug from the site search box's typeahead endpoint when a run assembles the
+map (it performs ONE typeahead fetch per name through the injectable session -- it is never called by
+the disabled paths).
 """
 from __future__ import annotations
 
@@ -93,7 +93,8 @@ BASE = "https://www.rotowire.com"
 PLAYER_URL_TEMPLATE = BASE + "/basketball/player/{slug}-{rotowire_id}"
 AJAX_URL = BASE + "/basketball/ajax/get-more-updates.php"
 RSS_URL = BASE + "/rss/news.php?sport=NBA"
-SEARCH_URL = BASE + "/search"
+TYPEAHEAD_URL = BASE + "/frontend/ajax/search-players.php"
+TYPEAHEAD_SPORT = "NBA"
 
 PREFIX = f"{NBA_PREFIX}/news/rotowire_archive"
 DEFAULT_DELAY_S = 2.5          # polite pacing floor between requests
@@ -232,21 +233,69 @@ def load_player_map(source) -> list:
     return out
 
 
-def resolve_player(session, name: str, timeout: float = DEFAULT_TIMEOUT_S) -> Optional[PlayerRef]:
-    """Resolve a player name to its RotoWire (slug, id) via ONE search-page fetch.
+def _slug_match_key(slug: str) -> str:
+    """Slug comparison key for resolver matching. RotoWire drops some punctuation outright
+    where `slugify` hyphenates it (live example: "P.J. Tucker" -> link slug "pj-tucker" vs
+    slugified "p-j-tucker"), so slugs are compared on their alphanumeric skeleton."""
+    return re.sub(r"[^a-z0-9]", "", (slug or "").lower())
 
-    For the future map-assembly run only: this performs a live request through the injectable
+
+def resolve_player(session, name: str, timeout: float = DEFAULT_TIMEOUT_S) -> Optional[PlayerRef]:
+    """Resolve a player name to its RotoWire (slug, id) via ONE typeahead fetch.
+
+    The live route is the site search box's own endpoint (verified live 2026-11-11 against the
+    three VERIFIED_SEED_PLAYERS after the /search page this replaces returned 404):
+        GET {TYPEAHEAD_URL}?searchTerm=<name>&sport=NBA
+        -> {"success": true, "players": [{"name", "rotoPlayerID", "link", ...}, ...]}
+    where `link` is the player-page path ("/basketball/player/{slug}-{id}").
+
+    A resolution counts only on a CONFIDENT match: exactly one returned player whose link
+    parses, whose `rotoPlayerID` agrees with the link's id, and whose link slug matches
+    slugify(name) on the alphanumeric skeleton (see `_slug_match_key`: the endpoint
+    ASCII-folds names and drops some punctuation outright, so "P.J. Tucker" -> "pj-tucker").
+    Zero matches, an ambiguous payload, or an entry whose id
+    field disagrees with its link all return None -- an unresolved player is a map-build
+    problem, never a reason to guess an ID. A non-200 response or a non-JSON payload raises,
+    like the archive fetcher: a blocked or changed route must fail loudly, never silently
+    empty the map.
+
+    For the map-assembly run only: this performs a live request through the injectable
     `session`, so tests drive it with a fake session and the disabled pull paths never call it.
-    Returns None when the search page carries no player-page link for the name.
     """
-    resp = session.get(SEARCH_URL, params={"query": name}, headers=HEADERS, timeout=timeout)
-    html = getattr(resp, "text", "") or ""
-    for m in _PLAYER_URL_RE.finditer(html):
-        slug, rid = m.group(1), int(m.group(2))
-        if slugify(name) == slug or slug.startswith(slugify(name)):
-            return PlayerRef(player=name, rotowire_id=rid, slug=slug)
-    m = _PLAYER_URL_RE.search(html)
-    return PlayerRef(player=name, rotowire_id=int(m.group(2)), slug=m.group(1)) if m else None
+    resp = session.get(TYPEAHEAD_URL, params={"searchTerm": name, "sport": TYPEAHEAD_SPORT},
+                       headers=HEADERS, timeout=timeout)
+    if getattr(resp, "status_code", 200) != 200:
+        raise RuntimeError(f"rotowire resolver: HTTP {resp.status_code} resolving {name!r}")
+    try:
+        payload = resp.json()
+    except Exception:
+        try:
+            payload = json.loads(getattr(resp, "text", "") or "")
+        except Exception as exc:
+            raise RuntimeError(f"rotowire resolver: typeahead payload was not JSON for {name!r}") from exc
+    players = payload.get("players") if isinstance(payload, dict) else None
+    if not isinstance(players, list):
+        raise RuntimeError(f"rotowire resolver: unexpected typeahead payload for {name!r}")
+    want = _slug_match_key(slugify(name))
+    by_id: dict = {}
+    for entry in players:
+        if not isinstance(entry, dict):
+            continue
+        parsed = parse_player_url(str(entry.get("link") or ""))
+        if parsed is None:
+            continue
+        slug, rid = parsed
+        try:
+            rid_field = int(entry.get("rotoPlayerID"))
+        except (TypeError, ValueError):
+            rid_field = None
+        if rid_field is not None and rid_field != rid:
+            continue  # the payload's two id carriers disagree: not a confident match
+        if _slug_match_key(slug) == want:
+            by_id[rid] = PlayerRef(player=name, rotowire_id=rid, slug=slug)
+    if len(by_id) != 1:
+        return None
+    return next(iter(by_id.values()))
 
 
 # ---------------------------------------------------------------------------
