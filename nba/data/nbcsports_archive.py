@@ -32,6 +32,13 @@ three seed players):
     alphanumeric skeleton -- NBC drops apostrophes outright, "De'Anthony Melton" ->
     "deanthony-melton"). Seed gate verified live 2026-11-11: Joel Embiid 10488,
     Kawhi Leonard 9568, Paolo Banchero 11269.
+    Player ids come in two forms (verified live 2026-11-12): legacy numeric ids and
+    Brightspot UUIDs (James Harden 00000188-9cf0-da6b-abd8-fcfdc2a301c5); ids are
+    strings throughout, and both forms serve the identical /news feed. Search
+    coverage is per-query inconsistent (Jalen Williams' query returns no player
+    link at all), so the driver also harvests the site's published sitemap index
+    (sitemap.xml -> monthly files), which enumerates player pages in both id
+    forms; extract_player_links parses HTML pages and sitemap files alike.
 
 Streaming dedupe at three levels (Luc's design note, 2026-11-11), enforced AS WE GO
 against a checkpointed corpus ledger, never as a post-pass:
@@ -113,9 +120,9 @@ MAX_PAGES = 1000               # runaway guard: no real archive approaches this
 MIGRATION_DATE = "2018-09-14"  # the platform migration/backfill stratum date
 
 VERIFIED_SEED_PLAYERS = (  # resolved live via the search route, 2026-11-11
-    {"player": "Joel Embiid", "nbc_id": 10488, "slug": "joel-embiid"},
-    {"player": "Kawhi Leonard", "nbc_id": 9568, "slug": "kawhi-leonard"},
-    {"player": "Paolo Banchero", "nbc_id": 11269, "slug": "paolo-banchero"},
+    {"player": "Joel Embiid", "nbc_id": "10488", "slug": "joel-embiid"},
+    {"player": "Kawhi Leonard", "nbc_id": "9568", "slug": "kawhi-leonard"},
+    {"player": "Paolo Banchero", "nbc_id": "11269", "slug": "paolo-banchero"},
 )
 
 
@@ -125,9 +132,12 @@ VERIFIED_SEED_PLAYERS = (  # resolved live via the search route, 2026-11-11
 
 @dataclass
 class PlayerRef:
-    """One row of the input player map."""
+    """One row of the input player map. `nbc_id` is a string: NBC keys players by
+    legacy numeric ids (Embiid "10488") or Brightspot UUIDs (James Harden
+    "00000188-9cf0-..."), verified live 2026-11-12; both forms serve the same
+    /news feed and a player's blocks consistently use his own form."""
     player: str
-    nbc_id: int
+    nbc_id: str
     slug: str
 
     @property
@@ -148,9 +158,9 @@ class ItemRecord:
     on other players' pages are mention references, not rows.
     """
     player: str
-    nbc_player_id: int
+    nbc_player_id: str
     subject_player: Optional[str]
-    subject_nbc_id: Optional[int]
+    subject_nbc_id: Optional[str]
     subject_slug: Optional[str]
     is_subject: bool
     published_ts: float                  # precise, from the block's data-date (UTC)
@@ -206,9 +216,18 @@ class CorpusLedger:
 
     @classmethod
     def from_jsonable(cls, data: dict) -> "CorpusLedger":
+        # Ids are coerced to strings: checkpoints written before the id-form
+        # generalization carry ints, and "10479" != 10479 would silently split
+        # the corpus's identity space.
+        def _key(k):
+            k = list(k)
+            if len(k) == 3 and k[2] is not None:
+                k[2] = str(k[2])
+            return tuple(k)
+
         led = cls()
-        led.seen = {tuple(k): v for k, v in data.get("seen", [])}
-        led.player_seen = {int(pid): {tuple(k) for k in keys}
+        led.seen = {_key(k): str(v) for k, v in data.get("seen", [])}
+        led.player_seen = {str(pid): {_key(k) for k in keys}
                            for pid, keys in data.get("player_seen", {}).items()}
         led.level1_stops = data.get("level1_stops", 0)
         led.level2_dupes = data.get("level2_dupes", 0)
@@ -233,7 +252,25 @@ def _slug_match_key(slug: str) -> str:
     return re.sub(r"[^a-z0-9]", "", (slug or "").lower())
 
 
-_PLAYER_LINK_RE = re.compile(r'href="https://www\.nbcsports\.com/nba/([a-z0-9][a-z0-9\-]*)/(\d+)"')
+_PLAYER_LINK_RE = re.compile(r'href="https://www\.nbcsports\.com/nba/([a-z0-9][a-z0-9\-]*)/([0-9][0-9a-z\-]*)"')
+_PLAYER_URL_RE = re.compile(r'https://www\.nbcsports\.com/nba/([a-z0-9][a-z0-9\-]*)/([0-9][0-9a-z\-]*)')
+_UUID_ID_RE = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
+
+
+def _is_player_id_segment(seg: str) -> bool:
+    """A player-id URL segment is a legacy numeric id or a Brightspot UUID."""
+    return bool(seg) and (seg.isdigit() or _UUID_ID_RE.fullmatch(seg) is not None)
+
+
+def extract_player_links(text: str) -> list:
+    """All (slug, nbc_id) player-page pairs in a page of HTML or a sitemap file.
+
+    Matches the bare URL form (present in sitemap <loc> entries as well as in
+    hrefs) and keeps only segments that are valid player-id forms, so team and
+    article URLs never enter the index.
+    """
+    return [(slug, seg) for slug, seg in _PLAYER_URL_RE.findall(text or "")
+            if _is_player_id_segment(seg)]
 
 
 def resolve_player(session, name: str, timeout: float = DEFAULT_TIMEOUT_S) -> Optional[PlayerRef]:
@@ -254,8 +291,8 @@ def resolve_player(session, name: str, timeout: float = DEFAULT_TIMEOUT_S) -> Op
     want = _slug_match_key(slugify(name))
     by_id: dict = {}
     for slug, sid in _PLAYER_LINK_RE.findall(resp.text or ""):
-        if _slug_match_key(slug) == want:
-            by_id[int(sid)] = PlayerRef(player=name, nbc_id=int(sid), slug=slug)
+        if _is_player_id_segment(sid) and _slug_match_key(slug) == want:
+            by_id[sid] = PlayerRef(player=name, nbc_id=sid, slug=slug)
     if len(by_id) != 1:
         return None
     return next(iter(by_id.values()))
@@ -267,7 +304,7 @@ def resolve_player(session, name: str, timeout: float = DEFAULT_TIMEOUT_S) -> Op
 
 _BLOCK_MARKER = '<div class="PlayerNewsPost"'
 _SUBJECT_RE = re.compile(
-    r'PlayerNewsPost-name-container"><a href="https://www\.nbcsports\.com/nba/([a-z0-9\-]+)/(\d+)"[^>]*>(.*?)</a>',
+    r'PlayerNewsPost-name-container"><a href="https://www\.nbcsports\.com/nba/([a-z0-9\-]+)/([0-9][0-9a-z\-]*)"[^>]*>(.*?)</a>',
     re.S)
 _HEADLINE_RE = re.compile(r'PlayerNewsPost-headline">(.*?)</h3>', re.S)
 _ANALYSIS_RE = re.compile(r'PlayerNewsPost-analysis">(.*?)(?:<div class="PlayerNewsPost-author">'
@@ -337,7 +374,10 @@ def parse_items_html(html: str, player: PlayerRef, fetched_at: str) -> list:
         subj_slug = subj_id = subj_name = None
         sm = _SUBJECT_RE.search(block)
         if sm:
-            subj_slug, subj_id = sm.group(1), int(sm.group(2))
+            subj_slug = sm.group(1)
+            subj_id = sm.group(2) if _is_player_id_segment(sm.group(2)) else None
+            if subj_id is None:
+                subj_slug = None
             # The anchor's full text is the complete display name -- joining only
             # the first/last spans drops generational suffixes ("Gary Payton II"
             # came out as "Gary Payton" until the anchor text was used whole).
@@ -521,15 +561,15 @@ def fetch_player_archive(session, player: PlayerRef, oldest_date: Optional[date]
 # Banking
 # ---------------------------------------------------------------------------
 
-def raw_key(nbc_id: int, page_no: int) -> str:
+def raw_key(nbc_id, page_no: int) -> str:
     return f"{PREFIX}/raw/{nbc_id}/page_{page_no:04d}.html"
 
 
-def parsed_key(nbc_id: int) -> str:
+def parsed_key(nbc_id) -> str:
     return f"{PREFIX}/parsed/{nbc_id}.jsonl"
 
 
-def mentions_key(nbc_id: int) -> str:
+def mentions_key(nbc_id) -> str:
     return f"{PREFIX}/mentions/{nbc_id}.jsonl"
 
 
@@ -560,7 +600,7 @@ def bank_player_pull(player: PlayerRef, pull: dict, store=storage) -> dict:
             "requests": pull["requests"], "stopped": pull["stopped"], "keys": keys}
 
 
-def load_parsed_corpus(nbc_id: int, store=storage) -> list:
+def load_parsed_corpus(nbc_id, store=storage) -> list:
     """Read back one player's full-item JSONL ([] when nothing is banked yet)."""
     key = parsed_key(nbc_id)
     if not store.exists(key):
@@ -569,7 +609,7 @@ def load_parsed_corpus(nbc_id: int, store=storage) -> list:
     return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
-def load_mentions(nbc_id: int, store=storage) -> list:
+def load_mentions(nbc_id, store=storage) -> list:
     """Read back one player's mention-reference JSONL ([] when none are banked)."""
     key = mentions_key(nbc_id)
     if not store.exists(key):

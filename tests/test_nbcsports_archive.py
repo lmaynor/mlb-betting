@@ -16,8 +16,8 @@ import pytest
 from nba.data import nbcsports_archive as nb
 
 FIXTURES = Path(__file__).parent / "fixtures"
-MELTON = nb.PlayerRef(player="De'Anthony Melton", nbc_id=10744, slug="deanthony-melton")
-EMBIID = nb.PlayerRef(player="Joel Embiid", nbc_id=10488, slug="joel-embiid")
+MELTON = nb.PlayerRef(player="De'Anthony Melton", nbc_id="10744", slug="deanthony-melton")
+EMBIID = nb.PlayerRef(player="Joel Embiid", nbc_id="10488", slug="joel-embiid")
 FETCHED = "2026-11-11T12:00:00+00:00"
 
 
@@ -68,7 +68,7 @@ def test_parse_melton_page1_fields_and_subject_marks():
     items = nb.parse_items_html(_fixture("nbcsports_melton_p1.html"), MELTON, FETCHED)
     assert len(items) == 10                            # the page's 10 real blocks
     first = items[0]
-    assert first.is_subject and first.subject_nbc_id == 10744
+    assert first.is_subject and first.subject_nbc_id == "10744"
     assert first.subject_player == "De'Anthony Melton"
     assert first.published_date == "2026-11-12"
     assert first.published_ts == datetime(2026, 11, 12, 5, 21, 14, 90000,
@@ -82,7 +82,7 @@ def test_parse_melton_page1_fields_and_subject_marks():
     assert not mention.is_subject
     # NBC's own header names this block "Gary Payton" (no suffix) while its slug/id
     # carry "gary-payton-ii"/10479 -- the id is the identity; the name is display text.
-    assert mention.subject_player == "Gary Payton" and mention.subject_nbc_id == 10479
+    assert mention.subject_player == "Gary Payton" and mention.subject_nbc_id == "10479"
     assert mention.subject_slug == "gary-payton-ii"
     assert mention.source_line == "NBA Injury Report" and mention.item_type == "Injury"
     assert "frees up additional minutes for De’Anthony Melton" in mention.body
@@ -254,8 +254,8 @@ def test_dedupe_and_window_slicing():
 
 def test_ledger_json_round_trip():
     led = nb.CorpusLedger()
-    led.seen[(1735689600.0, "Headline", 111)] = 1001
-    led.player_seen[1001] = {(1735689600.0, "Headline", 111)}
+    led.seen[(1735689600.0, "Headline", "111")] = "1001"
+    led.player_seen["1001"] = {(1735689600.0, "Headline", "111")}
     led.level3_mentions = 4
     back = nb.CorpusLedger.from_jsonable(json.loads(json.dumps(led.to_jsonable())))
     assert back.seen == led.seen and back.player_seen == led.player_seen
@@ -310,7 +310,7 @@ def test_enabled_pull_banks_raw_parsed_and_mentions():
     ts = [r["published_ts"] for r in corpus]
     assert ts == sorted(ts)                            # parsed output sorted by timestamp
     assert all("corpus_key" in r for r in corpus)
-    loaded = nb.load_parsed_corpus(10744, store=store)
+    loaded = nb.load_parsed_corpus("10744", store=store)
     assert len(loaded) == 20
 
 
@@ -358,7 +358,7 @@ def test_resolver_exact_match_and_request_shape():
     html = '<a href="https://www.nbcsports.com/nba/paolo-banchero/11269">Paolo Banchero</a>'
     s = SearchSession(html)
     ref = nb.resolve_player(s, "Paolo Banchero")
-    assert ref == nb.PlayerRef("Paolo Banchero", 11269, "paolo-banchero")
+    assert ref == nb.PlayerRef("Paolo Banchero", "11269", "paolo-banchero")
     assert s.calls[0]["url"] == nb.SEARCH_URL and s.calls[0]["params"] == {"q": "Paolo Banchero"}
     assert s.calls[0]["headers"] == nb.HEADERS
 
@@ -379,3 +379,66 @@ def test_resolver_ambiguity_and_absence_return_none():
 def test_resolver_non_200_fails_loudly():
     with pytest.raises(RuntimeError):
         nb.resolve_player(SearchSession("", status_code=429), "Joel Embiid")
+
+
+# ---------------------------------------------------------------------------
+# Player id forms (numeric + Brightspot UUID) and the sitemap index route
+# ---------------------------------------------------------------------------
+
+HARDEN_UUID = "00000188-9cf0-da6b-abd8-fcfdc2a301c5"
+
+
+class _SearchSession:
+    def __init__(self, text):
+        self.text = text
+
+    def get(self, url, params=None, headers=None, timeout=None):
+        return FakeResponse(self.text, 200)
+
+
+def test_resolver_accepts_uuid_id_form():
+    html = f'<a href="https://www.nbcsports.com/nba/james-harden/{HARDEN_UUID}">James Harden</a>'
+    ref = nb.resolve_player(_SearchSession(html), "James Harden")
+    assert ref == nb.PlayerRef("James Harden", HARDEN_UUID, "james-harden")
+    assert ref.page_url.endswith(f"/nba/james-harden/{HARDEN_UUID}/news")
+
+
+def test_resolver_rejects_story_uuid_with_player_shaped_slug_collision():
+    # A non-player segment (not numeric, not a full UUID) never resolves.
+    html = '<a href="https://www.nbcsports.com/nba/james-harden/00000188-short">x</a>'
+    assert nb.resolve_player(_SearchSession(html), "James Harden") is None
+
+
+def test_subject_block_with_uuid_id_parses_and_marks_subject():
+    block = _mini_block("james-harden", HARDEN_UUID, "James Harden",
+                        "2025-11-01T01:00:00.000Z", "Harden stuff.", body="body text")
+    page = _page(block)
+    ref = nb.PlayerRef("James Harden", HARDEN_UUID, "james-harden")
+    items = nb.parse_items_html(page, ref, "2026-11-12T00:00:00+00:00")
+    assert len(items) == 1 and items[0].is_subject
+    assert items[0].subject_nbc_id == HARDEN_UUID
+    assert items[0].corpus_key() == (items[0].published_ts, "Harden stuff.", HARDEN_UUID)
+
+
+def test_extract_player_links_from_sitemap_text():
+    xml = ("<urlset>"
+           "<url><loc>https://www.nbcsports.com/nba/miles-bridges/00000188-9cf0-da6b-abd8-fcfdc91e0084</loc></url>"
+           "<url><loc>https://www.nbcsports.com/nba/micah-potter/11194</loc></url>"
+           "<url><loc>https://www.nbcsports.com/nba/golden-state-warriors</loc></url>"
+           "<url><loc>https://www.nbcsports.com/nba/news/some-story</loc></url>"
+           "</urlset>")
+    links = nb.extract_player_links(xml)
+    assert ("miles-bridges", "00000188-9cf0-da6b-abd8-fcfdc91e0084") in links
+    assert ("micah-potter", "11194") in links
+    assert all(slug != "golden-state-warriors" for slug, _ in links)
+    assert all(slug != "news" for slug, _ in links)
+
+
+def test_ledger_checkpoint_migrates_int_ids_to_strings():
+    data = {"seen": [[[1735689600.0, "Headline", 111], 1001]],
+            "player_seen": {"1001": [[1735689600.0, "Headline", 111]]},
+            "level1_stops": 1, "level2_dupes": 2, "level3_mentions": 3}
+    led = nb.CorpusLedger.from_jsonable(data)
+    assert led.seen == {(1735689600.0, "Headline", "111"): "1001"}
+    assert led.player_seen == {"1001": {(1735689600.0, "Headline", "111")}}
+    assert (led.level1_stops, led.level2_dupes, led.level3_mentions) == (1, 2, 3)

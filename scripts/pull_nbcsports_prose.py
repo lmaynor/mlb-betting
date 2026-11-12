@@ -43,7 +43,7 @@ def _load_players(source) -> list:
     out = []
     for r in rows:
         try:
-            nid = int(r.get("nbc_id"))
+            nid = str(r.get("nbc_id")).strip()  # numeric string or Brightspot UUID
         except (TypeError, ValueError):
             logging.warning("player map: skipping %r (no nbc_id)", r.get("player"))
             continue
