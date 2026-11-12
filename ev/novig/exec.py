@@ -1,5 +1,7 @@
 """
 ev.novig.exec -- Novig as a second SHADOW venue for NFL props (public books, paper fills, no key needed).
+NHL (SOG + saves) rides the same pass since 2026-11-12: only the leg loading is league-parameterized;
+candidates / run_pass / grading are sport-agnostic (the join is (game_key, stat, player_norm, point)).
 
 Reuses the Kalshi executor's gates / Kelly sizing / risk gate / ledger / PaperVenue unchanged by presenting a Novig
 book in Kalshi's shape:  Over == 'yes', Under == 'no'; one Kalshi-style contract == 100 Novig contracts ($1 of payout),
@@ -62,12 +64,13 @@ def novig_config(cfg):
     return replace(cfg, taker_multiplier=0.0, allow_wide_book_on_consensus=True)
 
 
-def load_novig_legs(nc: NovigClient, now: datetime) -> dict:
-    """{(game_key, stat, player_norm, strike): NovigLeg} for future games."""
-    events = event_index(nc.list_events("NFL"))
+def load_novig_legs(nc: NovigClient, now: datetime, league: str = "NFL") -> dict:
+    """{(game_key, stat, player_norm, strike): NovigLeg} for future games. `league` selects the catalog and
+    the mapper's tables (NFL default == the original behaviour; "NHL" maps SOG + saves only)."""
+    events = event_index(nc.list_events(league), league)
     out = {}
-    for m in nc.list_markets("NFL"):
-        leg = map_prop_market(m, events)
+    for m in nc.list_markets(league):
+        leg = map_prop_market(m, events, league)
         if isinstance(leg, NovigLeg) and leg.start_utc > now:
             out[(leg.game_key, leg.stat, leg.player_norm, leg.strike)] = leg
     return out
