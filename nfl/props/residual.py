@@ -4,6 +4,9 @@
     python -m nfl.props.residual build --bp-dir <Odds/bettingpros_nfl copy> --work-dir W [--seasons 2021-2026]
     python -m nfl.props.residual run --table W/residual_table.parquet --out-md dev.md                       # development folds only
     python -m nfl.props.residual run --table W/residual_table.parquet --report-holdout --out-md final.md    # the held-out season, once
+    python -m nfl.props.residual build --with-kneel ...   # also attach the N1 QB kneel feature columns (nfl.props.kneel)
+    python -m nfl.props.residual run --table W/residual_table.parquet --report-holdout --kneel-ablation --out-md final.md
+        # on a kneel-attached table: ALSO report the N1 with/without ablation + Argon verdict for the holdout season
 
 The engine column is the hierarchical NFL engine (`nfl.models.hierarchical_live`, no pbp / injury context: the replay in
 nfl.props.engine_eval.replay_hierarchical) priced at the BOOK's line as of the game (history = games strictly before the week).
@@ -148,6 +151,12 @@ def build(args) -> int:
         res = EE.replay_hierarchical(df, seasons, EA.game_env_table(sched), stats=sorted(set(LABEL_OF.values())), market=market)
         res.to_parquet(cache)
     table = build_table(res, keep, df, sched)
+    if getattr(args, "with_kneel", False):
+        from nfl.data.read import load as _load
+        from nfl.props import kneel as K
+        pbp = _load("pbp", seasons=seasons, columns=["game_id", "posteam", "qtr", "qb_kneel"])
+        table = K.attach_kneel_features(table, sched, pbp)
+        log.info("kneel features attached: %d eligible QB rush rows", int(table["kneel_eligible"].sum()))
     table.to_parquet(os.path.join(args.work_dir, "residual_table.parquet"), index=False)
     log.info("table: %d rows %s", len(table), table.groupby("season").size().to_dict())
     return 0
@@ -157,12 +166,17 @@ def run(args) -> int:
     table = pd.read_parquet(args.table)
     res, preds = R.study(table, holdout=args.holdout, report_holdout=args.report_holdout, post=POST_SEASONS, nthread=args.nthread,
                          n_boot=args.boot, log=log.info)
+    kneel_md = ""
+    if getattr(args, "kneel_ablation", False):
+        from nfl.props import kneel as K
+        res["kneel_ablation"] = K.kneel_ablation(table, holdout=args.holdout)
+        kneel_md = "\n" + K.render_kneel_ablation(res["kneel_ablation"])
     if args.out_json:
         with open(args.out_json, "w") as fh:
             json.dump(res, fh, indent=1, default=lambda o: o.item() if hasattr(o, "item") else str(o))
     if args.out_preds:
         preds.to_parquet(args.out_preds)
-    md = R.render_study("NFL", res)
+    md = R.render_study("NFL", res) + kneel_md
     if args.out_md:
         with open(args.out_md, "w") as fh:
             fh.write(md)
@@ -177,10 +191,12 @@ def main(argv=None) -> int:
     b.add_argument("--bp-dir", required=True)
     b.add_argument("--work-dir", required=True)
     b.add_argument("--seasons", default="2021-2026")
+    b.add_argument("--with-kneel", action="store_true", help="attach the N1 QB kneel feature columns (nfl.props.kneel) using mirrored pbp")
     r = sub.add_parser("run", help="walk-forward evaluation")
     r.add_argument("--table", required=True)
     r.add_argument("--holdout", type=int, default=HOLDOUT_SEASON)
     r.add_argument("--report-holdout", action="store_true", help="ALSO score the held-out season (once, at the end)")
+    r.add_argument("--kneel-ablation", action="store_true", help="ALSO run the N1 kneel with/without ablation on the holdout season (table must carry the kneel columns)")
     r.add_argument("--nthread", type=int, default=4)
     r.add_argument("--boot", type=int, default=600)
     r.add_argument("--out-md")
