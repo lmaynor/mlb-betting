@@ -2,6 +2,12 @@
 
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
+import {
+  Tab as AriaTab,
+  TabList as AriaTabList,
+  TabPanel as AriaTabPanel,
+  Tabs as AriaTabs,
+} from 'react-aria-components'
 import { BookLogo } from '@/components/ui/book-logo'
 import { SportLogo } from '@/components/ui/sport-assets'
 import { useFocusTrap } from '@/components/ui/use-focus-trap'
@@ -231,20 +237,25 @@ export function GamePopup({ game, initialPane, initialLine, bettable = null, onC
           <button type="button" onClick={onClose} aria-label="Close" className="size-8 rounded-control border border-separator-border bg-transparent text-text-secondary hover:text-text-primary cursor-pointer text-[16px] leading-none">&times;</button>
         </header>
         <p className="flex-none m-0 px-4 pb-3 text-[14px] leading-[1.5] text-text-primary" data-testid="popup-headline">{gameHeadline(game)}</p>
-        <div className="flex-none px-4 border-b border-separator-border overflow-x-auto" role="tablist" aria-label="Card">
-          <div ref={tabsRef} className="flex gap-1 min-w-max">
-            {tabs.map(t => (
-              <button key={t.v} type="button" role="tab" aria-selected={pane === t.v} onClick={() => setPane(t.v)} data-testid={`tab-${t.v}`}
-                className="px-3 py-2.5 text-[13px] font-semibold bg-transparent border-0 cursor-pointer -mb-px border-b-2 transition-colors duration-150"
-                style={{ color: pane === t.v ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', borderBottom: `2px solid ${pane === t.v ? GREEN : 'transparent'}` }}>{t.l}</button>
-            ))}
+        <AriaTabs selectedKey={pane} onSelectionChange={k => setPane(k as PopupPane)} className="contents">
+          <div className="flex-none px-4 border-b border-separator-border overflow-x-auto">
+            <AriaTabList ref={tabsRef} aria-label="Card" className="flex gap-1 min-w-max">
+              {tabs.map(t => (
+                <AriaTab key={t.v} id={t.v} data-testid={`tab-${t.v}`}
+                  className="px-3 py-2.5 text-[13px] font-semibold bg-transparent border-0 cursor-pointer -mb-px border-b-2 transition-colors duration-150"
+                  style={{ color: pane === t.v ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', borderBottom: `2px solid ${pane === t.v ? GREEN : 'transparent'}` }}>{t.l}</AriaTab>
+              ))}
+            </AriaTabList>
           </div>
-        </div>
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 pt-3" role="tabpanel" data-testid="popup-body">
-          {(pane === 'ml' || pane === 'spread' || pane === 'total') && <MarketPane key={pane} g={game} market={pane} initialLine={pane === first ? initialLine : undefined} bettable={bettable} />}
-          {pane === 'move' && <MovePane g={game} />}
-          {pane === 'analysis' && <ModelPane game={game} />}
-        </div>
+          {tabs.map(t => (
+            <AriaTabPanel key={t.v} id={t.v} className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 pt-3" data-testid={pane === t.v ? 'popup-body' : undefined}>
+              {t.v === 'ml' || t.v === 'spread' || t.v === 'total'
+                ? <MarketPane key={t.v} g={game} market={t.v} initialLine={t.v === first ? initialLine : undefined} bettable={bettable} />
+                : t.v === 'move' ? <MovePane g={game} />
+                : t.v === 'analysis' ? <ModelPane game={game} /> : null}
+            </AriaTabPanel>
+          ))}
+        </AriaTabs>
         <footer className="flex-none px-4 py-2.5 border-t border-separator-border text-[12px] text-text-tertiary">
           Prices move: check the number at the book. Not financial advice.{' '}
           <Link className="text-link" href={`/ev/games?view=analysis&game=${encodeURIComponent(game.key)}`}>Open as a page</Link>

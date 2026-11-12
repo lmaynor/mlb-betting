@@ -14,6 +14,12 @@
  * SVG paint attributes use literal hex (var() does not resolve there).
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import {
+  Tab as AriaTab,
+  TabList as AriaTabList,
+  TabPanel as AriaTabPanel,
+  Tabs as AriaTabs,
+} from 'react-aria-components'
 import type { CockpitFeed, CockpitForm, CockpitGame, CockpitRow, EvBookQuote } from '@/lib/types'
 import { apiGetEdgeCockpit } from '@/lib/betting-api'
 import { bookDisplay } from '@/lib/tokens'
@@ -415,31 +421,31 @@ function Inspector({ r, renderMlbExtras, onClose }: { r: CockpitRow; renderMlbEx
       </header>
 
       {r.sport === 'nba' ? (
-        <>
-          <div role="tablist" aria-label="NBA research views" className="inline-flex gap-0.5 justify-self-start rounded-lg border border-separator-border bg-background-secondary-default p-[3px]">
+        <AriaTabs selectedKey={nbaTab} onSelectionChange={k => setNbaTab(k as NbaTab)} className="contents">
+          <AriaTabList aria-label="NBA research views" className="inline-flex gap-0.5 justify-self-start rounded-lg border border-separator-border bg-background-secondary-default p-[3px]">
             {NBA_TABS.map(t => (
-              <button key={t.id} role="tab" aria-selected={nbaTab === t.id} onClick={() => setNbaTab(t.id)}
+              <AriaTab key={t.id} id={t.id}
                 className={cx('cursor-pointer whitespace-nowrap rounded-md border px-[14px] py-1.5 text-caption-1-semibold', nbaTab === t.id ? 'border-border-button-hover bg-background-tertiary-default text-text-primary' : 'border-transparent bg-transparent text-text-secondary hover:bg-background-primary-hover')}>
                 {t.label}
-              </button>
+              </AriaTab>
             ))}
-          </div>
-          {nbaTab === 'trends' && (
+          </AriaTabList>
+          <AriaTabPanel id="trends">
             <Panel title="TRENDS" sub={`${propStatLabel(r.stat)} \u00b7 ${under ? 'Under' : 'Over'} ${r.line ?? ''}`}>
               <TrendsPanel row={r} fallback={logPanels} />
             </Panel>
-          )}
-          {nbaTab === 'shots' && (
+          </AriaTabPanel>
+          <AriaTabPanel id="shots">
             <Panel title="SHOT CHART" sub="vs league">
               <ShotChartPanel row={r} />
             </Panel>
-          )}
-          {nbaTab === 'prices' && (
+          </AriaTabPanel>
+          <AriaTabPanel id="prices">
             <Panel title="MULTI-BOOK ODDS MATRIX" sub={r.all_books ? `${onshoreQuotes(r.all_books).length} books` : undefined}>
               <OddsMatrix r={r} />
             </Panel>
-          )}
-        </>
+          </AriaTabPanel>
+        </AriaTabs>
       ) : (
         <>
           {logPanels}
