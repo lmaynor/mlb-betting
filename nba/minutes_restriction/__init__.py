@@ -53,6 +53,13 @@ CASE SCHEMA (the contract Lane 4 / Arm T joins on)
   started            bool   the player started the case game (DESCRIPTIVE ONLY: starting lineups
                             are published after decision time, so `started` is never a model
                             feature -- see features.py)
+
+B1 ADDENDUM (blowout.py, Argon game-state consult Nov 11, 2026): the B1 experiment adds
+pregame closing-spread features (closing_spread, abs_closing_spread, abs_spread_x_starter,
+team_pull_speed) in a SEPARATE feature matrix (build_features_b1); the base Arm S matrix
+above is unchanged. B1's interaction uses `started` as the backtest proxy for the pregame
+projected starter flag -- the timing caveat and the auto-kill bars (>= 0.15 min overall,
+>= 0.35 min at |spread| >= 9.5) are documented in blowout.py.
 """
 from __future__ import annotations
 
@@ -60,6 +67,17 @@ from nba.minutes_restriction.cases import CASE_COLUMNS, build_cases, select_desi
 from nba.minutes_restriction.features import FEATURE_COLUMNS, build_features
 from nba.minutes_restriction.arm_s import DEV_SEASONS, TEST_SEASONS, ArmSModel, walk_forward
 from nba.minutes_restriction.grade import grade as grade_predictions, render_markdown
+from nba.minutes_restriction.blowout import (
+    B1_FEATURE_COLUMNS,
+    ArmSB1Model,
+    attach_closing_spread,
+    build_features_b1,
+    consensus_closing_spreads,
+    grade_b1,
+    render_markdown_b1,
+    team_pull_speed,
+    walk_forward_b1,
+)
 
 __all__ = [
     "CASE_COLUMNS",
@@ -73,4 +91,14 @@ __all__ = [
     "render_markdown",
     "select_designation",
     "walk_forward",
+    # B1 blowout-minutes build (Argon game-state consult, Nov 11, 2026)
+    "B1_FEATURE_COLUMNS",
+    "ArmSB1Model",
+    "attach_closing_spread",
+    "build_features_b1",
+    "consensus_closing_spreads",
+    "grade_b1",
+    "render_markdown_b1",
+    "team_pull_speed",
+    "walk_forward_b1",
 ]
