@@ -469,3 +469,100 @@ def test_cli_execute_with_mocked_loaders_writes_reports(monkeypatch, tmp_path, c
     assert set(report["seasons"]) == {"2024-25", "2025-26"}
     assert "Verdict:" in out_md.read_text()
     assert "Verdict:" in capsys.readouterr().out
+
+
+# -----------------------------------------------------------------------------------------------
+# (g) designation index: the grouped lookup must be indistinguishable from the full-frame scan
+
+def _assert_same_selection(scan, indexed):
+    assert (scan is None) == (indexed is None)
+    if scan is None:
+        return
+    assert scan["designation"] == indexed["designation"]
+    assert scan["decision_report_ts"] == indexed["decision_report_ts"]
+    assert scan["report_reason"] == indexed["report_reason"]
+    assert scan["reason_cat"] == indexed["reason_cat"]
+
+
+def test_designation_index_matches_scan():
+    norm = cases._reports_normalized(reports_frame())
+    index = cases.build_designation_index(norm)
+    tip = pd.Timestamp("2022-01-25 19:30", tz="America/New_York")
+    queries = [
+        # Eligible pre-cutoff report; the post-cutoff upgrade is invisible to both paths.
+        ("Alpha Returner", "LAL", date(2022, 1, 25), tip),
+        # Last eligible wins (17:30 Probable over noon Questionable) in both paths.
+        ("Echo Baseline", "LAL", date(2022, 1, 27),
+         pd.Timestamp("2022-01-27 19:30", tz="America/New_York")),
+        ("Foxtrot Flag", "LAL", date(2022, 1, 13),
+         pd.Timestamp("2022-01-13 19:30", tz="America/New_York")),
+        # Selection answers even where no case is built (Hotel did not dress that night).
+        ("Hotel Scratch", "LAL", date(2022, 1, 19),
+         pd.Timestamp("2022-01-19 19:30", tz="America/New_York")),
+        # Misses: unknown player, wrong team, wrong date.
+        ("Nobody Here", "LAL", date(2022, 1, 13), tip),
+        ("Foxtrot Flag", "BOS", date(2022, 1, 13), tip),
+        ("Foxtrot Flag", "LAL", date(2022, 1, 14), tip),
+        # Tip 30 min after the noon report: the cutoff precedes it, so both paths return None.
+        ("Alpha Returner", "LAL", date(2022, 1, 25),
+         pd.Timestamp("2022-01-25 12:30", tz="America/New_York")),
+        # Suffix / punctuation folding resolves identically ("Jr." stripped by _norm_name).
+        ("Alpha Returner Jr.", "LAL", date(2022, 1, 25), tip),
+    ]
+    for player, team, day, query_tip in queries:
+        scan = cases.select_designation(norm, player=player, team=team, game_date=day,
+                                        tip_ts=query_tip)
+        indexed = cases.select_designation(norm, player=player, team=team, game_date=day,
+                                           tip_ts=query_tip, index=index)
+        _assert_same_selection(scan, indexed)
+
+
+def test_designation_index_matches_scan_on_ties_and_cutoff_edge():
+    rows = [
+        # Two reports at the SAME timestamp: the later row in frame order wins in both paths.
+        _report(date(2022, 3, 1), "17:00", "Tie Player", "Questionable"),
+        _report(date(2022, 3, 1), "17:00", "Tie Player", "Probable"),
+        # A report stamped exactly at tip - 60 min is eligible (<= cutoff) in both paths.
+        _report(date(2022, 3, 1), "18:30", "Edge Player", "Questionable"),
+    ]
+    norm = cases._reports_normalized(pd.DataFrame(rows, columns=REPORT_COLUMNS))
+    index = cases.build_designation_index(norm)
+    tip = pd.Timestamp("2022-03-01 19:30", tz="America/New_York")
+    for player in ("Tie Player", "Edge Player"):
+        scan = cases.select_designation(norm, player=player, team="LAL",
+                                        game_date=date(2022, 3, 1), tip_ts=tip)
+        indexed = cases.select_designation(norm, player=player, team="LAL",
+                                           game_date=date(2022, 3, 1), tip_ts=tip, index=index)
+        _assert_same_selection(scan, indexed)
+    tie = cases.select_designation(norm, player="Tie Player", team="LAL",
+                                   game_date=date(2022, 3, 1), tip_ts=tip, index=index)
+    assert tie["designation"] == "Probable"      # last in frame order, not first
+    edge = cases.select_designation(norm, player="Edge Player", team="LAL",
+                                    game_date=date(2022, 3, 1), tip_ts=tip, index=index)
+    assert edge["designation"] == "Questionable"  # exactly at the cutoff: eligible
+
+
+def test_build_cases_with_index_matches_scan_build(monkeypatch):
+    indexed = build_cases(season_box(), reports_frame())
+    # Force the pre-index path: build_designation_index returning None routes every
+    # select_designation call inside build_cases through the full-frame scan.
+    monkeypatch.setattr(cases, "build_designation_index", lambda reports_norm: None)
+    scanned = build_cases(season_box(), reports_frame())
+    pd.testing.assert_frame_equal(indexed, scanned)
+
+
+def test_cli_export_predictions_writes_frame(monkeypatch, tmp_path):
+    cli = _load_cli()
+    box = _multi_season_box()
+    monkeypatch.setattr(cli, "load_box_scores", lambda path: box)
+    out_json, export_csv = tmp_path / "report.json", tmp_path / "predictions.csv"
+    rc = cli.main(["--execute", "--box-path", "mocked", "--out-json", str(out_json),
+                   "--export-predictions", str(export_csv)])
+    assert rc == 0
+    report = json.loads(out_json.read_text())
+    export = pd.read_csv(export_csv)
+    assert len(export) == report["n_predictions"]
+    for column in ("case_id", "player", "game_date", "games_missed", "is_injury_return",
+                   "designation", "decision_report_ts", "absence_reason_class",
+                   "baseline_minutes", "naive_minutes", "pred_minutes", "realized_minutes"):
+        assert column in export.columns, column
