@@ -1,6 +1,6 @@
 import { applyPickFilters, pickRows, type BoardRow } from '../lib/board-rows'
-import { activeFilterCount, matchesBook, matchesQuery, matchesSignal, matchesTier, parsePickFilters } from '../lib/picks-filters'
-import { filterTopPicks, type TopPick } from '../lib/top-picks'
+import { activeFilterCount, matchesBand, matchesBook, matchesQuery, matchesSignal, parsePickFilters } from '../lib/picks-filters'
+import { filterTopPicks, matchesType, type TopPick } from '../lib/top-picks'
 
 const r = (o: Partial<BoardRow>): BoardRow => ({
   key: 'k', sport: 'nfl', system: 'NFL_REC_YDS', marketLabel: 'Rec Yds', player: 'Pat Receiver', headshotId: null, team: 'KC', matchup: 'KC @ LV', gameKey: 'nfl:2026-10-18:KC@LV', away: 'KC', home: 'LV', avg10: null, avgSzn: null, result: null, start: '2026-10-18T17:00:00Z',
@@ -10,19 +10,38 @@ const r = (o: Partial<BoardRow>): BoardRow => ({
 
 describe('parsePickFilters', () => {
   it('reads every param, ignores junk, and defaults sensibly', () => {
-    expect(parsePickFilters({})).toMatchObject({ day: 'today', game: undefined, market: undefined, signal: undefined, tier: undefined, book: undefined, books: [], q: '', sort: 'score', dir: 'desc' })
+    expect(parsePickFilters({})).toMatchObject({ day: 'today', game: undefined, market: undefined, signal: undefined, band: undefined, type: undefined, book: undefined, books: [], q: '', sort: 'score', dir: 'desc' })
     const f = parsePickFilters({ market: 'NFL_REC_YDS', tier: 'strong', book: 'Hard Rock', books: 'DraftKings, fanduel,,', q: ' Mahomes ', sort: 'prob', dir: 'asc', sport: 'NFL', day: 'yesterday', game: 'nfl:2026-10-18:KC@LV', signal: 'Strong', result: 'WIN' })
-    expect(f).toMatchObject({ market: 'NFL_REC_YDS', tier: 'STRONG', book: 'hardrock', books: ['draftkings', 'fanduel'], sort: 'prob', dir: 'asc', sport: 'nfl', day: 'yesterday', game: 'nfl:2026-10-18:KC@LV', signal: 'strong', result: 'win' })
-    expect(parsePickFilters({ tier: 'bogus', sort: 'bogus', dir: 'sideways', market: 'ALL', book: 'ALL', sport: 'ALL', day: 'last-week', signal: 'nonsense', result: 'maybe' })).toMatchObject({ tier: undefined, sort: 'score', dir: 'desc', market: undefined, book: undefined, sport: undefined, day: 'today', signal: undefined, result: undefined })
+    expect(f).toMatchObject({ market: 'NFL_REC_YDS', band: 'strong', book: 'hardrock', books: ['draftkings', 'fanduel'], sort: 'prob', dir: 'asc', sport: 'nfl', day: 'yesterday', game: 'nfl:2026-10-18:KC@LV', signal: 'strong', result: 'win' })
+    expect(parsePickFilters({ tier: 'bogus', sort: 'bogus', dir: 'sideways', market: 'ALL', book: 'ALL', sport: 'ALL', day: 'last-week', signal: 'nonsense', result: 'maybe' })).toMatchObject({ band: undefined, type: undefined, sort: 'score', dir: 'desc', market: undefined, book: undefined, sport: undefined, day: 'today', signal: undefined, result: undefined })
     // TIME is no longer a sort: an old link that asks for it falls back to the score
     expect(parsePickFilters({ sort: 'date' }).sort).toBe('score')
   })
 })
 
-describe('tier, book and text matching', () => {
-  it('tiers use the published cuts: STRONG 70+, LEAN 45-69, WATCH under 45', () => {
-    expect([70, 69, 45, 44].map(s => ['STRONG', 'LEAN', 'WATCH'].filter(t => matchesTier(s, t as 'STRONG')))).toEqual([['STRONG'], ['LEAN'], ['LEAN'], ['WATCH']])
-    expect(matchesTier(10, undefined)).toBe(true)
+describe('score band, book and text matching', () => {
+  it('bands use the published cuts: STRONG 70+, LEAN 45-69, WATCH under 45', () => {
+    expect([70, 69, 45, 44].map(s => (['strong', 'lean', 'watch'] as const).filter(b => matchesBand(s, b)))).toEqual([['strong'], ['lean'], ['lean'], ['watch']])
+    expect(matchesBand(10, undefined)).toBe(true)
+  })
+  it('the ?tier= shim splits into band and type, and explicit params win (Q3(b))', () => {
+    expect(parsePickFilters({ tier: 'STRONG' }).band).toBe('strong')
+    expect(parsePickFilters({ tier: 'official' }).type).toBe('official')
+    expect(parsePickFilters({ tier: 'outliers' }).type).toBe('outlier')
+    expect(parsePickFilters({ band: 'lean' }).band).toBe('lean')
+    expect(parsePickFilters({ type: 'confluence' }).type).toBe('confluence')
+    expect(parsePickFilters({ tier: 'strong', band: 'watch' }).band).toBe('watch')
+    expect(parsePickFilters({ tier: 'official', type: 'outlier' }).type).toBe('outlier')
+    expect(parsePickFilters({ band: 'bogus', type: 'bogus' })).toMatchObject({ band: undefined, type: undefined })
+  })
+  it('matchesType reads the pipeline facts of a row', () => {
+    const tp = (o: Partial<TopPick>): TopPick => ({ key: 'x', sport: 'mlb', who: 'A', what: 'Over 1.5', game: 'NYY @ BOS', odds: 120, book: 'fanduel', edge: 0.05, score: 70, basis: 'model', tracked: true, result: null, ...o })
+    expect(matchesType(tp({}), 'official')).toBe(true)                       // MLB: in-band edge, score 70, not invalidated
+    expect(matchesType(tp({ score: 40 }), 'official')).toBe(false)
+    expect(matchesType(tp({ confluence: true }), 'confluence')).toBe(true)
+    expect(matchesType(tp({ basis: 'confluence' }), 'confluence')).toBe(true)
+    expect(matchesType(tp({ sport: 'nfl', tier: null }), 'outlier')).toBe(true)  // 5% edge, not official
+    expect(matchesType(tp({}), undefined)).toBe(true)
   })
   it('book filters: one book, my books, and a row with no book is judged by the filter', () => {
     expect(matchesBook('DraftKings', { book: 'draftkings', books: [] })).toBe(true)
@@ -59,7 +78,8 @@ describe('board rows', () => {
     expect(f({ signal: 'ev' })).toEqual(['c', 'a'])                   // b's edge is negative
     expect(f({ signal: 'strong' })).toEqual(['b', 'c'])
     expect(f({ signal: 'lean' })).toEqual(['b', 'c', 'a'])
-    expect(f({ tier: 'strong' })).toEqual(['b', 'c'])
+    expect(f({ tier: 'strong' })).toEqual(['b', 'c'])                   // legacy shim for the band
+    expect(f({ band: 'strong' })).toEqual(['b', 'c'])
     expect(f({ book: 'fanduel' })).toEqual(['b'])
     expect(f({ result: 'win' })).toEqual(['c'])
     expect(f({ result: 'pending' })).toEqual(['b', 'a'])
@@ -104,10 +124,15 @@ describe('board rows', () => {
 
 describe('cross-sport Top 10 filters', () => {
   const tp = (o: Partial<TopPick>): TopPick => ({ key: 'x', sport: 'mlb', who: 'Aaron Judge', what: 'Over 1.5 Total Bases', game: 'NYY @ BOS', odds: 120, book: 'fanduel', edge: 0.05, score: 70, basis: 'model', tracked: true, result: null, ...o })
-  const picks = [tp({ key: '1', score: 90 }), tp({ key: '2', sport: 'nfl', who: 'Pat Mahomes', score: 80, edge: 0.09, book: 'draftkings', tracked: false }), tp({ key: '3', sport: 'nfl', who: 'Travis Kelce', score: 40, odds: -150 })]
+  const picks = [tp({ key: '1', score: 90 }), tp({ key: '2', sport: 'nfl', who: 'Pat Mahomes', score: 80, edge: 0.09, book: 'draftkings', tracked: false, confluence: true }), tp({ key: '3', sport: 'nfl', who: 'Travis Kelce', score: 40, odds: -150 })]
   it('keeps the ten best of what the filters leave, not the sport rows inside the overall ten', () => {
     expect(filterTopPicks(picks, parsePickFilters({ sport: 'nfl' })).map(p => p.key)).toEqual(['2', '3'])
     expect(filterTopPicks(picks, parsePickFilters({ tier: 'watch' })).map(p => p.key)).toEqual(['3'])
+    expect(filterTopPicks(picks, parsePickFilters({ band: 'watch' })).map(p => p.key)).toEqual(['3'])
+    expect(filterTopPicks(picks, parsePickFilters({ type: 'official' })).map(p => p.key)).toEqual(['1'])
+    expect(filterTopPicks(picks, parsePickFilters({ type: 'confluence' })).map(p => p.key)).toEqual(['2'])
+    expect(filterTopPicks(picks, parsePickFilters({ type: 'outlier' })).map(p => p.key)).toEqual(['2', '3'])
+    expect(filterTopPicks(picks, parsePickFilters({ tier: 'official' })).map(p => p.key)).toEqual(['1'])
     expect(filterTopPicks(picks, parsePickFilters({ q: 'judge' })).map(p => p.key)).toEqual(['1'])
     expect(filterTopPicks(picks, parsePickFilters({ book: 'draftkings' })).map(p => p.key)).toEqual(['2'])
     expect(filterTopPicks(picks, parsePickFilters({ sort: 'edge' })).map(p => p.key)).toEqual(['2', '1', '3'])

@@ -7,11 +7,13 @@
  *   book    one sportsbook (display name, any case)     books   comma list of canonical book keys ("my books")
  *   q       player / team / city text                   sort    score | edge | prob | odds     dir  asc | desc
  *   result  win | loss | pending (settled MLB days)     sport   cross-sport page only
- *   tier    legacy (STRONG | LEAN | WATCH), still honoured so old links keep working
+ *   band    score band: strong | lean | watch           type    signal type: official | confluence | outlier
+ *   tier    legacy alias, shimmed: STRONG|LEAN|WATCH map to band, official|outliers map to type (Q3(b))
  */
 import { scoreTier, TIER_CUTS } from '@/lib/beezy-score'
 
-export type TierFilter = 'STRONG' | 'LEAN' | 'WATCH'
+export type ScoreBand = 'strong' | 'lean' | 'watch'
+export type SignalType = 'official' | 'confluence' | 'outlier'
 export type PickSort = 'score' | 'edge' | 'prob' | 'odds'
 export type PickDay = 'today' | 'yesterday'
 export type SignalFilter = 'priced' | 'confluence' | 'ev' | 'strong' | 'lean'
@@ -28,10 +30,10 @@ export const SIGNAL_OPTIONS: { value: SignalFilter; label: string }[] = [
   { value: 'lean', label: `Lean or better (${TIER_CUTS.lean}+)` },
 ]
 
-export const TIER_OPTIONS: { value: TierFilter; label: string }[] = [
-  { value: 'STRONG', label: `STRONG (${TIER_CUTS.strong}+)` },
-  { value: 'LEAN', label: `LEAN (${TIER_CUTS.lean}-${TIER_CUTS.strong - 1})` },
-  { value: 'WATCH', label: `WATCH (<${TIER_CUTS.lean})` },
+export const BAND_OPTIONS: { value: ScoreBand; label: string }[] = [
+  { value: 'strong', label: `STRONG (${TIER_CUTS.strong}+)` },
+  { value: 'lean', label: `LEAN (${TIER_CUTS.lean}-${TIER_CUTS.strong - 1})` },
+  { value: 'watch', label: `WATCH (<${TIER_CUTS.lean})` },
 ]
 
 /** Sportsbooks and exchanges offered in the book menu; the value is what ?book= carries (lowercase, no spaces). */
@@ -45,7 +47,8 @@ export interface PickFilters {
   game?: string
   market?: string
   signal?: SignalFilter
-  tier?: TierFilter
+  band?: ScoreBand
+  type?: SignalType
   book?: string
   books: string[]
   q: string
@@ -58,9 +61,20 @@ export interface PickFilters {
 const SORTS = new Set<string>(SORT_OPTIONS.map(o => o.value))
 const SIGNALS = new Set<string>(SIGNAL_OPTIONS.map(o => o.value))
 
+const BANDS = new Set<string>(BAND_OPTIONS.map(o => o.value))
+const TYPES = new Set<string>(['official', 'confluence', 'outlier'])
+
 export function parsePickFilters(sp: Record<string, string | undefined>): PickFilters {
-  const up = (sp.tier ?? '').toUpperCase()
-  const tier = up === 'STRONG' || up === 'LEAN' || up === 'WATCH' ? (up as TierFilter) : undefined
+  // Q3(b): ?band= is the score band, ?type= is the signal type. The legacy ?tier= shims into whichever it
+  // meant (band words to band, population words to type) so old shared links keep working; an explicit
+  // ?band= or ?type= always wins over the shim.
+  const tierWord = (sp.tier ?? '').toLowerCase()
+  const shimBand = tierWord === 'strong' || tierWord === 'lean' || tierWord === 'watch' ? (tierWord as ScoreBand) : undefined
+  const shimType = tierWord === 'official' ? 'official' : tierWord === 'outliers' || tierWord === 'outlier' ? 'outlier' : undefined
+  const bandWord = (sp.band ?? '').toLowerCase()
+  const band = BANDS.has(bandWord) ? (bandWord as ScoreBand) : shimBand
+  const typeWord = (sp.type ?? '').toLowerCase()
+  const type = TYPES.has(typeWord) ? (typeWord as SignalType) : shimType
   const sig = (sp.signal ?? '').toLowerCase()
   const sort = SORTS.has(sp.sort ?? '') ? (sp.sort as PickSort) : 'score'
   const books = (sp.books ?? '').split(',').map(b => b.trim().toLowerCase()).filter(Boolean)
@@ -71,7 +85,8 @@ export function parsePickFilters(sp: Record<string, string | undefined>): PickFi
     game: sp.game ? sp.game.slice(0, 80) : undefined,
     market: sp.market && sp.market !== 'ALL' ? sp.market : undefined,
     signal: SIGNALS.has(sig) ? (sig as SignalFilter) : undefined,
-    tier,
+    band,
+    type,
     book: sp.book && sp.book !== 'ALL' ? bookParam(sp.book) : undefined,
     books,
     q: (sp.q ?? '').slice(0, 60),
@@ -82,8 +97,8 @@ export function parsePickFilters(sp: Record<string, string | undefined>): PickFi
   }
 }
 
-export function matchesTier(score: number, tier: TierFilter | undefined): boolean {
-  return tier == null || scoreTier(score).toUpperCase() === tier
+export function matchesBand(score: number, band: ScoreBand | undefined): boolean {
+  return band == null || scoreTier(score) === band
 }
 
 /** The facts about a row the SIGNAL menu needs; every picks row shape can supply them. */
@@ -115,5 +130,5 @@ export function matchesQuery(text: string, q: string): boolean {
 
 /** The filters that are set, for the bar's "clear" button and the empty-state wording. `day` and `sort` are views, not filters. */
 export function activeFilterCount(f: PickFilters): number {
-  return [f.game, f.market, f.signal, f.tier, f.book, f.books.length > 0, f.q, f.result, f.sport].filter(Boolean).length
+  return [f.game, f.market, f.signal, f.band, f.type, f.book, f.books.length > 0, f.q, f.result, f.sport].filter(Boolean).length
 }

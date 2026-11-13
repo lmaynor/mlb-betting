@@ -37,7 +37,7 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
   const tracked = pillar.board === 'tracked'
   const rawParams = await searchParams
   const f = parsePickFilters(rawParams)
-  const tierParam = rawParams.tier || 'all'
+  const typeParam = f.type ?? 'all'
   // Tier gating on = the board is cut per viewer: connection() guarantees per-request rendering so the cut
   // can never be cached or shared (the loader also branches on gatingOn). Gating off, the loader serves a
   // 60s result cache and never resolves the Clerk session.
@@ -50,10 +50,12 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
   let base = view === 'picks' && !tracked ? pickRows(board.rows) : board.rows
   if (view === 'picks') {
     const actionable = base.filter(r => isOfficialRow(r) || isOutlierRow(r))
-    if (tierParam === 'official') {
+    if (typeParam === 'official') {
       base = base.filter(isOfficialRow)
-    } else if (tierParam === 'outliers') {
+    } else if (typeParam === 'outlier') {
       base = base.filter(isOutlierRow)
+    } else if (typeParam === 'confluence') {
+      base = base.filter(r => r.confluence)
     } else if (actionable.length > 0) {
       base = actionable
     }
@@ -96,14 +98,18 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
         </div>
         {view === 'picks' && (
           <div className="flex items-center gap-1.5 mb-3.5 flex-wrap">
-            <span className="mono text-mini text-text-secondary">Tier</span>
+            <span className="mono text-mini text-text-secondary">Signal Type</span>
             {[
               { id: 'all', label: 'All Actionable' },
               { id: 'official', label: 'Official Plays Only' },
-              { id: 'outliers', label: '+EV Outliers' },
+              { id: 'confluence', label: 'Confluence' },
+              { id: 'outlier', label: '+EV Outliers' },
             ].map(t => {
-              const active = tierParam === t.id
-              const q = new URLSearchParams({ ...rawParams, tier: t.id }).toString()
+              const active = typeParam === t.id
+              const rest = { ...rawParams }
+              delete rest.tier
+              delete rest.type
+              const q = new URLSearchParams(t.id === 'all' ? rest : { ...rest, type: t.id }).toString()
               return (
                 <Link
                   key={t.id}

@@ -19,9 +19,17 @@ export function ScoreLegend() {
           STRONG is {TIER_CUTS.strong}+, LEAN is {TIER_CUTS.lean}-{TIER_CUTS.strong - 1}, WATCH is under {TIER_CUTS.lean}.
         </p>
         <p className="mono m-0 text-[12px] text-text-secondary">
-          On 7,259 graded +EV alerts the tiers realised +25.8% (STRONG), +6.4% (LEAN) and +3.5% (WATCH) flat-stake ROI, paper, each book counted separately.
+          On 7,259 graded +EV alerts the bands realised +25.8% (STRONG), +6.4% (LEAN) and +3.5% (WATCH) flat-stake ROI, paper, each book counted separately.
           The cut points were set on that same sample, so expect them to shrink going forward, and they are not yet validated for model bets.
         </p>
+        <dl className="m-0 grid gap-1.5">
+          <div><dt className="inline font-semibold">Candidate: </dt><dd className="inline m-0">Any prop or game line on today&rsquo;s slate where our model has calculated a fair projection and compared it against live sportsbook odds.</dd></div>
+          <div><dt className="inline font-semibold">Confluence: </dt><dd className="inline m-0">A candidate where both our projection model and the broader sportsbook market independently favor the same side of a bet.</dd></div>
+          <div><dt className="inline font-semibold">Tracked: </dt><dd className="inline m-0">A confluence play logged automatically in our background paper ledger to test model calibration, with no official standing or public grading.</dd></div>
+          <div><dt className="inline font-semibold">Official: </dt><dd className="inline m-0">A play that cleared every validation, multi-book consensus, and edge gate to earn a 1-unit spot on the Daily Card and permanent grading in Results.</dd></div>
+          <div><dt className="inline font-semibold">+EV Outlier: </dt><dd className="inline m-0">A single sportsbook price that sits well above the de-vigged consensus of peer books, flagged purely by market comparison, not by model edge.</dd></div>
+          <div><dt className="inline font-semibold">Beezy Score: </dt><dd className="inline m-0">A 0-100 composite strength rating combining edge size, book consensus, and hit probability, a ranking signal, not a commitment status.</dd></div>
+        </dl>
       </div>
     </details>
   )
