@@ -81,7 +81,13 @@ export function TopPicksTable({ picks, showResult = false, startRank = 1 }: { pi
                   {p.tracked && p.unvalidated && (
                     <span className="ui-heading ml-2 text-micro text-gold border border-[color:rgba(245,158,11,0.35)] rounded-chip py-[1px] px-[5px]">UNVALIDATED &middot; PAPER</span>
                   )}
-                  {!p.tracked && (
+                  {!p.tracked && p.tier === 'official' && (
+                    <span className="ui-heading ml-2 text-micro text-gold border border-[color:rgba(245,158,11,0.35)] rounded-chip py-[1px] px-[5px]">DAILY PLAY &middot; PAPER</span>
+                  )}
+                  {!p.tracked && p.tier === 'tracked' && (
+                    <span className="ui-heading ml-2 text-micro text-gold border border-[color:rgba(245,158,11,0.35)] rounded-chip py-[1px] px-[5px]">TRACKED &middot; PAPER</span>
+                  )}
+                  {!p.tracked && p.tier == null && (
                     <span className="ui-heading ml-2 text-micro text-gold border border-[color:rgba(245,158,11,0.35)] rounded-chip py-[1px] px-[5px]">SHADOW &middot; CALIBRATING</span>
                   )}
                 </td>

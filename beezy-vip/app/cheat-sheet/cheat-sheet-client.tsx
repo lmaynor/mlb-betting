@@ -108,6 +108,9 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
         style={{ borderLeft: `1px solid ${color}18`, background: `${tierColor}08` }}>
         <span className="mono text-[22px] font-semibold leading-[1]" style={{ color: tierColor }}>{pick.score}</span>
         <span className="ui-heading text-micro py-0.5 px-[5px] rounded-chip border border-[color:#57F287] bg-[rgba(87,242,135,0.12)] text-signal whitespace-nowrap">Official play</span>
+        {!pick.result && pick.started && (
+          <span className="ui-heading text-micro py-0.5 px-[5px] rounded-chip whitespace-nowrap" style={{ color: 'var(--color-neutral-300)', border: '1px solid var(--color-neutral-300)' }}>STARTED · GRADED AT FINAL</span>
+        )}
         {pick.result && <ResultTag result={pick.result} />}
       </div>
     </div>
@@ -255,7 +258,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
             <div className="flex items-start justify-between mb-2.5 gap-3">
               <div>
                 <BrandWordmark size="lg" />
-                <div className="text-[15px] font-semibold text-text-primary leading-[1.15] mt-2">Daily plays</div>
+                <div className="text-[15px] font-semibold text-text-primary leading-[1.15] mt-2">Daily Card</div>
                 <div className="mono text-micro text-text-secondary mt-[5px]">{today}</div>
                 <div className="text-[12px] text-neutral-300 leading-[1.45] mt-2">
                   Every play that clears the gate: the model and the market agree on the side, 4+ books behind the price, a measured edge and a blended EV that survives shrinking toward the market.
@@ -348,7 +351,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
           <div className="border border-separator-border bg-background-primary-default p-4 mb-4 rounded-[var(--radius)]">
             <div className="ui-heading text-micro text-text-secondary mb-2.5">What is this</div>
             <p className="text-cozy text-neutral-300 leading-[1.6]" style={{ margin: '0 0 10px' }}>
-              Today&apos;s official plays across MLB, NFL, NHL and NBA, ranked by Beezy Score. A play is official when the model and the market both like the same side, at least four books price it, the stat is one where the model has measurably added information beyond the market, and the blended edge is still at least 2.5% after shrinking the model toward the market. Each play is logged at its flagged price the first time it qualifies and graded at a flat 1 unit, so the record cannot be edited afterwards. MLB plays settle in the public record; NFL, NHL and NBA plays are paper and unvalidated.
+              Today&apos;s official plays across MLB, NFL, NHL and NBA, ranked by Beezy Score. A play is official when the model and the market both like the same side, at least four books price it, the stat is one where the model has measurably added information beyond the market, and the blended edge is still at least 2.5% after shrinking the model toward the market. Each play is logged at its flagged price the first time it qualifies and graded at a flat 1 unit, so the record cannot be edited afterwards. MLB plays settle in the public record; NFL, NHL and NBA plays are paper and unvalidated. Every settled play is also in <Link className="text-link" href="/results?population=daily">Results, filtered to Daily Picks</Link>.
             </p>
             <p className="text-cozy text-neutral-300 leading-[1.6] m-0">
               Tap a play to see why it made the card. Past days and results are in <Link className="text-link" href="/picks/history">Graded History</Link>; each sport&apos;s systems are on its Systems tab:
@@ -363,7 +366,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
             {[
               { tier: 'strong', desc: 'Score 70+: large edge, many books agree' },
               { tier: 'lean', desc: 'Score 45-69: positive edge, moderate confidence' },
-              { tier: 'watch', desc: 'Score under 45: small edge, listed for reference' },
+              { tier: 'watch', desc: 'Score under 45: small edge, never enough for this card' },
             ].map(row => {
               const t = row.tier as 'strong' | 'lean' | 'watch'
               return (

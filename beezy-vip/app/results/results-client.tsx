@@ -5,6 +5,7 @@
 import { useState, useMemo } from 'react'
 import { useMounted } from '@/lib/use-mounted'
 import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { SystemBadge, ResultPill, PnL } from '@/components/ui/primitives'
 import { formatOdds } from '@/lib/odds'
 import { cx } from '@/utils/cx'
@@ -204,13 +205,14 @@ function exportCSV(bets: Bet[]) {
   URL.revokeObjectURL(url)
 }
 
-function ResultBetCard({ bet }: { bet: Bet }) {
+function ResultBetCard({ bet, daily }: { bet: Bet; daily?: boolean }) {
   return (
     <div className={cx('card-hover flex flex-col gap-[11px] px-3.5 py-[13px]', CARD)}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <SystemBadge system={bet.system} />
           <span className="mono whitespace-nowrap text-mini text-text-secondary">{fmtDisplayDate(bet.game_date)}</span>
+          {daily && <span className="ui-heading text-micro text-link">DAILY CARD</span>}
         </div>
         <ResultPill result={bet.result} />
       </div>
@@ -244,16 +246,19 @@ export function ResultsClient({
   initialPicks,
   initialStats,
   curve = [],
+  dailyPicks = [],
   asOf,
 }: {
   initialPicks: Bet[]
   initialStats: SystemStats[]
   curve?: BankrollPoint[]
+  dailyPicks?: Bet[]
   /** Central-time date the totals were read, rendered next to them so every figure carries its own date. */
   asOf?: string
 }) {
   const sp = useSearchParams()
   const dateFilter = sp.get('date') ?? null
+  const [population, setPopulation] = useState<'all' | 'daily'>(() => (sp.get('population') === 'daily' ? 'daily' : 'all'))
 
   const [system,  setSystem]  = useState('ALL')
   const [result,  setResult]  = useState('ALL')
@@ -263,12 +268,16 @@ export function ResultsClient({
   const [page,    setPage]    = useState(0)
   const [onePerProp, setOnePerProp] = useState(true)
   const mounted = useMounted()
+  const dailyIds = useMemo(() => new Set(dailyPicks.map(b => b.id)), [dailyPicks])
+  const allCount = useMemo(() => collapseBooks(initialPicks).length, [initialPicks])
 
   const PAGE_SIZE = 30
 
   // The ledger can list one prop several times (once per book that flagged it). Default to one row per prop;
   // the P&L chart and the per-system table above keep every row, since each book's price was a separate paper bet.
-  const ledger = useMemo(() => (onePerProp ? collapseBooks(initialPicks) : initialPicks), [initialPicks, onePerProp])
+  // Under the Daily Picks population the source is the card plays instead of the whole ledger.
+  const source = population === 'daily' ? dailyPicks : initialPicks
+  const ledger = useMemo(() => (onePerProp ? collapseBooks(source) : source), [source, onePerProp])
 
   const countsBySystem = useMemo(() =>
     Object.fromEntries(
@@ -338,14 +347,22 @@ export function ResultsClient({
         <span className="mono text-caption-1-regular text-text-secondary">{filtered.length} bets shown &middot; {asOf ? `as of ${asOf} \u00b7 ` : ''}Central Time &middot; paper</span>
       </div>
 
+      <p className="mb-4 max-w-[90ch] text-body-2-regular text-text-secondary">
+        {population === 'daily'
+          ? 'Only the plays that made each day\'s Daily Card, at the prices on the card. The same plays by day are in Graded History.'
+          : 'Every settled paper bet. Filter to Daily Picks to see only the plays that made each day\'s Daily Card.'}
+      </p>
+
       {/* One inline metric strip: models and +EV alerts are summarised separately. */}
-      <div className={cx('mono mb-5 flex min-h-[38px] flex-wrap items-center gap-x-5.5 gap-y-1.5 px-3.5 py-2 text-xs text-text-secondary', CARD)}>
-        <span><span className="text-text-tertiary">Models</span> {models.bets.toLocaleString()} bets &middot; {models.winRate}% win &middot; <span style={{ color: models.pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{money(models.pnl)}</span> at paper stakes</span>
-        <span><span className="text-text-tertiary">+EV alerts</span> {ev.bets.toLocaleString()} graded &middot; {ev.winRate}% win &middot; <span style={{ color: ev.pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{money(ev.pnl)}</span> flat $100</span>
-      </div>
+      {population === 'all' && (
+        <div className={cx('mono mb-5 flex min-h-[38px] flex-wrap items-center gap-x-5.5 gap-y-1.5 px-3.5 py-2 text-xs text-text-secondary', CARD)}>
+          <span><span className="text-text-tertiary">Models</span> {models.bets.toLocaleString()} bets &middot; {models.winRate}% win &middot; <span style={{ color: models.pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{money(models.pnl)}</span> at paper stakes</span>
+          <span><span className="text-text-tertiary">+EV alerts</span> {ev.bets.toLocaleString()} graded &middot; {ev.winRate}% win &middot; <span style={{ color: ev.pnl >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{money(ev.pnl)}</span> flat $100</span>
+        </div>
+      )}
 
       {/* Season curve: cumulative P&L of the models (paper stakes) vs the +EV alerts (flat $100), from the first graded bet. */}
-      {system === 'ALL' && curve.length > 2 && (
+      {population === 'all' && system === 'ALL' && curve.length > 2 && (
         <div className={cx('mb-5 pb-2 pl-2 pr-4 pt-3.5', CARD)}>
           <div className="flex flex-wrap items-center justify-between gap-3 px-2 pb-2.5">
             <span className={LBL}>Cumulative P&L, full season ($)</span>
@@ -370,7 +387,7 @@ export function ResultsClient({
       )}
 
       {/* P&L Chart: per system, over the recent rows loaded here */}
-      {system !== 'ALL' && pnlRows.length > 2 && (
+      {population === 'all' && system !== 'ALL' && pnlRows.length > 2 && (
         <div className={cx('mb-6 pb-3 pl-2 pr-4 pt-5', CARD)}>
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 pb-4">
             <span className={LBL}>
@@ -448,7 +465,7 @@ export function ResultsClient({
       )}
 
       {/* Per-system stats table -- groups by type with subtle dividers */}
-      {initialStats.length > 0 && (
+      {population === 'all' && initialStats.length > 0 && (
         <>
           <div className={cx('results-model-desktop mb-6 overflow-x-auto', CARD)}>
             <div className="grid min-w-[500px] grid-cols-6 border-b border-separator-border bg-background-secondary-default">
@@ -535,10 +552,15 @@ export function ResultsClient({
       {/* System filter chips -- grouped with labels. On a phone they sit behind one Filters row so the ledger starts on the first screen. */}
       <button type="button" aria-expanded={filtersOpen} aria-controls="results-filters" onClick={() => setFiltersOpen(o => !o)}
         className="mono button-press-motion mb-3 flex min-h-[44px] w-full cursor-pointer items-center justify-between rounded-lg border border-separator-border bg-background-primary-default px-3 text-compact text-text-primary md:hidden" data-testid="results-filters-toggle">
-        <span>Filters{system !== 'ALL' || result !== 'ALL' ? ` \u00b7 ${[system !== 'ALL' ? (SYSTEM_LABEL[system] ?? system) : null, result !== 'ALL' ? result : null].filter(Boolean).join(', ')}` : ''}</span>
+        <span>Filters{population !== 'all' || system !== 'ALL' || result !== 'ALL' ? ` \u00b7 ${[population === 'daily' ? 'Daily Picks' : null, system !== 'ALL' ? (SYSTEM_LABEL[system] ?? system) : null, result !== 'ALL' ? result : null].filter(Boolean).join(', ')}` : ''}</span>
         <span aria-hidden>{filtersOpen ? '\u2212' : '+'}</span>
       </button>
       <div id="results-filters" className={cx('mb-4 md:block', filtersOpen ? 'block' : 'hidden')}>
+        <div className="mb-2.5 flex flex-wrap items-center gap-1.5">
+          <span className={cx(LBL, 'mr-1')}>Population</span>
+          <Chip label={`All bets (${allCount})`} active={population === 'all'} onClick={() => { setPopulation('all'); setPage(0) }} />
+          <Chip label={`Daily Picks (${dailyPicks.length})`} active={population === 'daily'} onClick={() => { setPopulation('daily'); setPage(0) }} />
+        </div>
         <div className="mb-2.5 flex flex-wrap items-center gap-5">
 
           {/* ALL chip */}
@@ -637,6 +659,7 @@ export function ResultsClient({
               <div key={bet.id ?? i} className="grid min-w-[860px] items-center border-b border-border-table transition-colors hover:bg-background-primary-hover" style={{ gridTemplateColumns: COL }}>
                 <div className="mono px-3 py-2 text-mini text-text-secondary">
                   {fmtDisplayDate(bet.game_date)}
+                  {dailyIds.has(bet.id) && <Link href="/picks/history" className="block text-link">Daily Card</Link>}
                 </div>
                 <div className="px-3 py-2"><SystemBadge system={bet.system} /></div>
                 <div className="min-w-0 px-3 py-2"><Matchup away={bet.away_team} home={bet.home_team} size={16} fontSize="11px" /></div>
@@ -662,7 +685,7 @@ export function ResultsClient({
         <div className="results-mobile">
           <div className="flex flex-col gap-2.5">
             {filtered.slice(pageStart, pageStart + PAGE_SIZE).map((bet, i) => (
-              <ResultBetCard key={bet.id ?? i} bet={bet} />
+              <ResultBetCard key={bet.id ?? i} bet={bet} daily={dailyIds.has(bet.id)} />
             ))}
           </div>
           {filtered.length > PAGE_SIZE && renderPager("mt-3 px-0.5 py-3")}

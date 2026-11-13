@@ -51,6 +51,8 @@ export interface TopPick {
   unvalidated?: boolean
   /** NFL / NBA / NHL: the backend's verdict (ev/model_picks.py): 'official' = a daily play. A ledger bet reads it from its notes, a board row from `pick_tier`. */
   tier?: 'official' | 'tracked' | null
+  /** the game has started; the row stays on the Daily Card with its last pre-start price and is graded when the game ends */
+  started?: boolean
 }
 
 const edgeFraction = (e: number | null | undefined): number | null => {
@@ -104,9 +106,12 @@ function projectionEdge(r: SportProjectionRow): number | null {
   return m ?? e
 }
 
-export function fromProjection(r: SportProjectionRow): TopPick | null {
+export function fromProjection(r: SportProjectionRow, opts?: { includeStarted?: boolean }): TopPick | null {
   if (!r.has_line || r.side == null || r.line == null || r.beezy_score <= 0) return null
-  if (r.mins_to_start != null && r.mins_to_start <= 0) return null // already started
+  const started = r.mins_to_start != null && r.mins_to_start <= 0
+  // Top Signals is a live board, so a started game comes off it by default: its price is no longer bettable. The Daily Card is
+  // the day's record, so its loader opts in (includeStarted) and the play stays, marked started, until its result lands.
+  if (started && !opts?.includeStarted) return null
   const over = r.side === 'over'
   const odds = over ? r.best_over_odds : r.best_under_odds
   if (odds == null) return null
@@ -131,14 +136,16 @@ export function fromProjection(r: SportProjectionRow): TopPick | null {
     modelEdge: r.model_edge ?? null,
     marketEv: r.market_ev ?? null,
     tier: r.pick_tier ?? null,
+    started: started || undefined,
   }
 }
 
 /**
  * A daily play (the Official Card gate).
  * - NFL / NHL / NBA: the backend's own official tier (ev/model_picks.py `qualifies`): the card gate (confluence, 4+ books, 3%-10% EV,
- *   model edge >= 1.5%, score >= 68) PLUS a stat with measured signal, a blended EV >= 2.5% and no sharp book against the side. Those
- *   last checks live only in Python, so the site reads the verdict (`tier`) rather than re-deriving a weaker copy of it. No stamp, no play.
+ *   model edge >= 1.5%, score >= 40 per ev/daily_card.py CONFLUENCE_MIN_SCORE, calibrated 2026-11-09) PLUS a stat with measured
+ *   signal, a blended EV >= 2.5% and no sharp book against the side. Those last checks live only in Python, so the site reads the
+ *   verdict (`tier`) rather than re-deriving a weaker copy of it. No stamp, no play.
  * - MLB: validated != false, 3%-10% edge, score >= 68.
  */
 export function isOfficialCardPlay(p: TopPick): boolean {

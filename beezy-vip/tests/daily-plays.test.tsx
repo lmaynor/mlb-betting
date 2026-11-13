@@ -9,6 +9,7 @@ import { render, screen } from '@testing-library/react'
 import { fromSportProjections, isOfficialRow, isOutlierRow } from '../lib/board-rows'
 import { SECTIONS, sectionFor } from '../lib/ia'
 import { buildDailyCard, dailyPlaysFromBets, fromBet, fromProjection, ledgerRowKey, recordOf } from '../lib/top-picks'
+import { dailyBetsFromLedger, todaysDailyCard } from '../lib/top-picks-data'
 import { ExpectedScoreBar, LambdaBar, leansListedSide } from '../components/picks/lambda-bar'
 import type { Bet, SportProjectionRow } from '../lib/types'
 
@@ -64,6 +65,47 @@ describe('one definition of a daily play', () => {
     expect(ledgerRowKey(bet)).toBe('nba|nba:2026-11-03:CHI@DET|id4594268|rebounds')
     expect(fromProjection(row())!.key).toBe(ledgerRowKey(bet))
     expect(ledgerRowKey(propsBet({ notes: null }))).toBeNull()
+  })
+
+  it('today\'s card keeps an official board play after its game starts', () => {
+    const startedRow = row({ pick_tier: 'official', mins_to_start: -10 })
+    const plays = [startedRow].map(r => fromProjection(r, { includeStarted: true })).filter((p): p is NonNullable<typeof p> => p != null)
+    const card = todaysDailyCard([], plays)
+    expect(card).toHaveLength(1)
+    expect(card[0].started).toBe(true)
+    expect(card[0].who).toBe('Jalen Duren')
+  })
+
+  it('dailyBetsFromLedger returns exactly each day\'s card plays across dates', () => {
+    const propsOfficial = propsBet({ id: 1, game_date: '2026-11-03' })
+    const propsTracked = propsBet({ id: 2, game_date: '2026-11-03', player: 'Tracked Guy', notes: JSON.stringify({ tier: 'tracked', row_key: 'nba:x|t|rebounds' }) })
+    const propsEv = propsBet({ id: 3, game_date: '2026-11-03', system: 'EV', player: 'Outlier Guy' })
+    const mlbQualifying: Bet = {
+      ...propsBet({
+        id: 4,
+        sport: 'mlb',
+        system: 'K',
+        game_date: '2026-11-04',
+        player: 'Gerrit Cole',
+        edge: 0.10,
+        model_prob: 0.60,
+        notes: null,
+      }),
+    }
+    const mlbExcluded: Bet = {
+      ...propsBet({
+        id: 5,
+        sport: 'mlb',
+        system: 'K',
+        game_date: '2026-11-04',
+        player: 'Other Guy',
+        edge: 0.01,
+        notes: null,
+      }),
+    }
+    const bets = dailyBetsFromLedger([propsOfficial, propsTracked, propsEv, mlbQualifying, mlbExcluded])
+    expect(bets.map(b => b.id)).toEqual([1, 4])
+    expect(bets).toMatchObject([propsOfficial, mlbQualifying])
   })
 
   it('there is no count cap on the card or on a graded day', () => {
