@@ -130,6 +130,14 @@ export default async function ProjectionsPage({ searchParams }: Props) {
   const pillar = SPORT_PILLARS[league]
   const f = parsePickFilters(sp)
   const board = await loadSportBoard(league, viewer, { day: f.day, date: f.date, view: 'projections', kind: league === 'mlb' ? 'player' : undefined })
+  // T-2: league-level stat categories, the day's stat markets for this league as pills over the census
+  const statCounts = new Map<string, { label: string; n: number }>()
+  for (const r of board.rows) {
+    const cur = statCounts.get(r.system)
+    if (cur) cur.n++
+    else statCounts.set(r.system, { label: r.marketLabel, n: 1 })
+  }
+  const statPills = [...statCounts.entries()].sort((a, b) => b[1].n - a[1].n)
   const rows = applyPickFilters(board.rows, f)
   const games = withCounts(board.games, board.rows)
   const filtered = activeFilterCount(f) > 0
@@ -138,6 +146,17 @@ export default async function ProjectionsPage({ searchParams }: Props) {
   return (
     <main>
       {header(`${rows.length} ${rows.length === 1 ? 'projection' : 'projections'}${filtered ? ' after filters' : ''}`)}
+      {statPills.length > 1 && (
+        <div className="mx-auto flex max-w-page flex-wrap items-center gap-1.5 px-6 pb-3">
+          <span className="label mr-1">Stat</span>
+          <Link href={pillHref({ market: undefined })} className={PILL_CLASS} style={pill(!f.market)}>All stats</Link>
+          {statPills.map(([system, s]) => (
+            <Link key={system} href={pillHref({ market: system })} className={PILL_CLASS} style={pill(f.market === system)}>
+              {s.label} <span className="opacity-60">{s.n}</span>
+            </Link>
+          ))}
+        </div>
+      )}
       {(board.yesterday || board.days.length > 0) && (
         <AlignedBar>
           <DayToggle today={today} yesterday={board.yesterday} days={board.days} selected={board.date} pinDates={league !== 'mlb'} />
