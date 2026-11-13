@@ -1,0 +1,30 @@
+{
+  "n_total": 122,
+  "n_shift": 22,
+  "n_steady": 100,
+  "shift_recall": 0.1818,
+  "direction_accuracy": 0.5,
+  "steady_false_alarm_rate": 0.23,
+  "per_class_confusion_counts": {
+    "warmer": {
+      "warmer": 3,
+      "cooler": 1,
+      "steady": 8
+    },
+    "cooler": {
+      "warmer": 3,
+      "cooler": 1,
+      "steady": 6
+    },
+    "steady": {
+      "warmer": 14,
+      "cooler": 9,
+      "steady": 77
+    }
+  },
+  "mean_confidence_score_by_label": {
+    "warmer": 2.4226,
+    "cooler": 2.4013,
+    "steady": 2.4484
+  }
+}
