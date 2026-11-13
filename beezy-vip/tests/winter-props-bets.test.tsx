@@ -203,13 +203,13 @@ describe('projection board on a phone', () => {
   it('every column the phone drops is marked, and the long name sits in a truncating cell with its full text in the title', () => {
     const { container } = render(<SportProjectionsBoard sport="nhl" rows={fromSportProjections([proj()])} />)
     const heads = [...container.querySelectorAll('th')].map(th => [th.textContent, th.classList.contains('pb-hide-m')])
-    expect(heads).toEqual([['Score', false], ['Player', false], ['Team', true], ['Market & line', false], ['Model', false], ['Market fair', true], ['Form', true], ['Best price', false], ['Model edge', false], ['Price EV', true]])
+    expect(heads).toEqual([['Score', false], ['Player', false], ['Team', true], ['Market & line', false], ['Model', false], ['Market fair', true], ['Best price', false], ['Model edge', false], ['Price EV', true]])
     const cells = [...container.querySelectorAll('tbody tr td')]
     expect(cells.map(td => td.classList.contains('pb-hide-m'))).toEqual(heads.map(h => h[1]))
     expect(container.querySelector('td.pb-player .pb-name')).toHaveAttribute('title', proj().player)
   })
 
-  it('a tap opens the detail row: game, market fair, form, price EV and a readable engine; a second tap closes it', () => {
+  it('a tap opens the detail row: game, market fair, price EV and a readable engine; a second tap closes it', () => {
     mobile = true
     const { container } = render(<SportProjectionsBoard sport="nhl" rows={fromSportProjections([proj()])} />)
     const btn = container.querySelector('button.pb-name') as HTMLElement
@@ -223,7 +223,7 @@ describe('projection board on a phone', () => {
     expect(d.getByText('Hierarchical')).toBeInTheDocument()
     expect(d.queryByText(/Unvalidated model output/)).not.toBeInTheDocument()
     expect(d.getByText('Model + market agree')).toBeInTheDocument()
-    expect(detail.textContent).toContain('L5 80%')
+    expect(detail.textContent).not.toContain('L5 80%')          // no Form item in the detail row either
     expect(container.textContent).not.toMatch(/empirical_ewm|hierarchical_v1|hier_v1/)
     fireEvent.click(btn)
     expect(container.querySelector('.pb-detail')).toBeNull()

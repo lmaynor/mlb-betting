@@ -67,21 +67,6 @@ export function ProbPair({ model, market }: { model: number | null; market: numb
   )
 }
 
-/** Hit-rate micro bars: the share of the last 5 and last 10 games that landed on the listed side. */
-export function FormBars({ l5, l10 }: { l5: number | null; l10: number | null }) {
-  if (l5 == null && l10 == null) return <span className="text-text-secondary">--</span>
-  const one = (label: string, v: number | null) => (
-    <span className="flex items-center gap-1.5">
-      <span className="mono text-micro text-text-secondary w-[18px]">{label}</span>
-      <span className="relative block h-[5px] w-[54px] rounded-full" style={{ background: TRACK }} aria-hidden>
-        {v != null && <span className="absolute left-0 top-0 block h-full rounded-full" style={{ width: `${v * 100}%`, background: v >= 0.6 ? GREEN : v < 0.4 ? '#ef4444' : SLATE }} />}
-      </span>
-      <span className="mono text-micro text-neutral-300">{v == null ? '--' : `${Math.round(v * 100)}%`}</span>
-    </span>
-  )
-  return <span className="inline-flex flex-col gap-[3px]" title="Share of the last 5 and 10 games that landed on the listed side of the line">{one('L5', l5)}{one('L10', l10)}</span>
-}
-
 export const LAMBDA_LEGEND = [
   { color: RANGE, label: 'Model 10th-90th percentile' },
   { color: GREEN, label: 'Model expectation (lambda), on the listed side of the line' },
