@@ -134,6 +134,18 @@ MAX_ABSTENTION_RATE_GROUPED = 0.20
 LOGLOSS_MIN_GAIN_NATS = 0.010
 LOGLOSS_MAX_P = 0.05
 
+#: FRAME LOCK (Argon frame-provenance ruling, 2026-11-13, pre-registered
+#: BEFORE the NBC backfill merge completed, per the ruling's Q3): the
+#: graded run uses EXCLUSIVELY the rebuilt canonical case frame
+#: (case_frame.parquet, built by build_cases over the complete 13,729-file
+#: GCS report backfill). A graded run executed on any other frame is VOID
+#: under the ruling. The graded path must assert the loaded frame's
+#: SHA-256 equals this lock and refuse (exit 2) on any mismatch.
+CANONICAL_FRAME_NAME = "case_frame.parquet"
+CANONICAL_FRAME_SHA256 = "86506b8a15703de7c6cd5f04bccf9b9876db4570ca96b2a4131b33786ad2ec53"
+CANONICAL_FRAME_ROWS = 5365
+CANONICAL_FRAME_COHORT_N = 227
+
 #: The graded run's corpus requirement (Q1 scope lock + Q4 contract): the
 #: NBC Sports (Rotoworld) archive, complete over the resolved player set.
 GRADED_CORPUS = "nbc"

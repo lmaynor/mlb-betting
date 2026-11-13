@@ -22,7 +22,13 @@ GUARDED, like every runner in this program:
   pooled 2024-25 + 2025-26 against the Q1 bars in arm_t_config). It
   REFUSES (exit 2) unless the corpus is the graded corpus (nbc) AND the
   corpus-completeness check passes: every resolved player in the player
-  map banked. Even with the gate open it does nothing without --execute.
+  map banked. Without --execute, it reports completeness and exits.
+  With --execute, it asserts the canonical frame lock (SHA-256 + rows/cohort),
+  verifies Arm S reproduction against --arm-s-export (< 1e-9 max abs diff),
+  slices prose, preflights cohort honesty, runs parallel classification via
+  --workers, fits dev calibration and shrinkage, grades test against the
+  tightened Q1 bars, writes artifacts (grade_artifact.json, etc.), and prints
+  the verdict line.
 
 The corpus is a config switch: --corpus nbc reads the NBC Sports archive
 (parsed/ + mentions/ + the NBC player map); --corpus rotowire reads the
@@ -57,6 +63,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--cases", help="case frame (parquet/CSV) with tip_ts + decision_report_ts")
     p.add_argument("--reports-dir", help="banked official reports root ({date}/report_*.csv)")
     p.add_argument("--spell-file", help="optional team-calendar case JSON with spell_start per return case")
+    p.add_argument("--arm-s-export", help="path to Arm S predictions_export.csv for cohort verification")
+    p.add_argument("--workers", type=int, default=12, help="worker threads for classification (default 12)")
     p.add_argument("--out", help="output directory (smoke/graded artifacts)")
     p.add_argument("--smoke", action="store_true", help="run the loader over corpus-covered cases")
     p.add_argument("--classify", type=int, default=0,
@@ -335,16 +343,36 @@ def run_graded(args: argparse.Namespace) -> int:
     if not args.execute:
         print("Corpus complete: the graded gate is OPEN. Nothing run without --execute.")
         return 0
-    # Gate open + --execute. The graded execution itself (classify dev via
-    # the Q4 loader, fit the band calibration on dev, classify test, grade
-    # against GRADED_BARS) is Luc's separately triggered step; this runner
-    # exists so the gate cannot be bypassed, and it stops here rather than
-    # improvising a grade. grade_t carries the MAE prongs; the tightened
-    # log-loss prong (>= 0.010 nats, date-clustered paired p < 0.05) is in
-    # arm_t_config.GRADED_BARS and must be applied by that step.
-    print("Corpus complete and --execute given: the graded gate is OPEN. "
-          "The graded execution is a separately triggered step (see the "
-          "deliverable); no cases were classified by this invocation.")
+
+    if not args.cases or not args.reports_dir or not args.out or not args.arm_s_export:
+        print("REFUSED: --graded --execute requires --cases, --reports-dir, --out and --arm-s-export.")
+        return 2
+
+    from nba.minutes_restriction import graded_run
+
+    try:
+        graded_run.assert_frame_lock(args.cases)
+    except graded_run.GradedGateError as exc:
+        print(f"REFUSED: {exc}")
+        return 2
+
+    try:
+        artifact = graded_run.run_graded_execution(
+            frame_path=args.cases,
+            parsed_dir=args.parsed_dir,
+            mentions_dir=args.mentions_dir,
+            player_map=args.player_map,
+            reports_dir=args.reports_dir,
+            export_csv=args.arm_s_export,
+            out_dir=args.out,
+            workers=args.workers,
+        )
+    except graded_run.GradedGateError as exc:
+        print(f"REFUSED: {exc}")
+        return 2
+
+    verdict = artifact.get("verdict") or artifact.get("grade_report", {}).get("verdict")
+    print(f"Arm T graded run verdict: {verdict}")
     return 0
 
 
