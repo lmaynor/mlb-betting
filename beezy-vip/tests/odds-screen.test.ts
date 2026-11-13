@@ -465,7 +465,7 @@ describe('computeSgpProxies', () => {
     expect(fdRow!.label).toBe(SGP_UNVALIDATED_LABEL)
   })
 
-  it('NHL player with 1+ Goal + 1+ Assist emits a GOAL+AST row and does not compare it with Over 1.5 Points', () => {
+  it('NHL 1+ Goal + 1+ Assist no longer emits an SGP proxy row', () => {
     const nhlGoal: BoardRow = {
       key: 'g|mcdavid|goals|0.5',
       game_key: 'nhl:2026-10-30:EDM@CGY',
@@ -524,13 +524,8 @@ describe('computeSgpProxies', () => {
       useCurve: true,
     })
 
-    expect(res.length).toBeGreaterThan(0)
-    const top = res[0]
-    expect(top.archetype).toBe('nhl_goal_ast_vs_pts')
-    expect(top.archetypeLabel).toBe('GOAL+AST')
-    // 1+ Goal AND 1+ Assist is not the same event as Over 1.5 Points (two goals also clear it): no comparison
-    expect(top).not.toHaveProperty('directMarketAm')
-    expect(top).not.toHaveProperty('vsDirectPct')
+    const goalAst = res.find(r => r.archetype === 'nhl_goal_ast_vs_pts')
+    expect(goalAst).toBeUndefined()
   })
 
   it('NBA TD proxy matches 10.0 whole-number lines on milestone ladders', () => {
@@ -663,6 +658,44 @@ describe('computeSgpProxies', () => {
     expect(linemates.every(r => r.rhoTrue === 0.32)).toBe(true)
     expect(linemates.some(r => r.player.includes('Hyman') || r.player.includes('Nugent-Hopkins'))).toBe(false)
     expect(linemates.some(r => r.player_norm.includes('hyman') || r.player_norm.includes('nugent-hopkins'))).toBe(false)
+  })
+
+  it('NHL teammates do not emit a LINEMATE PTS stack without line data', () => {
+    const mcdavidPts: BoardRow = {
+      key: 'g|mcdavid|points|0.5',
+      game_key: 'nhl:2026-10-30:EDM@CGY',
+      commence: '2026-10-30T23:00:00Z',
+      away: 'EDM',
+      home: 'CGY',
+      team: 'EDM',
+      player: 'Connor McDavid',
+      player_norm: 'connor mcdavid',
+      stat: 'points',
+      line: 0.5,
+      books: [B('fanduel', -350, 270), B('draftkings', -340, 260), B('betmgm', -345, 265)],
+    }
+    const draisaitlPts: BoardRow = {
+      key: 'g|draisaitl|points|0.5',
+      game_key: 'nhl:2026-10-30:EDM@CGY',
+      commence: '2026-10-30T23:00:00Z',
+      away: 'EDM',
+      home: 'CGY',
+      team: 'EDM',
+      player: 'Leon Draisaitl',
+      player_norm: 'leon draisaitl',
+      stat: 'points',
+      line: 0.5,
+      books: [B('fanduel', -280, 220), B('draftkings', -270, 215), B('betmgm', -275, 218)],
+    }
+    const res = computeSgpProxies([mcdavidPts, draisaitlPts], {
+      refs: [],
+      method: 'proportional',
+      bettable: null,
+      minEvPct: -50,
+      useCurve: true,
+    })
+    const linemate = res.find(r => r.archetype === 'nhl_linemate_pts_stack')
+    expect(linemate).toBeUndefined()
   })
 
   it('buildSgpDeeplinkTs never appends internal game_key to /event/ URLs and routes to sport pages', () => {
