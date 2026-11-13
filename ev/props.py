@@ -136,6 +136,7 @@ class Quote:
     under_link: str | None = None
     over_sid: str | None = None
     under_sid: str | None = None
+    ts: str | None = None
 
     @property
     def two_sided(self) -> bool:
@@ -182,6 +183,10 @@ def parse_event_props(event_obj: dict, sport: str = "nfl", resolver=None, team_f
                 if mkey.startswith("player_"):
                     unmapped[mkey] = unmapped.get(mkey, 0) + 1
                 continue
+            market_ts = market.get("last_update")
+            if market_ts is None:
+                market_ts = book.get("last_update")
+            market_ts = str(market_ts) if market_ts is not None else None
             cell: dict = {}
             for o in market.get("outcomes", []) or []:
                 raw, price, point = o.get("description"), o.get("price"), o.get("point")
@@ -222,7 +227,8 @@ def parse_event_props(event_obj: dict, sport: str = "nfl", resolver=None, team_f
                         rec["under_sid"] = str(raw_sid) if raw_sid else None
             for (pn, pt), rec in cell.items():
                 quotes.append(Quote(bkey, stat, alt, rec["player"], pn, rec["team"], pt, rec["over"], rec["under"],
-                                    rec["pid"], rec["over_link"], rec["under_link"], rec["over_sid"], rec["under_sid"]))
+                                    rec["pid"], rec["over_link"], rec["under_link"], rec["over_sid"], rec["under_sid"],
+                                    ts=market_ts))
     return quotes, {"unmapped_keys": unmapped, "unresolved": unresolved}
 
 

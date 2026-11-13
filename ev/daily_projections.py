@@ -2464,7 +2464,11 @@ def run_sport(sport: str, now: datetime | None = None, logs: GameLogs | None = N
     if write and events:
         # the /ev/odds screen's full per-book matrix rides the same compute: same unioned events, no extra credits
         from ev import odds_board as _ob
-        _ob.write_board(_ob.build_board(sport, events, now, meta), sport)
+        try:
+            prev = _ob.read_board(sport)
+        except Exception:
+            prev = None
+        _ob.write_board(_ob.build_board(sport, events, now, meta, prev_opens=(prev or {}).get("ladder_opens")), sport)
         _run_game_models(sport, events, now)
         _run_game_board(sport, now)
     return _finish(base, sport, write, now)

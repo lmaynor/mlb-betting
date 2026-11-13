@@ -195,7 +195,7 @@ def test_single_book_alt_rung_is_kept_only_when_actionable_against_the_curve():
     poor = over_only("draftkings", 44.5, 300, mkey="player_points_alternate")      # curve ~0.08 -> -68%
     rows = by_line(ob.build_board("nba", [event([*LADDER, great, poor])], NOW))
     assert 39.5 in rows and rows[39.5]["is_alt"] is True and len(rows[39.5]["books"]) == 1
-    assert rows[39.5]["books"][0] == {"book": "draftkings", "over": 900, "under": None}
+    assert rows[39.5]["books"][0] == {"book": "draftkings", "over": 900, "under": None, "ts": None}
     assert 44.5 not in rows
 
 
@@ -214,15 +214,20 @@ def test_cross_book_near_arb_alt_rung_is_kept_with_one_book_per_side():
     assert 39.5 in rows and {q["book"] for q in rows[39.5]["books"]} == {"draftkings", "fanduel"}
 
 
-def test_main_lines_are_never_evicted_by_alt_rungs_under_the_cap(monkeypatch):
+def test_cap_keeps_groups_whole_and_skips_a_group_that_cannot_fit(monkeypatch):
+    # Ladders B1 item 4 supersedes the old flat-cut guarantee ("mains never evicted by alts"): the cap is now
+    # group-atomic, so a (game, player, stat) group is kept whole or skipped whole. Here the early group
+    # (main + 3 alt rungs = 4 candidate rows) cannot fit a 3-row budget and is skipped entire, main included;
+    # the later one-row group fits and is kept. Groups are walked in (min tier, commence) priority order, so in
+    # production-sized budgets a group is only ever skipped once the budget is nearly exhausted.
     early = event([*FAIR, *alt_ladder(29.5, 160, -190), *alt_ladder(34.5, 300, -400), *alt_ladder(39.5, 500, -700)])
     later = event([book(b, -110, -110, player="Al Roe", point=20.5) for b in ("draftkings", "fanduel", "betmgm", "caesars")],
                   start=START + timedelta(days=1))
     monkeypatch.setattr(ob, "MAX_ROWS", 3)
     b = ob.build_board("nba", [early, later], NOW)
     mains = [r for r in b["rows"] if not r["is_alt"]]
-    assert {r["player"] for r in mains} == {"Jo Doe", "Al Roe"}          # nearest-game-first alone would have kept 3 early rows
-    assert b["count"] == 3 and b["summary"]["rows_cut"] == 2
+    assert {r["player"] for r in mains} == {"Al Roe"}
+    assert b["count"] == 1 and b["summary"]["rows_cut"] == 4
     assert [r["commence"] for r in b["rows"]] == sorted(r["commence"] for r in b["rows"])
 
 
@@ -510,3 +515,180 @@ def test_build_board_nhl_lines_annotation_and_summary_count(monkeypatch):
     b_nba = ob.build_board("nba", [event(FAIR)], NOW)
     assert b_nba["summary"]["lines_rows"] == 0
     assert "line_id" not in b_nba["rows"][0]
+
+
+# ------------------------------------------------------------------------------------------------- Ladders B1 (items 1-8)
+def test_quote_carries_market_last_update_ts():
+    mkt = {"key": "player_points", "last_update": "2026-10-15T14:30:00Z", "outcomes": [
+        {"name": "Over", "description": "Jo Doe", "price": -110, "point": 24.5},
+        {"name": "Under", "description": "Jo Doe", "price": -110, "point": 24.5},
+    ]}
+    ev = event([{"key": "draftkings", "markets": [mkt]}, book("fanduel", -110, -110)])
+    b = ob.build_board("nba", [ev], NOW)
+    dk = next(x for x in b["rows"][0]["books"] if x["book"] == "draftkings")
+    assert dk["ts"] == "2026-10-15T14:30:00Z"
+    fd = next(x for x in b["rows"][0]["books"] if x["book"] == "fanduel")
+    assert fd["ts"] is None
+
+
+def test_placeholder_cap_flags_and_best_price_exclusion():
+    b1 = book("draftkings", -110, -110)
+    b2 = book("fanduel", -105, -115)
+    b3 = book("betmgm", 200, -99900)
+    b = ob.build_board("nba", [event([b1, b2, b3])], NOW)
+    row = b["rows"][0]
+    mgm = next(x for x in row["books"] if x["book"] == "betmgm")
+    assert mgm.get("under_cap") is True
+    assert "over_cap" not in mgm
+    assert row["is_placeholder_cap"] is True
+    assert row["best_under"] is not None
+    assert row["best_under"]["book"] == "draftkings"
+    assert row["best_under"]["american"] == -110
+
+
+def test_rung_consensus_and_gate_data_numerical_sanity():
+    import numpy as np
+    from ev.props import _mad
+    b1 = book("draftkings", -110, -110)
+    b2 = book("fanduel", -105, -115)
+    b3 = book("betmgm", -120, 100)
+    b4 = book("caesars", 100, -120)
+    b = ob.build_board("nba", [event([b1, b2, b3, b4])], NOW)
+    row = b["rows"][0]
+    fairs = [ob._two_sided_fair(bk) for bk in row["books"]]
+    assert row["n_ref"] == 4
+    assert row["n_fresh_ref"] == 4
+    assert row["p_cons"] == round(float(np.median(fairs)), 4)
+    assert row["disp"] == round(_mad(fairs), 4)
+    assert 0.0 < row["rung_vig"] < 0.10
+
+
+def test_best_over_leave_one_out_stats():
+    b1 = book("draftkings", 150, -180)  # known best over (+150)
+    b2 = book("fanduel", -110, -110)
+    b3 = book("betmgm", -110, -110)
+    b4 = book("caesars", -110, -110)
+    b = ob.build_board("nba", [event([b1, b2, b3, b4])], NOW)
+    row = b["rows"][0]
+    bo = row["best_over"]
+    assert bo["book"] == "draftkings"
+    assert bo["american"] == 150
+    assert bo["n_ref_loo"] == 3
+    assert bo["p_cons_loo"] == 0.5
+    assert bo["disp_loo"] == 0.0
+    assert row["n_ref"] == 4
+
+
+def test_lagging_book_excluded_from_fresh_consensus():
+    import numpy as np
+    def book_with_ts(key, over, under, ts, player="Jo Doe", point=24.5):
+        b = book(key, over, under, player=player, point=point)
+        b["markets"][0]["last_update"] = ts
+        return b
+
+    t_fresh = (NOW - timedelta(minutes=10)).isoformat()
+    t_ok = (NOW - timedelta(minutes=30)).isoformat()
+    t_stale = (NOW - timedelta(minutes=150)).isoformat()  # 140 min lag behind t_fresh (> 120 min)
+
+    b1 = book_with_ts("draftkings", -110, -110, t_fresh)
+    b2 = book_with_ts("fanduel", -105, -115, t_ok)
+    b3 = book_with_ts("betmgm", 150, -180, t_stale)  # excluded from consensus
+    b4 = book("caesars", -110, -110)  # no ts -> included
+
+    b = ob.build_board("nba", [event([b1, b2, b3, b4])], NOW)
+    row = b["rows"][0]
+    assert row["n_ref"] == 3
+    included_fairs = [ob._two_sided_fair(bk) for bk in row["books"] if bk["book"] in ("draftkings", "fanduel", "caesars")]
+    assert row["p_cons"] == round(float(np.median(included_fairs)), 4)
+
+
+def test_group_metadata_and_ladder_opens():
+    b_24_1 = book("draftkings", -110, -110, point=24.5)
+    b_24_2 = book("fanduel", -110, -110, point=24.5)
+    b_24_3 = book("betmgm", -110, -110, point=24.5)
+    b_29_1 = book("draftkings", 160, -190, point=29.5, mkey="player_points_alternate")
+    b_29_2 = {"key": "caesars", "markets": [{"key": "player_points_alternate", "outcomes": [
+        {"name": "Over", "description": "Jo Doe", "price": 170, "point": 29.5}
+    ]}]}
+
+    ev = event([b_24_1, b_24_2, b_24_3, b_29_1, b_29_2])
+    b1 = ob.build_board("nba", [ev], NOW, prev_opens={})
+    row = b1["rows"][0]
+    assert row["grp_books_any"] == 4
+    assert row["grp_books_2sided"] == 3
+
+    gk, pn, st = row["game_key"], row["player_norm"], row["stat"]
+    gkey = f"{gk}|{pn}|{st}"
+    assert gkey in b1["ladder_opens"]
+    assert b1["ladder_opens"][gkey]["modal"] == 24.5
+    assert b1["ladder_opens"][gkey]["ts"] == NOW.isoformat()
+    assert row["modal_open"] == 24.5
+    assert row["modal_first_ts"] == NOW.isoformat()
+
+    prev = {gkey: {"modal": 23.5, "ts": "2026-10-15T10:00:00+00:00"}}
+    b2 = ob.build_board("nba", [ev], NOW, prev_opens=prev)
+    row2 = b2["rows"][0]
+    assert row2["modal_open"] == 23.5
+    assert row2["modal_first_ts"] == "2026-10-15T10:00:00+00:00"
+    assert b2["ladder_opens"][gkey]["modal"] == 23.5
+
+
+def test_stale_opener_flag_on_book():
+    def nfl_book_ts(key, over, under, ts, player="Patrick Mahomes", point=250.5):
+        return {"key": key, "markets": [{
+            "key": "player_pass_yds",
+            "last_update": ts,
+            "outcomes": [
+                {"name": "Over", "description": player, "price": over, "point": point},
+                {"name": "Under", "description": player, "price": under, "point": point},
+            ]
+        }]}
+
+    first_ts = "2026-10-15T10:00:00+00:00"
+    b_stale = nfl_book_ts("draftkings", -110, -110, "2026-10-15T10:03:00+00:00")
+    b_fresh = nfl_book_ts("fanduel", -110, -110, "2026-10-15T11:00:00+00:00")
+    b_nots = nfl_book_ts("betmgm", -110, -110, None)
+
+    ev = event([b_stale, b_fresh, b_nots], away="Kansas City Chiefs", home="Baltimore Ravens")
+    b_tmp = ob.build_board("nfl", [ev], NOW)
+    row_tmp = b_tmp["rows"][0]
+    gk, pn, st = row_tmp["game_key"], row_tmp["player_norm"], row_tmp["stat"]
+    gkey = f"{gk}|{pn}|{st}"
+
+    prev = {gkey: {"modal": 248.5, "ts": first_ts}}  # moved by 2.0 >= 1.5 (yardage)
+    b = ob.build_board("nfl", [ev], NOW, prev_opens=prev)
+    row = b["rows"][0]
+    dk = next(x for x in row["books"] if x["book"] == "draftkings")
+    fd = next(x for x in row["books"] if x["book"] == "fanduel")
+    mgm = next(x for x in row["books"] if x["book"] == "betmgm")
+
+    assert dk.get("stale_opener") is True
+    assert "stale_opener" not in fd
+    assert "stale_opener" not in mgm
+
+
+def test_group_atomic_cap_preserves_whole_groups(monkeypatch):
+    g1_1 = [book(b, -110, -110, point=24.5, player="Jo Doe") for b in ("draftkings", "fanduel")]
+    g1_2 = [book(b, 160, -190, point=29.5, player="Jo Doe", mkey="player_points_alternate") for b in ("draftkings", "fanduel")]
+    g2_1 = [book(b, -110, -110, point=20.5, player="Al Roe") for b in ("draftkings", "fanduel")]
+    g2_2 = [book(b, 160, -190, point=25.5, player="Al Roe", mkey="player_points_alternate") for b in ("draftkings", "fanduel")]
+
+    ev1 = event([*g1_1, *g1_2], start=START)
+    ev2 = event([*g2_1, *g2_2], start=START + timedelta(days=1))
+
+    monkeypatch.setattr(ob, "MAX_ROWS", 3)
+    b = ob.build_board("nba", [ev1, ev2], NOW)
+
+    assert b["count"] == 2
+    assert b["summary"]["rows_cut"] == 2
+    assert {r["player"] for r in b["rows"]} == {"Jo Doe"}
+    assert {r["line"] for r in b["rows"]} == {24.5, 29.5}
+    assert b["count"] <= 3
+
+    # Smaller subsequent group fits in remaining budget
+    g3 = [book(b, -110, -110, point=15.5, player="Bob Poe") for b in ("draftkings", "fanduel")]
+    ev3 = event([*g3], start=START + timedelta(days=2))
+    b2 = ob.build_board("nba", [ev1, ev2, ev3], NOW)
+    assert {r["player"] for r in b2["rows"]} == {"Jo Doe", "Bob Poe"}
+    assert b2["count"] == 3
+    assert b2["summary"]["rows_cut"] == 2
