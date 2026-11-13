@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { useMounted } from '@/lib/use-mounted'
 import { useSearchParams } from 'next/navigation'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
@@ -12,11 +13,11 @@ import { SPORT_PILLARS } from '@/lib/sports'
 import { cx } from '@/utils/cx'
 
 type Tab = 'bankroll' | 'calibration' | 'books' | 'health'
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'bankroll', label: 'Bankroll simulator' },
-  { id: 'calibration', label: 'Edge calibration' },
-  { id: 'books', label: 'Book leaderboard' },
-  { id: 'health', label: 'System health' },
+const TABS: { id: Tab; label: string; sub: string }[] = [
+  { id: 'bankroll', label: 'Bankroll simulator', sub: 'Bankroll' },
+  { id: 'calibration', label: 'Edge calibration', sub: 'Calibration' },
+  { id: 'books', label: 'Book leaderboard', sub: 'Books' },
+  { id: 'health', label: 'System health', sub: 'Health' },
 ]
 const GATE = 200
 const STORED_KELLY_FRACTION = 0.25   // fraction already baked into bets.kelly_pct for EV rows
@@ -29,7 +30,7 @@ const CARD = 'rounded-xl border border-separator-border bg-background-primary-de
 
 export function AnalyticsClient({ initial, stats }: { initial: AnalyticsDeepDive | null; stats: SystemStats[] }) {
   const mounted = useMounted()
-  // The tab lives in the URL (?tab=) and is chosen from the Results section tabs under the nav, so it is linkable.
+  // The sub-view lives in the URL (?tab=) and is chosen from the internal sub-tab strip below, so it is linkable.
   const sp = useSearchParams()
   const tabParam = sp.get('tab')
   const tab: Tab = TABS.some(t => t.id === tabParam) ? (tabParam as Tab) : 'bankroll'
@@ -57,6 +58,16 @@ export function AnalyticsClient({ initial, stats }: { initial: AnalyticsDeepDive
         <h1 className="text-title-2-bold text-text-primary">{TABS.find(t => t.id === tab)!.label}</h1>
         {loading && <span className="mono text-caption-2-medium text-text-secondary">updating...</span>}
       </div>
+      {/* Internal sub-tabs (lib/ia.ts Q1(g)): the Results strip holds one Analytics tab; the four sub-views switch here. */}
+      <nav aria-label="Analytics views" className="mb-6 flex gap-1 overflow-x-auto border-b border-separator-border">
+        {TABS.map(t => (
+          <Link key={t.id} href={`/analytics?tab=${t.id}`} aria-current={tab === t.id ? 'page' : undefined}
+            className={cx('-mb-px border-b-2 px-3 py-2 text-body-2-semibold no-underline transition-colors',
+              tab === t.id ? 'border-b-[var(--signal)] text-text-primary' : 'border-b-transparent text-text-secondary hover:text-text-primary')}>
+            {t.sub}
+          </Link>
+        ))}
+      </nav>
 
       {!data ? (
         <div className={cx(CARD, 'px-5 py-9 text-center text-body-regular text-text-secondary')}>Analytics are unavailable right now.</div>

@@ -24,7 +24,7 @@ export default function manifest(): MetadataRoute.Manifest {
     ],
     shortcuts: [
       {
-        name: 'Odds Terminal (+EV & Arb)',
+        name: 'Odds Screen (+EV & Arb)',
         short_name: 'Odds',
         url: '/ev',
         description: 'Live +EV scanner, outliers, arbitrage, and middles',
@@ -36,13 +36,13 @@ export default function manifest(): MetadataRoute.Manifest {
         description: "Today's locked official confluence plays",
       },
       {
-        name: 'Prop Research Cockpit',
-        short_name: 'Cockpit',
+        name: 'Prop Research',
+        short_name: 'Props',
         url: '/edge',
         description: 'L5/L10 hit rates, projections, and book comparison',
       },
       {
-        name: 'Public Results Ledger',
+        name: 'Settled Bets',
         short_name: 'Results',
         url: '/results',
         description: 'Verified graded bet history and ROI',

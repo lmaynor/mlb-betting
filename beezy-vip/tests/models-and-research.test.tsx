@@ -39,7 +39,7 @@ describe('a model page for every listed system', () => {
       expect(container.querySelector('h1')).toHaveTextContent(system.name)
       for (const t of ['Model configuration', 'Accuracy', 'Feature List']) expect(screen.getByText(t)).toBeInTheDocument()
       expect(screen.getByText(/No graded history is published/)).toBeInTheDocument()
-      expect(screen.getByRole('link', { name: /Every .* projection in the Odds Terminal/ })).toHaveAttribute('href', `/ev/projections?league=${system.sport}`)
+      expect(screen.getByRole('link', { name: /Every .* projection in the Scanner/ })).toHaveAttribute('href', `/ev/projections?league=${system.sport}`)
       unmount()
     })
 

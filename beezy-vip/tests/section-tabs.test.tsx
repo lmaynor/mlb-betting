@@ -12,15 +12,17 @@ describe('section tabs on a phone', () => {
     const row = screen.getByRole('navigation').firstElementChild as HTMLElement
     expect(row).toHaveClass('grid', 'auto-cols-fr')
     expect(row).not.toHaveClass('overflow-x-auto')
-    expect(screen.getByRole('link', { name: 'Odds Terminal' })).toHaveTextContent('OddsOdds Terminal')
+    expect(screen.getByRole('link', { name: 'Odds Screen' })).toHaveTextContent('OddsOdds Screen')
     expect(screen.getByRole('link', { name: 'Prop Research' })).toHaveTextContent('PropsProp Research')
     expect(screen.getByRole('link', { name: 'Game Lines' })).toHaveAttribute('aria-current', 'page')
   })
-  it('a longer row (Results has six) still scrolls, with the edge fade', () => {
+  it('Results has three tabs after the Analytics collapse (Q1(g)), so it also shares the row evenly', () => {
     path = '/results'
     render(<SectionTabs />)
     const row = screen.getByRole('navigation').firstElementChild as HTMLElement
-    expect(row).toHaveClass('overflow-x-auto')
-    expect(row.className).toMatch(/mask-image/)
+    expect(row).toHaveClass('grid', 'auto-cols-fr')
+    expect(row).not.toHaveClass('overflow-x-auto')
+    expect(screen.getByRole('link', { name: 'Settled Bets' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Analytics' })).toHaveAttribute('href', '/analytics')
   })
 })

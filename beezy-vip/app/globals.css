@@ -416,7 +416,7 @@ a:focus-visible {
 .systems-grid   { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .pricing-grid   { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
 
-.footer-grid    { display: grid; grid-template-columns: 1.6fr repeat(5, 1fr); gap: 28px; }
+.footer-grid    { display: grid; grid-template-columns: 1.5fr repeat(6, 1fr); gap: 24px; }
 .models-grid    { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 
 /* Seamless internal-border "strip" panels (no gap; cells share hairlines) */

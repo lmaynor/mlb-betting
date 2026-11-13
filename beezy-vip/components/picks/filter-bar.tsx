@@ -468,7 +468,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
             </div>
 
             {my.books.length === 0 && bookValue === 'MY' && (
-              <span className="text-mini text-text-secondary">Choose your books on the <Link className="text-link" href="/ev">Odds Terminal</Link> first.</span>
+              <span className="text-mini text-text-secondary">Choose your books on the <Link className="text-link" href="/ev">Odds Screen</Link> first.</span>
             )}
           </div>
         </MobileBottomSheet>
@@ -544,7 +544,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
         <button type="button" onClick={clear} style={{ ...CONTROL, cursor: 'pointer', color: 'var(--color-neutral-300)' }}>Clear {active}</button>
       )}
       {my.books.length === 0 && bookValue === 'MY' && (
-        <span className="text-mini text-text-secondary">Choose your books on the <Link className="text-link" href="/ev">Odds Terminal</Link> first.</span>
+        <span className="text-mini text-text-secondary">Choose your books on the <Link className="text-link" href="/ev">Odds Screen</Link> first.</span>
       )}
     </AlignedBar>
   )

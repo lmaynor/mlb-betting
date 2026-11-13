@@ -11,6 +11,7 @@ import { ClerkProvider } from '@clerk/nextjs'
 import { AUTH_DISABLED } from '@/lib/auth-mode'
 import { Nav } from '@/components/layout/nav'
 import { LiveTicker } from '@/components/layout/live-ticker'
+import { TickerSlot } from '@/components/layout/ticker-slot'
 import { Footer } from '@/components/layout/footer'
 import { BottomNav } from '@/components/layout/bottom-nav'
 import { SectionTabs } from '@/components/layout/section-tabs'
@@ -59,12 +60,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString([ORGANIZATION_LD, WEBSITE_LD]) }} />
         <div className="page-frame">
+          {/* Pinned chrome is exactly two rows (lib/ia.ts chrome budget): the product bar, then the section tab strip.
+              The LiveTicker is not chrome: it renders as a non-sticky strip inside Home and Scanner page bodies. */}
           <div className="site-chrome">
             <Nav authDisabled={AUTH_DISABLED} />
-            <LiveTicker />
+            <Suspense fallback={null}><SectionTabs /></Suspense>
           </div>
-          {/* Outside the sticky chrome on purpose: it scrolls away so the pinned header stays ~131px. */}
-          <Suspense fallback={null}><SectionTabs /></Suspense>
+          <TickerSlot><LiveTicker /></TickerSlot>
           <main>{children}</main>
           <Footer />
           <BottomNav />
