@@ -3,12 +3,15 @@ import { formatOdds } from '@/lib/odds'
 import { BookLogo } from '@/components/ui/book-logo'
 import { MobileBottomSheet } from '@/components/ui/mobile-sheet'
 import { STAT_LABEL, type ArbRow, type LongshotRow, type MiddleResult, type ScreenRow } from '@/lib/odds-screen'
+import { LadderCard } from './ladder-card'
+import type { LadderGroup } from '@/lib/ladders'
 import { HAIR, GREEN } from './odds-constants'
 import { startLabel, signed } from './odds-format'
 
 export function MobileCompareSheet({
   item,
   columns,
+  ladderGroup,
   onClose,
 }: {
   item:
@@ -18,6 +21,7 @@ export function MobileCompareSheet({
     | { type: 'longshots'; row: LongshotRow }
     | null
   columns: { key: string; offshore: boolean }[]
+  ladderGroup?: LadderGroup | null
   onClose: () => void
 }) {
   if (!item) return null
@@ -121,6 +125,13 @@ export function MobileCompareSheet({
             })}
           </div>
         </div>
+
+        {ladderGroup && item.type !== 'longshots' && (
+          <div>
+            <div className="ui-heading text-micro text-text-secondary mb-2">FULL LADDER</div>
+            <LadderCard group={ladderGroup} />
+          </div>
+        )}
       </div>
     </MobileBottomSheet>
   )

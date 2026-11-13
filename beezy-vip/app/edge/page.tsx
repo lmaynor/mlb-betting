@@ -1,10 +1,11 @@
 export const dynamic = 'force-dynamic'
 
 import type { Metadata } from 'next'
-import { apiGetTodayAllPredictions, apiGetTodaySlate, apiGetEdgeEnrich, apiGetTodayAlerts, type EdgeAlert } from '@/lib/betting-api'
+import { apiGetTodayAllPredictions, apiGetTodaySlate, apiGetEdgeEnrich, apiGetTodayAlerts, apiGetOddsBoard, type EdgeAlert } from '@/lib/betting-api'
 import type { Bet, CockpitFeed, TodaySlate, SlateGame } from '@/lib/types'
 import { formatCentralDate, siteDateKey } from '@/lib/dates'
-import { limitCockpit } from '@/lib/access-feeds'
+import { limitCockpit, limitOddsBoard } from '@/lib/access-feeds'
+import { withHeadshots } from '@/lib/odds-headshots'
 import { loadCockpit } from '@/lib/cockpit-loader'
 import { withHeadshotIds } from '@/lib/cockpit-headshots'
 import { limitBets } from '@/lib/access-bets'
@@ -53,7 +54,7 @@ function normName(name: string | null): string {
 
 export default async function EdgePage() {
   const date = siteDateKey()
-  const [rawAll, slate, enrichData, alerts, cockpitAll, viewer] = await Promise.all([
+  const [rawAll, slate, enrichData, alerts, cockpitAll, viewer, nflBoardRaw] = await Promise.all([
     // The model board is model predictions only; pooled +EV rows (system EV) belong to the +EV Terminal.
     apiGetTodayAllPredictions().then(r => r.filter(b => b.system !== 'EV')).catch(() => [] as Bet[]),
     apiGetTodaySlate().catch(() => ({ games: [] } as unknown as TodaySlate)),
@@ -62,7 +63,10 @@ export default async function EdgePage() {
     // the sweep's flagged rows plus the daily projection boards (lib/cockpit-players.ts); fail-soft per source
     loadCockpit(),
     getViewer(),
+    apiGetOddsBoard('nfl', { limit: 3000 }).catch(() => null),
   ])
+
+  const nflBoardRows = nflBoardRaw ? withHeadshots(limitOddsBoard(nflBoardRaw, viewer).board).rows : []
 
   // Prop research is paid per league (lib/access.ts). Cut here so withheld rows are never in the payload; the client only
   // refreshes through /api/edge-cockpit, which applies the same cut.
@@ -131,5 +135,5 @@ export default async function EdgePage() {
     weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
   })
 
-  return <EdgeClient picks={picks} updated={updated} dateKey={date} cockpit={cockpit} lockedBoard={board.locked} />
+  return <EdgeClient picks={picks} updated={updated} dateKey={date} cockpit={cockpit} lockedBoard={board.locked} nflBoardRows={nflBoardRows} />
 }

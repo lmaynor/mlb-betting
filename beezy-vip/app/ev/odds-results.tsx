@@ -5,8 +5,9 @@ import { SGP_ARTIFACT_EV_PCT, SGP_UNVALIDATED_LABEL } from '@/lib/odds-screen'
 import { gameLinesHref, isGameLinesOnly } from '@/lib/sports'
 import { HAIR, GREEN, PAGE } from './odds-constants'
 import { ageLabel, usd } from './odds-format'
-import { EvRow, ArbTableRow, MiddleTableRow, LongshotTableRow, OutlierTableRow, SgpTableRow } from './odds-rows'
-import { MobileEvRowCard, MobileArbCard, MobileMiddleCard, MobileLongshotCard, MobileSgpCard, OutlierCard } from './odds-cards'
+import { EvRow, ArbTableRow, MiddleTableRow, OutlierTableRow, SgpTableRow } from './odds-rows'
+import { MobileEvRowCard, MobileArbCard, MobileMiddleCard, MobileSgpCard, OutlierCard } from './odds-cards'
+import { LaddersView } from './ladder-card'
 import { OddsScreen } from './use-odds-screen'
 import { LeagueNote } from '@/components/ui/league-filter'
 
@@ -71,7 +72,7 @@ function RevealNotice({ msg, onDismiss }: { msg: string; onDismiss: () => void }
 }
 
 function MobileCardsView({ odds }: { odds: OddsScreen }) {
-  const { mode, limit, copied, revealed, revealMsg, setRevealMsg, bankroll, setMobileView, setInspectItem, handleReveal, screen, outliers, arbs, middles, longshots, sgpProxies, nRows, meta, outlay, copyHedge, copyMiddle, fullAccess } = odds
+  const { mode, limit, copied, revealed, revealMsg, setRevealMsg, bankroll, setMobileView, setInspectItem, handleReveal, screen, outliers, arbs, middles, sgpProxies, nRows, meta, outlay, copyHedge, copyMiddle, fullAccess } = odds
   return (
     <div>
       <MobileViewBar active="cards" nRows={nRows} onChange={setMobileView} trailing={<span className="mono text-mini text-text-secondary">{meta.age != null ? ageLabel(meta.age) : ''}</span>} />
@@ -124,16 +125,6 @@ function MobileCardsView({ odds }: { odds: OddsScreen }) {
               copied={copied === r.key}
               onCopy={copyMiddle}
               onInspect={() => setInspectItem({ type: 'middles', row: r })}
-            />
-          ))}
-        </div>
-      ) : mode === 'longshots' ? (
-        <div>
-          {longshots.slice(0, limit).map(r => (
-            <MobileLongshotCard
-              key={r.key}
-              r={r}
-              onInspect={() => setInspectItem({ type: 'longshots', row: r })}
             />
           ))}
         </div>
@@ -196,7 +187,7 @@ function SgpTableView({ odds }: { odds: OddsScreen }) {
 }
 
 function PropTableView({ odds }: { odds: OddsScreen }) {
-  const { mode, limit, copied, revealed, bankroll, isMobile, setMobileView, handleReveal, columns, screen, outliers, arbs, middles, longshots, nRows, refWeight, refSet, outlay, copyHedge, copyMiddle, fullAccess } = odds
+  const { mode, limit, copied, revealed, bankroll, isMobile, setMobileView, handleReveal, columns, screen, outliers, arbs, middles, nRows, refWeight, refSet, outlay, copyHedge, copyMiddle, fullAccess } = odds
   return (
     <div>
       {isMobile && <MobileViewBar active="table" nRows={nRows} onChange={setMobileView} />}
@@ -234,13 +225,6 @@ function PropTableView({ odds }: { odds: OddsScreen }) {
                 <th scope="col" className="odds-ev">STAKE SPLIT ({usd(outlay).replace('.00', '')})</th>
               </>
             )}
-            {mode === 'longshots' && (
-              <>
-                <th scope="col" className="odds-ev" title="Fair over / under price: the reference books' consensus, or the player's curve when they are too few">Fair anchor</th>
-                <th scope="col" className="odds-ev">Best action</th>
-                <th scope="col" title="Implied probability of the best price against the fair probability, for the best action's side" className="text-right">Implied / true</th>
-              </>
-            )}
             {columns.map(c => {
               const b = bookDisplay(c.key)
               const isRef = refSet.has(c.key)
@@ -266,7 +250,6 @@ function PropTableView({ odds }: { odds: OddsScreen }) {
           ))}
           {mode === 'middles' && middles.slice(0, limit).map(r => <MiddleTableRow key={r.key} r={r} columns={columns} outlay={outlay} copied={copied === r.key} onCopy={copyMiddle} />)}
           {mode === 'arb' && arbs.slice(0, limit).map(r => <ArbTableRow key={r.key} r={r} columns={columns} outlay={outlay} copied={copied === r.key} onCopy={copyHedge} />)}
-          {mode === 'longshots' && longshots.slice(0, limit).map(r => <LongshotTableRow key={r.key} r={r} columns={columns} />)}
         </tbody>
       </table>
     </div>
@@ -288,6 +271,8 @@ export function OddsResults({ odds }: { odds: OddsScreen }) {
         <LeagueNote value={sport} live={sportOptions} onPick={v => { if (isGameLinesOnly(v)) { window.location.assign(gameLinesHref(v)); return } setSport(v); setLimit(PAGE) }} />
       ) : allRows.length === 0 ? (
         <Empty title="No prop prices posted" />
+      ) : mode === 'longshots' ? (
+        <LaddersView odds={odds} />
       ) : nRows === 0 ? (
         <Empty title={emptyBody.title} body={emptyBody.body} />
       ) : isMobile && mobileView === 'cards' ? (
