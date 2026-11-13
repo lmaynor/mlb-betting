@@ -68,6 +68,9 @@ def run_plan(args) -> str:
         "     missed >= 4 injury MAE cut >= 15%; full population MAE cut >= 10%;",
         "     calibration |mean predicted - mean realized ratio| <= 0.05 per missed band.",
         f"  6. Write JSON to {args.out_json!r} and markdown to {args.out_md!r} (when given).",
+        f"  7. With --export-predictions={args.export_predictions!r}: also write the per-case "
+        "prediction frame (predictions joined with the case's designation, decision_report_ts, "
+        "and absence/injury class fields) as CSV there. Default: no export.",
         "Re-run with --execute to perform the run.",
     ])
 
@@ -78,6 +81,9 @@ def main(argv=None) -> int:
     ap.add_argument("--reports-path", help="local file/dir of banked official injury reports")
     ap.add_argument("--out-json", help="write the grading report dict as JSON here")
     ap.add_argument("--out-md", help="write the grading report as markdown here")
+    ap.add_argument("--export-predictions",
+                    help="also write the per-case prediction frame (CSV) here; "
+                         "default behavior (no flag) writes no export")
     ap.add_argument("--execute", action="store_true",
                     help="actually run the backtest (without this flag: print the plan, read nothing)")
     args = ap.parse_args(argv)
@@ -92,6 +98,12 @@ def main(argv=None) -> int:
     reports = load_designations(args.reports_path) if args.reports_path else None
     built = cases.build_cases(box, reports)
     predictions = arm_s.walk_forward(built)
+    if args.export_predictions:
+        case_fields = built[["case_id", "game_id", "player_id", "designation",
+                             "decision_report_ts", "absence_reason_class", "injury_class",
+                             "reason_cat"]]
+        export = predictions.merge(case_fields, on="case_id", how="left")
+        export.to_csv(args.export_predictions, index=False)
     report = grade.grade(predictions)
     report["n_cases"] = int(len(built))
     report["n_predictions"] = int(len(predictions))

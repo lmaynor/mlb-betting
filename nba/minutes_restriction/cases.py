@@ -150,8 +150,36 @@ def _reports_normalized(reports: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def build_designation_index(reports_norm: pd.DataFrame) -> dict:
+    """Pre-group a normalized reports frame by (name_key, team_code, game_date).
+
+    The scan in select_designation filters the full ~800k-row frame on every call, and
+    build_cases calls it for every eligible rotation player-game (~300k calls), which made
+    multi-season runs unrunnable. The index groups the frame ONCE (groupby preserves the
+    original row order inside each group, so the last-in-frame-order tie-break is unchanged)
+    and each lookup then scans only that player-game's <= 13 report versions. Semantics are
+    identical to the scan; the equivalence is pinned by tests and by the 2026-11-12 full
+    replay over every selection call site of the graded run (see the Arm S index PR).
+    """
+    if reports_norm is None or not len(reports_norm):
+        return {}
+    index: dict = {}
+    for key, group in reports_norm.groupby(["_name_key", "team_code", "_game_date"], sort=False):
+        index[key] = group
+    return index
+
+
+def _selection_result(row, latest) -> dict:
+    return {
+        "designation": row["status"],
+        "decision_report_ts": latest,
+        "report_reason": None if pd.isna(row["reason"]) else row["reason"],
+        "reason_cat": None if pd.isna(row["reason_cat"]) else row["reason_cat"],
+    }
+
+
 def select_designation(reports_norm: pd.DataFrame, *, player: str, team: str, game_date,
-                       tip_ts, lead_min: float = DECISION_LEAD_MIN):
+                       tip_ts, lead_min: float = DECISION_LEAD_MIN, index: dict | None = None):
     """The decision-time designation for one player-game, or None when no eligible report lists him.
 
     Eligible = reports for (player, team_code, game_date) stamped at or before tip - lead_min.
@@ -159,12 +187,27 @@ def select_designation(reports_norm: pd.DataFrame, *, player: str, team: str, ga
     construction. Returns {designation, decision_report_ts, report_reason, reason_cat}.
     `reports_norm` must already carry _report_ts / _game_date / _name_key (see _reports_normalized);
     build_cases prepares it once.
+
+    With `index` (from build_designation_index) the lookup scans only the player-game's own
+    report group; without it the full frame is scanned. The two paths are equivalent by
+    construction and by test.
     """
     if reports_norm is None or not len(reports_norm):
         return None
     tip = pd.Timestamp(tip_ts)
     tip = tip.tz_convert(_ET) if tip.tzinfo is not None else tip.tz_localize(_ET)
     cutoff = tip - pd.Timedelta(minutes=float(lead_min))
+    if index is not None:
+        gd = game_date.date() if hasattr(game_date, "date") and not isinstance(
+            game_date, type(pd.Timestamp("2020-01-01").date())) else game_date
+        group = index.get((_norm_name(player), team, gd))
+        if group is None or not len(group):
+            return None
+        cand = group[group["_report_ts"] <= cutoff]
+        if not len(cand):
+            return None
+        latest = cand["_report_ts"].max()
+        return _selection_result(cand[cand["_report_ts"] == latest].iloc[-1], latest)
     cand = reports_norm[
         (reports_norm["_name_key"] == _norm_name(player))
         & (reports_norm["team_code"] == team)
@@ -175,12 +218,7 @@ def select_designation(reports_norm: pd.DataFrame, *, player: str, team: str, ga
         return None
     latest = cand["_report_ts"].max()
     row = cand[cand["_report_ts"] == latest].iloc[-1]
-    return {
-        "designation": row["status"],
-        "decision_report_ts": latest,
-        "report_reason": None if pd.isna(row["reason"]) else row["reason"],
-        "reason_cat": None if pd.isna(row["reason_cat"]) else row["reason_cat"],
-    }
+    return _selection_result(row, latest)
 
 
 # -----------------------------------------------------------------------------------------------
@@ -265,6 +303,7 @@ def build_cases(box: pd.DataFrame, reports: pd.DataFrame | None = None, *,
     if not len(df):
         return pd.DataFrame(columns=CASE_COLUMNS)
     reports_norm = _reports_normalized(reports) if reports is not None and len(reports) else None
+    designation_index = build_designation_index(reports_norm) if reports_norm is not None else None
 
     # Team calendar: ordered games per team, the previous game (back-to-back), and the opponent.
     cal = (df.drop_duplicates(["_team", "game_id"])
@@ -319,7 +358,8 @@ def build_cases(box: pd.DataFrame, reports: pd.DataFrame | None = None, *,
             return {"designation": None, "decision_report_ts": pd.NaT,
                     "report_reason": None, "reason_cat": None}
         found = select_designation(reports_norm, player=player, team=team,
-                                   game_date=game_date, tip_ts=tip, lead_min=lead_min)
+                                   game_date=game_date, tip_ts=tip, lead_min=lead_min,
+                                   index=designation_index)
         if found is None:
             return {"designation": None, "decision_report_ts": pd.NaT,
                     "report_reason": None, "reason_cat": None}
