@@ -1,8 +1,8 @@
 /**
  * @jest-environment node
  *
- * Finding 954a0a3a regression: /api/slate/today and /api/stats/clv are the data plane of the login-gated
- * /tools pages, so their handlers must refuse anonymous callers with 401 (and never reach the upstream API,
+ * Finding 954a0a3a regression: /api/slate/today and /api/stats/clv are login-gated data routes,
+ * so their handlers must refuse anonymous callers with 401 (and never reach the upstream API,
  * which would spend the server-side key) while passing signed-in callers through.
  */
 import { NextRequest } from 'next/server'

@@ -127,20 +127,4 @@ describe('anonymous parameter-only routes are CDN-shared (s-maxage + SWR)', () =
     expect(upstreamInit().next?.revalidate).toBe(300)
     expect(res.headers.get('cache-control')).toContain('s-maxage=300')
   })
-
-  it('/api/tools/kelly (pure math, longer window)', async () => {
-    const { GET } = await import('@/app/api/tools/kelly/route')
-    const res = await GET(new NextRequest('http://localhost/api/tools/kelly?bankroll=1000&odds=-110&prob=0.55'))
-    expect(res.status).toBe(200)
-    expect(res.headers.get('cache-control')).toContain('s-maxage=3600')
-    expect(fetchMock).not.toHaveBeenCalled()
-  })
-
-  it('/api/tools/odds-calc (pure math, longer window)', async () => {
-    const { GET } = await import('@/app/api/tools/odds-calc/route')
-    const res = await GET(new NextRequest('http://localhost/api/tools/odds-calc?odds1=-110&odds2=-110'))
-    expect(res.status).toBe(200)
-    expect(res.headers.get('cache-control')).toContain('s-maxage=3600')
-    expect(fetchMock).not.toHaveBeenCalled()
-  })
 })

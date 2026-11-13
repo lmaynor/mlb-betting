@@ -26,8 +26,5 @@ Disallow: /api
 Disallow: /dashboard
 Disallow: /login
 Disallow: /signup
-Disallow: /tools/slate
-Disallow: /tools/clv-tracker
-Disallow: /tools/bet-tracker
 
 Sitemap: https://beezy.fyi/sitemap.xml

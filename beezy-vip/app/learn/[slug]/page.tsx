@@ -5,14 +5,8 @@ import Link from 'next/link'
 import { renderMarkdown, plainSummary } from '@/lib/markdown'
 import { articleLd, jsonLdString } from '@/lib/seo'
 
-// Where each guide should send a reader next: the free tool or live page that does what the article describes.
+// Where each guide should send a reader next: the live page that does what the article describes.
 const RELATED: Record<string, { href: string; label: string }[]> = {
-  'kelly-criterion-sports-betting': [{ href: '/tools/kelly-calculator', label: 'Kelly Calculator' }],
-  'implied-probability-calculator': [{ href: '/tools/odds-calculator', label: 'Odds & Vig Calculator' }],
-  'how-to-remove-vig-odds': [{ href: '/tools/odds-calculator', label: 'Odds & Vig Calculator' }],
-  'odds-boost-ev': [{ href: '/tools/boost-ev', label: 'Boost EV Calculator' }],
-  'closing-line-value-clv': [{ href: '/tools/clv-tracker', label: 'CLV Tracker' }],
-  'line-movement-sports-betting': [{ href: '/tools/clv-tracker', label: 'CLV Tracker' }],
   'what-is-nrfi-betting': [{ href: '/picks/mlb/nrfi', label: 'NRFI picks' }, { href: '/models/nrfi', label: 'NRFI model' }],
   'nrfi-betting-strategy': [{ href: '/picks/mlb/nrfi', label: 'NRFI picks' }, { href: '/models/nrfi', label: 'NRFI model' }],
   'f5-betting-mlb': [{ href: '/picks/mlb/f5', label: 'F5 picks' }, { href: '/models/f5', label: 'F5 model' }],

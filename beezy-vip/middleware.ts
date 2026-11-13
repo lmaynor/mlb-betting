@@ -8,9 +8,6 @@ export const runtime = 'nodejs'
 
 const isProtectedRoute = createRouteMatcher([
   '/dashboard(.*)',
-  '/tools/bet-tracker(.*)',
-  '/tools/clv-tracker(.*)',
-  '/tools/slate(.*)',
   '/api/admin(.*)',
 ])
 
@@ -45,7 +42,7 @@ function isGeoBlocked(req: NextRequest): { blocked: boolean; state: string; coun
 }
 
 function geoRedirect(req: NextRequest): NextResponse | undefined {
-  // Geo-check: applies to picks and dashboard pages only -- not legal, tools, or learn
+  // Geo-check: applies to picks and dashboard pages only -- not legal or learn
   const path = req.nextUrl.pathname
   const isGatedPath = path.startsWith('/picks') || path.startsWith('/dashboard') || path.startsWith('/signup')
   if (!isGatedPath) return undefined
@@ -117,17 +114,17 @@ export const config = {
     // surface is excluded: the ISR pages below and the /api routes that never read the viewer. Pages and routes that call
     // getViewer()/getUserTier()/auth(), and anything under the geo-gated /picks, /dashboard and /signup paths, must stay
     // matched. Keep this list in step with the `revalidate` pages.
-    // /api/slate/* and /api/stats/clv are NOT excluded: they are the data plane of the login-gated /tools pages and
+    // /api/slate/* and /api/stats/clv are NOT excluded: they are login-gated member data routes and
     // their handlers check the session with getUserId(), which only resolves when clerkMiddleware runs. The rest of
     // /api/stats (the summary proxies) stays excluded: it serves public season aggregates and never reads the viewer.
     // Also excluded: /api/webhooks (the Stripe webhook verifies its own signature) and /api/cron (checks
     // CRON_SECRET itself) -- neither reads a Clerk session, so a middleware run bought them nothing. The purely
-    // static public pages (learn, about, legal, pricing, compare, blocked, the three calculator pages) read no
+    // static public pages (learn, about, legal, pricing, compare, blocked) read no
     // session and are not geo-gated paths, so they are excluded too; /picks stays matched because the geo
     // redirect above applies to it.
     // /api/collect is excluded for the same reason as /api/analytics: it only classifies request headers and never
     // reads the viewer, so spending a middleware run on it would be pure Active CPU cost.
-    '/((?!_next|api/(?:og|stats(?!/clv(?:/|$))|sparkline|analytics|collect|edge-enrich|tools|webhooks|cron)(?:/|$)|results$|analytics$|tools$|tools/(?:boost-ev|kelly-calculator|odds-calculator)$|models(?:/|$)|learn(?:/|$)|about$|legal(?:/|$)|pricing$|compare(?:/|$)|blocked$|$|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|txt|xml)).*)',
-    '/(api(?!/(?:og|stats(?!/clv(?:/|$))|sparkline|analytics|collect|edge-enrich|tools|webhooks|cron)(?:/|$))|trpc)(.*)',
+    '/((?!_next|api/(?:og|stats(?!/clv(?:/|$))|sparkline|analytics|collect|edge-enrich|webhooks|cron)(?:/|$)|results$|analytics$|models(?:/|$)|learn(?:/|$)|about$|legal(?:/|$)|pricing$|compare(?:/|$)|blocked$|$|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|txt|xml)).*)',
+    '/(api(?!/(?:og|stats(?!/clv(?:/|$))|sparkline|analytics|collect|edge-enrich|webhooks|cron)(?:/|$))|trpc)(.*)',
   ],
 }

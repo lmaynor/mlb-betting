@@ -22,7 +22,7 @@ Why does this matter more than whether the bet won? Because the closing line is 
 
 ROI can be inflated by accident: train a model on data that overlaps the backtest window and it will "predict" games it has already seen. CLV is much harder to fool this way, because it is measured on prices that moved after you bet. Either the line moved toward your bet, or it did not. It requires no settled outcomes, resolves within hours, and reaches statistical significance far faster than win-loss records -- a meaningful CLV signal shows up in about 100 bets, where ROI needs 1,000+.
 
-That is why CLV matters to us. Today a Beezy system needs at least 200 settled bets, a positive ROI and good calibration before it can leave paper mode (the [Models](/models) page shows each system's sample and status), and we are moving toward a CLV requirement as well. A system that shows positive ROI but flat-or-negative CLV may be beating a soft historical line rather than the market, so we treat it as unproven. Track it yourself in the [CLV Tracker](/tools/clv-tracker).
+That is why CLV matters to us. Today a Beezy system needs at least 200 settled bets, a positive ROI and good calibration before it can leave paper mode (the [Models](/models) page shows each system's sample and status), and we are moving toward a CLV requirement as well. A system that shows positive ROI but flat-or-negative CLV may be beating a soft historical line rather than the market, so we treat it as unproven.
 
 ## How to use CLV yourself
 
