@@ -1,16 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Retired routes. The three /tools redirects were page-level before; /sports/[sport] became /picks/[sport] for every sport (see lib/ia.ts).
+  // Retired routes. /sports/[sport] became /picks/[sport] for every sport (see lib/ia.ts).
   async redirects() {
     return [
       { source: '/sports/:sport', destination: '/picks/:sport', permanent: true },
       // the +EV Terminal was folded into the Odds Terminal; the screen now lives at /ev
       { source: '/ev/odds', has: [{ type: 'query', key: 'view', value: 'game_lines' }], destination: '/ev/games', permanent: true },
       { source: '/ev/odds', destination: '/ev', permanent: true },
-      { source: '/tools/edge-finder', destination: '/tools/kelly-calculator', permanent: true },
-      { source: '/tools/nrfi-conditions', destination: '/tools/slate', permanent: true },
-      { source: '/tools/pitcher-matchups', destination: '/tools/slate', permanent: true },
       // Obvious aliases, Clerk standard paths and legal shortcuts
       { source: '/sign-in', destination: '/login', permanent: true },
       { source: '/sign-up', destination: '/signup', permanent: true },

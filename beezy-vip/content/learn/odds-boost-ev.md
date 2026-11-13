@@ -6,7 +6,7 @@ Every normal price a sportsbook posts carries vig -- typically 5-12% on props. T
 
 An **odds boost** flips the arithmetic. The book takes a market price, improves it as a marketing expense, and caps your stake so it cannot be exploited at scale. When the boosted price exceeds the market's fair price, the bet is +EV *by construction* -- no model, no handicapping skill, no inside information required. It is the single most dependable source of positive expected value available to a recreational bettor.
 
-The catch: not every boost clears the bar. A boost from -150 to -135 on a market whose fair price is -190 is a winning bet, but the same boost on a market whose fair price is -125 is a losing one. You have to do the math every time, or use the free Boost EV Calculator at /tools/boost-ev.
+The catch: not every boost clears the bar. A boost from -150 to -135 on a market whose fair price is -190 is a winning bet, but the same boost on a market whose fair price is -125 is a losing one. You have to do the math every time.
 
 ## The three-step calculation
 
@@ -24,7 +24,7 @@ The catch: not every boost clears the bar. A boost from -150 to -135 on a market
 
 A +30% EV bet is enormous -- for reference, professional bettors grind out careers on 2-4% edges. This is why sharp bettors max out every qualifying boost they see: the per-bet dollar amounts are capped, but the edge per dollar is often 10x anything obtainable at normal prices.
 
-Our [Boost EV calculator](/tools/boost-ev) does all three steps -- enter the boosted price and the market's normal two-sided prices, and it returns the true EV plus a [Kelly-sized](/learn/kelly-criterion-sports-betting) stake.
+Work all three steps by hand: take the boosted price and the market's normal two-sided prices, and you get the true EV plus a [Kelly-sized](/learn/kelly-criterion-sports-betting) stake.
 
 ## Rules of thumb
 

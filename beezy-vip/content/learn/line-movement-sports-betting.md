@@ -120,7 +120,7 @@ If you bet the Giants at +130 and the line closes at +112:
 
 If you bet the Dodgers at -130 and the line closes at -110, the market moved away from you: negative CLV.
 
-**Hit rate alone is noisy.** Over a few hundred bets a 52% win rate can be luck. At -110 the break-even win rate is 52.38%, so 52% actually loses about 0.8% per bet. A bettor who consistently takes prices better than the close is doing something repeatable, which is why CLV is tracked alongside results. See the [CLV guide](/learn/closing-line-value-clv) and the [CLV Tracker](/tools/clv-tracker).
+**Hit rate alone is noisy.** Over a few hundred bets a 52% win rate can be luck. At -110 the break-even win rate is 52.38%, so 52% actually loses about 0.8% per bet. A bettor who consistently takes prices better than the close is doing something repeatable, which is why CLV is tracked alongside results. See the [CLV guide](/learn/closing-line-value-clv).
 
 ## Line Movement Signals
 

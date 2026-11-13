@@ -25,10 +25,10 @@ describe('information architecture', () => {
     for (const s of SECTIONS) for (const t of s.tabs) expect(routeExists(t.href)).toBe(true)
   })
 
-  it('the five nav questions plus Learn are the only top-level items', () => {
-    expect(NAV.map(n => n.label)).toEqual(['Home', 'Odds Terminal', 'Picks', 'Results', 'Tools', 'Learn'])
-    expect(navActive('/learn/f5-betting-mlb', NAV[5])).toBe(true)
-    expect(sectionFor('/learn')).toBeNull()   // like Tools: a nav item, not a section with tabs
+  it('the nav questions plus Learn are the only top-level items', () => {
+    expect(NAV.map(n => n.label)).toEqual(['Home', 'Odds Terminal', 'Picks', 'Results', 'Learn'])
+    expect(navActive('/learn/f5-betting-mlb', NAV[4])).toBe(true)
+    expect(sectionFor('/learn')).toBeNull()   // a nav item, not a section with tabs
   })
 
   it('Prop Research is a view of the Scanner, Analytics and Models are views of Results, Daily Card of Picks', () => {
@@ -37,7 +37,6 @@ describe('information architecture', () => {
     expect(navActive('/models/hr', NAV[3])).toBe(true)
     expect(navActive('/cheat-sheet', NAV[2])).toBe(true)
     expect(sectionFor('/edge')?.id).toBe('scanner')
-    expect(sectionFor('/tools')).toBeNull()
   })
 
   it('Scanner tabs: Odds Terminal (props), Projections (lambda for props and game lines), Game Lines (NBA / NHL prices) and Prop Research; each is exactly one tab', () => {

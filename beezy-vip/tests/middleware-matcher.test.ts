@@ -20,8 +20,6 @@ describe('middleware matcher coverage for session-reading API routes', () => {
     '/api/slate/today',
     '/api/stats/clv',
     '/dashboard/picks',
-    '/tools/slate',
-    '/tools/clv-tracker',
     '/api/picks/today',
     '/picks/mlb',
   ])('middleware runs for %s', (path) => {
@@ -48,18 +46,12 @@ describe('middleware matcher coverage for session-reading API routes', () => {
     '/pricing',
     '/compare/oddsjam-alternative',
     '/blocked',
-    '/tools/kelly-calculator',
-    '/tools/odds-calculator',
-    '/tools/boost-ev',
   ])('middleware stays excluded for the public surface %s', (path) => {
     expect(runs(path)).toBe(false)
   })
 
   it.each([
-    // Member tools stay matched even though other /tools pages are excluded.
-    '/tools/bet-tracker',
-    '/tools/clv-tracker',
-    '/tools/slate',
+    // Member and session routes stay matched.
     '/api/user/bankroll',
     '/api/picks',
     '/api/ev',

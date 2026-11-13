@@ -8,7 +8,6 @@
  *            /picks/history (those plays, graded). Picks is the tracked, graded record; unvalidated estimates live in the Scanner.
  *            /picks/games (game picks) still resolves but is HIDDEN: no tab, no link, no sitemap entry, noindex.
  *   Results  what happened, and is it real?   /results (ledger)      + /analytics tabs + /models (methodology)
- *   Tools    calculators and dashboards       /tools/*
  *   Learn    how does this market work?       /learn (the guides: one per market and concept; the system, model and tool pages link back to them)
  *   Home     proof, nothing else
  *
@@ -55,7 +54,6 @@ export const NAV: NavItem[] = [
   { label: 'Odds Terminal', href: '/ev',     prefixes: ['/ev', '/edge'], live: true },
   { label: 'Picks',        href: '/picks',   prefixes: ['/picks', '/cheat-sheet', '/sports'] },
   { label: 'Results',      href: '/results', prefixes: ['/results', '/analytics', '/models'] },
-  { label: 'Tools',        href: '/tools',   prefixes: ['/tools'] },
   { label: 'Learn',        href: '/learn',   prefixes: ['/learn'] },
 ]
 

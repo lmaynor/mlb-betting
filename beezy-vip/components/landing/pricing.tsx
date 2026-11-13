@@ -96,7 +96,7 @@ export function PricingSection() {
             <span className="mono text-body-2-bold text-text-primary">$0 / Free Forever</span>
           </div>
           <div className="mt-[3px] text-body-2-regular text-text-secondary">
-            Daily Top 10 cross-sport picks, full public results ledger, odds & vig calculator, and Kelly sizing. No account or credit card required.
+            Daily Top 10 cross-sport picks and the full public results ledger. No account or credit card required.
           </div>
         </div>
         <Link href="/picks" className="button-press-motion whitespace-nowrap rounded-2lg border border-border-button-default bg-background-secondary-default px-3.5 py-[7px] text-caption-1-semibold text-text-primary no-underline hover:bg-background-primary-hover">

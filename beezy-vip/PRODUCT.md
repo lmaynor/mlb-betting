@@ -16,7 +16,6 @@ A data product for sports bettors who want ML-backed MLB picks. Ten XGBoost mode
 1. Check today's card — scan picks ranked by Beezy Score (0–100 conviction index)
 2. Review settled results — verify the track record is real and public
 3. Understand a pick — read the model rationale, edge vs. market price, Kelly stake
-4. Use tools — odds calculator, Kelly calculator, edge finder
 
 ## Brand Personality
 Analytical · Credible · Sharp

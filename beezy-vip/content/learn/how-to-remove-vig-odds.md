@@ -118,14 +118,12 @@ When you see -110 on both sides, the vig-free breakdown is **50-50**. The two im
 
 Dividing each side by the total assumes the book spread its margin in proportion to each side's probability. Books often shade favorites and longshots differently, and thin markets (props) can be mispriced on both sides at once. Other methods exist, but proportional removal is the common default.
 
-## Tools to help
+## The method
 
 1. Calculate the implied probability for each side
 2. Add them together
 3. Divide each by the total
 4. Multiply by 100 to get percentages
-
-Or let the free [Odds & Vig Calculator](/tools/odds-calculator) do it.
 
 ## The bottom line
 

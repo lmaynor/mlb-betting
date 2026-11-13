@@ -46,7 +46,7 @@ describe('robots.txt', () => {
     const star = groupFor('*')!
     expect(g.disallow.length).toBeGreaterThan(0)
     expect([...g.disallow].sort()).toEqual([...star.disallow].sort())
-    for (const p of ['/api', '/dashboard', '/login', '/signup', '/tools/slate', '/tools/clv-tracker', '/tools/bet-tracker']) {
+    for (const p of ['/api', '/dashboard', '/login', '/signup']) {
       expect(g.disallow).toContain(p)
     }
   })
