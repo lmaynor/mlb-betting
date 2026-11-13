@@ -12,6 +12,10 @@ Computes metrics and asserts threshold bars:
 - N2: postponement + suspension recall 100%, material-change false rate <= 1%.
 - N6: 0 pp_only leakage, false suspension rate <= 5%, promotion/demotion/shuffle recall.
 
+Note on compound items:
+Compound items are deterministically constructed by concatenating a same-team
+5v5-change blurb with a power-play-only blurb; they are not captured real-world blurbs.
+
 Writes combined eval_results.json into tests/fixtures/decisions/availability/.
 """
 
@@ -342,9 +346,67 @@ def run_n2_eval(pacer: Optional[Pacer] = None) -> dict[str, Any]:
 # Section 4: N6 NHL Line Change Evaluation
 # ---------------------------------------------------------------------------
 
+def item_answers_for(item: Mapping[str, Any], cache: AnswersCache) -> dict[str, Any]:
+    """Retrieve cached answers for an item by id."""
+    item_id = str(item.get("id") or item.get("item_id") or "")
+    return cache.get(item_id, {})
+
+
+def build_compound_items(items: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Deterministically construct compound items pairing 5v5 and PP-only changes.
+
+    Compound items are deterministically constructed by concatenating a same-team
+    5v5-change blurb with a power-play-only blurb; they are not captured real-world blurbs.
+    """
+    by_team_pp: dict[str, list[Mapping[str, Any]]] = {}
+    by_team_shuffle: dict[str, list[Mapping[str, Any]]] = {}
+    by_team_promo: dict[str, list[Mapping[str, Any]]] = {}
+
+    for it in items:
+        team = str(it.get("team") or "")
+        lbl = it.get("label")
+        if lbl == "pp_only_change":
+            by_team_pp.setdefault(team, []).append(it)
+        elif lbl == "line_shuffle":
+            by_team_shuffle.setdefault(team, []).append(it)
+        elif lbl == "promotion_demotion":
+            by_team_promo.setdefault(team, []).append(it)
+
+    qualifying_teams = sorted([
+        t for t in set(str(it.get("team") or "") for it in items if it.get("team"))
+        if t in by_team_pp and (t in by_team_shuffle or t in by_team_promo)
+    ])
+    capped_teams = qualifying_teams[:12]
+
+    compounds: list[dict[str, Any]] = []
+    for team in capped_teams:
+        pp_item = by_team_pp[team][0]
+        if team in by_team_shuffle:
+            shuffle_item = by_team_shuffle[team][0]
+        else:
+            shuffle_item = by_team_promo[team][0]
+
+        compounds.append({
+            "id": f"n6-compound-{team}",
+            "label": "compound_pp_and_5v5",
+            "constructed": True,
+            "team": team,
+            "blurb": str(shuffle_item.get("blurb") or "") + " " + str(pp_item.get("blurb") or ""),
+            "expected_5v5_trios": shuffle_item.get("expected_5v5_trios", []),
+            "expected_pp_units": pp_item.get("expected_pp_units"),
+            "source_item_ids": [shuffle_item.get("id"), pp_item.get("id")],
+            "component_labels": [shuffle_item.get("label"), "pp_only_change"],
+        })
+
+    return compounds
+
+
 def run_n6_eval(pacer: Optional[Pacer] = None) -> dict[str, Any]:
     items = _load_jsonl(N6_FIXTURE)
     cache = AnswersCache(CACHE_N6)
+    compound_items = build_compound_items(items)
+
+    all_eval_items = list(items) + list(compound_items)
 
     # Batch per (item, trio): the prep pack's context contract is one trio
     # under review per context. Cached answers stay keyed per item with the
@@ -352,7 +414,7 @@ def run_n6_eval(pacer: Optional[Pacer] = None) -> dict[str, Any]:
     uncached_batch: list[tuple[str, Mapping[str, Any]]] = []
     uncached_owners: list[tuple[int, int]] = []  # (item idx, trio k)
 
-    for idx, item in enumerate(items):
+    for idx, item in enumerate(all_eval_items):
         item_id = str(item.get("id") or item.get("item_id") or "")
         if item_id not in cache:
             for k, trio in enumerate(item.get("expected_5v5_trios") or []):
@@ -360,13 +422,13 @@ def run_n6_eval(pacer: Optional[Pacer] = None) -> dict[str, Any]:
                 uncached_owners.append((idx, k))
 
     if uncached_batch:
-        client = _get_eval_client("n6", items)
+        client = _get_eval_client("n6", all_eval_items)
         raw_results = run_batched(client, uncached_batch, pacer=pacer)
         merged: dict[int, dict[str, Any]] = {}
         for local_idx, (orig_idx, _k) in enumerate(uncached_owners):
             merged.setdefault(orig_idx, {}).update(raw_results[local_idx])
         for orig_idx, answers in merged.items():
-            item = items[orig_idx]
+            item = all_eval_items[orig_idx]
             item_id = str(item.get("id") or item.get("item_id") or "")
             cache.store(item_id, answers)
 
@@ -378,10 +440,9 @@ def run_n6_eval(pacer: Optional[Pacer] = None) -> dict[str, Any]:
     shuffle_promo_suspended = 0
 
     for item in items:
-        item_id = str(item.get("id") or item.get("item_id") or "")
-        label = item.get("label")
-        ans = cache.get(item_id, {})
+        ans = item_answers_for(item, cache)
         res = n6_result(item, ans)
+        label = item.get("label")
 
         has_suspension = len(res["suspended_trios"]) > 0
 
@@ -398,6 +459,25 @@ def run_n6_eval(pacer: Optional[Pacer] = None) -> dict[str, Any]:
             if has_suspension:
                 shuffle_promo_suspended += 1
 
+    # Score compound items
+    compound_prong_exempted_false = 0
+    compound_suspended_count = 0
+    for item in compound_items:
+        ans = item_answers_for(item, cache)
+        res = n6_result(item, ans)
+        if not res.get("trio_prong_exempted", False):
+            compound_prong_exempted_false += 1
+        if len(res.get("suspended_trios", [])) > 0:
+            compound_suspended_count += 1
+
+    n_compounds = len(compound_items)
+    compound_prong_active = (
+        compound_prong_exempted_false / n_compounds if n_compounds > 0 else 1.0
+    )
+    compound_suspended = (
+        compound_suspended_count / n_compounds if n_compounds > 0 else 1.0
+    )
+
     false_suspension_rate = (
         no_change_suspended / no_change_total if no_change_total > 0 else 0.0
     )
@@ -407,7 +487,17 @@ def run_n6_eval(pacer: Optional[Pacer] = None) -> dict[str, Any]:
 
     pp_leakage_bar_passed = pp_only_leakage == 0
     false_suspension_bar_passed = false_suspension_rate <= 0.05
-    bars_passed = pp_leakage_bar_passed and false_suspension_bar_passed
+    promotion_shuffle_bar_passed = shuffle_recall == 1.0
+    compound_prong_bar_passed = (compound_prong_active == 1.0) if n_compounds > 0 else True
+    compound_suspended_bar_passed = (compound_suspended == 1.0) if n_compounds > 0 else True
+
+    bars_passed = (
+        pp_leakage_bar_passed
+        and false_suspension_bar_passed
+        and promotion_shuffle_bar_passed
+        and compound_prong_bar_passed
+        and compound_suspended_bar_passed
+    )
 
     return {
         "total_items": len(items),
@@ -417,7 +507,12 @@ def run_n6_eval(pacer: Optional[Pacer] = None) -> dict[str, Any]:
         "no_change_items": no_change_total,
         "false_suspension_rate": false_suspension_rate,
         "false_suspension_bar_passed": false_suspension_bar_passed,
+        "promotion_shuffle_recall": shuffle_recall,
         "promotion_demotion_shuffle_recall": shuffle_recall,
+        "compound_items": n_compounds,
+        "compound_item_ids": [c["id"] for c in compound_items],
+        "compound_prong_active": compound_prong_active,
+        "compound_suspended": compound_suspended,
         "bars_passed": bars_passed,
     }
 

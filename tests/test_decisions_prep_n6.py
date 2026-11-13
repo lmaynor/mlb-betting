@@ -229,3 +229,63 @@ def test_gate_abstains_on_empty_answer():
 def test_gate_below_thresholds_no_suspend():
     out = V.gate(_answer({"line_shuffle": 0.79, "promotion_demotion": 0.79}, noul=0.85), TRIO)
     assert out["suspend"] is False
+
+
+# ---------------------------------------------------------------------------
+# Argon Ruling RUL-20261113-dec-gate-design Q3: conditional class-prong exemption
+# ---------------------------------------------------------------------------
+
+def test_gate_exemption_applies():
+    dist = {"pp_only_change": 0.85, "line_shuffle": 0.10, "promotion_demotion": 0.05}
+    out = V.gate(_answer(dist, noul=0.5), TRIO)
+    assert out["suspend"] is False
+    assert out["trio_prong_exempted"] is True
+
+
+def test_gate_no_exemption_when_shuffle_mass_0_20_exactly():
+    dist = {"pp_only_change": 0.80, "line_shuffle": 0.20}
+    out = V.gate(_answer(dist, noul=0.5), TRIO)
+    assert out["trio_prong_exempted"] is False
+    assert out["suspend"] is True
+
+
+def test_gate_no_exemption_when_pp_below_0_80():
+    dist = {"pp_only_change": 0.79, "line_shuffle": 0.0, "promotion_demotion": 0.0}
+    out = V.gate(_answer(dist, noul=0.5), TRIO)
+    assert out["trio_prong_exempted"] is False
+    assert out["suspend"] is True
+
+
+def test_gate_choice_fallback():
+    ans_sh = {
+        V.CLASS_QUESTION_ID: {"choice": "line_shuffle"},
+        V.TRIO_QUESTION_ID: {"noul": 0.5},
+    }
+    out_sh = V.gate(ans_sh, TRIO)
+    assert out_sh["trio_prong_exempted"] is False
+    assert out_sh["suspend"] is True
+
+    ans_pp = {
+        V.CLASS_QUESTION_ID: {"choice": "pp_only_change"},
+        V.TRIO_QUESTION_ID: {"noul": 0.5},
+    }
+    out_pp = V.gate(ans_pp, TRIO)
+    assert out_pp["trio_prong_exempted"] is True
+    assert out_pp["suspend"] is False
+
+
+def test_gate_no_class_answer_abstains_not_exempted():
+    # No class probabilities and no trio noul: the gate abstains (suspend
+    # False) and never exempts; fail-closed handling for missing answers
+    # lives in the route's abstained path, not in this gate.
+    out = V.gate({}, TRIO)
+    assert out["trio_prong_exempted"] is False
+    assert out["abstain"] is True
+    assert out["suspend"] is False
+
+
+def test_gate_class_prong_suspends_despite_exemption_shaped_trio_state():
+    dist = {"promotion_demotion": 0.9, "pp_only_change": 0.1}
+    out = V.gate(_answer(dist, noul=1.0), TRIO)
+    assert out["suspend"] is True
+    assert out["trio_prong_exempted"] is False

@@ -515,3 +515,85 @@ def test_client_construction_failure_treated_as_abstained(monkeypatch):
     assert g["confirmed"] is False
     assert g["fail_closed"] is True
     assert g["reason"] == "noul_missing"
+
+
+# ---------------------------------------------------------------------------
+# Test 11: N6 conditional class-prong exemption and exempted_trios
+# ---------------------------------------------------------------------------
+
+def test_n6_conditional_exemption_and_exempted_trios():
+    item = _sample_n6()
+    # answers where change_kind is pp_only_change (0.90) and trio 0 has low noul (0.35)
+    answers = {
+        "n6_change_kind_0": {
+            "choice": "pp_only_change",
+            "probabilities": {"pp_only_change": 0.90, "line_shuffle": 0.05, "no_change": 0.05},
+        },
+        "n6_trio_intact_0": {"noul": 0.35},  # would suspend absent exemption
+        "n6_trio_intact_1": {"noul": 0.85},  # intact
+    }
+
+    res = n6_result(item, answers)
+    assert res["trio_prong_exempted"] is True
+    assert res["exempted_trios"] == [0]
+    assert res["suspended_trios"] == []
+    assert res["disposition"] == "shadow_ok"
+    assert res["applied"] is False
+    assert res["n6_shadow"] is True
+
+    # When all trios were intact (> 0.80), exempted_trios is empty list []
+    answers_clean = {
+        "n6_change_kind_0": {
+            "choice": "pp_only_change",
+            "probabilities": {"pp_only_change": 0.95, "no_change": 0.05},
+        },
+        "n6_trio_intact_0": {"noul": 0.90},
+        "n6_trio_intact_1": {"noul": 0.85},
+    }
+    res_clean = n6_result(item, answers_clean)
+    assert res_clean["trio_prong_exempted"] is True
+    assert res_clean["exempted_trios"] == []
+    assert res_clean["suspended_trios"] == []
+    assert res_clean["disposition"] == "shadow_ok"
+
+    # When exemption does NOT apply (shuffle probability >= 0.20): prong active
+    answers_no_exempt = {
+        "n6_change_kind_0": {
+            "choice": "pp_only_change",
+            "probabilities": {"pp_only_change": 0.80, "line_shuffle": 0.20},
+        },
+        "n6_trio_intact_0": {"noul": 0.35},
+        "n6_trio_intact_1": {"noul": 0.85},
+    }
+    res_no_exempt = n6_result(item, answers_no_exempt)
+    assert res_no_exempt["trio_prong_exempted"] is False
+    assert "exempted_trios" not in res_no_exempt
+    assert len(res_no_exempt["suspended_trios"]) == 1
+    assert res_no_exempt["disposition"] == "shadow_suspend"
+
+
+# ---------------------------------------------------------------------------
+# Test 12: build_compound_items deterministic construction
+# ---------------------------------------------------------------------------
+
+def test_build_compound_items_construction():
+    from ev.decisions_evals.eval_availability import build_compound_items
+
+    items = [
+        {"id": "1", "team": "EDM", "label": "line_shuffle", "blurb": "EDM shuffle.", "expected_5v5_trios": ["A + B + C"]},
+        {"id": "2", "team": "EDM", "label": "pp_only_change", "blurb": "EDM PP.", "expected_pp_units": {"pp1": ["A"]}},
+        {"id": "3", "team": "TOR", "label": "promotion_demotion", "blurb": "TOR promo.", "expected_5v5_trios": ["D + E + F"]},
+        {"id": "4", "team": "TOR", "label": "pp_only_change", "blurb": "TOR PP.", "expected_pp_units": {"pp1": ["D"]}},
+    ]
+    compounds = build_compound_items(items)
+    assert len(compounds) == 2
+    assert compounds[0]["id"] == "n6-compound-EDM"
+    assert compounds[0]["label"] == "compound_pp_and_5v5"
+    assert compounds[0]["constructed"] is True
+    assert compounds[0]["team"] == "EDM"
+    assert compounds[0]["blurb"] == "EDM shuffle. EDM PP."
+    assert compounds[0]["source_item_ids"] == ["1", "2"]
+    assert compounds[0]["component_labels"] == ["line_shuffle", "pp_only_change"]
+
+    assert compounds[1]["id"] == "n6-compound-TOR"
+    assert compounds[1]["component_labels"] == ["promotion_demotion", "pp_only_change"]

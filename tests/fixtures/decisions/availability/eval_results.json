@@ -52,12 +52,30 @@
   "n6": {
     "total_items": 241,
     "pp_only_items": 59,
-    "pp_only_leakage": 3,
-    "pp_only_bar_passed": false,
+    "pp_only_leakage": 0,
+    "pp_only_bar_passed": true,
     "no_change_items": 9,
     "false_suspension_rate": 0.0,
     "false_suspension_bar_passed": true,
+    "promotion_shuffle_recall": 1.0,
     "promotion_demotion_shuffle_recall": 1.0,
+    "compound_items": 12,
+    "compound_item_ids": [
+      "n6-compound-ANA",
+      "n6-compound-ARI",
+      "n6-compound-BOS",
+      "n6-compound-BUF",
+      "n6-compound-CAR",
+      "n6-compound-CGY",
+      "n6-compound-COL",
+      "n6-compound-DAL",
+      "n6-compound-EDM",
+      "n6-compound-FLA",
+      "n6-compound-MIN",
+      "n6-compound-MTL"
+    ],
+    "compound_prong_active": 0.75,
+    "compound_suspended": 0.8333333333333334,
     "bars_passed": false
   },
   "all_bars_passed": false

@@ -478,7 +478,15 @@ def n6_result(
     mode: str = "shadow",
     abstained: bool = False,
 ) -> dict[str, Any]:
-    """Process answers for an N6 item and return shadow-only result."""
+    """Process answers for an N6 item and return shadow-only result.
+
+    Surfaces the conditional class-prong exemption of Argon ruling
+    RUL-20261113-dec-gate-design Q3 (implemented in prep_n6.gate):
+    ``trio_prong_exempted`` is True when any trio's trio-noul trigger was
+    waived by a confidently power-play-only class distribution, and
+    ``exempted_trios`` lists the indices of the trios the exemption kept
+    eligible. Forced shadow in every mode (unchanged).
+    """
     item_id = str(item.get("id") or item.get("item_id") or "")
     trios = item.get("expected_5v5_trios") or []
 
@@ -497,9 +505,12 @@ def n6_result(
             "mode": mode,
             "suspended_trios": [],
             "disposition": "shadow_abstained",
+            "trio_prong_exempted": False,
         }
 
     suspended_trios: list[str] = []
+    any_exempted = False
+    exempted_trios: list[int] = []
     for k, trio in enumerate(trios):
         trio_names = trio.split(" + ") if isinstance(trio, str) else prep_n6._trio_names(trio)
         ans_change = answers.get(f"n6_change_kind_{k}")
@@ -514,11 +525,18 @@ def n6_result(
             "shift_share_plausible": ans_shift,
         }
         gate_res = prep_n6.gate(trio_ans, trio_names)
+        if gate_res.get("trio_prong_exempted"):
+            any_exempted = True
+            # A trio counts as exempted when the exemption is what kept it
+            # eligible: its trio noul violated the intact threshold.
+            trio_noul = gate_res.get("trio_intact")
+            if trio_noul is not None and trio_noul < prep_n6.TRIO_INTACT_MIN:
+                exempted_trios.append(k)
         if gate_res.get("suspend"):
             suspended_trios.append(trio if isinstance(trio, str) else " + ".join(trio_names))
 
     disposition = "shadow_suspend" if suspended_trios else "shadow_ok"
-    return {
+    res: dict[str, Any] = {
         "id": item.get("id"),
         "item_id": item_id,
         "team": item.get("team"),
@@ -529,7 +547,11 @@ def n6_result(
         "mode": mode,
         "suspended_trios": suspended_trios,
         "disposition": disposition,
+        "trio_prong_exempted": any_exempted,
     }
+    if any_exempted:
+        res["exempted_trios"] = exempted_trios
+    return res
 
 
 # ---------------------------------------------------------------------------
