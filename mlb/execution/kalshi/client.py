@@ -219,15 +219,29 @@ class KalshiClient:
 
     def create_order(self, *, ticker: str, client_order_id: str, book_side: str, count: float,
                      price: float, time_in_force: str = "immediate_or_cancel",
-                     exchange_index: int | None = None) -> dict:
+                     exchange_index: int | None = None, post_only: bool = False) -> dict:
         """POST /portfolio/events/orders (v2). book_side 'bid' = buy YES at `price`;
         'ask' = sell YES at `price` (== buy NO at 1-price). `price`/`count` are sent as
-        fixed-point strings. No post_only, no resting remainder unless time_in_force says so."""
+        fixed-point strings.
+
+        `post_only=True` is only sent when True (the taker payload is unchanged when
+        it is False / omitted): the exchange then rejects rather than crosses, so the
+        order can only rest as a maker order. Combine it with
+        time_in_force="good_till_canceled" for a resting order (see
+        KalshiVenue.submit_resting).
+
+        Read-after-write lag (~1s, verified on demo 2026-11-11): an order placed here
+        may not appear in get_orders() / queue-position reads issued in the same
+        second. Callers must reconcile on `client_order_id` and must never treat a
+        fast empty read as a rejection.
+        """
         body = {
             "ticker": ticker, "client_order_id": client_order_id, "side": book_side,
             "count": f"{count:.2f}", "price": f"{price:.4f}",
             "time_in_force": time_in_force, "self_trade_prevention_type": "taker_at_cross",
         }
+        if post_only:
+            body["post_only"] = True
         if exchange_index is not None:
             body["exchange_index"] = exchange_index
         return self.request("POST", "/portfolio/events/orders", body=body)
@@ -237,8 +251,147 @@ class KalshiClient:
         return self.request("GET", "/portfolio/orders", params=p).get("orders", []) or []
 
     def cancel_order(self, order_id: str, ticker: str | None = None) -> dict:
+        """DELETE /portfolio/events/orders/{order_id} (V2).
+
+        Routing rule (Kalshi Cancel Order V2 doc, verified on demo 2026-11-11):
+        auto-routing requires the query param `market_ticker` (and omitting
+        `exchange_index`, or setting it to -1). An `order_id` alone cannot identify
+        the exchange shard, so an unrouted cancel 404s -- as did the old `ticker`
+        param, which the exchange does not recognise as the routing field.
+        `?market_ticker=<ticker>` returned 200 {"reduced_by": ...} on demo.
+        The `ticker` argument name is kept for call-site compatibility; it is sent
+        on the wire as `market_ticker`, never as `ticker`.
+        """
         return self.request("DELETE", f"/portfolio/events/orders/{order_id}",
-                            params={"ticker": ticker} if ticker else None)
+                            params={"market_ticker": ticker} if ticker else None)
+
+    # ---- resting-order reads / amend (queue position) ----
+    # Read-after-write lag (~1s, verified on demo 2026-11-11) applies to every read
+    # in this section: a resting order may be invisible to these reads in the same
+    # second it was placed. Reconcile on client_order_id; a fast empty read is NOT
+    # evidence that the order was rejected.
+
+    def get_order_queue_position(self, order_id: str) -> float:
+        """GET /portfolio/orders/{order_id}/queue_position -> contracts ahead of us.
+
+        The API returns a fixed-point string, {"queue_position_fp": "0.00"}; 0.0 is
+        the front of the queue. Parsed to float here.
+        """
+        data = self.request("GET", f"/portfolio/orders/{order_id}/queue_position")
+        return float(data.get("queue_position_fp") or 0.0)
+
+    def get_queue_positions(self, market_tickers) -> list[dict]:
+        """GET /portfolio/orders/queue_positions?market_tickers=<csv>.
+
+        `market_tickers` is an iterable of tickers (a single string is treated as
+        one ticker). Returns the API's list of
+        {"order_id", "market_ticker", "queue_position_fp"} entries with
+        `queue_position_fp` parsed from its fixed-point string to float.
+        """
+        if isinstance(market_tickers, str):
+            tickers = [market_tickers]
+        else:
+            tickers = list(market_tickers)
+        data = self.request("GET", "/portfolio/orders/queue_positions",
+                            params={"market_tickers": ",".join(tickers)})
+        out = []
+        for entry in data.get("queue_positions", []) or []:
+            parsed = dict(entry)
+            if "queue_position_fp" in parsed:
+                parsed["queue_position_fp"] = float(parsed["queue_position_fp"] or 0.0)
+            out.append(parsed)
+        return out
+
+    def amend_order(self, order_id: str, *, ticker: str, book_side: str, price: float,
+                    count: float, client_order_id: str | None = None,
+                    updated_client_order_id: str | None = None,
+                    expiration_time: int | None = None,
+                    exchange_index: int | None = None) -> dict:
+        """POST /portfolio/events/orders/{order_id}/amend (V2) -- low-level amend.
+
+        `price` / `count` are the UPDATED totals, sent as fixed-point strings in
+        the same conventions as create_order (`count` is the total/max fillable
+        count: already-filled plus desired resting remainder). `ticker` and
+        `book_side` ('bid'/'ask', YES terms) are required by the endpoint.
+        `expiration_time` is a Unix timestamp in seconds; omit it to preserve the
+        current expiry, or send 0 to remove it (good-till-canceled).
+
+        QUEUE-POSITION ASYMMETRY (documented Kalshi behaviour): decreasing size
+        and changing expiry alone PRESERVE queue position; increasing size and
+        changing price FORFEIT it. This raw method cannot tell which kind of
+        change a caller is making, so prefer the explicit wrappers below --
+        amend_size_down / amend_expiry (preserving) and amend_price /
+        amend_size_up (forfeiting) -- which encode the distinction in their
+        signatures and validate it.
+        """
+        body: dict = {
+            "ticker": ticker, "side": book_side,
+            "count": f"{count:.2f}", "price": f"{price:.4f}",
+        }
+        if client_order_id is not None:
+            body["client_order_id"] = client_order_id
+        if updated_client_order_id is not None:
+            body["updated_client_order_id"] = updated_client_order_id
+        if expiration_time is not None:
+            body["expiration_time"] = int(expiration_time)
+        if exchange_index is not None:
+            body["exchange_index"] = exchange_index
+        return self.request("POST", f"/portfolio/events/orders/{order_id}/amend", body=body)
+
+    def amend_size_down(self, order_id: str, *, ticker: str, book_side: str, price: float,
+                        current_count: float, new_count: float, **kw) -> dict:
+        """Queue-PRESERVING amend: decrease size only (price unchanged).
+
+        Raises ValueError unless new_count < current_count -- an increase would
+        forfeit queue position and must go through amend_size_up instead.
+        Extra kwargs are forwarded to amend_order (client_order_id, ...).
+        """
+        if not new_count < current_count:
+            raise ValueError(
+                f"amend_size_down requires new_count < current_count "
+                f"({new_count} !< {current_count}); a size increase forfeits queue "
+                "position -- use amend_size_up")
+        return self.amend_order(order_id, ticker=ticker, book_side=book_side,
+                                price=price, count=new_count, **kw)
+
+    def amend_expiry(self, order_id: str, *, ticker: str, book_side: str, price: float,
+                     count: float, expiration_time: int, **kw) -> dict:
+        """Queue-PRESERVING amend: change expiry only.
+
+        `price` and `count` are the order's CURRENT values and are resent
+        unchanged, as the endpoint requires; only `expiration_time` changes.
+        """
+        return self.amend_order(order_id, ticker=ticker, book_side=book_side,
+                                price=price, count=count,
+                                expiration_time=expiration_time, **kw)
+
+    def amend_price(self, order_id: str, *, ticker: str, book_side: str,
+                    current_price: float, new_price: float, count: float, **kw) -> dict:
+        """Queue-FORFEITING amend: change price.
+
+        Raises ValueError if new_price == current_price (that would not be a
+        price change at all). Callers use this only when deliberately giving up
+        queue position, e.g. after an adverse fair-value move.
+        """
+        if new_price == current_price:
+            raise ValueError("amend_price requires new_price != current_price")
+        return self.amend_order(order_id, ticker=ticker, book_side=book_side,
+                                price=new_price, count=count, **kw)
+
+    def amend_size_up(self, order_id: str, *, ticker: str, book_side: str, price: float,
+                      current_count: float, new_count: float, **kw) -> dict:
+        """Queue-FORFEITING amend: increase size only (price unchanged).
+
+        Raises ValueError unless new_count > current_count -- a decrease
+        preserves queue position and must go through amend_size_down instead.
+        """
+        if not new_count > current_count:
+            raise ValueError(
+                f"amend_size_up requires new_count > current_count "
+                f"({new_count} !> {current_count}); a size decrease preserves queue "
+                "position -- use amend_size_down")
+        return self.amend_order(order_id, ticker=ticker, book_side=book_side,
+                                price=price, count=new_count, **kw)
 
     def get_fills(self, ticker: str | None = None, order_id: str | None = None,
                   min_ts: int | None = None) -> list[dict]:
