@@ -11,8 +11,11 @@ The replay predicts a whole game day BEFORE any of that day's results are fed to
 inform an early game's price; `tests/test_nhl_market_eval.py` pins that by scrambling results on / after day t and
 checking day t's predictions do not move). The engine is replayed as the daily runner builds it: every game in the team box
 master (preseason included), goalie GSAx from the goalie master filtered to dates strictly before the game, unconfirmed
-starters. `ARI` is not in `nhl.config.TEAMS`, so the deployed engine raises on Coyotes games and skips them in the Kalman
-update; the default replay reproduces that (`--ari-as-uta` replays them as UTA instead, a sensitivity run).
+starters. `ARI` is a historical alias (nhl.config.HISTORICAL_TEAMS, deliberately not in the current-32 `TEAMS` table):
+the Kalman tracker seeds a state for it at the league prior, so Coyotes games price and update ratings in the default
+replay (`--ari-as-uta` still replays them as UTA instead, a sensitivity run). BettingPros carries no ARI side for
+Coyotes games, so moneyline / puck-line pairs for those games still cannot form; totals and opponent updates are
+what the alias restores.
 
     GCS_BUCKET=<bucket> python -m nhl.game.market_eval --out docs/analysis/nhl_game_market_eval.md
     python -m nhl.game.market_eval --local-dir <copy of Odds/bettingpros_nhl_games> --nhl-dir <copy of NHL masters>

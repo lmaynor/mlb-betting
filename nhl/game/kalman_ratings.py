@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from nhl.config import TEAMS, team_abbrev
+from nhl.config import ALL_TEAMS, team_abbrev
 
 log = logging.getLogger("nhl.game.kalman_ratings")
 
@@ -111,7 +111,10 @@ class KalmanGamePrediction:
 
 
 class KalmanTeamTracker:
-    """Continuous-time state-space Kalman filter tracking all 32 NHL teams."""
+    """Continuous-time state-space Kalman filter tracking all 32 current NHL teams, plus the historical
+    aliases in nhl.config.HISTORICAL_TEAMS (today: ARI) seeded at the league prior so historical Coyotes
+    games price and update ratings instead of raising / being skipped. Current-team states are seeded
+    exactly as before; UTA starts fresh at the prior (no ARI -> UTA franchise-continuity seeding)."""
 
     def __init__(
         self,
@@ -132,7 +135,7 @@ class KalmanTeamTracker:
             PRIOR_SIGMA_DEF ** 2,
             PRIOR_SIGMA_PACE ** 2,
         ])
-        for code, *_ in TEAMS:
+        for code, *_ in ALL_TEAMS:
             self.teams[code] = TeamState(
                 team=code,
                 theta=np.zeros(3, dtype=float),

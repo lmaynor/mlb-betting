@@ -276,17 +276,21 @@ def test_replay_day_t_predictions_do_not_depend_on_results_on_or_after_t():
     assert not np.allclose(b.loc[late_ids, cols].to_numpy(float), a.loc[late_ids, cols].to_numpy(float))
 
 
-def test_replay_only_prices_games_with_lines_and_skips_unknown_ari():
+def test_replay_only_prices_games_with_lines_and_prices_ari_via_the_historical_alias():
+    # Was `..._skips_unknown_ari`: before the ARI historical alias (nhl.config.HISTORICAL_TEAMS) the
+    # engine raised on Coyotes games and the replay skipped them. The alias is the S1 fix, so the
+    # default replay now prices ARI games; --ari-as-uta remains the sensitivity run (ARI priced as UTA).
     tb, _ = _synth(days=10)
     tb.loc[tb["team_abbr"] == "BOS", "team_abbr"] = "ARI"
     tb.loc[tb["opp_abbr"] == "BOS", "opp_abbr"] = "ARI"
     ids = [str(g) for g in tb["game_id"].unique()]
     lines = {g: {"spread": -1.5, "total": 5.5} for g in ids[: len(ids) // 2]}
     r = me.replay(tb.assign(game_id=tb["game_id"].astype(str)), _goalies(tb).replace({"BOS": "ARI"}), lines)
-    assert set(r["game_id"]) <= set(lines) and r.attrs["skipped"]["unknown_team"] >= 1
-    assert "ARI" not in set(r["home"]) | set(r["away"])
+    assert set(r["game_id"]) <= set(lines) and r.attrs["skipped"]["unknown_team"] == 0
+    assert "ARI" in set(r["home"]) | set(r["away"])
     r2 = me.replay(tb.assign(game_id=tb["game_id"].astype(str)), _goalies(tb).replace({"BOS": "ARI"}), lines, ari_as_uta=True)
-    assert r2.attrs["skipped"]["unknown_team"] == 0 and len(r2) > len(r)
+    assert r2.attrs["skipped"]["unknown_team"] == 0 and len(r2) == len(r)
+    assert "UTA" in set(r2["home"]) | set(r2["away"]) and "ARI" not in set(r2["home"]) | set(r2["away"])
 
 
 # ------------------------------------------------------------------------------------------------ outcomes
