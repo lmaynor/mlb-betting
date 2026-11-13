@@ -1,0 +1,27 @@
+{
+  "evaluated_at": "2026-11-13T20:54:30.530815+00:00",
+  "explanations": {
+    "clean_count": 50,
+    "clean_false_rejection_rate": 0.0,
+    "clean_false_rejections": 0,
+    "combined_rejection_rate": 1.0,
+    "combined_rejections": 50,
+    "entailment_only_rejections": 50,
+    "entailment_rejection_rate": 1.0,
+    "hallucinated_count": 50,
+    "number_layer_catches": 18,
+    "pass_target_met": true,
+    "total_items": 100
+  },
+  "gate": "publication_compliance_gate",
+  "social": {
+    "clean_count": 20,
+    "clean_false_rejection_rate": 0.15,
+    "clean_false_rejections": 3,
+    "pass_target_met": true,
+    "total_items": 40,
+    "tout_count": 20,
+    "tout_rejection_rate": 1.0,
+    "tout_rejections": 20
+  }
+}
