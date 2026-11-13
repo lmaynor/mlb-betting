@@ -3,10 +3,12 @@
 Evaluates the committed 660-label fixture:
 - tests/fixtures/decisions/n1_ladder_identity/labels.jsonl
 - AnswersCache at answers.jsonl in the fixture dir, keyed by entry_key
+- Deterministic causal Snapshot-History Block and short-circuit via snapshot_history.jsonl
+  per Argon ruling RUL-20261113-dec-gate-design Q4.
 - Rate-limited batched execution via Pacer and run_batched for uncached ambiguity set items (~1980 questions)
 - Offline cache-replay adjudication via CachedDecisionsClient
 - Scores against labels: false canonicalization (<= 0.5%), scope disagreement (<= 1.0%),
-  and quarantine reduction vs parser-only baseline (>= 30%).
+  quarantine reduction vs parser-only baseline (>= 30%), and stat agreement (>= 99.0%).
 - Writes eval_results.json and prints human-readable metrics.
 
 CRITICAL: Scores only live or cached-live answers; without GEMINI_API_KEY and with uncached
@@ -37,6 +39,10 @@ from ev.decisions_prep.n1_ladder_identity import (
     build_request_input,
     select_ambiguity_set,
 )
+from ev.decisions_prep.n1_snapshot_history import (
+    insufficient_history,
+    render_history_block,
+)
 from ev.props import norm_name
 
 FIXTURE_DIR = (
@@ -49,10 +55,12 @@ FIXTURE_DIR = (
 LABELS_PATH = FIXTURE_DIR / "labels.jsonl"
 ANSWERS_PATH = FIXTURE_DIR / "answers.jsonl"
 RESULTS_PATH = FIXTURE_DIR / "eval_results.json"
+SIDECAR_PATH = FIXTURE_DIR / "snapshot_history.jsonl"
 
 BAR_FALSE_CANONICALIZATION = 0.005  # <= 0.5%
 BAR_SCOPE_DISAGREEMENT = 0.010       # <= 1.0%
 BAR_QUARANTINE_REDUCTION = 0.30     # >= 30%
+BAR_STAT_AGREEMENT = 0.99           # >= 99.0%
 
 
 def parse_block_entry_key(block: str) -> str:
@@ -148,6 +156,7 @@ def run_eval(
     labels_path: Union[str, os.PathLike[str]] = LABELS_PATH,
     answers_path: Union[str, os.PathLike[str]] = ANSWERS_PATH,
     results_path: Optional[Union[str, os.PathLike[str]]] = RESULTS_PATH,
+    sidecar_path: Optional[Union[str, os.PathLike[str]]] = SIDECAR_PATH,
     client: Optional[Any] = None,
 ) -> dict[str, Any]:
     """Execute evaluation over the fixture entries.
@@ -167,6 +176,19 @@ def run_eval(
             if line:
                 entries.append(json.loads(line))
 
+    # Load snapshot history sidecar if available
+    histories: Optional[dict[str, Any]] = None
+    snapshot_history_status = "absent"
+    if sidecar_path is not None and Path(sidecar_path).exists():
+        histories = {}
+        with open(sidecar_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    row = json.loads(line)
+                    histories[row["entry_key"]] = row["features"]
+        snapshot_history_status = "present"
+
     # Build groups and views
     groups: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
     for e in entries:
@@ -175,9 +197,17 @@ def run_eval(
     views = [build_parser_view(e, groups[group_key(e)]) for e in entries]
     ambiguous_entries = select_ambiguity_set(entries, views)
 
-    # Cache handling
+    # Cache handling: uncached excludes entries short-circuited by insufficient_history
     cache = AnswersCache(answers_path)
-    uncached = [e for e in ambiguous_entries if make_entry_key(e) not in cache]
+    uncached: list[dict[str, Any]] = []
+    for e in ambiguous_entries:
+        ekey = make_entry_key(e)
+        if ekey in cache:
+            continue
+        features = histories.get(ekey) if histories is not None else None
+        if features is not None and insufficient_history(features):
+            continue
+        uncached.append(e)
 
     if uncached:
         active_client = client
@@ -195,7 +225,12 @@ def run_eval(
         items_to_fetch: list[tuple[str, Mapping[str, Any]]] = []
         for e in uncached:
             v = build_parser_view(e, groups[group_key(e)])
-            items_to_fetch.append(batch_item_for(e, v, groups[group_key(e)], entries))
+            ekey = make_entry_key(e)
+            features = histories.get(ekey) if histories is not None else None
+            h_block = render_history_block(features) if features is not None else None
+            items_to_fetch.append(
+                batch_item_for(e, v, groups[group_key(e)], entries, history_block=h_block)
+            )
 
         pacer = Pacer()
         batched_results = run_batched(active_client, items_to_fetch, pacer=pacer)
@@ -205,7 +240,9 @@ def run_eval(
 
     # Replay through adjudicate_entries with CachedDecisionsClient
     replay_client = CachedDecisionsClient(cache)
-    adj_result = adjudicate_entries(entries, client=replay_client)
+    adj_result = adjudicate_entries(
+        entries, client=replay_client, snapshot_histories=histories
+    )
     decisions = adj_result["decisions"]
     summary = adj_result["summary"]
 
@@ -279,10 +316,9 @@ def run_eval(
     pass_false_canon = false_canon_rate <= BAR_FALSE_CANONICALIZATION
     pass_scope_disagree = scope_disagree_rate <= BAR_SCOPE_DISAGREEMENT
     pass_quarantine_reduction = quarantine_reduction >= BAR_QUARANTINE_REDUCTION
-    gate_passed = pass_false_canon and pass_scope_disagree and pass_quarantine_reduction
 
-    # Diagnostic (not a gate metric): how often the model's stat choice
-    # agrees with the label, independent of the scope-confidence prongs.
+    # Diagnostic and gate metric: how often the model's stat choice
+    # agrees with the label.
     _cache = AnswersCache(answers_path)
     _agree = _tot = 0
     for _e in entries:
@@ -292,13 +328,39 @@ def run_eval(
             _tot += 1
             _agree += _pick == _e["label"]["canonical_stat"]
 
+    stat_choice_agreement = (_agree / _tot) if _tot else None
+
+    # Also compute stat agreement over ambiguous entries
+    ambig_agree = ambig_tot = 0
+    for _e in ambiguous_entries:
+        _a = _cache.get(make_entry_key(_e), {})
+        _pick = _a.get("canonical_stat", {}).get("choice") if isinstance(_a.get("canonical_stat"), Mapping) else None
+        if _pick:
+            ambig_tot += 1
+            ambig_agree += _pick == _e["label"]["canonical_stat"]
+    ambiguous_stat_agreement = (ambig_agree / ambig_tot) if ambig_tot else None
+
+    pass_stat_agreement = bool(
+        stat_choice_agreement is not None and stat_choice_agreement >= BAR_STAT_AGREEMENT
+    )
+    gate_passed = (
+        pass_false_canon
+        and pass_scope_disagree
+        and pass_quarantine_reduction
+        and pass_stat_agreement
+    )
+
     eval_results = {
         "gate_passed": gate_passed,
         "total": total_entries,
         "accepted": n_accepted,
-        "stat_choice_agreement": (_agree / _tot) if _tot else None,
+        "stat_choice_agreement": stat_choice_agreement,
         "stat_choice_agreement_n": _tot,
+        "ambiguous_stat_agreement": ambiguous_stat_agreement,
+        "ambiguous_stat_agreement_n": ambig_tot,
         "summary": summary,
+        "insufficient_temporal_history": summary.get("insufficient_temporal_history", 0),
+        "snapshot_history": snapshot_history_status,
         "parser_only_quarantined": parser_only_quarantined,
         "route_quarantined": route_quarantined,
         "quarantine_reduction": quarantine_reduction,
@@ -323,6 +385,11 @@ def run_eval(
                 "bar": BAR_QUARANTINE_REDUCTION,
                 "passed": pass_quarantine_reduction,
             },
+            "stat_agreement": {
+                "value": stat_choice_agreement,
+                "bar": BAR_STAT_AGREEMENT,
+                "passed": pass_stat_agreement,
+            },
         },
     }
 
@@ -345,12 +412,15 @@ def _print_results(results: dict[str, Any]) -> None:
     print(f"Accepted (shadow):           {results['accepted']}")
     print(f"Route quarantined:           {results['route_quarantined']}")
     print(f"Parser-only quarantined:     {results['parser_only_quarantined']}")
+    print(f"Snapshot history:            {results.get('snapshot_history', 'absent')}")
+    print(f"Insufficient history:        {results.get('insufficient_temporal_history', 0)}")
     print("-" * 70)
     print("GATE METRICS:")
     bars = results["bars"]
     fc = bars["false_canonicalization"]
     sd = bars["scope_disagreement"]
     qr = bars["quarantine_reduction"]
+    sa = bars["stat_agreement"]
 
     print(
         f"  False canonicalization:    {fc['value'] * 100:.2f}% "
@@ -363,6 +433,11 @@ def _print_results(results: dict[str, Any]) -> None:
     print(
         f"  Quarantine reduction:      {qr['value'] * 100:.2f}% "
         f"(bar >= {qr['bar'] * 100:.1f}%) -> {'PASS' if qr['passed'] else 'FAIL'}"
+    )
+    stat_val_str = f"{sa['value'] * 100:.2f}%" if sa["value"] is not None else "None"
+    print(
+        f"  Stat agreement:            {stat_val_str} "
+        f"(bar >= {sa['bar'] * 100:.1f}%) -> {'PASS' if sa['passed'] else 'FAIL'}"
     )
     print("-" * 70)
     print("PER-CLASS ACCEPTANCE:")
@@ -381,10 +456,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate N1 ladder identity adjudicator on 660-label fixture.")
     parser.add_argument("--labels", default=str(LABELS_PATH), help="Path to fixture labels.jsonl")
     parser.add_argument("--answers", default=str(ANSWERS_PATH), help="Path to answers.jsonl cache")
+    parser.add_argument("--sidecar", default=str(SIDECAR_PATH), help="Path to snapshot_history.jsonl")
     parser.add_argument("--out", default=str(RESULTS_PATH), help="Path to write eval_results.json")
     args = parser.parse_args()
 
-    run_eval(labels_path=args.labels, answers_path=args.answers, results_path=args.out)
+    run_eval(
+        labels_path=args.labels,
+        answers_path=args.answers,
+        results_path=args.out,
+        sidecar_path=args.sidecar,
+    )
 
 
 if __name__ == "__main__":

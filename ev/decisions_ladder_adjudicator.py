@@ -3,10 +3,13 @@
 DOCTRINE:
 Deterministic parse FIRST; Decisions is consulted ONLY for the ambiguity set;
 acceptance is the prep gate (noul >= 0.95 scope confidence + exact stat agreement
-+ P(unknown) <= 0.10); LIVE CANONICALIZATION IS OFF in this build - the route emits
++ P(unknown) <= 0.10); ambiguous entries receive the deterministic Snapshot-History Block
+and entries with insufficient temporal history short-circuit immediately per
+RUL-20261113-dec-gate-design Q4; LIVE CANONICALIZATION IS OFF in this build - the route emits
 shadow decisions and quarantine lists only, applied=False always, until the 660-label
 fixture gate passes (false canonicalization <= 0.5%, scope disagreement <= 1.0%,
-quarantine-rate drop >= 30% vs parser-only) and a human enables it.
+quarantine-rate drop >= 30% vs parser-only) and a human enables it. Canonicalization
+stays OFF (applied=False) regardless of the gate outcome.
 """
 
 from __future__ import annotations
@@ -31,6 +34,10 @@ from ev.decisions_prep.n1_ladder_identity import (
     deterministic_rung,
     is_ambiguous,
     select_ambiguity_set,
+)
+from ev.decisions_prep.n1_snapshot_history import (
+    insufficient_history,
+    render_history_block,
 )
 from ev.props import norm_name, stat_of
 
@@ -220,10 +227,13 @@ def batch_item_for(
     view: Mapping[str, Any],
     group_entries: Sequence[Mapping[str, Any]],
     all_entries: Sequence[Mapping[str, Any]],
+    history_block: Optional[str] = None,
 ) -> tuple[str, dict[str, Any]]:
     """The (input, questions) pair for one ambiguous entry: the prep pack's
     request input plus the deterministic cross-book structure block."""
     input_block = build_request_input(entry, view) + "\n" + cross_book_structure(entry, all_entries)
+    if history_block is not None:
+        input_block = input_block + "\n" + history_block
     return input_block, build_questions(entry, candidate_stats_for(entry, group_entries))
 
 
@@ -234,6 +244,7 @@ def adjudicate_entries(
     *,
     mode: Optional[str] = None,
     log_path: Optional[Union[str, os.PathLike[str]]] = None,
+    snapshot_histories: Optional[Mapping[str, Mapping[str, Any]]] = None,
 ) -> dict[str, Any]:
     """Adjudicate quote entries through deterministic matching and Decisions ambiguity resolution.
 
@@ -243,6 +254,7 @@ def adjudicate_entries(
             If construction fails, takes the abstention path.
         mode: Operating mode ('shadow' or 'live'). Defaults to DECISIONS_LADDER_MODE env var or 'shadow'.
         log_path: Optional file path to append decision records JSONL.
+        snapshot_histories: Optional mapping of entry_key -> snapshot history features.
 
     Returns:
         dict with 'decisions' list and 'summary' dictionary.
@@ -310,7 +322,32 @@ def adjudicate_entries(
 
     # 3. Ambiguous entries
     ambig_indices = [idx for idx, is_ambig in enumerate(is_ambig_list) if is_ambig]
-    if ambig_indices:
+    insufficient_history_count = 0
+    active_ambig_indices: list[int] = []
+    entry_history_blocks: dict[int, Optional[str]] = {}
+
+    for idx in ambig_indices:
+        entry = entries[idx]
+        ekey = make_entry_key(entry)
+        features = snapshot_histories.get(ekey) if snapshot_histories is not None else None
+        if features is not None and insufficient_history(features):
+            decisions[idx] = {
+                "entry_key": ekey,
+                "status": "quarantined",
+                "identity": None,
+                "reasons": ["insufficient_temporal_history"],
+                "applied": False,
+                "mode": mode,
+            }
+            insufficient_history_count += 1
+        else:
+            active_ambig_indices.append(idx)
+            if features is not None:
+                entry_history_blocks[idx] = render_history_block(features)
+            else:
+                entry_history_blocks[idx] = None
+
+    if active_ambig_indices:
         active_client = client
         if active_client is None:
             try:
@@ -324,10 +361,13 @@ def adjudicate_entries(
         curr_batch = ItemBatch()
         curr_indices: list[int] = []
 
-        for idx in ambig_indices:
+        for idx in active_ambig_indices:
             entry = entries[idx]
             view = views[idx]
-            input_block, q_map = batch_item_for(entry, view, groups[group_key(entry)], entries)
+            hist_block = entry_history_blocks.get(idx)
+            input_block, q_map = batch_item_for(
+                entry, view, groups[group_key(entry)], entries, history_block=hist_block
+            )
 
             if curr_batch.question_count + len(q_map) > MAX_QUESTIONS_PER_CALL and curr_batch.question_count > 0:
                 batches.append(curr_batch)
@@ -423,6 +463,7 @@ def adjudicate_entries(
         "ambiguous": len(ambig_indices),
         "accepted_shadow": sum(1 for d in decisions if d.get("status") == "accepted_shadow"),
         "quarantined": sum(1 for d in decisions if d.get("status") == "quarantined"),
+        "insufficient_temporal_history": insufficient_history_count,
     }
 
     return {
