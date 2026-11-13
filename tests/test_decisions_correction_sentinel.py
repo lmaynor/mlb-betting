@@ -284,17 +284,156 @@ def test_announcement_text():
         "value_after": 1,
         "prose_announced": True,
     }
-    expected = (
+    expected_base = (
         "Official stat correction issued by the NHL stats authority: the official "
         "box score for Drake Batherson (Ottawa Senators) for the game on 2025-10-21 "
         "has been corrected. Drake Batherson's assists total for that game is "
         "revised from 0 to 1. The originally published assists figure of 0 is "
         "superseded; 1 is the official corrected total."
     )
-    assert announcement_text(item_bool) == expected
+    expected_delta = (
+        "\nStat delta (deterministic):\n"
+        "stat: assists\n"
+        "settled_value: 0\n"
+        "corrected_value: 1\n"
+        "delta: 1"
+    )
+    assert announcement_text(item_bool) == f"{expected_base}{expected_delta}"
 
     item_str = dict(item_bool, prose_announced="Official NHL scoring announcement.")
-    assert announcement_text(item_str) == f"{expected} Official NHL scoring announcement."
+    assert (
+        announcement_text(item_str)
+        == f"{expected_base} Official NHL scoring announcement.{expected_delta}"
+    )
+
+
+def test_announcement_text_canonical_full_item():
+    """Full item with stat/settled/corrected ints + source_name + source_url produces canonical template."""
+    item = {
+        "league": "NHL",
+        "game_date": "2026-11-02",
+        "player": "Artturi Lehkonen",
+        "team": "Colorado Avalanche",
+        "stat": "goals",
+        "settled": 0,
+        "corrected": 1,
+        "announced_date": "2026-11-03",
+        "source_name": "NHL Stats Authority",
+        "source_url": "https://media.nhl.com/public/news/123",
+    }
+    text = announcement_text(item)
+
+    # Fuller official-correction framing
+    expected_fuller_framing = (
+        "Official stat correction issued by the NHL stats authority on 2026-11-03: "
+        "the official box score for Artturi Lehkonen (Colorado Avalanche) for the game on 2026-11-02 "
+        "has been corrected. Artturi Lehkonen's goals total for that game is revised from 0 to 1. "
+        "The originally published goals figure of 0 is superseded; 1 is the official corrected total."
+    )
+    assert expected_fuller_framing in text
+
+    # Source line
+    assert "Source: NHL Stats Authority (https://media.nhl.com/public/news/123)" in text
+
+    # Explicit stat-delta section
+    assert "Stat delta (deterministic):" in text
+    assert "stat: goals" in text
+    assert "settled_value: 0" in text
+    assert "corrected_value: 1" in text
+    assert "delta: 1" in text
+
+    # Ordering: Source line appears before Stat delta section
+    source_pos = text.find("Source: NHL Stats Authority (https://media.nhl.com/public/news/123)")
+    delta_pos = text.find("Stat delta (deterministic):")
+    assert source_pos != -1 and delta_pos != -1
+    assert source_pos < delta_pos
+
+    # Exact expected assembly
+    expected_lines = [
+        expected_fuller_framing,
+        "Source: NHL Stats Authority (https://media.nhl.com/public/news/123)",
+        "Stat delta (deterministic):",
+        "stat: goals",
+        "settled_value: 0",
+        "corrected_value: 1",
+        "delta: 1",
+    ]
+    assert text == "\n".join(expected_lines)
+
+
+def test_announcement_text_no_source_and_non_numeric_values():
+    """Item without source fields has no Source line and delta: n/a when values are non-numeric."""
+    item = {
+        "league": "NHL",
+        "game_date": "2026-11-02",
+        "player": "Artturi Lehkonen",
+        "team": "Colorado Avalanche",
+        "stat": "goals",
+        "settled": "zero",
+        "corrected": "one",
+    }
+    text = announcement_text(item)
+
+    assert "Source:" not in text
+    assert "Stat delta (deterministic):" in text
+    assert "stat: goals" in text
+    assert "settled_value: zero" in text
+    assert "corrected_value: one" in text
+    assert "delta: n/a" in text
+
+
+def test_announcement_text_missing_fields_unknown_placeholders():
+    """Missing stat/settled/corrected produce unknown placeholders and delta: n/a."""
+    item = {
+        "league": "NHL",
+        "game_date": "2026-11-02",
+        "player": "Artturi Lehkonen",
+        "team": "Colorado Avalanche",
+    }
+    text = announcement_text(item)
+
+    assert "Source:" not in text
+    assert "Stat delta (deterministic):" in text
+    assert "stat: unknown" in text
+    assert "settled_value: unknown" in text
+    assert "corrected_value: unknown" in text
+    assert "delta: n/a" in text
+
+
+def test_announcement_text_source_name_only():
+    """Item with only source_name renders Source: <name> without URL."""
+    item = {
+        "league": "NHL",
+        "player": "Artturi Lehkonen",
+        "stat": "goals",
+        "settled": 1,
+        "corrected": 2,
+        "source_name": "Official Scorer",
+    }
+    text = announcement_text(item)
+    assert "Source: Official Scorer" in text
+    assert "http" not in text
+    assert "delta: 1" in text
+
+
+def test_announcement_text_excludes_other_players_stat_names():
+    """Announcement still excludes other players' stat names (privacy property)."""
+    item = {
+        "league": "NHL",
+        "game_date": "2026-11-02",
+        "player": "Artturi Lehkonen",
+        "team": "Colorado Avalanche",
+        "stat": "goals",
+        "settled": 0,
+        "corrected": 1,
+        "other_player": "Nathan MacKinnon",
+        "other_stat": "assists",
+    }
+    text = announcement_text(item)
+    assert "Artturi Lehkonen" in text
+    assert "goals" in text
+    assert "Nathan MacKinnon" not in text
+    assert "assists" not in text
 
 
 def test_sentinel_items_from_pairs_fixture():

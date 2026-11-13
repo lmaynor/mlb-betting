@@ -5,6 +5,13 @@ SHADOW-ONLY sentinel. It flags settled rows whose underlying stat was later
 corrected, for quarantine review. It NEVER recomputes, regrades, or republishes
 graded outcomes; flags only. applied=False always in this build.
 
+The canonical input template is the fuller official-correction announcement framing
+produced by ev.decisions_prep.n5_correction_sentinel.build_context (matched
+settled ledger/boxscore stat line + full official correction context + explicit
+stat-delta fields), pinned by unit tests, per Argon ruling RUL-20261113-dec-gate-design
+Q2; the stat-category-only variant is retained in code for historical comparison
+only and is not the canonical template.
+
 The sentinel operates downstream of settlement and postgame ingestion:
 1. Deterministic pairing: input items (or pairs) identify the settled row and
    the postgame capture/announcement. Unmatched or ambiguous pairs are excluded
@@ -75,8 +82,30 @@ def announcement_text(item: Mapping[str, Any]) -> str:
     stat = str(item.get("stat") or "").strip()
     game_date = str(item.get("game_date") or "").strip()
     team = str(item.get("team") or "").strip()
-    val_before = item.get("value_before", "")
-    val_after = item.get("value_after", "")
+
+    # Resolve settled and corrected values (preferring explicit "settled"/"corrected" keys,
+    # falling back to "value_before"/"value_after" if "settled"/"corrected" are not in item).
+    if "settled" in item:
+        settled_val = item["settled"]
+    else:
+        settled_val = item.get("value_before")
+
+    if "corrected" in item:
+        corrected_val = item["corrected"]
+    else:
+        corrected_val = item.get("value_after")
+
+    val_before = item.get("value_before")
+    if val_before is None and "settled" in item:
+        val_before = item["settled"]
+    if val_before is None:
+        val_before = ""
+
+    val_after = item.get("value_after")
+    if val_after is None and "corrected" in item:
+        val_after = item["corrected"]
+    if val_after is None:
+        val_after = ""
 
     announced = str(item.get("announced_date") or "").strip()
     base = (
@@ -88,12 +117,55 @@ def announcement_text(item: Mapping[str, Any]) -> str:
         f"superseded; {val_after} is the official corrected total."
     )
 
+    body = base
     prose = item.get("prose_announced")
     if isinstance(prose, str) and prose.strip():
         prose_clean = prose.strip()
         if prose_clean not in base:
-            return f"{base} {prose_clean}"
-    return base
+            body = f"{base} {prose_clean}"
+
+    lines = [body]
+
+    # Source context line:
+    # f"Source: {source_name} ({source_url})" when both item["source_name"] and item["source_url"] are present;
+    # f"Source: {source_name}" when only the name is present; omit entirely when neither is present.
+    source_name = item.get("source_name")
+    source_url = item.get("source_url")
+    s_name_clean = str(source_name).strip() if source_name is not None else ""
+    s_url_clean = str(source_url).strip() if source_url is not None else ""
+
+    if s_name_clean and s_url_clean:
+        lines.append(f"Source: {s_name_clean} ({s_url_clean})")
+    elif s_name_clean:
+        lines.append(f"Source: {s_name_clean}")
+
+    # Explicit stat-delta section
+    lines.append("Stat delta (deterministic):")
+
+    if stat:
+        lines.append(f"stat: {stat}")
+    else:
+        lines.append("stat: unknown")
+
+    if settled_val is None or settled_val == "":
+        lines.append("settled_value: unknown")
+    else:
+        lines.append(f"settled_value: {settled_val}")
+
+    if corrected_val is None or corrected_val == "":
+        lines.append("corrected_value: unknown")
+    else:
+        lines.append(f"corrected_value: {corrected_val}")
+
+    def _is_num(val: Any) -> bool:
+        return isinstance(val, (int, float)) and not isinstance(val, bool)
+
+    if _is_num(settled_val) and _is_num(corrected_val):
+        lines.append(f"delta: {corrected_val - settled_val}")
+    else:
+        lines.append("delta: n/a")
+
+    return "\n".join(lines)
 
 
 def sentinel_items_from_pairs(
