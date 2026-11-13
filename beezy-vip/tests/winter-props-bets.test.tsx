@@ -135,13 +135,13 @@ describe('top picks: a model PROPS pick is a model basis, labelled unvalidated',
     expect(isOfficialCardPlay({ ...official, score: 70, nBooks: 3 })).toBe(true)       // the site does not re-derive the gates: the tier is the verdict
     expect(isEvOutlier({ ...tracked, score: 70 })).toBe(true)
   })
-  it('the table says UNVALIDATED / PAPER on a winter pick and nothing extra on an MLB pick', () => {
+  it('the table stamps pipeline tags, not warnings: TRACKED / MODEL ESTIMATE on tracked picks of either season', () => {
     const { container } = render(<TopPicksTable picks={[fromBet(bet()), fromBet(mlbBet({ id: 2 }))]} />)
     const rows = container.querySelectorAll('tbody tr')
-    expect(within(rows[0] as HTMLElement).getByText(/UNVALIDATED/)).toBeInTheDocument()
+    expect(within(rows[0] as HTMLElement).getByText(/TRACKED/)).toBeInTheDocument()
     expect(within(rows[0] as HTMLElement).getByText('Over 10.5 Rebounds')).toBeInTheDocument()
-    expect(within(rows[1] as HTMLElement).queryByText(/UNVALIDATED/)).toBeNull()
-    expect(container.textContent).not.toMatch(/PROPS|rebounds_over/)
+    expect(within(rows[1] as HTMLElement).getByText(/TRACKED/)).toBeInTheDocument()
+    expect(container.textContent).not.toMatch(/UNVALIDATED|PROPS|rebounds_over/)
   })
 })
 

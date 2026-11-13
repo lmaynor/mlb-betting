@@ -1,14 +1,12 @@
 import { bookDisplay } from '@/lib/tokens'
 import { fmtMoney, kellySizing } from '@/lib/ev-math'
 import { formatOdds } from '@/lib/odds'
-import { PlayerHeadshot } from '@/components/ui/sport-assets'
-import { type HeadshotSport } from '@/lib/sport-assets'
 import { BookLogo } from '@/components/ui/book-logo'
 import { LockGlyph } from '@/components/ui/lock-glyph'
-import { type ArbRow, type BoardBook, type LongshotRow, type MiddleResult, type OutlierRow, type ScreenRow, type SgpProxyRow } from '@/lib/odds-screen'
-import { HAIR, GREEN, SKY, VIOLET, MIN_REF, CELL_EDGE } from './odds-constants'
-import { startLabel, signed, usd, fairText, sgpEvText, dec, underText } from './odds-format'
-import { SgpBadges, PriceCell, TierPill, PropCells, BookTag } from './odds-cells'
+import { type ArbRow, type BoardBook, type LongshotRow, type MiddleResult, type OutlierRow, type ScreenRow } from '@/lib/odds-screen'
+import { GREEN, SKY, VIOLET, MIN_REF, CELL_EDGE } from './odds-constants'
+import { signed, usd, fairText, dec, underText } from './odds-format'
+import { PriceCell, TierPill, PropCells, BookTag } from './odds-cells'
 
 export function EvRow({ r, columns, bankroll }: { r: ScreenRow; columns: { key: string; offshore: boolean }[]; bankroll: number }) {
   const d = r.implied > 0 ? 1 / r.implied : 1
@@ -279,99 +277,6 @@ export function OutlierTableRow({
         const isOutlier = !isLocked && c.key === r.outlierBook
         return <PriceCell key={c.key} top={target} bottom={other} topState={isOutlier ? 'best' : undefined} best={isOutlier} tint={isOutlier} />
       })}
-    </tr>
-  )
-}
-
-export function SgpTableRow({ r }: { r: SgpProxyRow }) {
-  return (
-    <tr style={{ borderBottom: `1px solid ${HAIR}` }}>
-      <td className="py-2.5 px-3.5 min-w-[220px]">
-        <div className="flex items-center gap-2.5">
-          <PlayerHeadshot id={r.headshot_id} name={r.player} sport={r.sport as HeadshotSport} size={36} />
-          <div>
-            <div className="font-semibold text-text-primary text-cozy">{r.player}</div>
-            <div className="flex items-center gap-1.5 flex-wrap mt-[3px]">
-              <SgpBadges r={r} />
-            </div>
-            <div className="mono text-mini text-text-secondary mt-[3px]">
-              {r.team ? `${r.team} \u00b7 ` : ''}{r.away} @ {r.home} &middot; {startLabel(r.commence)}
-            </div>
-          </div>
-        </div>
-      </td>
-      <td className="py-2.5 px-3.5">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {r.legs.map((leg, idx) => (
-              <span
-                key={idx}
-                className="mono"
-                style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.04)', border: `1px solid ${HAIR}`, color: 'var(--color-text-primary)' }}
-              >
-                {leg.label} ({formatOdds(leg.bookAm)})
-              </span>
-            ))}
-            <span className="text-mini text-text-secondary">
-              @ <span className="capitalize text-text-primary font-medium">{bookDisplay(r.book).label}</span>
-            </span>
-          </div>
-          <div className="mono text-[11px] text-text-secondary">
-            Uncorrelated parlay: {formatOdds(r.naiveSingleProductAm)}
-          </div>
-        </div>
-      </td>
-      <td className="py-2.5 px-3.5">
-        <div className="mono text-cozy font-semibold text-text-primary">
-          {formatOdds(r.fairJointAm)}
-        </div>
-        <div className="flex items-center gap-1 mt-0.5">
-          <span className="mono text-mini text-text-secondary">
-            {(r.fairJointProb * 100).toFixed(1)}% model
-          </span>
-          <span
-            className="mono"
-            style={{ fontSize: '10px', padding: '1px 4px', borderRadius: '3px', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--color-text-secondary)' }}
-            title={`Assumed correlation rho = ${r.rhoTrue} (unvalidated: a constant per archetype, not fitted to data)`}
-          >
-            &rho;={r.rhoTrue > 0 ? `+${r.rhoTrue}` : r.rhoTrue}
-          </span>
-        </div>
-      </td>
-      <td className="py-2.5 px-3.5">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <BookLogo book={r.book} size={22} />
-          <span className="mono text-cozy font-semibold text-text-primary">
-            Modelled: {formatOdds(r.estSgpAm)}
-          </span>
-        </div>
-        <div className="mono mt-0.5 text-[11px] text-text-secondary">
-          Assumed book copula (&rho;={r.rhoBook}, hold={Math.round(r.holdBook * 100)}%)
-        </div>
-        {r.runnerUpBooks && r.runnerUpBooks.length > 0 && (
-          <div className="text-[11px] text-text-secondary mt-[3px]">
-            Also at: {r.runnerUpBooks.map(b => `${bookDisplay(b.book).label} (${b.evPct > 0 ? `+${b.evPct.toFixed(1)}%` : `${b.evPct.toFixed(1)}%`})`).join(', ')}
-          </div>
-        )}
-      </td>
-      <td className="py-2.5 px-3.5 text-right">
-        <div className="flex items-center justify-end gap-2.5">
-          <span className="mono" style={{ fontSize: '12px', fontWeight: 600, padding: '3px 8px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.04)', color: 'var(--color-neutral-300)', border: `1px solid ${HAIR}` }}>
-            {sgpEvText(r)}
-          </span>
-          {r.deeplink && (
-            <a
-              href={r.deeplink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-ghost"
-              style={{ padding: '4px 8px', fontSize: '11px', fontWeight: 600, color: 'var(--color-text-primary)', border: `1px solid ${HAIR}`, borderRadius: '4px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-            >
-              Check price &rarr;
-            </a>
-          )}
-        </div>
-      </td>
     </tr>
   )
 }

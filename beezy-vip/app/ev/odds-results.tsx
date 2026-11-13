@@ -1,32 +1,13 @@
 import { bookDisplay, SURFACE_CARD } from '@/lib/tokens'
 import { cx } from '@/utils/cx'
 import { BookLogo } from '@/components/ui/book-logo'
-import { SGP_ARTIFACT_EV_PCT, SGP_UNVALIDATED_LABEL } from '@/lib/odds-screen'
 import { gameLinesHref, isGameLinesOnly } from '@/lib/sports'
 import { HAIR, GREEN, PAGE } from './odds-constants'
 import { ageLabel, usd } from './odds-format'
-import { EvRow, ArbTableRow, MiddleTableRow, LongshotTableRow, OutlierTableRow, SgpTableRow } from './odds-rows'
-import { MobileEvRowCard, MobileArbCard, MobileMiddleCard, MobileLongshotCard, MobileSgpCard, OutlierCard } from './odds-cards'
+import { EvRow, ArbTableRow, MiddleTableRow, LongshotTableRow, OutlierTableRow } from './odds-rows'
+import { MobileEvRowCard, MobileArbCard, MobileMiddleCard, MobileLongshotCard, OutlierCard } from './odds-cards'
 import { OddsScreen } from './use-odds-screen'
 import { LeagueNote } from '@/components/ui/league-filter'
-
-/** One strip above the SGP view: every row is UNVALIDATED model output, and the flagged extreme rows are counted, not silently dropped. */
-function SgpNotice({ extremeCount, includeExtreme, onToggle }: { extremeCount: number; includeExtreme: boolean; onToggle: () => void }) {
-  return (
-    <div role="note" className="mb-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-separator-border border-l-[3px] border-l-[#facc15] bg-background-primary-default px-3 py-2 shadow-card">
-      <span className="mono text-[11px] font-semibold text-warn">Unvalidated</span>
-      <span className="min-w-[240px] flex-1 text-caption-1-regular text-text-secondary">
-        {SGP_UNVALIDATED_LABEL}.
-      </span>
-      <span className={cx('mono text-mini', extremeCount > 0 ? 'text-[#ff5a4f]' : 'text-text-secondary')}>
-        {extremeCount} EXTREME (EV OVER {SGP_ARTIFACT_EV_PCT}%){includeExtreme ? ' SHOWN' : ' HIDDEN'}
-      </span>
-      <button type="button" onClick={onToggle} aria-pressed={includeExtreme} className="btn btn-ghost px-2.5 py-[3px] text-mini">
-        Include extreme
-      </button>
-    </div>
-  )
-}
 
 function Empty({ title, body }: { title: string; body?: string }) {
   return (
@@ -71,7 +52,7 @@ function RevealNotice({ msg, onDismiss }: { msg: string; onDismiss: () => void }
 }
 
 function MobileCardsView({ odds }: { odds: OddsScreen }) {
-  const { mode, limit, copied, revealed, revealMsg, setRevealMsg, bankroll, setMobileView, setInspectItem, handleReveal, screen, outliers, arbs, middles, longshots, sgpProxies, nRows, meta, outlay, copyHedge, copyMiddle, fullAccess } = odds
+  const { mode, limit, copied, revealed, revealMsg, setRevealMsg, bankroll, setMobileView, setInspectItem, handleReveal, screen, outliers, arbs, middles, longshots, nRows, meta, outlay, copyHedge, copyMiddle, fullAccess } = odds
   return (
     <div>
       <MobileViewBar active="cards" nRows={nRows} onChange={setMobileView} trailing={<span className="mono text-mini text-text-secondary">{meta.age != null ? ageLabel(meta.age) : ''}</span>} />
@@ -137,13 +118,7 @@ function MobileCardsView({ odds }: { odds: OddsScreen }) {
             />
           ))}
         </div>
-      ) : (
-        <div>
-          {sgpProxies.slice(0, limit).map(r => (
-            <MobileSgpCard key={r.key} r={r} />
-          ))}
-        </div>
-      )}
+      ) : null}
     </div>
   )
 }
@@ -163,33 +138,6 @@ function OutlierCardsView({ odds }: { odds: OddsScreen }) {
             onReveal={() => handleReveal(item.key)}
           />
         ))}
-      </div>
-    </div>
-  )
-}
-
-function SgpTableView({ odds }: { odds: OddsScreen }) {
-  const { limit, isMobile, setMobileView, sgpProxies, nRows } = odds
-  return (
-    <div>
-      {isMobile && <MobileViewBar active="table" nRows={nRows} onChange={setMobileView} />}
-      <div className="odds-table-wrap rounded-xl border border-separator-border bg-background-primary-default shadow-card">
-        <table className="odds-table w-full border-collapse">
-          <thead>
-            <tr style={{ borderBottom: `1px solid ${HAIR}`, background: '#0d0f15' }}>
-              <th scope="col" className="text-left min-w-[220px] py-2.5 px-3.5">PLAYER &amp; MATCHUP</th>
-              <th scope="col" className="text-left min-w-[280px] py-2.5 px-3.5">SGP LEGS (SAME BOOK)</th>
-              <th scope="col" className="text-left min-w-[150px] py-2.5 px-3.5">Assumed-correlation fair</th>
-              <th scope="col" className="text-left min-w-[220px] py-2.5 px-3.5">MODELLED SGP PRICE (NOT QUOTED)</th>
-              <th scope="col" className="text-right min-w-[170px] py-2.5 px-3.5">MODEL EV &amp; ACTION</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sgpProxies.slice(0, limit).map(r => (
-              <SgpTableRow key={r.key} r={r} />
-            ))}
-          </tbody>
-        </table>
       </div>
     </div>
   )
@@ -275,13 +223,9 @@ function PropTableView({ odds }: { odds: OddsScreen }) {
 }
 
 export function OddsResults({ odds }: { odds: OddsScreen }) {
-  const { mode, sport, setSport, sportOptions, sgpExtreme, setSgpExtreme, setLimit, outlierView, isMobile, mobileView, allRows, sgpExtremeCount, nRows, unpublished, emptyBody } = odds
+  const { mode, sport, setSport, sportOptions, setLimit, outlierView, isMobile, mobileView, allRows, nRows, unpublished, emptyBody } = odds
   return (
     <>
-      {mode === 'sgp' && !unpublished && (
-        <SgpNotice extremeCount={sgpExtremeCount} includeExtreme={sgpExtreme} onToggle={() => { setSgpExtreme(v => !v); setLimit(PAGE) }} />
-      )}
-
       {unpublished ? (
         <Empty title="Odds board not published yet" body="The price feed behind this screen is not available right now. It is rewritten every 30 minutes while games are on the board; check back shortly." />
       ) : sport !== 'all' && !sportOptions.includes(sport) ? (
@@ -294,8 +238,6 @@ export function OddsResults({ odds }: { odds: OddsScreen }) {
         <MobileCardsView odds={odds} />
       ) : mode === 'outliers' && outlierView === 'cards' ? (
         <OutlierCardsView odds={odds} />
-      ) : mode === 'sgp' ? (
-        <SgpTableView odds={odds} />
       ) : (
         <PropTableView odds={odds} />
       )}

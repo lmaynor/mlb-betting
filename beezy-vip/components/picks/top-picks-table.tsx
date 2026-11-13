@@ -78,18 +78,17 @@ export function TopPicksTable({ picks, showResult = false, startRank = 1 }: { pi
                 <td className={cx('mono whitespace-nowrap text-text-secondary', TD)}>{p.game || '--'}</td>
                 <td className={cx(TD, 'whitespace-nowrap text-text-secondary')}>
                   {BASIS_LABEL[p.basis]}
-                  {p.tracked && p.unvalidated && (
-                    <span className="ui-heading ml-2 text-micro text-gold border border-[color:rgba(245,158,11,0.35)] rounded-chip py-[1px] px-[5px]">UNVALIDATED &middot; PAPER</span>
-                  )}
-                  {!p.tracked && p.tier === 'official' && (
-                    <span className="ui-heading ml-2 text-micro text-gold border border-[color:rgba(245,158,11,0.35)] rounded-chip py-[1px] px-[5px]">DAILY PLAY &middot; PAPER</span>
-                  )}
-                  {!p.tracked && p.tier === 'tracked' && (
-                    <span className="ui-heading ml-2 text-micro text-gold border border-[color:rgba(245,158,11,0.35)] rounded-chip py-[1px] px-[5px]">TRACKED &middot; PAPER</span>
-                  )}
-                  {!p.tracked && p.tier == null && (
-                    <span className="ui-heading ml-2 text-micro text-gold border border-[color:rgba(245,158,11,0.35)] rounded-chip py-[1px] px-[5px]">SHADOW &middot; CALIBRATING</span>
-                  )}
+                  {(() => {
+                    const origin = p.basis === 'ev' ? 'MARKET SCAN' : 'MODEL ESTIMATE'
+                    const tag = !p.tracked && p.tier === 'official'
+                      ? 'OFFICIAL PLAY'
+                      : p.tracked || p.tier === 'tracked'
+                        ? `TRACKED \u00b7 ${origin}`
+                        : `CANDIDATE \u00b7 ${origin}`
+                    return (
+                      <span className="ui-heading ml-2 text-micro text-gold border border-[color:rgba(245,158,11,0.35)] rounded-chip py-[1px] px-[5px]">{tag}</span>
+                    )
+                  })()}
                 </td>
                 {showResult && (
                   <td className={cx('ui-heading', TD)} style={{ color: res?.color ?? 'var(--link)' }}>{res?.label ?? 'Pending'}</td>

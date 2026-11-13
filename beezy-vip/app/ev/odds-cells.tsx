@@ -4,29 +4,9 @@ import { formatOdds } from '@/lib/odds'
 import { PlayerHeadshot } from '@/components/ui/sport-assets'
 import { type HeadshotSport } from '@/lib/sport-assets'
 import { BookLogo } from '@/components/ui/book-logo'
-import { STAT_LABEL, SGP_ARTIFACT_EV_PCT, type BoardRow, type SgpProxyRow } from '@/lib/odds-screen'
+import { STAT_LABEL, type BoardRow } from '@/lib/odds-screen'
 import { HAIR } from './odds-constants'
 import { startLabel } from './odds-format'
-
-export function SgpBadges({ r }: { r: SgpProxyRow }) {
-  const badgeBg = r.archetype === 'nba_reb_ast_10_10' ? 'rgba(168, 85, 247, 0.2)' : r.archetype.includes('vs_') ? 'rgba(59, 130, 246, 0.2)' : 'rgba(234, 179, 8, 0.2)'
-  const badgeFg = r.archetype === 'nba_reb_ast_10_10' ? '#c084fc' : r.archetype.includes('vs_') ? '#60a5fa' : '#facc15'
-  return (
-    <>
-      <span style={{ fontSize: '10px', fontWeight: 600, padding: '1px 5px', borderRadius: '4px', background: badgeBg, color: badgeFg, flexShrink: 0 }}>
-        {r.archetypeLabel}
-      </span>
-      <span className="mono text-micro font-semibold py-[1px] px-[5px] rounded-chip border border-border-button-hover text-warn shrink-0" title={r.label}>
-        UNVALIDATED
-      </span>
-      {r.modelArtifact && (
-        <span className="mono" title={`EV above ${SGP_ARTIFACT_EV_PCT}% is almost certainly an artifact of the assumed correlation and hold`} style={{ fontSize: '10px', fontWeight: 600, padding: '1px 5px', borderRadius: '4px', border: '1px solid rgba(255,90,79,0.5)', color: '#ff5a4f', flexShrink: 0 }}>
-          MODEL ARTIFACT?
-        </span>
-      )}
-    </>
-  )
-}
 
 type CellState = 'best' | 'arb' | undefined
 

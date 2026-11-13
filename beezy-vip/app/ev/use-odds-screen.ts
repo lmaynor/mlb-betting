@@ -8,7 +8,7 @@ import { useMyBooks } from '@/lib/use-my-books'
 import { sportsWithRows, type SportSlug } from '@/lib/sports'
 import { PRE_LAUNCH } from '@/lib/launch'
 import { useIsMobile } from '@/components/ui/mobile-sheet'
-import { buildArbRows, buildLongshotRows, buildScreenRows, computeMiddles, computeOutliers, computeSgpProxies, STAT_LABEL, type ArbRow, type BoardRow, type DevigMethod, type LongshotRow, type LongshotSubfilter, type MiddleResult, type OddsBoard, type OddsScreenMode, type ScreenRow, type SideFilter } from '@/lib/odds-screen'
+import { buildArbRows, buildLongshotRows, buildScreenRows, computeMiddles, computeOutliers, STAT_LABEL, type ArbRow, type BoardRow, type DevigMethod, type LongshotRow, type LongshotSubfilter, type MiddleResult, type OddsBoard, type OddsScreenMode, type ScreenRow, type SideFilter } from '@/lib/odds-screen'
 import { SportFilter, SortKey, LinesFilter, ArbView, OutlierView, OutlierOddsBand, SPORT_KEYS, BOOK_ORDER, PAGE, MIN_REF, LONGSHOT_MIN_REF, NEAR_ARB_PCT, MIDDLE_MIN_REF, POLL_MS, BadgeKey, BADGE_KEYS } from './odds-constants'
 import { usd } from './odds-format'
 
@@ -45,7 +45,7 @@ function scheduleIdle(fn: () => void): () => void {
 export function useOddsScreen({ initial, initialLocked, fullAccess }: { initial: Partial<Record<SportSlug, OddsBoard>>; initialLocked: number; fullAccess: boolean }) {
   const sp = useSearchParams()
   const viewParam = sp?.get('view')
-  const initialMode: OddsScreenMode = (viewParam && ['ev', 'outliers', 'arb', 'middles', 'longshots', 'sgp'].includes(viewParam))
+  const initialMode: OddsScreenMode = (viewParam && ['ev', 'outliers', 'arb', 'middles', 'longshots'].includes(viewParam))
     ? (viewParam as OddsScreenMode)
     : 'ev'
 
@@ -59,10 +59,6 @@ export function useOddsScreen({ initial, initialLocked, fullAccess }: { initial:
   const [side, setSide] = useState<SideFilter>('both')
   const [lines, setLines] = useState<LinesFilter>('all')
   const [minEv, setMinEv] = useState(0)
-  const [sgpArch, setSgpArch] = useState<string>('all')
-  const [sgpMinEv, setSgpMinEv] = useState<number>(0)
-  const [sgpBook, setSgpBook] = useState<string>('all')
-  const [sgpExtreme, setSgpExtreme] = useState(false)
   const [q, setQ] = useState('')
   const [method, setMethod] = useState<DevigMethod>('proportional')
   const [refs, setRefs] = useState<string[]>([])                 // empty = every book
@@ -131,20 +127,14 @@ export function useOddsScreen({ initial, initialLocked, fullAccess }: { initial:
       if (oddsMin > 0) count++
       if (minEv > 0) count++
       if (!useCurve) count++
-    } else if (mode === 'sgp') {
-      if (sgpArch !== 'all') count++
-      if (sgpMinEv > 0) count++
-      if (sgpBook !== 'all') count++
-      if (sgpExtreme) count++
-      if (!useCurve) count++
     }
     return count
-  }, [sport, stat, game, q, refs.length, mode, lines, side, minEv, sort, outlierGap, outlierReqEv, outlierOddsBand, outlierMinBooks, arbView, exchanges, outlayText, midCost, midPosEv, midGap, longSub, oddsMin, useCurve, sgpArch, sgpMinEv, sgpBook, sgpExtreme])
+  }, [sport, stat, game, q, refs.length, mode, lines, side, minEv, sort, outlierGap, outlierReqEv, outlierOddsBand, outlierMinBooks, arbView, exchanges, outlayText, midCost, midPosEv, midGap, longSub, oddsMin, useCurve])
 
   const [prevViewParam, setPrevViewParam] = useState(viewParam)
   if (viewParam !== prevViewParam) {
     setPrevViewParam(viewParam)
-    if (viewParam && ['ev', 'outliers', 'arb', 'middles', 'longshots', 'sgp'].includes(viewParam)) {
+    if (viewParam && ['ev', 'outliers', 'arb', 'middles', 'longshots'].includes(viewParam)) {
       setMode(viewParam as OddsScreenMode)
     }
   }
@@ -279,26 +269,6 @@ export function useOddsScreen({ initial, initialLocked, fullAccess }: { initial:
     return rows.sort((a, b) => (b.bestEv ?? -Infinity) - (a.bestEv ?? -Infinity))
   }, [mode, filtered, refs, method, bettable, useCurve, longSub, minEv, oddsMin])
 
-  // ---- SGP Proxies: modelled same-book SGP tickets (assumed correlation constants: unvalidated model output, not quotes)
-  const sgpAll = useMemo(() => {
-    if (mode !== 'sgp') return []
-    const all = computeSgpProxies(filtered, {
-      refs,
-      method,
-      bettable,
-      minEvPct: sgpMinEv,
-      book: sgpBook === 'all' ? undefined : sgpBook,
-      useCurve,
-      minRef: MIN_REF,
-    })
-    if (sgpArch === 'milestones') return all.filter(r => r.archetype === 'nba_reb_ast_10_10')
-    if (sgpArch === 'combos') return all.filter(r => r.archetype.includes('_vs_'))
-    if (sgpArch === 'stacks') return all.filter(r => r.archetype.includes('stack'))
-    return all
-  }, [mode, filtered, refs, method, bettable, sgpMinEv, sgpBook, useCurve, sgpArch])
-  // rows above SGP_ARTIFACT_EV_PCT are flagged model artifacts: hidden (and counted) unless 'Include extreme' is on
-  const sgpExtremeCount = useMemo(() => sgpAll.filter(r => r.modelArtifact).length, [sgpAll])
-  const sgpProxies = useMemo(() => sgpExtreme ? sgpAll : sgpAll.filter(r => !r.modelArtifact), [sgpAll, sgpExtreme])
 
   // Mode badges. The ACTIVE mode's badge is its own row count (already computed for the table). The other modes' counts
   // are computed one engine at a time when the browser is idle, from deferred inputs, so a filter change or a mode click
@@ -328,9 +298,6 @@ export function useOddsScreen({ initial, initialLocked, fullAccess }: { initial:
         case 'longshots':
           return buildLongshotRows(d.scoped, { refs: d.refs, method: d.method, bettable: d.bettable, minRef: LONGSHOT_MIN_REF, useCurve: d.useCurve, sub: 'all', minEv: 0, minOverAm: 0 })
             .filter(r => r.bestEv != null && r.bestEv >= floor * 100).length
-        case 'sgp':
-          // flagged model artifacts are not counted (they are hidden by default)
-          return computeSgpProxies(d.scoped, { refs: d.refs, method: d.method, bettable: d.bettable, minEvPct: 0, useCurve: d.useCurve, minRef: MIN_REF }).filter(r => !r.modelArtifact).length
       }
     }
     const todo = BADGE_KEYS.filter(k => k !== mode)
@@ -354,8 +321,7 @@ export function useOddsScreen({ initial, initialLocked, fullAccess }: { initial:
     : mode === 'outliers' ? outliers.length
     : mode === 'arb' ? arbs.length
     : mode === 'middles' ? middles.length
-    : mode === 'longshots' ? longshots.length
-    : sgpProxies.length
+    : longshots.length
   const badgeFor = (k: BadgeKey): number | null => k === mode ? nRows : (badgeVals[k] ?? null)
 
   const meta = useMemo(() => {
@@ -404,8 +370,6 @@ export function useOddsScreen({ initial, initialLocked, fullAccess }: { initial:
 
   const emptyBody = mode === 'outliers'
     ? { title: 'No market outliers clear these filters', body: 'An outlier needs one bettable book hanging a price significantly above the market average of at least 3 peer books. Lower the MIN GAP threshold, widen books, or turn off Verified +EV Only.' }
-    : mode === 'sgp'
-    ? { title: 'No SGP proxies clear these filters', body: 'SGP Proxies models two-leg same-book tickets from single-leg prices (unvalidated: assumed correlation and hold). Rows above 45% model EV are hidden as likely artifacts unless you include them; lower the MIN EV floor or switch archetypes.' }
     : mode === 'middles'
     ? { title: 'No middles at this cost', body: 'A middle needs the over of a lower line and the under of a higher line, priced close enough that a miss costs little. Raise the max cost, loosen the window filter, or include exchanges.' }
     : mode === 'arb'
@@ -416,7 +380,7 @@ export function useOddsScreen({ initial, initialLocked, fullAccess }: { initial:
       : { title: 'Nothing clears these filters', body: 'Set MIN EV to All to see every line, widen the devig books, or clear the prop and game filters. A +EV row needs at least three devig books pricing the line both ways.' }
   const refsNote = mode === 'longshots' ? 'Two books behind a fair value (the curve stands in below that).' : 'Needs 3 books behind a row.'
 
-  return { isMobile, meta, nRows, loading, refresh, mode, limit, setLimit, locked, allRows, columns, inspectItem, setInspectItem, stat, setStat, game, setGame, side, setSide, lines, setLines, minEv, setMinEv, sgpArch, setSgpArch, sgpMinEv, setSgpMinEv, sgpBook, setSgpBook, setQ, method, setMethod, refs, setRefs, setShown, sort, setSort, arbView, setArbView, exchanges, setExchanges, outlayText, setOutlayText, midCost, setMidCost, midGap, setMidGap, midPosEv, setMidPosEv, longSub, setLongSub, oddsMin, setOddsMin, useCurve, setUseCurve, outlierGap, setOutlierGap, outlierReqEv, setOutlierReqEv, outlierOddsBand, setOutlierOddsBand, outlierMinBooks, setOutlierMinBooks, outlierView, setOutlierView, myBooks, mobileFiltersOpen, setMobileFiltersOpen, bookList, defaultShown, shownSet, statOptions, games, refsNote, sport, setSport, sportOptions, q, activeFilterCount, switchMode, badgeFor, copied, revealed, revealMsg, setRevealMsg, bankroll, setMobileView, handleReveal, screen, outliers, arbs, middles, longshots, sgpProxies, outlay, copyHedge, copyMiddle, fullAccess, refWeight, refSet, sgpExtreme, setSgpExtreme, mobileView, sgpExtremeCount, unpublished, emptyBody }
+  return { isMobile, meta, nRows, loading, refresh, mode, limit, setLimit, locked, allRows, columns, inspectItem, setInspectItem, stat, setStat, game, setGame, side, setSide, lines, setLines, minEv, setMinEv, setQ, method, setMethod, refs, setRefs, setShown, sort, setSort, arbView, setArbView, exchanges, setExchanges, outlayText, setOutlayText, midCost, setMidCost, midGap, setMidGap, midPosEv, setMidPosEv, longSub, setLongSub, oddsMin, setOddsMin, useCurve, setUseCurve, outlierGap, setOutlierGap, outlierReqEv, setOutlierReqEv, outlierOddsBand, setOutlierOddsBand, outlierMinBooks, setOutlierMinBooks, outlierView, setOutlierView, myBooks, mobileFiltersOpen, setMobileFiltersOpen, bookList, defaultShown, shownSet, statOptions, games, refsNote, sport, setSport, sportOptions, q, activeFilterCount, switchMode, badgeFor, copied, revealed, revealMsg, setRevealMsg, bankroll, setMobileView, handleReveal, screen, outliers, arbs, middles, longshots, outlay, copyHedge, copyMiddle, fullAccess, refWeight, refSet, mobileView, unpublished, emptyBody }
 }
 
 export type OddsScreen = ReturnType<typeof useOddsScreen>

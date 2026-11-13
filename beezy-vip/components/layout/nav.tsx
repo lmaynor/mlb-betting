@@ -7,21 +7,13 @@ import { useUser, UserButton, SignInButton } from '@clerk/nextjs'
 import { BrandWordmark } from '@/components/ui/brand-mark'
 import { DiscordMark } from '@/components/ui/discord-mark'
 import { XMark } from '@/components/ui/x-mark'
-import { NAV, navActive } from '@/lib/ia'
+import { NAV, SECTIONS, navActive } from '@/lib/ia'
 
 import { DISCORD_URL, X_URL } from '@/lib/links'
 import { cx } from '@/utils/cx'
 import { PRE_LAUNCH } from '@/lib/launch'
 import { InstallAppButton } from '@/components/layout/install-app-button'
 
-
-const ICON_BOX = 'button-press-motion inline-flex size-[34px] items-center justify-center rounded-2lg border border-separator-border bg-background-primary-default text-text-secondary no-underline hover:border-border-button-hover hover:text-text-primary'
-
-const DISCORD_BTN = 'inline-flex items-center gap-[7px] rounded-2lg border px-[11px] py-[7px] text-body-2-semibold no-underline'
-const DISCORD_BTN_STYLE: React.CSSProperties = {
-  background: 'color-mix(in oklab, #5865f2 22%, var(--color-background-full))',
-  color: '#c6ccff', borderColor: 'color-mix(in oklab, #5865f2 50%, var(--color-background-full))',
-}
 
 // A menu row: full width, 48px tall, icon then label, a hairline between rows. Install is a button with its own modal, so it takes the same look as a style.
 const MENU_ROW = 'flex h-12 w-full items-center gap-3 border-b border-separator-border px-4 text-[15px] text-text-primary no-underline hover:bg-background-primary-hover'
@@ -70,6 +62,11 @@ function NavShell({ isSignedIn, userButton, signIn }: {
   // The menu closes on navigation, Escape, and a tap anywhere outside the header.
   useEffect(() => { setMenuOpen(false) }, [pathname])
   useEffect(() => {
+    const open = () => setMenuOpen(true)
+    window.addEventListener('beezy:open-menu', open)
+    return () => window.removeEventListener('beezy:open-menu', open)
+  }, [])
+  useEffect(() => {
     if (!menuOpen) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuOpen(false) }
     const onDown = (e: MouseEvent | TouchEvent) => { if (headerRef.current && !headerRef.current.contains(e.target as Node)) setMenuOpen(false) }
@@ -86,7 +83,7 @@ function NavShell({ isSignedIn, userButton, signIn }: {
         <div className="mx-auto flex h-12 md:h-14 max-w-[1280px] items-center gap-5 px-6">
 
           <Link href="/" aria-label="beezy.fyi home" className="flex shrink-0 items-center no-underline">
-            <BrandWordmark size="md" showDomain />
+            <BrandWordmark size="bar" showDomain />
           </Link>
 
           <div className="nav-desktop flex flex-1 items-center justify-center gap-0.5">
@@ -106,13 +103,6 @@ function NavShell({ isSignedIn, userButton, signIn }: {
           </div>
 
           <div className="nav-desktop ml-auto shrink-0 items-center gap-2.5">
-            <InstallAppButton />
-            <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" aria-label="Join Discord" className={ICON_BOX}>
-              <DiscordMark size={15} color="currentColor" />
-            </a>
-            <a href={X_URL} target="_blank" rel="noopener noreferrer" aria-label="Follow Beezy.FYI on X" className={cx(ICON_BOX, 'nav-xl')}>
-              <XMark size={14} color="currentColor" />
-            </a>
             {isSignedIn ? (
               <>
                 <Link
@@ -150,7 +140,19 @@ function NavShell({ isSignedIn, userButton, signIn }: {
         <>
           {/* Scrim: dims the page under the header and closes the menu on a tap. */}
           <div aria-hidden onClick={() => setMenuOpen(false)} className="mobile-only absolute inset-x-0 top-full z-[59] bg-black/60" style={{ height: '100dvh' }} />
-          <div id="nav-menu" data-testid="nav-menu" className="mobile-only absolute inset-x-0 top-full z-[60] flex-col border-b border-separator-border bg-background-secondary-default shadow-card">
+          <div id="nav-menu" data-testid="nav-menu" className="mobile-only absolute inset-x-0 top-full z-[60] max-h-[calc(100dvh-48px)] flex-col overflow-y-auto border-b border-separator-border bg-background-secondary-default shadow-card">
+            <Link href="/learn" className={MENU_ROW}>Learn</Link>
+            {NAV.filter(n => n.label !== 'Learn').map(n => (
+              <Link key={n.href} href={n.href} className={MENU_ROW}>{n.label}</Link>
+            ))}
+            {SECTIONS.map(s => (
+              <div key={s.id}>
+                <div className="ui-heading px-4 pb-1 pt-3 text-micro text-text-secondary">{s.label}</div>
+                {s.tabs.map(t => (
+                  <Link key={t.href} href={t.href} className={MENU_ROW}>{t.label}</Link>
+                ))}
+              </div>
+            ))}
             <InstallAppButton style={ROW_STYLE} />
             <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" className={MENU_ROW}>
               <span className="inline-flex w-[12px] flex-none justify-center"><DiscordMark size={14} color="currentColor" /></span> Discord

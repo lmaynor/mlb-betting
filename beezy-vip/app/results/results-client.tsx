@@ -258,7 +258,8 @@ export function ResultsClient({
 }) {
   const sp = useSearchParams()
   const dateFilter = sp.get('date') ?? null
-  const [population, setPopulation] = useState<'all' | 'daily'>(() => (sp.get('population') === 'daily' ? 'daily' : 'all'))
+  // The canonical record opens on the Official Daily Card (Decision 19); ?population=all and ?population=ev widen it.
+  const [population, setPopulation] = useState<'daily' | 'all' | 'ev'>(() => (sp.get('population') === 'all' ? 'all' : sp.get('population') === 'ev' ? 'ev' : 'daily'))
 
   const [system,  setSystem]  = useState('ALL')
   const [result,  setResult]  = useState('ALL')
@@ -269,14 +270,17 @@ export function ResultsClient({
   const [onePerProp, setOnePerProp] = useState(true)
   const mounted = useMounted()
   const dailyIds = useMemo(() => new Set(dailyPicks.map(b => b.id)), [dailyPicks])
+  const evPicks = useMemo(() => initialPicks.filter(b => b.system === 'EV'), [initialPicks])
   const allCount = useMemo(() => collapseBooks(initialPicks).length, [initialPicks])
+  const evCount = useMemo(() => collapseBooks(evPicks).length, [evPicks])
 
   const PAGE_SIZE = 30
 
   // The ledger can list one prop several times (once per book that flagged it). Default to one row per prop;
   // the P&L chart and the per-system table above keep every row, since each book's price was a separate paper bet.
-  // Under the Daily Picks population the source is the card plays instead of the whole ledger.
-  const source = population === 'daily' ? dailyPicks : initialPicks
+  // Under the Daily Card population the source is the card plays instead of the whole ledger; under +EV
+  // Alerts it is the sweep's alert pool (system EV) out of the same ledger.
+  const source = population === 'daily' ? dailyPicks : population === 'ev' ? evPicks : initialPicks
   const ledger = useMemo(() => (onePerProp ? collapseBooks(source) : source), [source, onePerProp])
 
   const countsBySystem = useMemo(() =>
@@ -349,8 +353,11 @@ export function ResultsClient({
 
       <p className="mb-4 max-w-[90ch] text-body-2-regular text-text-secondary">
         {population === 'daily'
-          ? 'Only the plays that made each day\'s Daily Card, at the prices on the card. The same plays by day are in Graded History.'
-          : 'Every settled paper bet. Filter to Daily Picks to see only the plays that made each day\'s Daily Card.'}
+          ? 'Only the plays that made each day\'s Daily Card, at the prices on the card. The same plays by day are in Past Cards.'
+          : population === 'ev'
+            ? '+EV alerts only: every settled alert from the odds sweep, graded at a flat $100. Market-scan candidates, not official plays.'
+            : 'Every settled paper bet. Filter to Official Daily Card to see only the plays that made each day\'s Daily Card.'}
+        {' '}Plans and results are paper-tracked and hypothetical; no real money is wagered through beezy.fyi.
       </p>
 
       {/* One inline metric strip: models and +EV alerts are summarised separately. */}
@@ -552,14 +559,15 @@ export function ResultsClient({
       {/* System filter chips -- grouped with labels. On a phone they sit behind one Filters row so the ledger starts on the first screen. */}
       <button type="button" aria-expanded={filtersOpen} aria-controls="results-filters" onClick={() => setFiltersOpen(o => !o)}
         className="mono button-press-motion mb-3 flex min-h-[44px] w-full cursor-pointer items-center justify-between rounded-lg border border-separator-border bg-background-primary-default px-3 text-compact text-text-primary md:hidden" data-testid="results-filters-toggle">
-        <span>Filters{population !== 'all' || system !== 'ALL' || result !== 'ALL' ? ` \u00b7 ${[population === 'daily' ? 'Daily Picks' : null, system !== 'ALL' ? (SYSTEM_LABEL[system] ?? system) : null, result !== 'ALL' ? result : null].filter(Boolean).join(', ')}` : ''}</span>
+        <span>Filters{population !== 'all' || system !== 'ALL' || result !== 'ALL' ? ` \u00b7 ${[population === 'daily' ? 'Official Daily Card' : population === 'ev' ? '+EV Alerts' : null, system !== 'ALL' ? (SYSTEM_LABEL[system] ?? system) : null, result !== 'ALL' ? result : null].filter(Boolean).join(', ')}` : ''}</span>
         <span aria-hidden>{filtersOpen ? '\u2212' : '+'}</span>
       </button>
       <div id="results-filters" className={cx('mb-4 md:block', filtersOpen ? 'block' : 'hidden')}>
         <div className="mb-2.5 flex flex-wrap items-center gap-1.5">
           <span className={cx(LBL, 'mr-1')}>Population</span>
-          <Chip label={`All bets (${allCount})`} active={population === 'all'} onClick={() => { setPopulation('all'); setPage(0) }} />
-          <Chip label={`Daily Picks (${dailyPicks.length})`} active={population === 'daily'} onClick={() => { setPopulation('daily'); setPage(0) }} />
+          <Chip label={`Official Daily Card (${dailyPicks.length})`} active={population === 'daily'} onClick={() => { setPopulation('daily'); setPage(0) }} />
+          <Chip label={`All Tracked Paper (${allCount})`} active={population === 'all'} onClick={() => { setPopulation('all'); setPage(0) }} />
+          <Chip label={`+EV Alerts (${evCount})`} active={population === 'ev'} onClick={() => { setPopulation('ev'); setPage(0) }} />
         </div>
         <div className="mb-2.5 flex flex-wrap items-center gap-5">
 

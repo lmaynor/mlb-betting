@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom'
-/** Results population filter: the default view is the whole settled ledger with Daily Card rows marked;
- *  ?population=daily narrows the list to the Daily Card plays only. */
+/** Results population selector (IA S5): the canonical record opens on the Official Daily Card;
+ *  ?population=all widens to every tracked paper bet, ?population=ev narrows to the +EV alert pool. */
 import { render, screen } from '@testing-library/react'
 import { ResultsClient } from '@/app/results/results-client'
 import type { Bet } from '@/lib/types'
@@ -25,21 +25,45 @@ const dailyBet = bet({
   player: 'Jalen Duren', away_team: 'CHI', home_team: 'DET', odds: 105, stake: 10, result: 'loss', profit: -10,
   book: 'fanduel', notes: JSON.stringify({ tier: 'official' }),
 })
+const evBet = bet({
+  id: 3, system: 'EV', sport: 'nhl', game_date: '2026-11-05', game_pk: 0, bet_type: 'saves_over_26.5',
+  player: 'Igor Shesterkin', away_team: 'NYR', home_team: 'BOS', odds: 115, stake: 100, result: 'win', profit: 115,
+  book: 'betmgm', notes: null,
+})
 
-describe('Results population filter', () => {
-  it('shows the whole ledger by default and marks the rows that were Daily Card plays', () => {
+describe('Results population selector', () => {
+  it('opens on the Official Daily Card by default', () => {
     mockParams = new URLSearchParams()
-    render(<ResultsClient initialPicks={[mlbBet, dailyBet]} initialStats={[]} dailyPicks={[dailyBet]} />)
-    expect(screen.queryAllByText(/Gerrit Cole/).length).toBeGreaterThan(0)
-    expect(screen.queryAllByText(/Jalen Duren/).length).toBeGreaterThan(0)
-    expect(screen.queryAllByText('Daily Card').length).toBeGreaterThan(0)
-  })
-
-  it('?population=daily narrows the ledger to the Daily Card plays only', () => {
-    mockParams = new URLSearchParams('population=daily')
-    render(<ResultsClient initialPicks={[mlbBet, dailyBet]} initialStats={[]} dailyPicks={[dailyBet]} />)
+    render(<ResultsClient initialPicks={[mlbBet, dailyBet, evBet]} initialStats={[]} dailyPicks={[dailyBet]} />)
     expect(screen.queryAllByText(/Jalen Duren/).length).toBeGreaterThan(0)
     expect(screen.queryAllByText(/Gerrit Cole/)).toHaveLength(0)
-    expect(screen.getByRole('button', { name: /Daily Picks \(1\)/ })).toBeInTheDocument()
+    expect(screen.queryAllByText(/Igor Shesterkin/)).toHaveLength(0)
+    expect(screen.getByRole('button', { name: /Official Daily Card \(1\)/ })).toBeInTheDocument()
+  })
+
+  it('?population=all shows the whole ledger and marks the rows that were Daily Card plays', () => {
+    mockParams = new URLSearchParams('population=all')
+    render(<ResultsClient initialPicks={[mlbBet, dailyBet, evBet]} initialStats={[]} dailyPicks={[dailyBet]} />)
+    expect(screen.queryAllByText(/Gerrit Cole/).length).toBeGreaterThan(0)
+    expect(screen.queryAllByText(/Jalen Duren/).length).toBeGreaterThan(0)
+    expect(screen.queryAllByText(/Igor Shesterkin/).length).toBeGreaterThan(0)
+    expect(screen.queryAllByText('Daily Card').length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: /All Tracked Paper \(3\)/ })).toBeInTheDocument()
+  })
+
+  it('?population=ev narrows the ledger to the +EV alert pool only', () => {
+    mockParams = new URLSearchParams('population=ev')
+    render(<ResultsClient initialPicks={[mlbBet, dailyBet, evBet]} initialStats={[]} dailyPicks={[dailyBet]} />)
+    expect(screen.queryAllByText(/Igor Shesterkin/).length).toBeGreaterThan(0)
+    expect(screen.queryAllByText(/Gerrit Cole/)).toHaveLength(0)
+    expect(screen.queryAllByText(/Jalen Duren/)).toHaveLength(0)
+    expect(screen.getByRole('button', { name: /\+EV Alerts \(1\)/ })).toBeInTheDocument()
+  })
+
+  it('?population=daily still narrows to the Daily Card plays (PR #254 links stay valid)', () => {
+    mockParams = new URLSearchParams('population=daily')
+    render(<ResultsClient initialPicks={[mlbBet, dailyBet, evBet]} initialStats={[]} dailyPicks={[dailyBet]} />)
+    expect(screen.queryAllByText(/Jalen Duren/).length).toBeGreaterThan(0)
+    expect(screen.queryAllByText(/Gerrit Cole/)).toHaveLength(0)
   })
 })

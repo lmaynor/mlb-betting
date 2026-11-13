@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { AlignedBar } from '@/components/picks/aligned-bar'
 import { DayToggle } from '@/components/picks/day-toggle'
 import { FilterBar } from '@/components/picks/filter-bar'
@@ -50,6 +51,22 @@ const GROUP_CLASS = 'inline-flex gap-0.5 p-[3px] bg-background-secondary-default
  */
 export default async function ProjectionsPage({ searchParams }: Props) {
   const sp = await searchParams
+  // Scanner URLs carry no ?tier= or ?result= (lib/ia.ts URL standard): strip them on arrival, keeping every
+  // other param, so a shared picks-board link lands on the same filtered board under its canonical URL.
+  if ('tier' in sp || 'result' in sp) {
+    const q = new URLSearchParams()
+    for (const [k, v] of Object.entries(sp)) if (k !== 'tier' && k !== 'result' && v != null) q.set(k, v)
+    const s = q.toString()
+    redirect(s ? `/ev/projections?${s}` : '/ev/projections')
+  }
+  // Pill hrefs preserve the shared filter params (F-J1): only the pill's own keys change.
+  const pillHref = (over: Record<string, string | undefined>): string => {
+    const q = new URLSearchParams()
+    for (const [k, v] of Object.entries(sp)) if (k !== 'tier' && k !== 'result' && v != null) q.set(k, v)
+    for (const [k, v] of Object.entries(over)) { if (v == null) q.delete(k); else q.set(k, v) }
+    const s = q.toString()
+    return s ? `/ev/projections?${s}` : '/ev/projections'
+  }
   const view: View = sp.view === 'games' ? 'games' : 'props'
   const league: SportSlug = sp.league && isSportSlug(sp.league) ? sp.league : 'nfl'
   const gameSport = parseGameSport(sp.sport)
@@ -63,19 +80,19 @@ export default async function ProjectionsPage({ searchParams }: Props) {
       </div>
       <div className="flex gap-3 flex-wrap items-center mt-3.5">
         <nav aria-label="Projection type" className={GROUP_CLASS}>
-          <Link className={PILL_CLASS} href={`/ev/projections?league=${league}`} aria-current={view === 'props' ? 'page' : undefined} style={pill(view === 'props')}>Player props</Link>
-          <Link className={PILL_CLASS} href="/ev/projections?view=games" aria-current={view === 'games' ? 'page' : undefined} style={pill(view === 'games')}>Game lines</Link>
+          <Link className={PILL_CLASS} href={pillHref({ view: undefined, sport: undefined, league })} aria-current={view === 'props' ? 'page' : undefined} style={pill(view === 'props')}>Player props</Link>
+          <Link className={PILL_CLASS} href={pillHref({ view: 'games', league: undefined })} aria-current={view === 'games' ? 'page' : undefined} style={pill(view === 'games')}>Game lines</Link>
         </nav>
         {view === 'props' ? (
           <nav aria-label="League" className={GROUP_CLASS}>
             {LIVE_SPORTS.map(p => (
-              <Link className={PILL_CLASS} key={p.slug} href={`/ev/projections?league=${p.slug}`} aria-current={p.slug === league ? 'page' : undefined} style={pill(p.slug === league)}>{p.shortName}</Link>
+              <Link className={PILL_CLASS} key={p.slug} href={pillHref({ league: p.slug, view: undefined, sport: undefined })} aria-current={p.slug === league ? 'page' : undefined} style={pill(p.slug === league)}>{p.shortName}</Link>
             ))}
           </nav>
         ) : (
           <nav aria-label="Game line sport" className={GROUP_CLASS}>
             {GAME_SPORTS.map(t => (
-              <Link className={PILL_CLASS} key={t.key} href={t.key === 'all' ? '/ev/projections?view=games' : `/ev/projections?view=games&sport=${t.key}`} aria-current={gameSport === t.key ? 'page' : undefined} style={pill(gameSport === t.key)}>{t.label}</Link>
+              <Link className={PILL_CLASS} key={t.key} href={pillHref({ view: 'games', sport: t.key === 'all' ? undefined : t.key, league: undefined })} aria-current={gameSport === t.key ? 'page' : undefined} style={pill(gameSport === t.key)}>{t.label}</Link>
             ))}
           </nav>
         )}

@@ -482,7 +482,7 @@ function PropCard({ r, active, onSelect }: { r: CockpitRow; active: boolean; onS
         <span className="flex min-w-0 items-center gap-[7px]">
           <span className="ui-heading shrink-0 rounded-chip border px-[5px] py-px" style={{ color: accent, borderColor: `${accent}55` }}>{r.sport.toUpperCase()}</span>
           {r.flag && <span className="ui-heading shrink-0 text-signal" title="A book is hanging this line well off the market and it passed the credibility gates">Flagged</span>}
-          {r.sport !== 'mlb' && <span className="ui-heading shrink-0 text-gold" title="NFL, NHL and NBA output has no tested edge against prices">Unvalidated</span>}
+          <span className="ui-heading shrink-0 text-text-secondary" title={r.source === 'model' ? 'A model projection row from the daily boards' : 'A market sweep row: a flagged price from the live odds sweep'}>{r.source === 'model' ? 'MODEL PROJECTION' : 'MARKET SWEEP'}</span>
           <span className="mono min-w-0 flex-1 truncate text-mini text-text-secondary">{meta}</span>
         </span>
       </span>
@@ -493,7 +493,7 @@ function PropCard({ r, active, onSelect }: { r: CockpitRow; active: boolean; onS
           <span className="mono text-body-2-bold text-text-primary">{r.american != null ? formatOdds(r.american) : '--'}</span>
         </span>
         <span className="mono rounded-full border border-separator-border bg-background-secondary-default px-2 py-0.5 text-mini font-semibold" style={{ color: rateColor(l10) }}>
-          L10: {pct0(l10)}
+          L10: {l10 == null ? 'n/a' : pct0(l10)}
         </span>
       </span>
     </button>
@@ -532,6 +532,7 @@ export function Cockpit({ feed, sport, updated, loading, onRefresh, renderMlbExt
 }) {
   const [market, setMarket] = useState<string>('all')
   const [sort, setSort] = useState<SortKey>('ev')
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'sweep' | 'model'>('all')
   const [credibleOnly, setCredibleOnly] = useState(false)
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -558,16 +559,23 @@ export function Cockpit({ feed, sport, updated, loading, onRefresh, renderMlbExt
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
     const list = inSport
+      .filter(r => sourceFilter === 'all' || (sourceFilter === 'model') === (r.source === 'model'))
       .filter(r => activeMarket === 'all' || r.stat === activeMarket)
       .filter(r => !credibleOnly || r.flag)
       .filter(r => !q || (r.player ?? '').toLowerCase().includes(q) || (r.matchup ?? '').toLowerCase().includes(q) || (r.team ?? '').toLowerCase().includes(q))
     const l10 = (r: CockpitRow) => (r.recentForm ? sideRate(r.recentForm.games, r.recentForm.line, isUnder(r), 10) : null)
     return list.slice().sort((a, b) => {
-      if (sort === 'l10') return (l10(b) ?? -1) - (l10(a) ?? -1) || (b.ev ?? 0) - (a.ev ?? 0)
+      if (sort === 'l10') {
+        const x = l10(a), y = l10(b)
+        if (x == null && y == null) return (b.ev ?? 0) - (a.ev ?? 0)
+        if (x == null) return 1   // no L10 log: sinks below every measured row, never sorted as a rate
+        if (y == null) return -1
+        return y - x || (b.ev ?? 0) - (a.ev ?? 0)
+      }
       if (sort === 'start') return (a.mins_to_kick ?? 1e9) - (b.mins_to_kick ?? 1e9) || (b.ev ?? 0) - (a.ev ?? 0)
-      return Number(!a.flag) - Number(!b.flag) || (b.ev ?? 0) - (a.ev ?? 0)
+      return (b.ev ?? 0) - (a.ev ?? 0)
     })
-  }, [inSport, activeMarket, credibleOnly, query, sort])
+  }, [inSport, activeMarket, credibleOnly, query, sort, sourceFilter])
 
   const selected = useMemo(() => rows.find(r => r.id === selectedId) ?? rows[0] ?? null, [rows, selectedId])
 
@@ -626,9 +634,11 @@ export function Cockpit({ feed, sport, updated, loading, onRefresh, renderMlbExt
         <div className="flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex flex-wrap items-center gap-2.5">
             <Segmented<SortKey> label="Sort" value={sort} onChange={setSort}
-              options={[{ id: 'ev', label: 'BEST +EV' }, { id: 'l10', label: 'L10 HIT%' }, { id: 'start', label: 'STARTS SOON' }]} />
+              options={[{ id: 'ev', label: 'NET EV %' }, { id: 'l10', label: 'L10 HIT%' }, { id: 'start', label: 'STARTS SOON' }]} />
             <Segmented<string> label="Confidence" value={credibleOnly ? 'credible' : 'all'} onChange={v => setCredibleOnly(v === 'credible')}
               options={[{ id: 'all', label: 'All players' }, { id: 'credible', label: 'Flagged only' }]} />
+            <Segmented<string> label="Source" value={sourceFilter} onChange={v => setSourceFilter(v as 'all' | 'sweep' | 'model')}
+              options={[{ id: 'all', label: 'All sources' }, { id: 'sweep', label: 'Market Sweep' }, { id: 'model', label: 'Model Projection' }]} />
           </div>
           <input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search player or team" aria-label="Search player or team"
             className="h-[34px] min-w-0 max-w-[300px] flex-[1_1_180px] rounded-lg border border-border-button-default bg-background-secondary-default px-2.5 text-body-2-regular text-text-primary outline-none placeholder:text-text-placeholder focus:border-accent-500" />
