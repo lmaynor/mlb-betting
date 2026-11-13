@@ -83,6 +83,7 @@ from nba.props import team_context as _tc
 from nfl.models import hierarchical_live as _hl
 from nfl.props import env_adjust as _ea
 from nhl.props import hierarchical as _nh
+from nhl.props import saves_hardening as _sh
 
 log = logging.getLogger("ev.daily_projections")
 _ET = ZoneInfo("America/New_York")
@@ -530,6 +531,8 @@ class GameLogs:
         self._sv: dict = {}
         self._tracker = None
         self._trained: dict = {}
+        self._saves_history = None                   # settled saves rows for the D1 hardening state (set_saves_history)
+        self._saves_states: dict = {}
         self._opp_g: dict = {}
         self._lock = threading.Lock()
 
@@ -766,6 +769,29 @@ class GameLogs:
     def set_trained(self, preds: dict) -> None:
         """Install {(player_id, ET game date, stat): (mu, alpha, version)} (see load_trained)."""
         self._trained = preds or {}
+
+    def set_saves_history(self, rows) -> None:
+        """Install settled saves history rows (nhl.props.saves_hardening history shape) for the D1
+        centering / calibration / regime state. Per-date HardeningStates are built lazily and cached."""
+        self._saves_history = list(rows or [])
+        self._saves_states = {}
+
+    def saves_state(self, as_of: str | None):
+        """The HardeningState for a game date, or None when no history was installed (unit tests, a
+        ledger outage): centering / calibration then leave the probability untouched, while the
+        starter and price stamps are still written (see _saves_hardening_fields)."""
+        if getattr(self, "_saves_history", None) is None or not as_of:
+            return None
+        cache = getattr(self, "_saves_states", None)
+        if cache is None:
+            cache = self._saves_states = {}
+        if as_of not in cache:
+            try:
+                cache[as_of] = _sh.build_state(self._saves_history, as_of)
+            except Exception as exc:                                                # noqa: BLE001
+                log.info("saves hardening state unavailable for %s: %s", as_of, exc)
+                cache[as_of] = None
+        return cache[as_of]
 
     def trained_pred(self, player_id, as_of: str | None, stat: str):
         if self.sport != "nhl" or not self._trained or player_id is None or not as_of:
@@ -1729,9 +1755,21 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
             p_floor, p_ceil = (None, None) if family == "anytime" else (hier.dist.ppf(0.10), hier.dist.ppf(0.90))
     form = cf.shape_form(rows, sdef, line)
     p_mkt_over = cons.p_over if cons is not None else None
+    # NHL trained saves hardening (Argon Props D1 / Pack 4 D1 / Data D2; nhl.props.saves_hardening):
+    # 28-day log-odds centering + rolling residual calibration replace the raw model probability BEFORE
+    # the blend and every edge below is computed; the gate inputs are stamped on the row for
+    # ev.model_picks.qualifies. Other stats / engines are untouched.
+    saves_hard = None
+    if sport == "nhl" and stat == "saves" and extra.get("nhl_model") == "trained_v1" and p_model_over is not None:
+        p_model_over, saves_hard = _saves_hardening_fields(logs, p_model_over, p_mkt_over, team, player, as_of)
     n_books = cons.n_books if cons is not None else (len(_real(at_pt)) if at_pt else None)
     best = best_prices(at_pt) if at_pt else {"over": None, "under": None}
     ef = edge_fields(p_model_over, p_mkt_over, best, cons.n_books if cons is not None else None)
+    if saves_hard is not None:
+        # the price gate's inputs: the (hardened) model's side edge over the median consensus and the
+        # number of books behind that median (ev.props.build_consensus p_over IS the per-book median)
+        saves_hard.update(saves_median_edge=None if ef["model_edge"] is None else round(float(ef["model_edge"]), 6),
+                          saves_median_n_books=None if cons is None else int(cons.n_books))
     side = ef["side"]
     p_model_side = None if p_model_over is None or side is None else (p_model_over if side == "over" else 1 - p_model_over)
     p_mkt_side = None if p_mkt_over is None or side is None else (p_mkt_over if side == "over" else 1 - p_mkt_over)
@@ -1777,8 +1815,59 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
         # D4 shadow cohort: search ALL quotes for this player/stat (not just the main-line real books in at_pt --
         # Fliff / Betr are DFS-classed and never reach at_pt or the consensus), falling back to at_pt.
         row.update(nhl_shadow_cohort_fields(stat, extra.get("nhl_model") == "trained_v1", all_quotes or at_pt))
+        if saves_hard is not None:
+            row.update(saves_hard)
     row["pick_tier"] = pick_tier(row)
     return row
+
+
+_SAVES_RW_MEMO: dict = {}
+
+
+def _saves_rotowire_confirmed(day: str | None) -> dict:
+    """RotoWire-confirmed starters for a game day (ET), memoised to one cache read per minute.
+    {} (nobody confirmed) on any failure: the dual gate is fail-closed, see nhl.props.saves_hardening."""
+    if not day:
+        return {}
+    key = (day, int(time.time() // 60))
+    if _SAVES_RW_MEMO.get("key") != key:
+        _SAVES_RW_MEMO.update(key=key, data=_sh.rotowire_confirmed_for(day))
+    return _SAVES_RW_MEMO["data"]
+
+
+def _saves_hardening_fields(logs, p_model_over: float, p_mkt_over, team, player, as_of) -> tuple:
+    """(hardened P(over), stamp dict) for one trained saves row (nhl.props.saves_hardening).
+
+    The probability is centered (28-day log-odds) and, when a calibration fit exists, recalibrated
+    against the de-vigged median market. The stamps carry every officials-gate input except the price
+    gate's (the caller adds saves_median_edge / saves_median_n_books once the side is known): the
+    dual-confirmation starter verdict (RotoWire cache + the fail-closed ESPN stub), and the regime
+    verdict from the trailing 14-day realized over-rate. With no settled history installed the state
+    is neutral (no centering, regime not blocked) but the starter stamp still blocks: the stub
+    confirms nobody, by design, until a real ESPN fetcher replaces it."""
+    state = logs.saves_state(as_of) if hasattr(logs, "saves_state") else None
+    if state is not None:
+        h = state.harden(p_model_over, p_mkt_over)
+        p_final = h["p_final"]
+        stamps = {"saves_p_model_raw": _f(p_model_over), "saves_p_centered": _f(h["p_centered"]),
+                  "saves_center_residual": _f(h["center_residual"]), "saves_center_n": h["center_n"],
+                  "saves_calibrated": bool(h["calibrated"]),
+                  "saves_regime_blocked": bool(state.regime.blocked),
+                  "saves_regime_over_rate": _f(state.regime.over_rate), "saves_regime_n": state.regime.n}
+    else:
+        p_final = p_model_over
+        stamps = {"saves_p_model_raw": _f(p_model_over), "saves_p_centered": _f(p_model_over),
+                  "saves_center_residual": None, "saves_center_n": 0, "saves_calibrated": False,
+                  "saves_regime_blocked": False, "saves_regime_over_rate": None, "saves_regime_n": 0}
+    starter = _sh.dual_confirmed_starter(team=str(team or ""), goalie=str(player or ""), date=str(as_of or ""),
+                                         rotowire_confirmed=_saves_rotowire_confirmed(as_of),
+                                         second_source=_sh.default_second_source())
+    stamps.update(saves_starter_dual_confirmed=bool(starter.official_ok),
+                  saves_starter_rotowire_confirmed=bool(starter.rotowire_confirmed),
+                  saves_starter_second_source=starter.second.source,
+                  saves_starter_second_status=starter.second.status,
+                  saves_starter_gate_reason=starter.reason)
+    return p_final, stamps
 
 
 _LINEUP_MEMO: dict = {}
@@ -2304,6 +2393,10 @@ def run_sport(sport: str, now: datetime | None = None, logs: GameLogs | None = N
         return _finish(base, sport, write, now)
     if sport == "nhl" and trained_enabled():
         logs.set_trained(load_trained(now))
+        try:
+            logs.set_saves_history(_sh.load_settled_saves_history(now))
+        except Exception as exc:                                                # noqa: BLE001
+            log.info("saves hardening history unavailable: %s", exc)
     if sport == "nba" and write:
         logs.set_nba_spreads(_load_nba_spreads(now))
         logs.set_nba_tracking(_load_nba_tracking(now))
