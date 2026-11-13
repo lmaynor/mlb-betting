@@ -567,6 +567,99 @@ describe('computeSgpProxies', () => {
     expect(res[0].archetype).toBe('nba_reb_ast_10_10')
   })
 
+  it('NHL line mates emit a LINEMATE PTS stack only within a real line', () => {
+    // Line assignments from NHL/lines/lines_latest.json built 2026-11-12 (trailing-10 window, as of 2026-11-11);
+    // prices are fixture prices in the style of the previous test.
+    const mcdavidPts: BoardRow = {
+      key: 'g|mcdavid|points|0.5',
+      game_key: 'nhl:2026-10-30:EDM@CGY',
+      commence: '2026-10-30T23:00:00Z',
+      away: 'EDM',
+      home: 'CGY',
+      team: 'EDM',
+      player: 'Connor McDavid',
+      player_norm: 'connor mcdavid',
+      stat: 'points',
+      line: 0.5,
+      line_id: 'EDM-F1',
+      books: [B('fanduel', -320, 250), B('draftkings', -310, 240), B('betmgm', -300, 235)],
+    }
+    const draisaitlPts: BoardRow = {
+      key: 'g|draisaitl|points|0.5',
+      game_key: 'nhl:2026-10-30:EDM@CGY',
+      commence: '2026-10-30T23:00:00Z',
+      away: 'EDM',
+      home: 'CGY',
+      team: 'EDM',
+      player: 'Leon Draisaitl',
+      player_norm: 'leon draisaitl',
+      stat: 'points',
+      line: 0.5,
+      line_id: 'EDM-F1',
+      books: [B('fanduel', -280, 220), B('draftkings', -270, 215), B('betmgm', -265, 212)],
+    }
+    const podkolzinPts: BoardRow = {
+      key: 'g|podkolzin|points|0.5',
+      game_key: 'nhl:2026-10-30:EDM@CGY',
+      commence: '2026-10-30T23:00:00Z',
+      away: 'EDM',
+      home: 'CGY',
+      team: 'EDM',
+      player: 'Vasily Podkolzin',
+      player_norm: 'vasily podkolzin',
+      stat: 'points',
+      line: 0.5,
+      line_id: 'EDM-F1',
+      books: [B('fanduel', -170, 140), B('draftkings', -165, 138), B('betmgm', -160, 135)],
+    }
+    const nugentHopkinsPts: BoardRow = {
+      key: 'g|nugenthopkins|points|0.5',
+      game_key: 'nhl:2026-10-30:EDM@CGY',
+      commence: '2026-10-30T23:00:00Z',
+      away: 'EDM',
+      home: 'CGY',
+      team: 'EDM',
+      player: 'Ryan Nugent-Hopkins',
+      player_norm: 'ryan nugent-hopkins',
+      stat: 'points',
+      line: 0.5,
+      line_id: 'EDM-F2',
+      books: [B('fanduel', -210, 175), B('draftkings', -200, 168), B('betmgm', -205, 170)],
+    }
+    const hymanPts: BoardRow = {
+      key: 'g|hyman|points|0.5',
+      game_key: 'nhl:2026-10-30:EDM@CGY',
+      commence: '2026-10-30T23:00:00Z',
+      away: 'EDM',
+      home: 'CGY',
+      team: 'EDM',
+      player: 'Zach Hyman',
+      player_norm: 'zach hyman',
+      stat: 'points',
+      line: 0.5,
+      books: [B('fanduel', -190, 160), B('draftkings', -185, 155), B('betmgm', -180, 152)],
+    }
+    const res = computeSgpProxies([mcdavidPts, draisaitlPts, podkolzinPts, nugentHopkinsPts, hymanPts], {
+      refs: [],
+      method: 'proportional',
+      bettable: null,
+      minEvPct: -50,
+      useCurve: true,
+    })
+    const linemates = res.filter(r => r.archetype === 'nhl_linemate_pts_stack')
+    const expectedPairs = new Set([
+      'Connor McDavid + Leon Draisaitl (EDM)',
+      'Connor McDavid + Vasily Podkolzin (EDM)',
+      'Leon Draisaitl + Vasily Podkolzin (EDM)',
+    ])
+    expect(new Set(linemates.map(r => r.player))).toEqual(expectedPairs)
+    expect(linemates).toHaveLength(3)
+    expect(linemates.every(r => r.archetypeLabel === 'LINEMATE PTS')).toBe(true)
+    expect(linemates.every(r => r.rhoTrue === 0.32)).toBe(true)
+    expect(linemates.some(r => r.player.includes('Hyman') || r.player.includes('Nugent-Hopkins'))).toBe(false)
+    expect(linemates.some(r => r.player_norm.includes('hyman') || r.player_norm.includes('nugent-hopkins'))).toBe(false)
+  })
+
   it('NHL teammates do not emit a LINEMATE PTS stack without line data', () => {
     const mcdavidPts: BoardRow = {
       key: 'g|mcdavid|points|0.5',

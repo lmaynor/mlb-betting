@@ -45,6 +45,8 @@ export interface BoardRow {
   curve_fair_over?: number | null
   /** rungs behind the curve */
   curve_n?: number
+  /** the skater's even-strength line id from nhl.data.lines, annotated at board production; absent when the skater is in no derived line */
+  line_id?: string | null
 }
 export interface OddsBoard {
   sport: string
@@ -1364,6 +1366,38 @@ export function computeSgpProxies(rows: BoardRow[], opts: SgpProxyOptions): SgpP
     const pick = (row: BoardRow) => {
       const f = resolveFairOver(row, opts.method, refs, null, opts.useCurve, minRef)
       return f != null && f >= 0.04 && f <= 0.88 ? f : null
+    }
+
+    if (sp === 'nhl') {
+      const arch = SGP_ARCH_DEFS.nhl_linemate_pts_stack
+      if (wanted(arch)) {
+        const skaters: { row: BoardRow; fairProb: number; lineId: string }[] = []
+        for (const plRows of teamPlayers.values()) {
+          const ptsRow = plRows.find(r => r.stat === 'points' && r.line === 0.5)
+          if (ptsRow && ptsRow.line_id) {
+            const f = pick(ptsRow)
+            if (f != null) skaters.push({ row: ptsRow, fairProb: f, lineId: ptsRow.line_id })
+          }
+        }
+        const byLine = new Map<string, typeof skaters>()
+        for (const s of skaters) {
+          const g = byLine.get(s.lineId)
+          if (g) g.push(s)
+          else byLine.set(s.lineId, [s])
+        }
+        for (const group of byLine.values()) {
+          for (let i = 0; i < group.length; i++) {
+            for (let j = i + 1; j < group.length; j++) {
+              const a = group[i].row, b = group[j].row
+              scanPair({
+                arch, sample, r1: a, r2: b, ...pairWho(a, b),
+                leg1: { stat: 'points', label: `${a.player} 1+ Pt`, line: 0.5 },
+                leg2: { stat: 'points', label: `${b.player} 1+ Pt`, line: 0.5 },
+              })
+            }
+          }
+        }
+      }
     }
 
     if (sp === 'nfl') {
