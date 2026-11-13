@@ -15,7 +15,7 @@ import { cx } from '@/utils/cx'
 
 export const metadata: Metadata = {
   title: 'Top Signals',
-  description: 'Top +EV Outliers and Confluence Plays across MLB, NFL, NHL and NBA right now, ranked by Beezy Score. Free.',
+  description: 'The ten highest-scored plays across MLB, NFL, NHL and NBA right now, ranked by Beezy Score: official plays and +EV outliers. Free.',
 }
 
 export default async function TopPicksPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
@@ -48,7 +48,7 @@ export default async function TopPicksPage({ searchParams }: { searchParams: Pro
               <span className="mono text-caption-2-medium text-text-secondary">Tier</span>
               {[
                 { id: 'all', label: 'All Actionable' },
-                { id: 'official', label: 'Official Plays Only' },
+                { id: 'official', label: 'Official Plays (Daily Card)' },
                 { id: 'outliers', label: '+EV Outliers' },
               ].map(t => {
                 const active = tierParam === t.id
@@ -75,6 +75,14 @@ export default async function TopPicksPage({ searchParams }: { searchParams: Pro
           </span>
         </div>
 
+        <p className="mb-3 max-w-[90ch] text-body-2-regular text-text-secondary">
+          {tierParam === 'official'
+            ? 'Official plays inside today\'s top ten. The full card, with no ten-row window, is the Daily Card.'
+            : tierParam === 'outliers'
+            ? '+EV outliers inside today\'s top ten: one book\'s price out of line with the pack, no model agreement needed. Not official plays.'
+            : 'The ten highest-scored plays across all sports right now, cut to the actionable rows: official plays and +EV outliers. Rows leave this board when their game starts; the Daily Card keeps its plays.'}
+        </p>
+
         {displayPicks.length === 0 ? (
           <div className="rounded-xl border border-separator-border bg-background-primary-default px-5 py-9 text-center shadow-card">
             <div className="mb-1.5 text-body-semibold text-text-primary">{filtered ? 'No picks match these filters' : 'Nothing scored yet'}</div>
@@ -96,9 +104,7 @@ export default async function TopPicksPage({ searchParams }: { searchParams: Pro
         </div>
 
         <p className="mx-0.5 mt-3.5 max-w-[90ch] text-caption-1-regular text-text-secondary">
-          MLB rows are the tracked model card and +EV alerts: every one is logged at the flagged price and settled on the Results ledger.
-          NFL, NHL and NBA rows come from the daily projection boards and are unvalidated: they are not tracked in the public results yet.
-          One row per prop, at the best available book. Odds can move before you bet.
+          MLB rows are tracked ledger bets (model systems and +EV alerts), settled in Results. NFL, NHL and NBA rows are projection-board rows: a row stamped Official is a Daily Card play, logged at this price and graded in Graded History; a row stamped Tracked is logged on paper and settled in the ledger; an unstamped row is not tracked. One row per prop, at the best available book. Odds can move before you bet.
         </p>
         <ScoreLegend />
       </div>
