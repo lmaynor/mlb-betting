@@ -71,7 +71,7 @@ export function TopPicksTable({ picks, showResult = false, startRank = 1 }: { pi
                     ) : isOutlier ? (
                       <span className="ui-heading text-micro text-link border border-[color:#38bdf8] rounded-chip py-[1px] px-[5px] bg-[rgba(56,189,248,0.12)]">+EV OUTLIER</span>
                     ) : null}
-                    <span className="mono font-semibold" title={`Beezy Score ${p.score}. Not a win probability.`} style={{ color: isOfficial ? '#57F287' : isOutlier ? '#38bdf8' : 'var(--color-neutral-300)' }}>{p.score}</span>
+                    <span className="mono font-semibold" title={`Beezy Score ${p.score}`} style={{ color: isOfficial ? '#57F287' : isOutlier ? '#38bdf8' : 'var(--color-neutral-300)' }}>{p.score}</span>
                   </div>
                 </td>
                 <td className={cx('mono', TD)} style={{ color: (p.edge ?? 0) > 0 ? 'var(--signal)' : 'var(--color-text-secondary)' }}>{fmtEdge(p.edge)}</td>
@@ -79,10 +79,10 @@ export function TopPicksTable({ picks, showResult = false, startRank = 1 }: { pi
                 <td className={cx(TD, 'whitespace-nowrap text-text-secondary')}>
                   {BASIS_LABEL[p.basis]}
                   {p.tracked && p.unvalidated && (
-                    <span className="ui-heading ml-2 text-micro text-gold border border-[color:rgba(245,158,11,0.35)] rounded-chip py-[1px] px-[5px]" title="The model behind this pick has no tested edge against prices. It is tracked on paper at 1 unit and graded after the game.">UNVALIDATED &middot; PAPER</span>
+                    <span className="ui-heading ml-2 text-micro text-gold border border-[color:rgba(245,158,11,0.35)] rounded-chip py-[1px] px-[5px]">UNVALIDATED &middot; PAPER</span>
                   )}
                   {!p.tracked && (
-                    <span className="ui-heading ml-2 text-micro text-gold border border-[color:rgba(245,158,11,0.35)] rounded-chip py-[1px] px-[5px]" title="Projections come from an empirical estimator on game logs and are not tracked in the public results yet.">SHADOW &middot; CALIBRATING</span>
+                    <span className="ui-heading ml-2 text-micro text-gold border border-[color:rgba(245,158,11,0.35)] rounded-chip py-[1px] px-[5px]">SHADOW &middot; CALIBRATING</span>
                   )}
                 </td>
                 {showResult && (

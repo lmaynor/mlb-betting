@@ -585,7 +585,7 @@ export function ResultsClient({
             ))}
           </div>
           <div className="ml-auto flex items-center gap-3">
-            <label className="mono flex cursor-pointer items-center gap-1.5 text-micro text-text-secondary" title="The same prop flagged at several books shows as one row">
+            <label className="mono flex cursor-pointer items-center gap-1.5 text-micro text-text-secondary">
               <input type="checkbox" checked={onePerProp} onChange={e => { setOnePerProp(e.target.checked); setPage(0) }} /> One row per prop
             </label>
             <span className="mono text-micro text-text-secondary">{filtered.length} bets</span>

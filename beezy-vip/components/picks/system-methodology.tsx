@@ -68,7 +68,7 @@ export function SystemMethodology({ system }: { system: PickSystem }) {
             <Stat label="MAE (ENGINE VS L5)" value={pair(live.mae, live.baselineMae, live.mae >= 10 ? 1 : 3)} title="Mean absolute error of the projection on past games, using only earlier games; L5 is the player's average over the last five. Lower is better." />
             <Stat label="MAE change" value={`${live.dMae <= 0 ? '' : '+'}${((live.dMae / live.baselineMae) * 100).toFixed(1)}% (se ${((live.dMaeSe / live.baselineMae) * 100).toFixed(1)}%)`} title="Paired over the same games, as a share of the L5 error; negative means the engine is more accurate." />
           </div>
-          <div className="mt-2 text-text-secondary text-[12px]">{live.method}. Accuracy of the projection only; it says nothing about beating a price.</div>
+          <div className="mt-2 text-text-secondary text-[12px]">{live.method}.</div>
         </div>
       )}
       <div>

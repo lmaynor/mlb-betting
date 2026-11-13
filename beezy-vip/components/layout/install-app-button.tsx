@@ -134,7 +134,6 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
         style={btnStyle}
         className={className}
         aria-label="Install beezy.fyi web app"
-        title="Install beezy.fyi to your home screen or dock"
       >
         <svg
           width="12"
@@ -175,7 +174,7 @@ export function InstallAppButton({ compact = false, style, className }: InstallA
                   Install beezy.fyi Terminal
                 </h3>
                 <p className="mt-1 text-caption-1-regular text-text-secondary">
-                  Add beezy.fyi to your home screen or dock for fast, full-screen odds scanning with zero browser chrome.
+                  Add beezy.fyi to your home screen or dock.
                 </p>
               </div>
               <button

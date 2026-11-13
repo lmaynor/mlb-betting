@@ -38,10 +38,6 @@ export default async function SignupPage() {
             className="btn btn-primary mb-2.5 w-full">
             Join Discord (free picks now)
           </a>
-          <p className="mono mb-7 text-micro text-text-secondary">
-            Paid access launches when systems clear the 200-bet gate.
-          </p>
-
           <div className="mb-10 text-left">
             <p className="times mb-3 text-headline-regular text-text-secondary">
               Or get the launch by email instead:

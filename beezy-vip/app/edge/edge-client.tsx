@@ -209,10 +209,6 @@ function FormSparkline({ rf, color }: { rf: NonNullable<EdgePick['recentForm']>;
   const lineY = hasLine ? ya(rf.line as number) : null
   const overCount = games.filter(succ).length
   const pct = Math.round((overCount / games.length) * 100)
-  const n3 = Math.min(3, games.length)
-  const f3 = games.slice(0, n3).reduce((a, b) => a + b.value, 0) / n3
-  const l3 = games.slice(-n3).reduce((a, b) => a + b.value, 0) / n3
-  const trend = l3 > f3 + 0.3 ? 'trending up' : l3 < f3 - 0.3 ? 'cooling off' : 'holding steady'
   const statL = rf.stat.replace(/_/g, ' ')
   return (
     <div className="edge-ctx edge-ctx-wide">
@@ -220,8 +216,8 @@ function FormSparkline({ rf, color }: { rf: NonNullable<EdgePick['recentForm']>;
       <Take>
         {hasLine
           ? <>Cleared the <b>{rf.line}</b> line in <b>{overCount} of {games.length}</b>{' '}
-              <span className="mono">({pct}%)</span> &mdash; {trend}.</>
-          : <>{rf.stat === 'home_runs' ? 'Homered' : 'Produced'} in <b>{overCount} of {games.length}</b> games &mdash; {trend}.</>}
+              <span className="mono">({pct}%)</span>.</>
+          : <>{rf.stat === 'home_runs' ? 'Homered' : 'Produced'} in <b>{overCount} of {games.length}</b> games.</>}
       </Take>
       <svg className="edge-spark" viewBox={`0 0 ${W} ${H}`} role="img"
         aria-label={`recent ${statL}: over the line in ${overCount} of ${games.length} games`}>
@@ -433,7 +429,7 @@ function ZoneGrid({ zone }: { zone: NonNullable<EdgePick['zone']> }) {
   return (
     <div className="edge-ctx">
       <div className="edge-ctx-k">Pitch location <span className="edge-ctx-dim">(catcher&apos;s view)</span></div>
-      <Take>Lives <b>{spot}</b> &mdash; that&apos;s where most pitches cross the zone.</Take>
+      <Take>Lives <b>{spot}</b>.</Take>
       <div className="edge-zone-wrap">
         <div className="edge-zone-side"><span>HIGH</span><span>LOW</span></div>
         <div>
@@ -945,7 +941,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
       <Styles />
       <header className="edge-header">
         <div className="edge-title-row">
-          <h1 className="edge-title" title={showCockpit ? 'Price, recent form and volume for every flagged prop line, across sports.' : 'Our model probability vs the market line on every pick.'}>Prop Research</h1>
+          <h1 className="edge-title">Prop Research</h1>
           <span className="edge-updated">
             <span className="edge-live-dot" /> Updated hourly <span className="edge-updated-time">{updated}</span>
           </span>
@@ -1021,8 +1017,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
               <span className="edge-hud-k">line alerts</span>
             </div>
           )}
-          <button className="edge-hud-best" onClick={() => selectPick(hud.best.id)}
-            title="Jump to the top pick">
+          <button className="edge-hud-best" onClick={() => selectPick(hud.best.id)}>
             <span className="edge-hud-k">top play</span>
             <span className="edge-hud-bestname">{titleOf(hud.best)}</span>
             <span className="edge-hud-v" style={{ color: SYSTEM_COLOR[hud.best.system] ?? 'var(--signal)' }}>
@@ -1189,8 +1184,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
                 const pk = picks.find(p => p.id === id)
                 return (
                   <li key={id} className="edge-slip-item">
-                    <button className="edge-slip-jump" onClick={() => pk && selectPick(id)}
-                      title="Open this pick">
+                    <button className="edge-slip-jump" onClick={() => pk && selectPick(id)}>
                       <span className="edge-slip-item-name">{pk ? titleOf(pk) : `pick #${id}`}</span>
                       {pk && (
                         <span className="edge-slip-item-meta">

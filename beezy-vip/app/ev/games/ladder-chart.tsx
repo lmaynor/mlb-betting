@@ -88,7 +88,7 @@ export function LadderChart({ rungs, selected, onSelect, sideLabel }: { rungs: C
           const bw = 12
           return (
             <g key="gaps">
-              {r.modelGap && <rect x={X(i) + 9} y={Y(r.modelGap.to)} width={bw} height={Math.max(1, Y(r.modelGap.from) - Y(r.modelGap.to))} fill={SKY} fillOpacity={0.28} data-testid="gap-model"><title>Our model is above the best price (unvalidated)</title></rect>}
+              {r.modelGap && <rect x={X(i) + 9} y={Y(r.modelGap.to)} width={bw} height={Math.max(1, Y(r.modelGap.from) - Y(r.modelGap.to))} fill={SKY} fillOpacity={0.28} data-testid="gap-model"><title>Our model is above the best price</title></rect>}
               {r.marketGap && <rect x={X(i) - 9 - bw} y={Y(r.marketGap.to)} width={bw} height={Math.max(1, Y(r.marketGap.from) - Y(r.marketGap.to))} fill={GREEN} fillOpacity={0.35} data-testid="gap-market"><title>Best price is below the market fair value</title></rect>}
             </g>
           )

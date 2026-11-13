@@ -95,7 +95,7 @@ export function GamePicksTable({ feeds }: { feeds: { odds: Record<string, GameOd
       </div>
       <p className="text-[12px] text-text-secondary leading-[1.5] px-4 py-3 m-0 border-t border-separator-border">
         Sorted by how far our model sits above the market fair price on each game&apos;s main lines. Blue is the model and has no tested edge; green is always against the market fair value.
-        {noView > 0 ? ` ${noView} more ${noView === 1 ? 'game has' : 'games have'} no side above the market.` : ''} Not financial advice.
+        {noView > 0 ? ` ${noView} more ${noView === 1 ? 'game has' : 'games have'} no side above the market.` : ''}
       </p>
     </div>
   )

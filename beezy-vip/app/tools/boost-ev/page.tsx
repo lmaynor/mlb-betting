@@ -39,7 +39,7 @@ export default function BoostEvPage() {
 
   return (
     <div className="max-w-[680px] mx-auto p-6">
-      <ToolHeader title="Boost EV Calculator" hint="Example values shown; edit them" current="/tools/boost-ev" />
+      <ToolHeader title="Boost EV Calculator" hint="Example values shown" current="/tools/boost-ev" />
 
       <div className="border border-separator-border rounded-control bg-background-primary-default p-6 mb-4">
         <div className="mb-4">
@@ -85,8 +85,8 @@ export default function BoostEvPage() {
           <div className="py-3.5 px-5">
             <p className="times text-compact text-text-secondary leading-[1.5]">
               {ev > 0
-                ? 'Positive EV: the boosted price pays more than the fair probability implies. Max out the boost limit if the Kelly fraction supports it.'
-                : 'Negative EV: even boosted, this price is below fair value. Skip it.'}{' '}
+                ? 'Max out the boost limit if the Kelly fraction supports it.'
+                : 'Skip it.'}{' '}
               New to boosts? <a href="/learn/odds-boost-ev" className="text-link underline">How to tell if a boost is actually +EV</a>.
             </p>
           </div>

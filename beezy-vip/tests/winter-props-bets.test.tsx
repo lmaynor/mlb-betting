@@ -209,7 +209,7 @@ describe('projection board on a phone', () => {
     expect(container.querySelector('td.pb-player .pb-name')).toHaveAttribute('title', proj().player)
   })
 
-  it('a tap opens the detail row: game, market fair, form, price EV, a readable engine and the unvalidated note; a second tap closes it', () => {
+  it('a tap opens the detail row: game, market fair, form, price EV and a readable engine; a second tap closes it', () => {
     mobile = true
     const { container } = render(<SportProjectionsBoard sport="nhl" rows={fromSportProjections([proj()])} />)
     const btn = container.querySelector('button.pb-name') as HTMLElement
@@ -221,7 +221,7 @@ describe('projection board on a phone', () => {
     const d = within(detail)
     expect(d.getByText('DAL @ COL')).toBeInTheDocument()
     expect(d.getByText('Hierarchical')).toBeInTheDocument()
-    expect(d.getByText(/Unvalidated model output/)).toBeInTheDocument()
+    expect(d.queryByText(/Unvalidated model output/)).not.toBeInTheDocument()
     expect(d.getByText('Model + market agree')).toBeInTheDocument()
     expect(detail.textContent).toContain('L5 80%')
     expect(container.textContent).not.toMatch(/empirical_ewm|hierarchical_v1|hier_v1/)

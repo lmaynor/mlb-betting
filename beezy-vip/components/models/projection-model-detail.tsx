@@ -128,9 +128,11 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
           {v && (v.brier != null || v.ece != null) && (
             <p className="mono text-micro text-text-secondary mt-1">Research model calibration: Brier {fmt(v.brier, 4)}, ECE {fmt(v.ece, 4)}.</p>
           )}
-          <p className="mono text-micro text-text-secondary mt-2.5 leading-[1.55]">
-            {live ? `${live.method}. ` : ''}Accuracy of the projection only; it says nothing about beating a price.
-          </p>
+          {live && (
+            <p className="mono text-micro text-text-secondary mt-2.5 leading-[1.55]">
+              {live.method}.
+            </p>
+          )}
         </div>
       </div>
 
@@ -156,7 +158,7 @@ export async function ProjectionModelDetail({ system }: { system: PickSystem }) 
         <div><strong className="text-text-primary">What the live board runs.</strong> {gap ? 'Nothing: this stat is not projected.' : LIVE_ENGINE.summary}</div>
         {model && <div><strong className="text-text-primary">Research model result.</strong> {model.verdict}</div>}
         <div><strong className="text-text-primary">Against prices.</strong> {model?.trained ? spec.marketVerdict : 'No study has compared this stat with prices.'}</div>
-        <div><strong className="text-text-primary">Record.</strong> No graded history is published for {pillar.shortName} projections: they are not logged to the public ledger, so there is no win rate or ROI to show. Paper mode.</div>
+        <div><strong className="text-text-primary">Record.</strong> No graded history is published for {pillar.shortName} projections: they are not logged to the public ledger, so there is no win rate or ROI to show.</div>
         <div className="text-text-secondary text-[12px]">Source: {spec.sources} Baselines are the best trailing-average forecaster in each study. The live board does not run the research model.</div>
       </div>
 

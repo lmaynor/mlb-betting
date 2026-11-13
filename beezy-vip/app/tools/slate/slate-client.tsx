@@ -281,7 +281,7 @@ export function SlateClient({ slate, dateLabel }: { slate: TodaySlate; dateLabel
           </div>
           {slateData.total_games === 0 && (
             <div className="mono text-mini text-text-secondary">
-              The slate is built from the MLB Stats API. Check back after 10 AM ET.
+              Check back after 10 AM ET.
             </div>
           )}
         </div>

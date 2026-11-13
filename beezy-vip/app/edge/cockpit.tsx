@@ -292,7 +292,7 @@ export function UsageSparkline({ form }: { form: CockpitForm }) {
   return (
     <div>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" style={{ width: '100%', height: 'auto', display: 'block' }}
-        aria-label={`${label} over the last ${n} games, ${trend}`}>
+        aria-label={`${label} over the last ${n} games`}>
         <path d={area} fill="#38bdf8" opacity="0.12" />
         <line x1={padL} x2={W - padR} y1={y(avg)} y2={y(avg)} stroke="#7d8596" strokeWidth="1" strokeDasharray="4 4" />
         <text x={padL - 5} y={y(avg) + 3} textAnchor="end" fill="#9ca3af" style={{ fontSize: '10px', fontFamily: 'monospace' }}>{fmt(avg)}</text>
@@ -315,7 +315,7 @@ export function UsageSparkline({ form }: { form: CockpitForm }) {
         { label: 'TREND', value: change == null ? 'steady' : `${change >= 0 ? '+' : ''}${Math.round(change * 100)}%`, color: trendColor },
       ]} />
       <div className="text-compact text-neutral-300 mt-2 leading-[1.5]">
-        {label} are <b style={{ color: trendColor }}>{trend}</b>
+        {label}
         {prior != null ? <>: {fmt(recent)} over the last 3 games vs {fmt(prior)} before that.</> : '.'}
       </div>
     </div>
@@ -386,7 +386,7 @@ function Inspector({ r, renderMlbExtras, onClose }: { r: CockpitRow; renderMlbEx
   const logPanels = (
     <>
       <Panel title={`L${form?.n_games ?? 10} GAME LOG VS LINE`} sub={form ? `${propStatLabel(r.stat)} \u00b7 ${under ? 'Under' : 'Over'} ${form.line ?? ''}` : undefined}>
-        {form && form.games.length ? <FormSparkline form={form} under={under} /> : <NoData>No game log is available for this player and stat yet. The line and price above are still live.</NoData>}
+        {form && form.games.length ? <FormSparkline form={form} under={under} /> : <NoData>No game log is available for this player and stat yet.</NoData>}
       </Panel>
       {r.sport === 'nba' && (form && form.games.length ? <Panel title="OPPORTUNITY AND VOLUME TREND" sub={form.usage_label ?? undefined}><UsageSparkline form={form} /></Panel> : null)}
     </>
@@ -451,7 +451,7 @@ function Inspector({ r, renderMlbExtras, onClose }: { r: CockpitRow; renderMlbEx
           {logPanels}
           <Panel title={r.sport === 'mlb' ? 'CONTACT QUALITY AND BATTED BALLS' : 'OPPORTUNITY AND VOLUME TREND'} sub={r.sport === 'mlb' ? 'Statcast' : form?.usage_label ?? undefined}>
             {r.sport === 'mlb'
-              ? (mlbExtras ?? <NoData>Statcast batted-ball charts are not built for this player today.</NoData>)
+              ? (mlbExtras ?? <NoData>No Statcast batted-ball charts for this player today.</NoData>)
               : form && form.games.length ? <UsageSparkline form={form} /> : <NoData>No volume history for this player yet.</NoData>}
           </Panel>
 
@@ -610,7 +610,7 @@ export function Cockpit({ feed, sport, updated, loading, onRefresh, renderMlbExt
       <div className={cx(CARD, 'px-5 py-9 text-center')}>
         <div className="mb-1.5 text-body-semibold text-text-primary">Prop research is temporarily unavailable</div>
         <div className="mx-auto max-w-[60ch] text-body-2-regular text-text-secondary">
-          Prop data is temporarily unavailable. This page retries every minute.
+          This page retries every minute.
         </div>
       </div>
     )

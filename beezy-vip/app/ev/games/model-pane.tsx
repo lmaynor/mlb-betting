@@ -123,7 +123,7 @@ export function ModelPane({ game }: { game: GameBoardEntry }) {
             {chartMarkets.length > 1 && <Seg label="Market" value={active} options={chartMarkets.map(k => ({ v: k, l: MARKET_NAME[k] }))} onChange={setMarket} />}
           </div>
           <LadderChart rungs={shown} selected={selected} sideLabel={sideLabel} onSelect={line => setPicked(p => ({ ...p, [active]: line }))} />
-          <p className="m-0 text-[12px] text-text-tertiary">Grey is the market fair price, dashed blue is our projection, and a <span style={{ color: GREEN }}>green</span> dot is the best price. Model output is unvalidated.</p>
+          <p className="m-0 text-[12px] text-text-tertiary">Grey is the market fair price, dashed blue is our projection, and a <span style={{ color: GREEN }}>green</span> dot is the best price.</p>
         </div>
       )}
     </div>

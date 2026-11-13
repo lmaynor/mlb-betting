@@ -197,11 +197,6 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
       {rows.length > limit && (
         <button onClick={() => setLimit(limit + PAGE)} className="btn btn-ghost tap-m mt-[10px]">Show {Math.min(PAGE, rows.length - limit)} more</button>
       )}
-      <p className="text-[12px] text-text-secondary mt-2.5 leading-[1.55]">
-        Model edge is the model&rsquo;s probability minus the market&rsquo;s fair probability: where the model disagrees. Price EV is the best
-        price against the market&rsquo;s own fair probability: whether a book is actually off-market. A big edge with a negative EV means only the
-        model likes the play. Rows with no line are projections only: prices have not posted.
-      </p>
       {visuals && showRange && (
         <ul className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 p-0 list-none text-[12px] text-text-secondary" aria-label="How to read RANGE">
           {LAMBDA_LEGEND.map(l => (
@@ -239,7 +234,6 @@ function DetailRow({ r, span, showResult, visuals = false }: { r: BoardRow; span
           {showResult && r.result && item('Result', r.result.toUpperCase())}
           {r.engine && item('Engine', r.engine)}
         </dl>
-        {r.sport !== 'mlb' && <div className="mt-2 text-mini text-warn">Unvalidated model output. Paper only, not in the public results.</div>}
       </td>
     </tr>
   )
