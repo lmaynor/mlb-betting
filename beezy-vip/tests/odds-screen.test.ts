@@ -465,7 +465,7 @@ describe('computeSgpProxies', () => {
     expect(fdRow!.label).toBe(SGP_UNVALIDATED_LABEL)
   })
 
-  it('NHL player with 1+ Goal + 1+ Assist emits a GOAL+AST row and does not compare it with Over 1.5 Points', () => {
+  it('NHL 1+ Goal + 1+ Assist no longer emits an SGP proxy row', () => {
     const nhlGoal: BoardRow = {
       key: 'g|mcdavid|goals|0.5',
       game_key: 'nhl:2026-10-30:EDM@CGY',
@@ -524,13 +524,8 @@ describe('computeSgpProxies', () => {
       useCurve: true,
     })
 
-    expect(res.length).toBeGreaterThan(0)
-    const top = res[0]
-    expect(top.archetype).toBe('nhl_goal_ast_vs_pts')
-    expect(top.archetypeLabel).toBe('GOAL+AST')
-    // 1+ Goal AND 1+ Assist is not the same event as Over 1.5 Points (two goals also clear it): no comparison
-    expect(top).not.toHaveProperty('directMarketAm')
-    expect(top).not.toHaveProperty('vsDirectPct')
+    const goalAst = res.find(r => r.archetype === 'nhl_goal_ast_vs_pts')
+    expect(goalAst).toBeUndefined()
   })
 
   it('NBA TD proxy matches 10.0 whole-number lines on milestone ladders', () => {
@@ -572,7 +567,7 @@ describe('computeSgpProxies', () => {
     expect(res[0].archetype).toBe('nba_reb_ast_10_10')
   })
 
-  it('NHL teammates on the same team emit a LINEMATE PTS stack', () => {
+  it('NHL teammates do not emit a LINEMATE PTS stack without line data', () => {
     const mcdavidPts: BoardRow = {
       key: 'g|mcdavid|points|0.5',
       game_key: 'nhl:2026-10-30:EDM@CGY',
@@ -607,10 +602,7 @@ describe('computeSgpProxies', () => {
       useCurve: true,
     })
     const linemate = res.find(r => r.archetype === 'nhl_linemate_pts_stack')
-    expect(linemate).toBeDefined()
-    expect(linemate!.archetypeLabel).toBe('LINEMATE PTS')
-    expect(linemate!.player).toContain('Connor McDavid + Leon Draisaitl')
-    expect(linemate!.rhoTrue).toBe(0.32)
+    expect(linemate).toBeUndefined()
   })
 
   it('buildSgpDeeplinkTs never appends internal game_key to /event/ URLs and routes to sport pages', () => {

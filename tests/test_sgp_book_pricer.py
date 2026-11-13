@@ -434,11 +434,45 @@ def test_extreme_ev_rows_are_flagged_not_dropped_and_sorted_last():
     assert all(c.model_artifact for c in cands[first_flag:])  # flagged rows never lead
 
 
-def test_build_sgp_proxy_teammate_stacks():
+def test_nhl_sgp_shapes_suppressed():
     from ev.sgp_proxy_builder import build_sgp_proxy_candidates
 
-    # NHL Linemates
+    # Rows that WOULD previously have produced both suppressed NHL shapes
     nhl_rows = [
+        {
+            "game_key": "nhl:2026-10-30:EDM@CGY",
+            "commence": "2026-10-30T23:00:00Z",
+            "away": "EDM",
+            "home": "CGY",
+            "team": "EDM",
+            "player": "Connor McDavid",
+            "player_norm": "connor mcdavid",
+            "stat": "goals",
+            "line": 0.5,
+            "books": [
+                {"book": "fanduel", "over": 190, "under": -250},
+                {"book": "draftkings", "over": 185, "under": -240},
+                {"book": "betmgm", "over": 180, "under": -235},
+                {"book": "caesars", "over": 182, "under": -238},
+            ],
+        },
+        {
+            "game_key": "nhl:2026-10-30:EDM@CGY",
+            "commence": "2026-10-30T23:00:00Z",
+            "away": "EDM",
+            "home": "CGY",
+            "team": "EDM",
+            "player": "Connor McDavid",
+            "player_norm": "connor mcdavid",
+            "stat": "assists",
+            "line": 0.5,
+            "books": [
+                {"book": "fanduel", "over": 130, "under": -170},
+                {"book": "draftkings", "over": 125, "under": -165},
+                {"book": "betmgm", "over": 120, "under": -160},
+                {"book": "caesars", "over": 122, "under": -162},
+            ],
+        },
         {
             "game_key": "nhl:2026-10-30:EDM@CGY",
             "commence": "2026-10-30T23:00:00Z",
@@ -476,10 +510,6 @@ def test_build_sgp_proxy_teammate_stacks():
     ]
 
     cands = build_sgp_proxy_candidates(nhl_rows, min_ev_pct=-50.0)
-    linemate = next((c for c in cands if c.archetype == "nhl_linemate_pts_stack"), None)
-    assert linemate is not None
-    assert linemate.archetype_label == "LINEMATE PTS"
-    assert "Connor McDavid + Leon Draisaitl" in linemate.player
-    assert linemate.rho_true == 0.32
-    assert "/event/nhl:" not in (linemate.deeplink or "")
+    assert not any(c.archetype == "nhl_linemate_pts_stack" for c in cands)
+    assert not any(c.archetype == "nhl_goal_ast_vs_pts" for c in cands)
 

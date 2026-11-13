@@ -1136,7 +1136,6 @@ const SGP_ARCH_DEFS: Record<string, SgpArchDef> = {
   nba_pts_reb_vs_pr: { key: 'nba_pts_reb_vs_pr', label: 'PTS+REB', sport: 'nba', rhoTrue: 0.15, rhoBook: 0.06, holdBook: 0.14 },
   nba_pts_ast_vs_pa: { key: 'nba_pts_ast_vs_pa', label: 'PTS+AST', sport: 'nba', rhoTrue: 0.18, rhoBook: 0.07, holdBook: 0.14 },
   nba_reb_ast_vs_ra: { key: 'nba_reb_ast_vs_ra', label: 'REB+AST', sport: 'nba', rhoTrue: 0.22, rhoBook: 0.08, holdBook: 0.14 },
-  nhl_goal_ast_vs_pts: { key: 'nhl_goal_ast_vs_pts', label: 'GOAL+AST', sport: 'nhl', rhoTrue: 0.25, rhoBook: 0.10, holdBook: 0.15 },
   nhl_linemate_pts_stack: { key: 'nhl_linemate_pts_stack', label: 'LINEMATE PTS', sport: 'nhl', rhoTrue: 0.32, rhoBook: 0.10, holdBook: 0.14 },
   nfl_qb_wr_stack: { key: 'nfl_qb_wr_stack', label: 'QB+WR STACK', sport: 'nfl', rhoTrue: 0.35, rhoBook: 0.18, holdBook: 0.15 },
   nba_teammate_ast_pts_stack: { key: 'nba_teammate_ast_pts_stack', label: 'AST+PTS STACK', sport: 'nba', rhoTrue: 0.26, rhoBook: 0.08, holdBook: 0.14 },
@@ -1345,17 +1344,6 @@ export function computeSgpProxies(rows: BoardRow[], opts: SgpProxyOptions): SgpP
       }
     }
 
-    // NHL 1+ Goal AND 1+ Assist
-    const goal05 = statMap.get('goals|0.5')
-    const ast05 = statMap.get('assists|0.5')
-    const aga = SGP_ARCH_DEFS.nhl_goal_ast_vs_pts
-    if (goal05 && ast05 && sp === 'nhl' && wanted(aga)) {
-      scanPair({
-        arch: aga, sample, r1: goal05, r2: ast05, ...who,
-        leg1: { stat: 'goals', label: '1+ Goal', line: 0.5 },
-        leg2: { stat: 'assists', label: '1+ Assist', line: 0.5 },
-      })
-    }
   }
 
   // 2. Multi-player teammate stacks (NHL linemates, NFL QB+WR, NBA Ast+Pts). The pricing book is left out of each
@@ -1376,30 +1364,6 @@ export function computeSgpProxies(rows: BoardRow[], opts: SgpProxyOptions): SgpP
     const pick = (row: BoardRow) => {
       const f = resolveFairOver(row, opts.method, refs, null, opts.useCurve, minRef)
       return f != null && f >= 0.04 && f <= 0.88 ? f : null
-    }
-
-    if (sp === 'nhl') {
-      const arch = SGP_ARCH_DEFS.nhl_linemate_pts_stack
-      if (wanted(arch)) {
-        const skaters: { row: BoardRow; fairProb: number }[] = []
-        for (const plRows of teamPlayers.values()) {
-          const ptsRow = plRows.find(r => r.stat === 'points' && r.line === 0.5)
-          const f = ptsRow ? pick(ptsRow) : null
-          if (ptsRow && f != null) skaters.push({ row: ptsRow, fairProb: f })
-        }
-        skaters.sort((a, b) => b.fairProb - a.fairProb)
-        const top = skaters.slice(0, 3)
-        for (let i = 0; i < top.length; i++) {
-          for (let j = i + 1; j < top.length; j++) {
-            const a = top[i].row, b = top[j].row
-            scanPair({
-              arch, sample, r1: a, r2: b, ...pairWho(a, b),
-              leg1: { stat: 'points', label: `${a.player} 1+ Pt`, line: 0.5 },
-              leg2: { stat: 'points', label: `${b.player} 1+ Pt`, line: 0.5 },
-            })
-          }
-        }
-      }
     }
 
     if (sp === 'nfl') {
