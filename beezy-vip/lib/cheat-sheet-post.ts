@@ -1,5 +1,5 @@
 /**
- * The "POST TO X" cheat sheets on the Daily Card. Pure (no React, no Next) so the page and the tests share one formatter.
+ * The "POST TO X" cheat sheets on Today's Card. Pure (no React, no Next) so the page and the tests share one formatter.
  *
  *   Tuesday +EV NBA Cheat Sheet <emoji>
  *

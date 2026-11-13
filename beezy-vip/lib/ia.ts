@@ -70,15 +70,15 @@ export const SECTIONS: Section[] = [
       { label: 'Projections', href: '/ev/projections', stage: 'candidate', strangerQuestion: "What is the model's expected stat line (lambda) for every prop and game line today?" },
       { label: 'Game Lines', href: '/ev/games', stage: 'candidate', strangerQuestion: 'What are the full-game spreads, totals, and moneylines across books and game engines?' },
       { label: 'Prop Research', short: 'Props', href: '/edge', stage: 'candidate', strangerQuestion: 'Which flagged or top-ranked candidate props merit a bet, backed by L10 logs and usage?' },
+      { label: 'Live Candidates', short: 'Live', href: '/ev/candidates', stage: 'candidate', strangerQuestion: 'Which candidate props rank highest right now, across all sports?' },
     ],
   },
   {
     // The tab strip is for the all-sports views only; MLB and the other sports are chosen in the ribbon and have their own headers.
     id: 'picks', label: 'Picks', prefixes: ['/picks/history', '/cheat-sheet'], exact: ['/picks'],
     tabs: [
-      { label: 'Daily Card', href: '/cheat-sheet', stage: 'commitment', strangerQuestion: 'Which official plays cleared every validation and consensus gate today?' },
-      { label: 'Top Signals', href: '/picks', stage: 'candidate', strangerQuestion: 'Which candidate props rank highest right now, across all sports?' },
-      { label: 'Graded History', href: '/picks/history', stage: 'record', strangerQuestion: 'How did past Daily Cards grade?' },
+      { label: "Today's Card", href: '/picks', also: ['/cheat-sheet'], stage: 'commitment', strangerQuestion: 'Which official plays cleared every validation and consensus gate today?' },
+      { label: 'Past Cards', href: '/picks/history', stage: 'record', strangerQuestion: 'How did past Daily Cards grade?' },
     ],
   },
   {
@@ -116,7 +116,7 @@ export function tabActive(pathname: string, tabParam: string | null, tab: Sectio
   const [path, query] = tab.href.split('?')
   const want = query ? new URLSearchParams(query).get('tab') : null
   if (want) return pathname === path && (tabParam ?? 'bankroll') === want
-  if (path === '/picks') return pathname === '/picks'
+  if (path === '/picks') return pathname === '/picks' || (tab.also ?? []).some(p => under(pathname, p))
   if (path === '/ev') return pathname === '/ev'                 // /ev/games is its own tab
   return under(pathname, path)
 }
@@ -160,7 +160,7 @@ export const ROUTES: RouteEntry[] = [
   { path: '/about', stage: 'guide', strangerQuestion: 'What is beezy.fyi, and who runs it?' },
   { path: '/analytics', stage: 'record', strangerQuestion: 'Is the record profitable, calibrated, and healthy across books and systems?' },
   { path: '/blocked', stage: 'utility', strangerQuestion: 'Why is this page unavailable in this region?' },
-  { path: '/cheat-sheet', stage: 'commitment', strangerQuestion: 'Which official plays cleared every validation and consensus gate today?' },
+  { path: '/cheat-sheet', stage: 'commitment', strangerQuestion: 'Which official plays cleared every validation and consensus gate today? (Permanent alias of /picks.)' },
   { path: '/compare/oddsjam-alternative', stage: 'guide', strangerQuestion: 'How does beezy compare with OddsJam?' },
   { path: '/dashboard', stage: 'utility', strangerQuestion: 'What is my account status and subscription?' },
   { path: '/dashboard/history', stage: 'utility', strangerQuestion: 'What picks has my account followed?' },
@@ -169,6 +169,7 @@ export const ROUTES: RouteEntry[] = [
   { path: '/edge', stage: 'candidate', strangerQuestion: 'Which flagged or top-ranked candidate props merit a bet, backed by L10 logs and usage?' },
   { path: '/edge/projections', stage: 'candidate', strangerQuestion: "What is the model's expected stat line (lambda) for every prop and game line today? (Redirects to /ev/projections.)" },
   { path: '/ev', stage: 'candidate', strangerQuestion: 'What is every book charging for this prop right now, and where does a price break from consensus?' },
+  { path: '/ev/candidates', stage: 'candidate', strangerQuestion: 'Which candidate props rank highest right now, across all sports?' },
   { path: '/ev/games', stage: 'candidate', strangerQuestion: 'What are the full-game spreads, totals, and moneylines across books and game engines?' },
   { path: '/ev/projections', stage: 'candidate', strangerQuestion: "What is the model's expected stat line (lambda) for every prop and game line today?" },
   { path: '/learn', stage: 'guide', strangerQuestion: 'How do these markets, de-vigged consensus, and models work?' },
@@ -181,7 +182,7 @@ export const ROUTES: RouteEntry[] = [
   { path: '/models', stage: 'record', strangerQuestion: 'How do the models work, and is their accuracy validated?' },
   { path: '/models/[slug]', stage: 'record', strangerQuestion: "What is this sport's model, and how accurate is it?" },
   { path: '/models/[slug]/[system]', stage: 'record', strangerQuestion: "What is this system's method, and how accurate is it?" },
-  { path: '/picks', stage: 'candidate', strangerQuestion: 'Which candidate props rank highest right now, across all sports?' },
+  { path: '/picks', stage: 'commitment', strangerQuestion: 'Which official plays cleared every validation and consensus gate today?' },
   { path: '/picks/[sport]', stage: 'candidate', strangerQuestion: "What does the model say for this sport's props today?" },
   { path: '/picks/[sport]/[system]', stage: 'candidate', strangerQuestion: "What does this one system say for this sport today?" },
   { path: '/picks/[sport]/projections', stage: 'candidate', strangerQuestion: "What is the model's expected stat line (lambda) for every prop and game line today? (Redirects to /ev/projections.)" },

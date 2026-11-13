@@ -157,6 +157,29 @@ export function isOfficialCardPlay(p: TopPick): boolean {
   return true
 }
 
+/**
+ * Why a tracked or confluence candidate is being HELD off the Daily Card (Decision 17's near-miss zone). The
+ * reason is derived from the row's own fields, in gate order: reference-book coverage first, then the measured
+ * stat allowlist (NBA threes and rebounds, NHL saves; every other winter stat is shadow calibration), then the
+ * general edge/consensus gate. Display derivation only: admission itself stays with isOfficialCardPlay and the
+ * backend tier, never with this label.
+ */
+export function holdReasonFor(p: TopPick): string {
+  if (p.nBooks != null && p.nBooks < 4) return `HOLD: ${p.nBooks}/4 reference books`
+  if (p.sport === 'nhl' && !/save/i.test(p.what)) return 'HOLD: shadow calibration only; saves are the measured NHL signal'
+  if (p.sport === 'nba' && !/(three|3-point|rebound)/i.test(p.what)) return 'HOLD: shadow calibration only; stat outside the measured allowlist'
+  return 'HOLD: below the official gate on edge or consensus'
+}
+
+/** Up to `n` near-miss candidates: tracked or confluence rows that did not make the card, best score first. */
+export function selectNearMisses(candidates: TopPick[], card: TopPick[], n = 5): TopPick[] {
+  const onCard = new Set(card.map(p => p.key))
+  return candidates
+    .filter(p => !onCard.has(p.key) && (p.confluence || p.tracked))
+    .sort((a, b) => b.score - a.score || (b.edge ?? 0) - (a.edge ?? 0))
+    .slice(0, n)
+}
+
 /** Tier 2: Live +EV Outliers (market EV >= 3% without confluence or sitting outside card cap) */
 export function isEvOutlier(p: TopPick): boolean {
   const edge = p.edge ?? 0

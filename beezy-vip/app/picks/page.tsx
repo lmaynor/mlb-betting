@@ -1,113 +1,146 @@
 export const dynamic = 'force-dynamic'
 
 import type { Metadata } from 'next'
-import Link from 'next/link'
-import { FilterBar } from '@/components/picks/filter-bar'
-import { TopPicksTable } from '@/components/picks/top-picks-table'
-import { ScoreLegend } from '@/components/ui/score-legend'
-import { siteDateKey, formatDateKey } from '@/lib/dates'
-import { sportHref } from '@/lib/ia'
-import { activeFilterCount, parsePickFilters } from '@/lib/picks-filters'
-import { sportsInSeason } from '@/lib/sports'
-import { filterTopPicks, isOfficialCardPlay, isEvOutlier } from '@/lib/top-picks'
-import { loadTopPlayerPicks } from '@/lib/top-picks-data'
-import { cx } from '@/utils/cx'
+import { permanentRedirect } from 'next/navigation'
+import { limitRows } from '@/lib/access'
+import { getViewer } from '@/lib/auth'
+import { addDaysToDateKey, formatCentralDate, siteDateKey } from '@/lib/dates'
+import { buildSheets, SHEET_SIZE } from '@/lib/cheat-sheet-post'
+import { teamLogoUrl, type AssetSport } from '@/lib/sport-assets'
+import { headshotUrlByName } from '@/lib/sport-assets.server'
+import { SPORT_SLUGS, type SportSlug } from '@/lib/sports'
+import { recordOf, selectNearMisses, type TopPick } from '@/lib/top-picks'
+import { loadDailyPlaysHistory, loadTopPlayerPicks } from '@/lib/top-picks-data'
+import type { Bet } from '@/lib/types'
+import { CheatSheetClient, type CardPick } from '../cheat-sheet/cheat-sheet-client'
+import { GateReceipt } from './gate-receipt'
+import { NearMissZone } from './near-miss'
 
 export const metadata: Metadata = {
-  title: 'Top Signals',
-  description: 'The ten highest-scored plays across MLB, NFL, NHL and NBA right now, ranked by Beezy Score: official plays and +EV outliers. Free.',
+  title: "Today's Card",
+  description: "Today's Card: every official play across MLB, NFL, NHL and NBA, no cap and no filler, with the graded record behind it.",
+  openGraph: {
+    title: 'Today\'s Card \u2014 beezy.fyi',
+    description: 'Every official play with its price and edge, and the graded record behind them.',
+    images: ['/api/og/picks-card'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Today\'s Card \u2014 beezy.fyi',
+    description: 'Every official play with its price and edge, and the graded record behind them.',
+    images: ['/api/og/picks-card'],
+  },
 }
 
-export default async function TopPicksPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
+const TEAM_SLUG: Record<string, string> = {
+  ARI: 'ari', ATL: 'atl', BAL: 'bal', BOS: 'bos', CHC: 'chc', CIN: 'cin', CLE: 'cle',
+  COL: 'col', CWS: 'cws', DET: 'det', HOU: 'hou', KC: 'kc', LAA: 'laa', LAD: 'lad',
+  MIA: 'mia', MIL: 'mil', MIN: 'min', NYM: 'nym', NYY: 'nyy', OAK: 'oak', PHI: 'phi',
+  PIT: 'pit', SD: 'sd', SEA: 'sea', SF: 'sf', STL: 'stl', TB: 'tb', TEX: 'tex',
+  TOR: 'tor', WSH: 'wsh',
+}
+
+function logoUrl(abbrev: string | null): string | null {
+  const slug = TEAM_SLUG[(abbrev ?? '').toUpperCase()] ?? null
+  return slug ? `/logos/${slug}.png` : null
+}
+
+function dateLabel(): string {
+  return formatCentralDate(new Date(), { weekday: 'long', month: 'long', day: 'numeric' })
+}
+
+// bets.sport is mlb unless a row says otherwise (lib/sport-assets handles nhl / nba logos)
+function assetSport(bet: Bet): AssetSport | null {
+  const s = (bet as Bet & { sport?: string }).sport
+  return s === 'nhl' || s === 'nba' ? s : null
+}
+
+/** Headshot for a player pick (NFL: nfl.com image token via the team-keyed map) and team logos for a game pick. */
+function enrich(p: TopPick): CardPick {
+  const isPlayer = p.sport !== 'mlb' || !!p.bet?.player
+  const headshotUrl = isPlayer ? headshotUrlByName(p.sport, p.who, p.team) : null
+  const bet = p.bet
+  const sp = bet ? assetSport(bet) : null
+  const logo = (team: string | null) => (sp ? teamLogoUrl(sp, team) : logoUrl(team))
+  return { ...p, headshotUrl, awayLogoUrl: bet ? logo(bet.away_team) : null, homeLogoUrl: bet ? logo(bet.home_team) : null }
+}
+
+/** Days of record shown on the card; the full range is on Past Cards. */
+const RECORD_DAYS = 7
+
+/** A card under this many official plays is a thin day: the near-miss zone shows what the gate held back. */
+const THIN_CARD = 5
+
+/**
+ * Legacy board links: /picks carried the candidate board before the IA restructure, so a ?tier= (or ?type=)
+ * link belongs on Live Candidates now. The tier vocabulary maps forward (official/outliers are signal types,
+ * strong/lean/watch are score bands); every other filter param rides along untouched.
+ */
+function legacyCandidatesRedirect(sp: Record<string, string>): string | null {
+  const tier = sp.tier
+  if (!tier && !sp.type) return null
+  const q = new URLSearchParams()
+  for (const [k, v] of Object.entries(sp)) if (k !== 'tier' && k !== 'result') q.set(k, v)
+  if (tier === 'official') q.set('type', 'official')
+  else if (tier === 'outliers') q.set('type', 'outlier')
+  else if (tier === 'strong' || tier === 'lean' || tier === 'watch') q.set('band', tier)
+  const s = q.toString()
+  return `/ev/candidates${s ? `?${s}` : ''}`
+}
+
+export default async function TodaysCardPage({ searchParams }: { searchParams?: Promise<Record<string, string>> } = {}) {
+  const sp = (await searchParams) ?? {}
+  const legacy = legacyCandidatesRedirect(sp)
+  if (legacy) permanentRedirect(legacy)
+
   const date = siteDateKey()
-  const rawParams = await searchParams
-  const filters = parsePickFilters(rawParams)
-  const tierParam = rawParams.tier || 'all'
-  const { candidates } = await loadTopPlayerPicks(date)
-  // The ten best of what the filters leave: "NFL" is the ten best NFL picks, not the NFL rows inside the overall ten.
-  const top = filterTopPicks(candidates, filters)
-  const filtered = activeFilterCount(filters) > 0
+  const recentDates = Array.from({ length: RECORD_DAYS }, (_, i) => addDaysToDateKey(date, -(i + 1)))
+  const [{ dailyCard, candidates }, viewer, recent] = await Promise.all([
+    loadTopPlayerPicks(date),
+    getViewer(),
+    loadDailyPlaysHistory(recentDates),
+  ])
+  // Capability flags come from the authenticated viewer only, never from a query parameter.
+  const canPost = viewer.tier !== 'public'
 
-  const actionable = top.filter(p => isOfficialCardPlay(p) || isEvOutlier(p))
-  const displayPicks = tierParam === 'official'
-    ? top.filter(isOfficialCardPlay)
-    : tierParam === 'outliers'
-    ? top.filter(isEvOutlier)
-    : (actionable.length > 0 ? actionable : top)
+  // Yesterday's graded plays (the empty-state proof) and the last week's record: both are the same daily plays Past Cards lists.
+  const yesterdayPicks = recent.find(d => d.date === addDaysToDateKey(date, -1))?.picks ?? []
+  const weekRecord = recordOf(recent.flatMap(d => d.picks))
 
-  const showResult = displayPicks.some(p => p.result != null)
+  // One list per sport from the day's official plays. limitRows keeps the free player-board preview rule when tier gating is on; the
+  // overall list is the merge of those cut lists, so a free viewer cannot read the whole card through the "All" chip.
+  // The card's sport chips AND the POST TO X sheets both read these exact arrays, so the screenshot and the text cannot disagree.
+  const sportPicks: Partial<Record<SportSlug, CardPick[]>> = {}
+  let locked = 0
+  for (const s of SPORT_SLUGS) {
+    const cut = limitRows(dailyCard.filter(p => p.sport === s), viewer, 'player_board', s, p => p.score)
+    locked += cut.locked
+    if (cut.rows.length) sportPicks[s] = cut.rows.map(enrich)
+  }
+  const players = Object.values(sportPicks).flat().sort((a, b) => b.score - a.score || (b.edge ?? 0) - (a.edge ?? 0))
+  const sheets = buildSheets(
+    players.slice(0, SHEET_SIZE),
+    Object.fromEntries(Object.entries(sportPicks).map(([s, l]) => [s, (l ?? []).slice(0, SHEET_SIZE)])),
+    formatCentralDate(new Date(), { weekday: 'long' }),
+  )
+
+  const sportsScanned = new Set(candidates.map(p => p.sport)).size
+  const nearMisses = dailyCard.length < THIN_CARD ? selectNearMisses(candidates, dailyCard) : []
 
   return (
-    <div>
-      <FilterBar sport="all" />
-      <div className="mx-auto max-w-page p-6">
-        <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
-          <div>
-            <h1 className="text-title-2-bold text-text-primary">Top Signals</h1>
-            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-              <span className="mono text-caption-2-medium text-text-secondary">Tier</span>
-              {[
-                { id: 'all', label: 'All Actionable' },
-                { id: 'official', label: 'Official Plays (Daily Card)' },
-                { id: 'outliers', label: '+EV Outliers' },
-              ].map(t => {
-                const active = tierParam === t.id
-                const q = new URLSearchParams({ ...rawParams, tier: t.id }).toString()
-                return (
-                  <Link
-                    key={t.id}
-                    href={`/picks?${q}`}
-                    className={cx(
-                      'button-press-motion inline-flex min-h-11 items-center rounded-2lg border px-3 text-body-2-medium no-underline',
-                      active
-                        ? 'border-accent-500 bg-button-ghost-background text-button-ghost-foreground'
-                        : 'border-border-button-default bg-transparent text-text-secondary hover:border-border-button-hover hover:bg-background-primary-hover',
-                    )}
-                  >
-                    {t.label}
-                  </Link>
-                )
-              })}
-            </div>
-          </div>
-          <span className="mono text-caption-1-regular text-text-secondary">
-            {formatDateKey(date, { weekday: 'short', month: 'short', day: 'numeric' })}{' '}&middot; all sports, ranked by Beezy Score &middot; free
-          </span>
-        </div>
-
-        <p className="mb-3 max-w-[90ch] text-body-2-regular text-text-secondary">
-          {tierParam === 'official'
-            ? 'Official plays inside today\'s top ten. The full card, with no ten-row window, is the Daily Card.'
-            : tierParam === 'outliers'
-            ? '+EV outliers inside today\'s top ten: one book\'s price out of line with the pack, no model agreement needed. Not official plays.'
-            : 'The ten highest-scored plays across all sports right now, cut to the actionable rows: official plays and +EV outliers. Rows leave this board when their game starts; the Daily Card keeps its plays.'}
-        </p>
-
-        {displayPicks.length === 0 ? (
-          <div className="rounded-xl border border-separator-border bg-background-primary-default px-5 py-9 text-center shadow-card">
-            <div className="mb-1.5 text-body-semibold text-text-primary">{filtered ? 'No picks match these filters' : 'Nothing scored yet'}</div>
-            <div className="mx-auto max-w-[62ch] text-body-2-regular text-text-secondary">
-              {filtered ? 'Clear a filter to widen the list. ' : 'Daily boards publish once sportsbook lines post for NFL, NBA, and NHL (MLB resumes in March). '}
-              See <Link href="/picks/history" className="text-accent-400 hover:underline">past days</Link> in the meantime.
-            </div>
-          </div>
-        ) : (
-          <TopPicksTable picks={displayPicks} showResult={showResult} />
-        )}
-
-        <div className="mx-0.5 mt-3 flex flex-wrap items-baseline gap-x-5 gap-y-2 text-body-2-regular">
-          <span className="text-text-secondary">Full boards</span>
-          {sportsInSeason().map(p => (
-            <Link key={p.slug} href={sportHref(p.slug)} className="text-accent-400 hover:underline">{p.shortName} &rarr;</Link>
-          ))}
-          <Link href="/picks/history" className="text-accent-400 hover:underline">Graded history &rarr;</Link>
-        </div>
-
-        <p className="mx-0.5 mt-3.5 max-w-[90ch] text-caption-1-regular text-text-secondary">
-          MLB rows are tracked ledger bets (model systems and +EV alerts), settled in Results. NFL, NHL and NBA rows are projection-board rows: a row stamped Official is a Daily Card play, logged at this price and graded in Graded History; a row stamped Tracked is logged on paper and settled in the ledger; an unstamped row is not tracked. One row per prop, at the best available book. Odds can move before you bet.
-        </p>
-        <ScoreLegend />
-      </div>
-    </div>
+    <>
+      <GateReceipt officials={dailyCard.length} candidatesScanned={candidates.length} sportsScanned={sportsScanned} />
+      <CheatSheetClient
+        sheets={sheets}
+        canPost={canPost}
+        sportPicks={sportPicks}
+        players={players}
+        locked={locked}
+        today={dateLabel()}
+        yesterday={yesterdayPicks.map(enrich)}
+        weekRecord={{ ...weekRecord, days: recent.length }}
+      />
+      <NearMissZone picks={nearMisses} />
+    </>
   )
 }

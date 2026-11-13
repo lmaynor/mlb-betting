@@ -206,7 +206,7 @@ const chip = (on: boolean): React.CSSProperties => ({
 /**
  * The shareable Daily Card: the day's official plays, every one of them. No count cap and no filler: the number of plays is whatever the
  * gate lets through, and a slate with none says so. A play keeps its place after its game with the result on it, and the record strip
- * links to Graded History, which is the same plays day by day. Plays can be narrowed to one sport; sports are never blended inside a filter.
+ * links to Past Cards, which is the same plays day by day. Plays can be narrowed to one sport; sports are never blended inside a filter.
  */
 export function CheatSheetClient({ sheets, canPost = false, sportPicks, players, locked, today, yesterday, weekRecord }: {
   sheets: Sheet[]
@@ -218,7 +218,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
   locked: number
   today: string
   yesterday: CardPick[]
-  /** the last week of graded daily plays: the same record Graded History shows, summed */
+  /** the last week of graded daily plays: the same record Past Cards shows, summed */
   weekRecord: Record1u & { days: number }
 }) {
   const [sport, setSport] = useState<SportFilter>('all')
@@ -250,7 +250,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
 
   return (
     <div className="bg-background-full flex flex-col items-center pt-4.5 px-3 pb-10">
-      <h1 className="sr-only">Daily Card</h1>
+      <h1 className="sr-only">Today's Card</h1>
       <div className="cheat-sheet-layout">
         <div className="w-full max-w-[390px] border border-separator-border bg-background-full rounded-[var(--radius)] overflow-hidden shrink-0">
           {/* Header */}
@@ -258,7 +258,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
             <div className="flex items-start justify-between mb-2.5 gap-3">
               <div>
                 <BrandWordmark size="lg" />
-                <div className="text-[15px] font-semibold text-text-primary leading-[1.15] mt-2">Daily Card</div>
+                <div className="text-[15px] font-semibold text-text-primary leading-[1.15] mt-2">Today's Card</div>
                 <div className="mono text-micro text-text-secondary mt-[5px]">{today}</div>
                 <div className="text-[12px] text-neutral-300 leading-[1.45] mt-2">
                   Every play that clears the gate: the model and the market agree on the side, 4+ books behind the price, a measured edge and a blended EV that survives shrinking toward the market.
@@ -354,7 +354,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
               Today&apos;s official plays across MLB, NFL, NHL and NBA, ranked by Beezy Score. A play is official when the model and the market both like the same side, at least four books price it, the stat is one where the model has measurably added information beyond the market, and the blended edge is still at least 2.5% after shrinking the model toward the market. Each play is logged at its flagged price the first time it qualifies and graded at a flat 1 unit, so the record cannot be edited afterwards. MLB plays settle in the public record; NFL, NHL and NBA plays are paper and unvalidated. Every settled play is also in <Link className="text-link" href="/results?population=daily">Results, filtered to Daily Picks</Link>.
             </p>
             <p className="text-cozy text-neutral-300 leading-[1.6] m-0">
-              Tap a play to see why it made the card. Past days and results are in <Link className="text-link" href="/picks/history">Graded History</Link>; each sport&apos;s systems are on its Systems tab:
+              Tap a play to see why it made the card. Past days and results are in <Link className="text-link" href="/picks/history">Past Cards</Link>; each sport&apos;s systems are on its Systems tab:
             </p>
             <div className="flex flex-wrap gap-y-1.5 gap-x-3.5 mt-2 text-[13px]">
               {SPORT_SLUGS.map(s => <Link className="text-link" key={s} href={`${sportHref(s)}/systems`}>{SPORT_PILLARS[s].shortName}</Link>)}
