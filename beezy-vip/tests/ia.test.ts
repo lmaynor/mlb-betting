@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
-import { NAV, SECTIONS, navActive, sectionFor, sportActive, sportHref, tabActive } from '../lib/ia'
+import { EV_MODES, NAV, ROUTES, SECTIONS, navActive, sectionFor, sportActive, sportHref, tabActive, type PipelineStage } from '../lib/ia'
+import { MODES } from '../app/ev/odds-constants'
 import { PICK_SYSTEMS } from '../lib/pick-systems'
 import { LIVE_SPORTS, SPORT_SLUGS } from '../lib/sports'
 
@@ -110,6 +111,61 @@ describe('information architecture', () => {
   it('every system page resolves to a route, and the retired /sports hub still has its redirect page', () => {
     for (const s of PICK_SYSTEMS) expect(routeExists(`/picks/${s.sport}/${s.slug}`)).toBe(true)
     expect(routeExists('/sports/nfl')).toBe(true)
+  })
+})
+
+describe('stranger test gate (Q6(c))', () => {
+  const STAGES: PipelineStage[] = ['candidate', 'commitment', 'record', 'guide', 'proof', 'utility']
+
+  it('every nav item, section tab, /ev mode, and registered route declares a pipeline stage and a stranger question', () => {
+    for (const n of NAV) {
+      expect(STAGES).toContain(n.stage)
+      expect(n.strangerQuestion.trim().length).toBeGreaterThan(0)
+    }
+    for (const s of SECTIONS) for (const t of s.tabs) {
+      expect(STAGES).toContain(t.stage)
+      expect(t.strangerQuestion.trim().length).toBeGreaterThan(0)
+    }
+    for (const m of EV_MODES) {
+      expect(STAGES).toContain(m.stage)
+      expect(m.strangerQuestion.trim().length).toBeGreaterThan(0)
+    }
+    for (const r of ROUTES) {
+      expect(STAGES).toContain(r.stage)
+      expect(r.strangerQuestion.trim().length).toBeGreaterThan(0)
+    }
+  })
+
+  it('every app/ page route is registered in ROUTES, and every ROUTES entry has a page behind it', () => {
+    const found: string[] = []
+    const walk = (dir: string, prefix: string) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (e.isDirectory()) walk(path.join(dir, e.name), `${prefix}/${e.name}`)
+        else if (e.name === 'page.tsx') found.push(prefix === '' ? '/' : prefix)
+      }
+    }
+    walk(app, '')
+    expect(found.sort()).toEqual(ROUTES.map(r => r.path).sort())
+  })
+
+  it('no duplicate labels across the nav and the section tabs', () => {
+    const labels = [...NAV.map(n => n.label), ...SECTIONS.flatMap(s => s.tabs.map(t => t.label))]
+    expect(new Set(labels).size).toBe(labels.length)
+  })
+
+  it('Picks registers no candidate view (the one transitional exception is named, and goes stale loudly)', () => {
+    // TRANSITIONAL (IA stage S2): Top Signals still lives at /picks until stage S3 moves it to Scanner as Live
+    // Candidates. The exception list must name exactly the candidate tabs actually present in the Picks section:
+    // any new candidate view fails, and once S3 removes Top Signals this list must be emptied or the test fails.
+    const PICKS_CANDIDATE_EXCEPTIONS = ['Top Signals']
+    const picks = SECTIONS.find(s => s.id === 'picks')!
+    const candidateTabs = picks.tabs.filter(t => t.stage === 'candidate').map(t => t.label)
+    expect(candidateTabs.sort()).toEqual([...PICKS_CANDIDATE_EXCEPTIONS].sort())
+  })
+
+  it('the /ev mode set the page renders is exactly the mode set ia.ts registers', () => {
+    expect(MODES.map(m => m.key).sort()).toEqual(EV_MODES.map(m => m.key).sort())
+    for (const m of MODES) expect(EV_MODES.find(e => e.key === m.key)!.label).toBe(m.label)
   })
 })
 
