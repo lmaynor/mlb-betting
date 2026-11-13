@@ -2,6 +2,16 @@
 
 import { LockedNotice } from '@/components/picks/locked-notice'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  Button as AriaButton,
+  ListBox as AriaListBox,
+  ListBoxItem as AriaListBoxItem,
+  Popover as AriaPopover,
+  Select as AriaSelect,
+  Tab as AriaTab,
+  TabList as AriaTabList,
+  Tabs as AriaTabs,
+} from 'react-aria-components'
 import { ResearchTabs } from '@/components/picks/research-tabs'
 import type { Bet, CockpitFeed, CockpitRow } from '@/lib/types'
 import type { EdgeAlert, PlayerStatus, SeasonStats } from '@/lib/betting-api'
@@ -484,63 +494,43 @@ function TeamSelLogo({ team }: { team: string }) {
 function MatchupSelect({ value, matchups, onChange }: {
   value: string; matchups: MatchupOpt[]; onChange: (v: string) => void
 }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!open) return
-    const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
-    document.addEventListener('mousedown', onDoc)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDoc)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
   const sel = value !== 'all' ? matchups.find(m => m.key === value) ?? null : null
-  const pick = (v: string) => { onChange(v); setOpen(false) }
   return (
-    <div className="edge-select edge-teamsel" ref={ref}>
+    <AriaSelect
+      aria-label="Matchup filter"
+      selectedKey={value}
+      onSelectionChange={k => onChange(k as string)}
+      className="edge-select edge-teamsel"
+    >
       <span className="edge-select-k">Matchup</span>
-      <button
-        type="button"
-        className="edge-teamsel-btn edge-matchsel-btn"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label="Matchup filter"
-        onClick={() => setOpen(o => !o)}
-      >
+      <AriaButton className="edge-teamsel-btn edge-matchsel-btn">
         {sel
           ? <span className="edge-matchsel-val"><TeamSelLogo team={sel.away} />{sel.away}<span className="edge-matchsel-at">@</span><TeamSelLogo team={sel.home} />{sel.home}</span>
           : <span>All games</span>}
         <span className="edge-teamsel-caret" aria-hidden>{'\u25be'}</span>
-      </button>
-      {open && (
-        <div className="edge-teamsel-menu edge-matchsel-menu" role="listbox">
-          <button
-            type="button" role="option" aria-selected={value === 'all'}
+      </AriaButton>
+      <AriaPopover className="edge-teamsel-menu edge-matchsel-menu">
+        <AriaListBox className="edge-matchsel-listbox">
+          <AriaListBoxItem
+            id="all"
+            textValue="All games"
             className={`edge-teamsel-opt${value === 'all' ? ' is-sel' : ''}`}
-            onClick={() => pick('all')}
-          >All games</button>
+          >All games</AriaListBoxItem>
           {matchups.map(m => (
-            <button
+            <AriaListBoxItem
               key={m.key}
-              type="button"
-              role="option"
-              aria-selected={m.key === value}
+              id={m.key}
+              textValue={`${m.away} @ ${m.home}`}
               className={`edge-teamsel-opt edge-matchsel-opt${m.key === value ? ' is-sel' : ''}`}
-              onClick={() => pick(m.key)}
             >
               <TeamSelLogo team={m.away} /><span>{m.away}</span>
               <span className="edge-matchsel-at">@</span>
               <TeamSelLogo team={m.home} /><span>{m.home}</span>
-            </button>
+            </AriaListBoxItem>
           ))}
-        </div>
-      )}
-    </div>
+        </AriaListBox>
+      </AriaPopover>
+    </AriaSelect>
   )
 }
 
@@ -962,20 +952,21 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <ResearchTabs active="cockpit" />
-          {feed != null && <div role="tablist" aria-label="Sport" className="inline-flex max-w-full gap-0.5 overflow-x-auto rounded-lg border border-separator-border bg-background-secondary-default p-[3px]">
+          {feed != null && <AriaTabs selectedKey={sport} onSelectionChange={k => setSport(k as CockpitSport)} className="contents">
+            <AriaTabList aria-label="Sport" className="inline-flex max-w-full gap-0.5 overflow-x-auto rounded-lg border border-separator-border bg-background-secondary-default p-[3px]">
             {COCKPIT_SPORTS.map(k => {
               const n = k === 'all' ? feed?.rows.length : feed?.sports?.[k]?.count
               const active = sport === k
               return (
-                <button key={k} role="tab" aria-selected={active} onClick={() => setSport(k)}
+                <AriaTab key={k} id={k}
                   className={cx('button-press-motion inline-flex cursor-pointer items-center gap-[7px] whitespace-nowrap rounded-md border px-[13px] py-[7px] text-caption-1-bold ',
                     active ? 'border-border-button-hover bg-background-tertiary-default text-text-primary' : 'border-transparent bg-transparent text-text-secondary hover:bg-background-primary-hover')}>
                   {SPORT_TAB_LABEL[k]}
                   {n != null && <span className={cx('mono text-micro', active ? 'text-text-secondary' : 'text-text-tertiary')}>{n}</span>}
-                </button>
+                </AriaTab>
               )
             })}
-          </div>}
+          </AriaTabList></AriaTabs>}
           {sport === 'mlb' && feed != null && (
             <div role="group" aria-label="MLB view" className="inline-flex gap-0.5 rounded-lg border border-separator-border bg-background-secondary-default p-[3px]">
               {([['cockpit', 'PROP COCKPIT'], ['board', 'MODEL BOARD']] as [View, string][]).map(([k, label]) => {
@@ -1042,15 +1033,16 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
       )}
 
       {/* Players | Games mode switch */}
-      <div className="edge-mode" role="tablist" aria-label="Player or game props">
-        {(['players', 'games'] as Mode[]).map(m => (
-          <button key={m} role="tab" aria-selected={mode === m}
-            onClick={() => { setMode(m); setPosition('all'); setMarkets([]) }}
-            className={`edge-modebtn${mode === m ? ' is-active' : ''}`}>
-            {m === 'players' ? 'Players' : 'Games'}<span className="edge-filter-n">{modeCount(m)}</span>
-          </button>
-        ))}
-      </div>
+      <AriaTabs selectedKey={mode} onSelectionChange={k => { setMode(k as Mode); setPosition('all'); setMarkets([]) }} className="contents">
+        <AriaTabList aria-label="Player or game props" className="edge-mode">
+          {(['players', 'games'] as Mode[]).map(m => (
+            <AriaTab key={m} id={m}
+              className={`edge-modebtn${mode === m ? ' is-active' : ''}`}>
+              {m === 'players' ? 'Players' : 'Games'}<span className="edge-filter-n">{modeCount(m)}</span>
+            </AriaTab>
+          ))}
+        </AriaTabList>
+      </AriaTabs>
 
       {/* Control bar */}
       <div className="edge-controls">
@@ -1411,6 +1403,7 @@ function Styles() {
 .edge-teamsel-menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 40; background: var(--color-background-primary-default); border: 1px solid var(--color-separator-border); box-shadow: 0 8px 24px rgba(0,0,0,0.5); max-height: 320px; overflow-y: auto; min-width: 160px; padding: 4px; }
 .edge-teamsel-opt { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: transparent; color: var(--color-text-primary); border: 0; padding: 6px 8px; font-size: 12px; cursor: pointer; }
 .edge-teamsel-opt:hover { background: var(--color-background-secondary-default); }
+.edge-teamsel-opt[data-focused] { background: var(--color-background-secondary-default); }
 .edge-teamsel-opt.is-sel { color: var(--signal); }
 .edge-matchsel-btn { min-width: 140px; }
 .edge-matchsel-val { display: inline-flex; align-items: center; gap: 4px; }
