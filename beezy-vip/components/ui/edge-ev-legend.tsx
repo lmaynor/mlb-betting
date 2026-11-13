@@ -24,8 +24,7 @@ export function EdgeEvLegend() {
           is treated as a likely model error and scores 0.
         </p>
         <p className="m-0">
-          <strong>Market fair</strong> is that consensus probability, its American price and how many books it rests on. <strong>Form</strong> is
-          the share of recent games that landed on the listed side of the line, or the player&rsquo;s own average when there is no line.
+          <strong>Market fair</strong> is that consensus probability, its American price and how many books it rests on.
         </p>
       </div>
     </details>
