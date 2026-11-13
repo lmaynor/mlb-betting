@@ -16,9 +16,18 @@ Design (pre-registered; see
   [out, heavy_restriction, light_restriction, full_workload]. The response
   carries a picked option, a full probability distribution, and a confidence.
 - Model ``gemini-decision-1`` at
-  ``https://generativelanguage.googleapis.com/v1beta/decisions`` (endpoint
-  verified live in an earlier smoke test with a synthetic case; the API's
-  question types are literally named ``noul`` / ``choice`` / ``score``).
+  ``https://generativelanguage.googleapis.com/v1beta/decisions``. Request
+  envelope per Google's published Decisions API shape (launched
+  Nov 11, 2026): ``{"model", "input": <shared context text>, "questions":
+  {<question_id>: {"type": "choice", "instructions": <question>,
+  "criteria": {<option>: <description>}}}}``; the response carries
+  ``answers`` as a MAP keyed by question id, each answer holding
+  ``choice`` / ``probabilities`` / ``confidence``. NOTE: this client's
+  first shipped envelope (a ``context`` field plus a list-shaped
+  ``questions`` array) was rejected by the live API on Nov 12, 2026 with
+  HTTP 400 ``Unknown parameter 'context'``; the Nov 11 sentinel smoke
+  that "verified" the endpoint had used its own request construction,
+  not this client's. The envelope below is the published one.
 - Hard timeout 20.0s.
 - FAIL CLOSED: on timeout, HTTP error, or malformed response the case is an
   ABSTENTION (``band is None``), never defaulted to a band. Abstentions are
@@ -139,10 +148,22 @@ class DecisionsBandClassifier:
 
     # -- request construction -------------------------------------------------
 
-    def build_context(self, case: Mapping[str, Any], blurbs: Sequence[Mapping[str, Any]]) -> str:
+    def build_context(
+        self,
+        case: Mapping[str, Any],
+        blurbs: Sequence[Mapping[str, Any]],
+        mentions: Optional[Sequence[str]] = None,
+    ) -> str:
         """Decision-time context. ``blurbs`` must already be cutoff-filtered
         (published <= decision time) and timestamp-ordered by the caller; they
-        are rendered raw and unedited, superseded updates included."""
+        are rendered raw and unedited, superseded updates included.
+
+        ``mentions`` (Argon Q4 contract): sentence-level excerpts from items
+        headlined by OTHER players, rendered in a SEPARATE section under an
+        explicit header instructing the classifier that they are secondary
+        evidence at <= 0.25x the weight of the subject blurbs. ``None`` (the
+        default) renders exactly the pre-Q4 context.
+        """
         lines = [
             f"Player: {case.get('player')} ({case.get('team')})",
             f"Game date: {case.get('game_date')}",
@@ -163,48 +184,70 @@ class DecisionsBandClassifier:
                 )
         else:
             lines.append("(no pre-decision blurbs available)")
+        if mentions:
+            from .arm_t_config import MENTION_FIELD_HEADER
+
+            lines.append("")
+            lines.append(MENTION_FIELD_HEADER)
+            for excerpt in mentions:
+                lines.append(f"- {excerpt}")
         return "\n".join(lines)
 
-    def build_request(self, case: Mapping[str, Any], blurbs: Sequence[Mapping[str, Any]]) -> dict:
-        """The single batched request body for one game-case."""
+    def build_request(
+        self,
+        case: Mapping[str, Any],
+        blurbs: Sequence[Mapping[str, Any]],
+        mentions: Optional[Sequence[str]] = None,
+    ) -> dict:
+        """The single batched request body for one game-case.
+
+        Published Decisions API envelope: the shared context rides in
+        ``input``; ``questions`` is a MAP keyed by question id; a choice
+        question carries ``instructions`` (the model never sees the key)
+        and ``criteria`` mapping each option id to its description.
+        """
         return {
             "model": self.model,
-            "context": self.build_context(case, blurbs),
-            "questions": [
-                {
-                    "id": QUESTION_ID,
+            "input": self.build_context(case, blurbs, mentions=mentions),
+            "questions": {
+                QUESTION_ID: {
                     "type": "choice",
-                    "question": (
+                    "instructions": (
                         "Based only on the information available at decision "
                         "time, which workload band will this player realize "
-                        "in this game, as a ratio of his baseline minutes? "
-                        "out = does not play; heavy_restriction = plays under "
-                        "70% of baseline; light_restriction = 70-90% of "
-                        "baseline; full_workload = 90% or more of baseline."
+                        "in this game, as a ratio of his baseline minutes?"
                     ),
-                    "options": list(BANDS),
+                    "criteria": {
+                        "out": "Does not play at all in this game (0 minutes).",
+                        "heavy_restriction": (
+                            "Plays, but at under 70% of his baseline minutes "
+                            "(heavy minutes restriction)."
+                        ),
+                        "light_restriction": (
+                            "Plays at 70% to under 90% of his baseline "
+                            "minutes (light restriction or ramp-up)."
+                        ),
+                        "full_workload": (
+                            "Plays at 90% or more of his baseline minutes "
+                            "(full normal workload)."
+                        ),
+                    },
                 }
-            ],
+            },
         }
 
     # -- response parsing -----------------------------------------------------
 
     @staticmethod
     def _extract_answer(payload: Any) -> Optional[Mapping[str, Any]]:
+        # Published response shape: ``answers`` is a MAP keyed by question
+        # id. Anything else is malformed and fails closed upstream.
         if not isinstance(payload, Mapping):
             return None
         answers = payload.get("answers")
-        if isinstance(answers, Sequence) and not isinstance(answers, (str, bytes)) and answers:
-            first = answers[0]
-            return first if isinstance(first, Mapping) else None
-        # Tolerated alternate nesting from the API: results/questions arrays.
-        for key in ("results", "questions"):
-            seq = payload.get(key)
-            if isinstance(seq, Sequence) and not isinstance(seq, (str, bytes)) and seq:
-                first = seq[0]
-                if isinstance(first, Mapping):
-                    ans = first.get("answer", first)
-                    return ans if isinstance(ans, Mapping) else None
+        if isinstance(answers, Mapping):
+            answer = answers.get(QUESTION_ID)
+            return answer if isinstance(answer, Mapping) else None
         return None
 
     @staticmethod
@@ -263,7 +306,10 @@ class DecisionsBandClassifier:
     # -- the one call -----------------------------------------------------------
 
     def classify_case(
-        self, case: Mapping[str, Any], blurbs: Sequence[Mapping[str, Any]]
+        self,
+        case: Mapping[str, Any],
+        blurbs: Sequence[Mapping[str, Any]],
+        mentions: Optional[Sequence[str]] = None,
     ) -> BandPrediction:
         """Classify one game-case with exactly ONE Decisions call.
 
@@ -271,7 +317,7 @@ class DecisionsBandClassifier:
         response all produce an abstention, never a defaulted band.
         """
         case_id = str(case.get("case_id"))
-        body = self.build_request(case, blurbs)
+        body = self.build_request(case, blurbs, mentions=mentions)
         headers = {
             "Content-Type": "application/json",
             "x-goog-api-key": self._api_key,
