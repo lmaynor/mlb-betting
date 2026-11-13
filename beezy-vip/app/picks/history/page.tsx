@@ -47,6 +47,8 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
         </div>
       </div>
 
+      <p className="text-body-2-regular text-text-secondary max-w-[90ch] mb-3.5">The Daily Card&apos;s record: every official play from each past day, graded at a flat 1 unit. Top Signals are not graded here; the staked ledger is <Link className="text-link" href="/results">Results</Link>.</p>
+
       <div className="mono bg-background-primary-default border border-separator-border rounded-control py-[9px] px-3.5 mb-3.5 text-[13px] text-neutral-300 flex gap-y-1.5 gap-x-4 flex-wrap">
         <span>{history.length} days</span>
         <span>{total.graded} graded</span>
@@ -69,7 +71,7 @@ export default async function PicksHistoryPage({ searchParams }: { searchParams:
         book. A play is official when it clears the model-plus-market gate described there; it is logged at the flagged price the first time it qualifies and never
         re-priced afterwards, so this record cannot be edited after the fact. Results are graded at a flat 1 unit; pushes and voids are excluded. NFL, NHL and NBA plays
         are paper and unvalidated: their models have no tested edge against prices, and this record is how that gets settled. See{' '}
-        <Link className="text-link" href="/results">Results</Link> for the full staked ledger.
+        <Link className="text-link" href="/results">Results</Link> for the full staked ledger, or <Link className="text-link" href="/results?population=daily">just the Daily Card plays</Link> inside it.
       </p>
     </div>
   )

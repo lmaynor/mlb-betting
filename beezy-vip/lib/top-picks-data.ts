@@ -37,10 +37,12 @@ export async function loadTopPlayerPicks(date: string): Promise<{ top: TopPick[]
     ...PROJECTION_SPORTS.map(s => apiGetSportProjections(s, { limit: 600 }).catch(() => null as SportProjections | null)),
   ])
   const mlbToday = ledger.filter(b => b.system !== 'PROPS')
-  const projected = boards.flatMap(b => (b?.rows ?? []).map(fromProjection).filter((p): p is TopPick => p != null))
+  // The card keeps plays after their game starts; the Top 10 / Top Signals candidates stay pre-start only.
+  const projected = boards.flatMap(b => (b?.rows ?? []).map(r => fromProjection(r)).filter((p): p is TopPick => p != null))
+  const projectedAll = boards.flatMap(b => (b?.rows ?? []).map(r => fromProjection(r, { includeStarted: true })).filter((p): p is TopPick => p != null))
   // `candidates` is every scored pick (the filters on /picks cut from it); `top` is the unfiltered ten.
   const candidates = withHeadshotIds(rankTopPicks([...topFromBets(mlbToday, 1000), ...projected], 1000))
-  return { top: candidates.slice(0, TOP_N), candidates, mlbToday, dailyCard: todaysDailyCard(ledger, projected) }
+  return { top: candidates.slice(0, TOP_N), candidates, mlbToday, dailyCard: todaysDailyCard(ledger, projectedAll) }
 }
 
 /**
@@ -65,4 +67,18 @@ export async function loadDailyPlaysHistory(dates: string[]): Promise<DailyPlays
       return { date, picks, record: recordOf(picks) }
     })
     .filter(d => d.picks.length > 0)
+}
+
+/** The bets that were on each day's Daily Card, grouped by game_date and run through the same dailyPlaysFromBets rules Graded History uses. The Results page's 'Daily Picks' population is exactly this set. */
+export function dailyBetsFromLedger(bets: Bet[]): Bet[] {
+  const byDate = new Map<string, Bet[]>()
+  for (const b of bets) {
+    const arr = byDate.get(b.game_date)
+    if (arr) arr.push(b); else byDate.set(b.game_date, [b])
+  }
+  const out: Bet[] = []
+  for (const dayBets of byDate.values()) {
+    for (const p of dailyPlaysFromBets(dayBets)) if (p.bet) out.push(p.bet)
+  }
+  return out
 }

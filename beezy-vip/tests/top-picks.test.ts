@@ -38,6 +38,15 @@ describe('top picks', () => {
     expect(fromProjection(proj({ best_over_odds: null }))).toBeNull()
   })
 
+  it('a started row (mins_to_start: -5) returns null by default, but fromProjection(row, { includeStarted: true }) returns a pick with started === true and its pick_tier preserved', () => {
+    const startedRow = proj({ mins_to_start: -5, pick_tier: 'official' })
+    expect(fromProjection(startedRow)).toBeNull()
+    const kept = fromProjection(startedRow, { includeStarted: true })
+    expect(kept).not.toBeNull()
+    expect(kept?.started).toBe(true)
+    expect(kept?.tier).toBe('official')
+  })
+
   it('a projection takes the price of the side the model likes and is never tracked', () => {
     const over = fromProjection(proj({}))!
     expect(over.odds).toBe(-110)

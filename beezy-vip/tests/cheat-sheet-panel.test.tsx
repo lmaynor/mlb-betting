@@ -145,3 +145,18 @@ describe('Daily Card layout CSS', () => {
     expect(mobileBlock.slice(0, mobileBlock.indexOf('\n}'))).toMatch(/\.cheat-sheet-mobile-post\s*\{\s*display:\s*block;/)
   })
 })
+
+describe('a play whose game has started stays on the card', () => {
+  it('renders the started status in place of a result, and the result takes over once graded', () => {
+    const startedPick = cp({ who: 'Started Player', started: true, result: null })
+    const gradedPick = cp({ who: 'Graded Player', started: true, result: 'win' })
+    const picks = [startedPick, gradedPick]
+    const view = render(<CheatSheetClient sheets={[]} sportPicks={{ nba: picks }} players={picks} locked={0} today="THURSDAY, NOVEMBER 12" yesterday={[]} weekRecord={NO_RECORD} />)
+    const card = view.container.querySelector('.cheat-sheet-layout > div') as HTMLElement
+    expect(card).toHaveTextContent('Started Player')
+    expect(card).toHaveTextContent('STARTED · GRADED AT FINAL')
+    expect(card).toHaveTextContent('Graded Player')
+    expect(card).toHaveTextContent('WIN')
+    expect(within(card).getAllByText('STARTED · GRADED AT FINAL')).toHaveLength(1)
+  })
+})
