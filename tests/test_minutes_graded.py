@@ -299,7 +299,12 @@ def test_sensitivity_exhibit():
     assert ex["moved_8"]["t_mae"] == pytest.approx(0.0)
 
 
-def test_arm_s_cohort_check_reproduction(tmp_path):
+def _synthetic_frame_and_export(tmp_path):
+    """A small frame plus an export built from its own walk-forward.
+
+    The export carries the designations Arm S consumed (the real
+    predictions_export.csv does), attached from the frame by case_id.
+    """
     from nba.minutes_restriction import arm_s
 
     rows = []
@@ -330,21 +335,120 @@ def test_arm_s_cohort_check_reproduction(tmp_path):
             })
     frame = pd.DataFrame(rows)
     walked = arm_s.walk_forward(frame)
+    export_df = walked.copy()
+    export_df["designation"] = export_df["case_id"].map(
+        frame.set_index("case_id")["designation"])
     export_path = tmp_path / "export.csv"
-    walked.to_csv(export_path, index=False)
+    export_df.to_csv(export_path, index=False)
+    return frame, walked, export_df, export_path
 
-    # Clean match passes
+
+def _pin_synthetic_canonicals(monkeypatch, walked):
+    """Point the canonical pins at the synthetic frame's own re-grade.
+
+    Mirrors the real-data situation (pins recorded from the canonical
+    re-grade) so the amended check can pass on synthetic data; tamper
+    tests then break one assertion at a time.
+    """
+    from nba.minutes_restriction import grade as grade_mod
+
+    rebuilt_cohort = walked[cohort_mask(walked)]
+    mae = float((rebuilt_cohort["realized_minutes"]
+                 - rebuilt_cohort["pred_minutes"]).abs().mean())
+    cmax = max((abs(b["diff"]) for b in grade_mod.calibration(rebuilt_cohort).values()),
+               default=0.0)
+    pmax = max((abs(b["diff"]) for b in grade_mod.calibration(
+        walked[~walked["is_game_two"].astype(bool)]).values()), default=0.0)
+    monkeypatch.setattr(arm_t_config, "CANONICAL_ARM_S_COHORT_MAE", mae)
+    monkeypatch.setattr(arm_t_config, "CANONICAL_ARM_S_COHORT_CALIB_MAX", cmax)
+    monkeypatch.setattr(arm_t_config, "CANONICAL_ARM_S_PRIMARY_CALIB_MAX", pmax)
+    monkeypatch.setattr(arm_t_config, "CANONICAL_DEV_FIT_ROWS", 18)
+    return mae
+
+
+def test_arm_s_cohort_check_amended_passes(tmp_path, monkeypatch):
+    frame, walked, export_df, export_path = _synthetic_frame_and_export(tmp_path)
+    mae = _pin_synthetic_canonicals(monkeypatch, walked)
+
     res = arm_s_cohort_check(frame, export_path)
-    assert res["max_abs_diff"] < 1e-9
     assert res["n"] == 8
+    assert res["invariance"]["case_id_exact_match"] is True
+    assert res["invariance"]["designation_mismatches"] == 0
+    assert res["invariance"]["max_outcome_abs_diff"] < 1e-9
+    assert res["fit_provenance"]["dev_fit_rows"] == 18
+    assert res["comparators"]["canonical_rebuilt"]["cohort_mae"] == pytest.approx(mae)
+    # The synthetic export IS the same predictions, so legacy == canonical here.
+    assert res["comparators"]["legacy_export"]["cohort_mae"] == pytest.approx(mae)
 
-    # Perturbed prediction fails gate
-    bad_export = walked.copy()
-    bad_export.loc[0, "pred_minutes"] += 0.001
-    bad_export_path = tmp_path / "bad_export.csv"
-    bad_export.to_csv(bad_export_path, index=False)
-    with pytest.raises(GradedGateError, match="Arm S cohort reproduction failure"):
-        arm_s_cohort_check(frame, bad_export_path)
+
+def test_arm_s_cohort_check_prediction_drift_is_not_gated(tmp_path, monkeypatch):
+    """Amended Q4.2: export predictions are NOT asserted (fit-dependent)."""
+    frame, walked, export_df, export_path = _synthetic_frame_and_export(tmp_path)
+    _pin_synthetic_canonicals(monkeypatch, walked)
+
+    drifted = export_df.copy()
+    drifted.loc[drifted.index[0], "pred_minutes"] += 0.25
+    drifted_path = tmp_path / "drifted_export.csv"
+    drifted.to_csv(drifted_path, index=False)
+    res = arm_s_cohort_check(frame, drifted_path)  # must NOT raise
+    assert res["comparators"]["legacy_export"]["cohort_mae"] != pytest.approx(
+        res["comparators"]["canonical_rebuilt"]["cohort_mae"])
+
+
+def test_arm_s_cohort_check_outcome_tamper_fails(tmp_path, monkeypatch):
+    frame, walked, export_df, export_path = _synthetic_frame_and_export(tmp_path)
+    _pin_synthetic_canonicals(monkeypatch, walked)
+
+    bad = export_df.copy()
+    bad.loc[bad.index[0], "realized_minutes"] += 0.01
+    bad_path = tmp_path / "bad_export.csv"
+    bad.to_csv(bad_path, index=False)
+    with pytest.raises(GradedGateError, match="outcome mismatch"):
+        arm_s_cohort_check(frame, bad_path)
+
+
+def test_arm_s_cohort_check_designation_tamper_fails(tmp_path, monkeypatch):
+    frame, walked, export_df, export_path = _synthetic_frame_and_export(tmp_path)
+    _pin_synthetic_canonicals(monkeypatch, walked)
+
+    bad = export_df.copy()
+    bad.loc[bad.index[0], "designation"] = "Probable"
+    bad_path = tmp_path / "bad_export.csv"
+    bad.to_csv(bad_path, index=False)
+    with pytest.raises(GradedGateError, match="designation mismatch"):
+        arm_s_cohort_check(frame, bad_path)
+
+
+def test_arm_s_cohort_check_membership_tamper_fails(tmp_path, monkeypatch):
+    frame, walked, export_df, export_path = _synthetic_frame_and_export(tmp_path)
+    _pin_synthetic_canonicals(monkeypatch, walked)
+
+    bad = export_df.drop(index=export_df.index[0])
+    bad_path = tmp_path / "bad_export.csv"
+    bad.to_csv(bad_path, index=False)
+    with pytest.raises(GradedGateError, match="membership mismatch"):
+        arm_s_cohort_check(frame, bad_path)
+
+
+def test_arm_s_cohort_check_pin_tamper_fails(tmp_path, monkeypatch):
+    frame, walked, export_df, export_path = _synthetic_frame_and_export(tmp_path)
+    mae = _pin_synthetic_canonicals(monkeypatch, walked)
+    monkeypatch.setattr(arm_t_config, "CANONICAL_ARM_S_COHORT_MAE", mae + 0.001)
+    with pytest.raises(GradedGateError, match="pin failure \\(cohort MAE\\)"):
+        arm_s_cohort_check(frame, export_path)
+
+
+def test_arm_s_cohort_check_regrade_drift_fails(tmp_path, monkeypatch):
+    """Shifting the dev fit set moves the re-grade off its pin -> gate fails."""
+    frame, walked, export_df, export_path = _synthetic_frame_and_export(tmp_path)
+    _pin_synthetic_canonicals(monkeypatch, walked)
+
+    tampered = frame.copy()
+    dev_rows = tampered["season_start"].isin((2021, 2022, 2023))
+    tampered.loc[dev_rows, "realized_ratio"] = 0.5
+    tampered.loc[dev_rows, "realized_minutes"] = 15.0
+    with pytest.raises(GradedGateError, match="pin failure"):
+        arm_s_cohort_check(tampered, export_path)
 
 
 def test_preflight_cohort_gate_assertions():

@@ -2,7 +2,11 @@
 
 Implements Argon's 2026-11-13 ruling:
   - Canonical frame hash-lock assertion (refuses unless SHA-256 equals the lock).
-  - Arm S cohort reproduction check against predictions_export.csv (< 1e-9 max abs diff).
+  - Amended Q4.2 Arm S cohort check against predictions_export.csv: invariance
+    over cohort membership, ground-truth outcomes and Arm S designations
+    (NOT over Arm S predictions, which are fit-dependent), plus the
+    fit-provenance pin of the canonical re-grade (Argon amendment ruling,
+    2026-11-13, superseding the original exact-prediction-match assertion).
   - Two-day official reports resolution and Q4/Q5 prose slicing.
   - Cohort preflight assertions (decision time <= tip - 60m, all admitted items <= freeze, no strata items).
   - ThreadPoolExecutor parallel classification.
@@ -98,80 +102,217 @@ def assert_frame_lock(frame_path: str | Path) -> dict:
     return {"sha256": actual_sha, "rows": n_rows, "cohort_n": cohort_n}
 
 
+def _normalize_designation(value: Any) -> str:
+    """One canonical form for an Arm S designation across frames.
+
+    The canonical frame stores a missing designation as None; the export
+    CSV stores it as an empty field (NaN on read). Both are the same
+    state: no designation at decision time.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, float) and np.isnan(value):
+        return ""
+    s = str(value).strip()
+    return "" if s in ("", "None", "nan", "NaN", "NaT") else s
+
+
+def _export_cohort_mask(df: pd.DataFrame) -> pd.Series:
+    """The cohort rule applied to the export's own columns."""
+    return (
+        df["season_start"].astype(int).isin(arm_t_config.TEST_SEASON_STARTS)
+        & ~df["is_game_two"].astype(bool)
+        & (df["games_missed"].astype(int) >= 4)
+        & df["is_injury_return"].astype(bool)
+    )
+
+
 def arm_s_cohort_check(frame: pd.DataFrame, export_csv_path: str | Path) -> dict:
-    """Assert rebuilt Arm S predictions exactly reproduce export on the cohort."""
+    """Amended Q4.2 gate (Argon amendment ruling, 2026-11-13).
+
+    Supersedes the original exact-prediction-match assertion, which rested
+    on the false premise that identical cohort inputs imply identical Arm S
+    predictions: Arm S is a Ridge fit on the dev seasons, and the dev fit
+    set is frame-dependent (3,172 mirror rows vs 3,151 canonical rows), so
+    canonical-frame predictions legitimately differ from the mirror-fit
+    export. The amended precondition asserts, in order:
+
+    1. Cohort outcome & membership invariance vs predictions_export.csv:
+       exact 227-row case_id match; identical ground-truth outcomes
+       (games_missed exact; baseline_minutes and realized_minutes within
+       < 1e-9); identical Arm S designations on all 227 cases.
+    2. Fit provenance & canonical re-grade pin: the dev fit row count is
+       the canonical 3,151, and the canonical re-grade reproduces its
+       recorded values within CANONICAL_PIN_TOL (cohort MAE 4.9503,
+       primary max band calibration 0.0429 and <= 0.050, cohort max band
+       calibration 0.0409).
+    3. Dual reporting: both comparators are returned; the graded verdict
+       (grade_t on the rebuilt walk-forward predictions) reads the
+       canonical rebuilt comparator ONLY. The legacy export comparator is
+       lineage, never a bar input.
+    """
     rebuilt_walk = arm_s.walk_forward(frame)
     rebuilt_cohort = rebuilt_walk[cohort_mask(rebuilt_walk)].copy()
+    frame_cohort = frame[cohort_mask(frame)].copy()
 
     export_df = pd.read_csv(export_csv_path)
-    joined = rebuilt_cohort.merge(export_df, on="case_id", suffixes=("", "_export"))
-    if len(joined) != len(rebuilt_cohort):
+    if "designation" not in export_df.columns:
         raise GradedGateError(
-            f"Arm S export CSV missing cohort cases: joined {len(joined)} "
-            f"of {len(rebuilt_cohort)} rebuilt cohort cases"
+            f"Export CSV {export_csv_path} lacks the designation column; "
+            "amended Q4.2 invariance cannot be verified"
+        )
+    export_cohort = export_df[_export_cohort_mask(export_df)].copy()
+
+    # -- 1. membership: exact case_id match, no duplicates on either side.
+    frame_ids = frame_cohort["case_id"].astype(str)
+    export_ids = export_cohort["case_id"].astype(str)
+    if (
+        len(frame_cohort) != len(export_cohort)
+        or frame_ids.duplicated().any()
+        or export_ids.duplicated().any()
+        or set(frame_ids) != set(export_ids)
+    ):
+        raise GradedGateError(
+            "Arm S cohort membership mismatch vs export: canonical frame "
+            f"cohort {len(frame_cohort)} rows / {frame_ids.nunique()} unique ids, "
+            f"export cohort {len(export_cohort)} rows / {export_ids.nunique()} unique ids"
+        )
+    joined = frame_cohort.merge(export_cohort, on="case_id", suffixes=("_frame", "_export"))
+    if len(joined) != len(frame_cohort):
+        raise GradedGateError(
+            f"Arm S cohort join lost rows: {len(joined)} of {len(frame_cohort)}"
         )
 
-    pred_col_export = (
-        "pred_minutes_export" if "pred_minutes_export" in joined.columns else "pred_minutes"
+    # -- 1. outcomes: games_missed exact; minutes within < 1e-9.
+    n_missed_mismatch = int(
+        (joined["games_missed_frame"].astype(int) != joined["games_missed_export"].astype(int)).sum()
     )
-    if pred_col_export not in joined.columns:
-        if "pred_ratio_export" in joined.columns:
-            joined["pred_minutes_export"] = (
-                joined["pred_ratio_export"].astype(float)
-                * joined["baseline_minutes"].astype(float)
-            )
-            pred_col_export = "pred_minutes_export"
-        else:
+    if n_missed_mismatch:
+        raise GradedGateError(
+            f"Arm S cohort outcome mismatch: games_missed differs on {n_missed_mismatch} cases"
+        )
+    max_outcome_abs_diff = 0.0
+    for col in ("baseline_minutes", "realized_minutes"):
+        d = float(
+            (joined[f"{col}_frame"].astype(float) - joined[f"{col}_export"].astype(float))
+            .abs()
+            .max()
+        )
+        max_outcome_abs_diff = max(max_outcome_abs_diff, d)
+        if d >= 1e-9:
             raise GradedGateError(
-                f"Export CSV {export_csv_path} lacks pred_minutes or pred_ratio"
+                f"Arm S cohort outcome mismatch: {col} max abs diff {d:.4e} >= 1e-9"
             )
 
-    diffs = (joined["pred_minutes"].astype(float) - joined[pred_col_export].astype(float)).abs()
-    max_abs_diff = float(diffs.max())
-    if max_abs_diff >= 1e-9:
+    # -- 1. designations: identical on all 227 (null-normalized).
+    desig_frame = joined["designation_frame"].map(_normalize_designation)
+    desig_export = joined["designation_export"].map(_normalize_designation)
+    n_desig_mismatch = int((desig_frame != desig_export).sum())
+    if n_desig_mismatch:
         raise GradedGateError(
-            f"Arm S cohort reproduction failure: max abs diff {max_abs_diff:.4e} >= 1e-9"
+            f"Arm S cohort designation mismatch on {n_desig_mismatch} cases"
         )
+
+    # -- 2. fit provenance & canonical re-grade pins.
+    dev_fit = arm_s.dev_fit_frame(frame)
+    dev_fit_rows = int(len(dev_fit))
+    if dev_fit_rows != arm_t_config.CANONICAL_DEV_FIT_ROWS:
+        raise GradedGateError(
+            f"Arm S dev fit row count mismatch: {dev_fit_rows} "
+            f"!= canonical {arm_t_config.CANONICAL_DEV_FIT_ROWS}"
+        )
+    tol = arm_t_config.CANONICAL_PIN_TOL
 
     rebuilt_mae = float(
-        (joined["realized_minutes"].astype(float) - joined["pred_minutes"].astype(float)).abs().mean()
+        (rebuilt_cohort["realized_minutes"].astype(float)
+         - rebuilt_cohort["pred_minutes"].astype(float)).abs().mean()
     )
-    export_mae = float(
-        (joined["realized_minutes"].astype(float) - joined[pred_col_export].astype(float)).abs().mean()
-    )
-    if abs(rebuilt_mae - export_mae) >= 1e-6:
+    if abs(rebuilt_mae - arm_t_config.CANONICAL_ARM_S_COHORT_MAE) >= tol:
         raise GradedGateError(
-            f"Arm S cohort MAE mismatch: rebuilt {rebuilt_mae:.6f} vs export {export_mae:.6f}"
+            "Canonical Arm S re-grade pin failure (cohort MAE): rebuilt "
+            f"{rebuilt_mae:.6f} vs pinned {arm_t_config.CANONICAL_ARM_S_COHORT_MAE:.6f}"
         )
 
-    # Calibration-by-band, two populations (the recorded 0.045 is the
-    # PRIMARY-population max band |diff| from grade.calibration over all
-    # non-game-2 test cases; the cohort-band table is published alongside):
-    calib = grade.calibration(joined)
+    calib = grade.calibration(rebuilt_cohort)
     calib_max_abs_diff = max((abs(b["diff"]) for b in calib.values()), default=0.0)
+    if abs(calib_max_abs_diff - arm_t_config.CANONICAL_ARM_S_COHORT_CALIB_MAX) >= tol:
+        raise GradedGateError(
+            "Canonical Arm S re-grade pin failure (cohort calibration): rebuilt "
+            f"{calib_max_abs_diff:.6f} vs pinned {arm_t_config.CANONICAL_ARM_S_COHORT_CALIB_MAX:.6f}"
+        )
 
     rebuilt_primary = rebuilt_walk[~rebuilt_walk["is_game_two"].astype(bool)]
-    export_primary = export_df[~export_df["is_game_two"].astype(bool)]
     calib_primary_rebuilt = grade.calibration(rebuilt_primary)
-    calib_primary_export = grade.calibration(export_primary)
     calib_primary_max_rebuilt = max(
         (abs(b["diff"]) for b in calib_primary_rebuilt.values()), default=0.0)
-    calib_primary_max_export = max(
-        (abs(b["diff"]) for b in calib_primary_export.values()), default=0.0)
-    if abs(calib_primary_max_rebuilt - calib_primary_max_export) >= 1e-6:
+    if abs(calib_primary_max_rebuilt - arm_t_config.CANONICAL_ARM_S_PRIMARY_CALIB_MAX) >= tol:
         raise GradedGateError(
-            "Arm S primary-population calibration mismatch: rebuilt "
-            f"{calib_primary_max_rebuilt:.6f} vs export {calib_primary_max_export:.6f}"
+            "Canonical Arm S re-grade pin failure (primary calibration): rebuilt "
+            f"{calib_primary_max_rebuilt:.6f} vs pinned "
+            f"{arm_t_config.CANONICAL_ARM_S_PRIMARY_CALIB_MAX:.6f}"
+        )
+    if calib_primary_max_rebuilt > grade.CALIBRATION_TOL:
+        raise GradedGateError(
+            "Canonical Arm S primary calibration breaches the 0.050 bar: "
+            f"{calib_primary_max_rebuilt:.6f}"
         )
 
+    # -- 3. legacy export comparator (reported, never asserted, never a bar).
+    pred_col_export = "pred_minutes" if "pred_minutes" in export_cohort.columns else None
+    if pred_col_export is None and "pred_ratio" in export_cohort.columns:
+        export_cohort = export_cohort.copy()
+        export_cohort["pred_minutes"] = (
+            export_cohort["pred_ratio"].astype(float)
+            * export_cohort["baseline_minutes"].astype(float)
+        )
+        pred_col_export = "pred_minutes"
+    if pred_col_export is None:
+        raise GradedGateError(
+            f"Export CSV {export_csv_path} lacks pred_minutes or pred_ratio"
+        )
+    export_mae = float(
+        (export_cohort["realized_minutes"].astype(float)
+         - export_cohort[pred_col_export].astype(float)).abs().mean()
+    )
+    export_primary = export_df[~export_df["is_game_two"].astype(bool)]
+    calib_primary_export = grade.calibration(export_primary)
+    calib_primary_max_export = max(
+        (abs(b["diff"]) for b in calib_primary_export.values()), default=0.0)
+
     season_splits = {}
-    for (start, label), sub in joined.groupby(["season_start", "season_label"], sort=True):
+    for (start, label), sub in rebuilt_cohort.groupby(
+            ["season_start", "season_label"], sort=True):
         season_splits[str(label)] = grade.cohort_stats(sub)
 
-    overall_stats = grade.cohort_stats(joined)
+    overall_stats = grade.cohort_stats(rebuilt_cohort)
+    rebuilt_primary_stats = grade.cohort_stats(rebuilt_primary)
 
     return {
-        "max_abs_diff": max_abs_diff,
+        "n": len(joined),
+        "invariance": {
+            "case_id_exact_match": True,
+            "games_missed_mismatches": n_missed_mismatch,
+            "max_outcome_abs_diff": max_outcome_abs_diff,
+            "designation_mismatches": n_desig_mismatch,
+        },
+        "fit_provenance": {
+            "dev_fit_rows": dev_fit_rows,
+            "n_train": rebuilt_walk.attrs.get("n_train"),
+            "fit_seasons": rebuilt_walk.attrs.get("fit_seasons"),
+            "used_fallback": rebuilt_walk.attrs.get("used_fallback"),
+        },
+        "comparators": {
+            "canonical_rebuilt": {
+                "cohort_mae": rebuilt_mae,
+                "primary_calibration_max_abs_diff": calib_primary_max_rebuilt,
+                "cohort_calibration_max_abs_diff": calib_max_abs_diff,
+                "pin_tolerance": tol,
+            },
+            "legacy_export": {
+                "cohort_mae": export_mae,
+                "primary_calibration_max_abs_diff": calib_primary_max_export,
+            },
+        },
         "rebuilt_cohort_mae": rebuilt_mae,
         "export_cohort_mae": export_mae,
         "calibration_cohort_bands": calib,
@@ -182,7 +323,22 @@ def arm_s_cohort_check(frame: pd.DataFrame, export_csv_path: str | Path) -> dict
         "calibration_primary_max_abs_diff_export": calib_primary_max_export,
         "seasons": season_splits,
         "overall": overall_stats,
-        "n": len(joined),
+        "pooled_fail_lineage": {
+            "recorded_verdict": "FAIL",
+            "recorded_observed_cut": 0.067,
+            "recorded_required_cut": grade.BAR_FULL_CUT,
+            "recorded_primary_n": 1947,
+            "status": (
+                "Q3 pooled FAIL stands permanently untouched; the rebuilt "
+                "descriptive figures below are lineage only, never a re-grade"
+            ),
+            "rebuilt_descriptive": {
+                "primary_n": rebuilt_primary_stats["n"],
+                "naive_mae": rebuilt_primary_stats["naive_mae"],
+                "arm_s_mae": rebuilt_primary_stats["arm_s_mae"],
+                "pooled_cut": rebuilt_primary_stats["rel_improvement"],
+            },
+        },
     }
 
 
@@ -627,10 +783,65 @@ def run_graded_execution(
     arm_s_predictions.to_csv(out / "arm_s_predictions_rebuilt.csv", index=False)
     audit_df.to_csv(out / "prose_audit.csv", index=False)
 
+    # Per-bar verdicts against the CANONICAL rebuilt comparator only
+    # (amended Q4.2 dual-reporting rule): report.s_mae / t_mae are computed
+    # from the rebuilt walk-forward predictions on the shared cases.
+    def _bar(observed, ok):
+        return {"observed": observed, "pass": bool(ok) if observed is not None else False}
+
+    bars = {
+        "comparator": "canonical rebuilt Arm S (case_frame.parquet re-grade)",
+        "evaluated_n": {
+            "observed": report.n_shared,
+            "required": f">= {grade_t.MIN_SHARED_CASES}",
+            "pass": report.n_shared >= grade_t.MIN_SHARED_CASES,
+        },
+        "cohort_abstention_rate": {
+            "observed": report.abstention_rate,
+            "required": f"<= {arm_t_config.MAX_ABSTENTION_RATE_COHORT}",
+            "pass": report.n_shared >= grade_t.MIN_SHARED_CASES,
+        },
+        "relative_mae": {
+            "t_mae": report.t_mae,
+            "s_mae_same_cases": report.s_mae,
+            "required": "MAE_T <= 0.90 * MAE_S-same-cases "
+                        f"(rel improvement >= {grade_t.MIN_REL_IMPROVEMENT})",
+            **_bar(report.rel_improvement,
+                   report.rel_improvement is not None
+                   and report.rel_improvement >= grade_t.MIN_REL_IMPROVEMENT),
+        },
+        "absolute_mae": {
+            "required": f">= {grade_t.MIN_ABS_IMPROVEMENT_MIN} min",
+            **_bar(report.abs_improvement,
+                   report.abs_improvement is not None
+                   and report.abs_improvement >= grade_t.MIN_ABS_IMPROVEMENT_MIN),
+        },
+        "logloss": {
+            "gain_nats": report.logloss_gain_nats,
+            "p_value": report.logloss_p_value,
+            "n_clusters": report.logloss_n_clusters,
+            "required": f"gain >= {arm_t_config.LOGLOSS_MIN_GAIN_NATS} nats and "
+                        f"p < {arm_t_config.LOGLOSS_MAX_P} (date-clustered paired)",
+            "pass": bool(
+                report.logloss_gain_nats is not None
+                and report.logloss_p_value is not None
+                and report.logloss_gain_nats >= arm_t_config.LOGLOSS_MIN_GAIN_NATS
+                and report.logloss_p_value < arm_t_config.LOGLOSS_MAX_P
+            ),
+        },
+    }
+
     artifact = {
         "lock": lock,
         "completeness": comp.to_dict(),
         "cohort_check": cohort_check,
+        "fit_provenance": {
+            "frame_sha256": lock["sha256"],
+            **cohort_check["fit_provenance"],
+        },
+        "comparators": cohort_check["comparators"],
+        "bars": bars,
+        "pooled_fail_lineage": cohort_check["pooled_fail_lineage"],
         "preflight": preflight,
         "calibration": {
             "mean_ratio_by_band": calibration.mean_ratio_by_band,

@@ -24,7 +24,8 @@ GUARDED, like every runner in this program:
   corpus-completeness check passes: every resolved player in the player
   map banked. Without --execute, it reports completeness and exits.
   With --execute, it asserts the canonical frame lock (SHA-256 + rows/cohort),
-  verifies Arm S reproduction against --arm-s-export (< 1e-9 max abs diff),
+  verifies the amended Q4.2 Arm S cohort gate against --arm-s-export
+  (membership/outcome/designation invariance + canonical re-grade pins),
   slices prose, preflights cohort honesty, runs parallel classification via
   --workers, fits dev calibration and shrinkage, grades test against the
   tightened Q1 bars, writes artifacts (grade_artifact.json, etc.), and prints
