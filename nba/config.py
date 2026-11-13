@@ -205,6 +205,25 @@ ODDS_BANK_DEFAULT_BUDGET = {
 # the MLB snapshot job and the historical puller (was 500 / none / 2500).
 PARLAY_RESERVE_FLOOR = int(os.environ.get("PARLAY_RESERVE_FLOOR", "500"))
 
+# -- Prop CLV banker (Argon Data Direction 1, 2026-11-10; ev/prop_clv_banker.py) ------------------------------------------------
+# Verified plan cost (Argon D1 Step 1): the 100,000-credit plan is $20/month (confirmed by Luc 2026-11-10 on the
+# upgrade from the starter tier). Recorded here and in docs/DATA_LICENSES.md.
+# REALLOCATION, NOT NEW BUDGET: Argon D1 shifts 10,000 credits/month to a T-15 closing-snapshot job. The closing job
+# spends through the SAME per-sport credit ledger against the SAME accumulator caps above (34,400 per sport,
+# UNCHANGED), so parlay_budget_total() does not move and no cap is raised. The figures below are a carve-out
+# INSIDE those caps -- a monthly sub-cap on closing-window spend, tracked on the job's own sub-ledger
+# (OddsAccum/{sport}/_credits_closing/{month}.json) -- funded by the accumulators pacing ~20k against a 34.4k cap.
+CLV_CLOSING_MONTHLY_BUDGET = {
+    "basketball_nba": 5000,
+    "icehockey_nhl": 5000,
+}
+CLV_CLOSING_TARGET_LEAD_MIN = 15.0      # the closing snapshot targets T-15 minutes before game start
+CLV_CLOSING_CAPTURE_WINDOW_MIN = 20.0   # a capture firing buys only events starting within this window (not yet started)
+CLV_CLOSING_MAX_AGE_MIN = 60.0          # a close older than this before start is stale, not a valid CLV close
+                                        # (== nfl.props.lines.CLOSE_FRESH_MIN, the repo's existing freshness bar)
+CLV_COVERAGE_TARGET = 0.92              # Argon D1 pre-registered test (Nov 24, 2026): >= 92% of settled prop rows
+                                        # carry valid paired CLV, with zero credit-cap overruns
+
 
 def parlay_budget_total(mlb_active: bool = False) -> int:
     """Everything that may be spent in one month across all sports and tools (excludes the reserve floor).

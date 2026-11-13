@@ -5,6 +5,12 @@ docs/solutions/conventions/nhl-data-source-licensing.md: a source is listed here
 product surface, with what it allows, what it requires, and where that leaves us. When in doubt, the stricter
 reading wins.
 
+## ParlayAPI (live odds spine, verified 2026-11-11)
+
+| Source | What we take | License / terms | Requirements on us |
+| --- | --- | --- | --- |
+| ParlayAPI (parlay-api.com) | Live player-prop and game-line odds snapshots, banked forward to the OddsAccum lake (nba/odds/accumulator.py; closing snapshots by ev/prop_clv_banker.py) | Paid plan: 100,000 credits/month at $20/month (Argon Data D1 Step 1 invoice audit: cost confirmed by Luc 2026-11-10 on the upgrade from the starter tier; recorded in nba/config.py). Billing: props 1 credit per (event x market), whole-slate game lines 1 credit per market | Every spender draws from the ONE shared pool under the budgets in nba/config.py (per-sport ledger caps, reserve floor); no historical prop archive exists, so unbanked days are unrecoverable. Key from Secret Manager (parlay-api-key) only |
+
 ## Soccer vertical (Phase 1, added 2026-11-03)
 
 All Phase 1 soccer sources are free; the vertical runs at $0 data spend. Paid soccer data (StatsBomb API,
