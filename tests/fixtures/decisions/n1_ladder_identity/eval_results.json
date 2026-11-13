@@ -1,0 +1,58 @@
+{
+  "gate_passed": false,
+  "total": 660,
+  "accepted": 0,
+  "stat_choice_agreement": 0.9954545454545455,
+  "stat_choice_agreement_n": 660,
+  "summary": {
+    "total": 660,
+    "deterministic": 0,
+    "ambiguous": 660,
+    "accepted_shadow": 0,
+    "quarantined": 660
+  },
+  "parser_only_quarantined": 660,
+  "route_quarantined": 660,
+  "quarantine_reduction": 0.0,
+  "false_canonicalization_count": 0,
+  "false_canonicalization_rate": 0.0,
+  "scope_disagreement_count": 0,
+  "scope_disagreement_rate": 0.0,
+  "by_class": {
+    "onesided_ladder_rung": {
+      "total": 285,
+      "accepted": 0,
+      "quarantined": 285,
+      "rate": 0.0
+    },
+    "twosided_offmain_rung": {
+      "total": 300,
+      "accepted": 0,
+      "quarantined": 300,
+      "rate": 0.0
+    },
+    "unmapped_key": {
+      "total": 75,
+      "accepted": 0,
+      "quarantined": 75,
+      "rate": 0.0
+    }
+  },
+  "bars": {
+    "false_canonicalization": {
+      "value": 0.0,
+      "bar": 0.005,
+      "passed": true
+    },
+    "scope_disagreement": {
+      "value": 0.0,
+      "bar": 0.01,
+      "passed": true
+    },
+    "quarantine_reduction": {
+      "value": 0.0,
+      "bar": 0.3,
+      "passed": false
+    }
+  }
+}
