@@ -1,0 +1,62 @@
+{
+  "manifest_check": "not_applicable_no_manifests",
+  "total_claims": 100,
+  "blocked_count": 72,
+  "clear_count": 28,
+  "passed_all": false,
+  "metrics": {
+    "contradicted_recall": {
+      "value": 1.0,
+      "bar": 1.0,
+      "passed": true,
+      "blocked": 22,
+      "total": 22
+    },
+    "planted_flaw_recall": {
+      "value": 1.0,
+      "bar": 0.9,
+      "passed": true,
+      "blocked": 50,
+      "total": 50
+    },
+    "clean_false_block_rate": {
+      "value": 0.44,
+      "bar": 0.05,
+      "passed": false,
+      "blocked": 22,
+      "total": 50
+    }
+  },
+  "per_label": {
+    "clean": {
+      "total": 50,
+      "blocked": 22,
+      "clear": 28,
+      "block_rate": 0.44
+    },
+    "contradicted": {
+      "total": 22,
+      "blocked": 22,
+      "clear": 0,
+      "block_rate": 1.0
+    },
+    "unsupported": {
+      "total": 10,
+      "blocked": 10,
+      "clear": 0,
+      "block_rate": 1.0
+    },
+    "stale": {
+      "total": 9,
+      "blocked": 9,
+      "clear": 0,
+      "block_rate": 1.0
+    },
+    "wrong_scope": {
+      "total": 9,
+      "blocked": 9,
+      "clear": 0,
+      "block_rate": 1.0
+    }
+  }
+}
