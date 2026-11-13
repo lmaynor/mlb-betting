@@ -68,7 +68,9 @@ class Dataset:
     tag       GitHub release tag (path segment after /download/).
     stem      asset filename stem; the file is {stem}_{season}.parquet
     first     first season upstream publishes (clips the window from below)
-    group     core | extra -- the default CLI selection is core only (pbp is ~20 MB per season)
+    group     core | extra -- the default CLI selection is core only. pbp was 'extra' until 2026-11-11 and is
+              now 'core': first-basket outcomes (nba/data/first_scorer_outcomes.py) derive from it, so the
+              nightly mirror must carry it (~20 MB per season).
     required  columns that must exist or the file is rejected. ONLY columns confirmed in the 2026 files (2026-10-16).
     """
     name: str
@@ -96,7 +98,7 @@ DATASETS = {d.name: d for d in (
     Dataset("schedules", "espn_nba_schedules", "nba_schedule", 2002, "core",
             ("game_id", "season", "season_type", "game_date_time", "home_id", "away_id", "home_abbreviation",
              "away_abbreviation", "status_type_completed")),
-    Dataset("pbp", "espn_nba_pbp", "play_by_play", 2002, "extra", ("game_id", "season")),
+    Dataset("pbp", "espn_nba_pbp", "play_by_play", 2002, "core", ("game_id", "season")),
 )}
 GROUPS = ("core", "extra")
 DEFAULT_GROUPS = ("core",)

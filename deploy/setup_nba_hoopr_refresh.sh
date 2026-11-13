@@ -2,7 +2,9 @@
 # setup_nba_hoopr_refresh.sh -- provision the nightly hoopR/ESPN NBA mirror Job + Scheduler.
 #
 # Runs `python -m nba.data.hoopr --mode refresh` (current hoopR season, plus last season during the Aug-Oct turnover, for
-# player/team box scores + schedules -> NBA/hoopr/ in the shared bucket). Byte-identical files are not rewritten (sha256 vs
+# player/team box scores + schedules + play-by-play -> NBA/hoopr/ in the shared bucket). Play-by-play (espn_nba_pbp)
+# moved from the 'extra' group to 'core' on 2026-11-11 so first-basket outcomes are derivable; it adds ~20 MB/season.
+# Byte-identical files are not rewritten (sha256 vs
 # NBA/hoopr/_manifest.json). No DB, no secrets, no API key. Gives nba/props an ESPN-keyed history that already has the new
 # season (SportsBlaze does not): `python -m nba.props.score --history-source espn`.
 #
@@ -15,7 +17,7 @@
 # FIRST RUN is a backfill, not the nightly refresh (override the args for ONE execution; repeated --args, CONTEXT s15.9):
 #   gcloud run jobs execute nba-hoopr-refresh --region=us-central1 --wait \
 #     --args="-m" --args="nba.data.hoopr" --args="--mode" --args="backfill"
-# Size it first from any machine:  python3 -m nba.data.hoopr --mode backfill --probe   (core group ~ 50 MB for 2019-2027)
+# Size it first from any machine:  python3 -m nba.data.hoopr --mode backfill --probe   (core incl. pbp ~ 210 MB for 2019-2027)
 #
 # Check afterwards: gs://<bucket>/NBA/hoopr/last_refresh.json (status ok|partial|error + per-file failures).
 # Not wired into monitor_ops (same as nba-refresh-data / nfl-refresh-data): a failed execution shows in Cloud Run only.

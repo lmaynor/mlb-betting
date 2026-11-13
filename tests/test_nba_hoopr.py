@@ -74,9 +74,11 @@ def test_current_season_is_the_year_the_season_ends():
     assert hoopr.current_season(date(2027, 1, 5)) == 2027
 
 
-def test_default_groups_exclude_pbp():
+def test_default_groups_include_pbp():
+    # pbp flipped extra -> core on 2026-11-11: first-basket outcomes derive from it, so the
+    # default (nightly) mirror must carry it. See nba/data/hoopr.py Dataset docstring.
     names = [d.name for d in hoopr.select_datasets()]
-    assert names == ["player_boxscores", "team_boxscores", "schedules"]
+    assert names == ["player_boxscores", "team_boxscores", "schedules", "pbp"]
     assert "pbp" in [d.name for d in hoopr.select_datasets(groups=("core", "extra"))]
     with pytest.raises(ValueError):
         hoopr.select_datasets(["nope"])
