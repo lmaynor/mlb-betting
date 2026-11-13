@@ -46,6 +46,11 @@ def raw_pbp_key(game_id: int) -> str:
     return f"{NHL_PREFIX}/raw/pbp/{game_id}.json.gz"
 
 
+def raw_shiftchart_key(game_id: int) -> str:
+    # shift charts are the raw input for line derivation (nhl.data.lines); gzipped like play-by-play
+    return f"{NHL_PREFIX}/raw/shiftcharts/{game_id}.json.gz"
+
+
 def shots_key(season_year: int) -> str:
     # Per-season so the nightly rewrite only touches the current season (~85k rows), not every season's shots.
     return f"{NHL_PREFIX}/shots/shots_{season_year}.csv"

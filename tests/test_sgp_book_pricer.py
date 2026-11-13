@@ -513,3 +513,116 @@ def test_nhl_sgp_shapes_suppressed():
     assert not any(c.archetype == "nhl_linemate_pts_stack" for c in cands)
     assert not any(c.archetype == "nhl_goal_ast_vs_pts" for c in cands)
 
+
+def test_build_sgp_proxy_linemate_stacks_real_lines():
+    from ev.sgp_proxy_builder import build_sgp_proxy_candidates
+
+    # Line assignments from NHL/lines/lines_latest.json built 2026-11-12 (trailing-10 window, as of 2026-11-11);
+    # prices are fixture prices in the style of the previous test.
+    nhl_rows = [
+        {
+            "game_key": "nhl:2026-10-30:EDM@CGY",
+            "commence": "2026-10-30T23:00:00Z",
+            "away": "EDM",
+            "home": "CGY",
+            "team": "EDM",
+            "player": "Connor McDavid",
+            "player_norm": "connor mcdavid",
+            "stat": "points",
+            "line": 0.5,
+            "line_id": "EDM-F1",
+            "books": [
+                {"book": "fanduel", "over": -320, "under": 250},
+                {"book": "draftkings", "over": -310, "under": 240},
+                {"book": "betmgm", "over": -300, "under": 235},
+                {"book": "caesars", "over": -305, "under": 238},
+            ],
+        },
+        {
+            "game_key": "nhl:2026-10-30:EDM@CGY",
+            "commence": "2026-10-30T23:00:00Z",
+            "away": "EDM",
+            "home": "CGY",
+            "team": "EDM",
+            "player": "Leon Draisaitl",
+            "player_norm": "leon draisaitl",
+            "stat": "points",
+            "line": 0.5,
+            "line_id": "EDM-F1",
+            "books": [
+                {"book": "fanduel", "over": -280, "under": 220},
+                {"book": "draftkings", "over": -270, "under": 215},
+                {"book": "betmgm", "over": -265, "under": 212},
+                {"book": "caesars", "over": -275, "under": 218},
+            ],
+        },
+        {
+            "game_key": "nhl:2026-10-30:EDM@CGY",
+            "commence": "2026-10-30T23:00:00Z",
+            "away": "EDM",
+            "home": "CGY",
+            "team": "EDM",
+            "player": "Vasily Podkolzin",
+            "player_norm": "vasily podkolzin",
+            "stat": "points",
+            "line": 0.5,
+            "line_id": "EDM-F1",
+            "books": [
+                {"book": "fanduel", "over": -170, "under": 140},
+                {"book": "draftkings", "over": -165, "under": 138},
+                {"book": "betmgm", "over": -160, "under": 135},
+                {"book": "caesars", "over": -168, "under": 142},
+            ],
+        },
+        {
+            "game_key": "nhl:2026-10-30:EDM@CGY",
+            "commence": "2026-10-30T23:00:00Z",
+            "away": "EDM",
+            "home": "CGY",
+            "team": "EDM",
+            "player": "Ryan Nugent-Hopkins",
+            "player_norm": "ryan nugent-hopkins",
+            "stat": "points",
+            "line": 0.5,
+            "line_id": "EDM-F2",
+            "books": [
+                {"book": "fanduel", "over": -210, "under": 175},
+                {"book": "draftkings", "over": -200, "under": 168},
+                {"book": "betmgm", "over": -205, "under": 170},
+                {"book": "caesars", "over": -208, "under": 172},
+            ],
+        },
+        {
+            "game_key": "nhl:2026-10-30:EDM@CGY",
+            "commence": "2026-10-30T23:00:00Z",
+            "away": "EDM",
+            "home": "CGY",
+            "team": "EDM",
+            "player": "Zach Hyman",
+            "player_norm": "zach hyman",
+            "stat": "points",
+            "line": 0.5,
+            "books": [
+                {"book": "fanduel", "over": -190, "under": 160},
+                {"book": "draftkings", "over": -185, "under": 155},
+                {"book": "betmgm", "over": -180, "under": 152},
+                {"book": "caesars", "over": -188, "under": 158},
+            ],
+        },
+    ]
+
+    cands = build_sgp_proxy_candidates(nhl_rows, min_ev_pct=-50.0)
+    expected_players = {
+        "Connor McDavid + Leon Draisaitl (EDM)",
+        "Connor McDavid + Vasily Podkolzin (EDM)",
+        "Leon Draisaitl + Vasily Podkolzin (EDM)",
+    }
+    assert {c.player for c in cands} == expected_players
+    assert len(cands) == 3
+    for c in cands:
+        assert c.archetype == "nhl_linemate_pts_stack"
+        assert c.rho_true == 0.32
+        assert "Hyman" not in c.player and "hyman" not in c.player_norm
+        assert "Nugent-Hopkins" not in c.player and "nugent-hopkins" not in c.player_norm
+        assert "/event/nhl:" not in (c.deeplink or "")
+

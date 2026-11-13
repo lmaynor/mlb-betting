@@ -37,6 +37,7 @@ log = logging.getLogger("ev.odds_board")
 SPORTS = ("nfl", "nhl", "nba", "mlb")
 MLB_RAW_PREFIX = "OddsAccum/baseball_mlb/raw"   # props_{HHMM}.json: a list of ParlayAPI single-event odds objects, banked by the snapshot job
 OUT_KEY = "EVSweep/{sport}_props/odds_board_latest.json"
+LINES_KEY = "NHL/lines/lines_latest.json"
 MAX_ROWS = 3000                      # main lines first, then actionable alts; nearest game first within a tier
 MIN_BOOKS = 2                        # a one-book line is not a comparison (an actionable alt rung is the exception)
 ALT_GAP = 1.0                        # a line this far from the player's modal line is an alt line
@@ -50,6 +51,7 @@ CACHE_TTL_SEC = 5 * 60               # the job rewrites the file every 30 min
 STALE_MINUTES = 90
 
 _CACHE: dict = {}                    # sport -> (time.monotonic() loaded, payload)
+_LINES_CACHE: dict = {"t": 0.0, "by_team": {}, "by_norm": {}}
 
 
 def _logit(p: float) -> float:
@@ -190,6 +192,81 @@ def _safe_decimal(american):
     return american_to_decimal(v)
 
 
+def _load_lines_maps() -> tuple[dict, dict]:
+    t = _LINES_CACHE.get("t", 0.0)
+    if t and time.monotonic() - t < CACHE_TTL_SEC:
+        return _LINES_CACHE["by_team"], _LINES_CACHE["by_norm"]
+
+    by_team: dict[tuple[str, str], str] = {}
+    by_norm: dict[str, tuple[str, str]] = {}
+    try:
+        from mlb_core import storage
+        raw = storage.read_bytes(LINES_KEY)
+        artifact = json.loads(raw)
+        team_pairs: dict[tuple[str, str], set[str]] = {}
+        norm_pairs: dict[str, set[tuple[str, str]]] = {}
+        teams = artifact.get("teams")
+        if isinstance(teams, dict):
+            for abbr, tdata in teams.items():
+                if not isinstance(tdata, dict):
+                    continue
+                team_abbr = str(abbr).upper().strip()
+                lines = tdata.get("lines")
+                if not isinstance(lines, list):
+                    continue
+                for line in lines:
+                    if not isinstance(line, dict):
+                        continue
+                    lid = line.get("line_id")
+                    if not lid:
+                        continue
+                    players = line.get("players")
+                    if not isinstance(players, list):
+                        continue
+                    for p in players:
+                        if not isinstance(p, dict):
+                            continue
+                        norm = p.get("player_norm")
+                        if not norm:
+                            continue
+                        team_pairs.setdefault((team_abbr, norm), set()).add(lid)
+                        norm_pairs.setdefault(norm, set()).add((team_abbr, lid))
+        # A (team, norm) key claimed by two different lines is a same-team namesake
+        # (Vancouver's two Elias Petterssons, C and D): the board cannot tell them
+        # apart by name, so the key annotates nothing rather than guessing a line.
+        by_team = {k: next(iter(v)) for k, v in team_pairs.items() if len(v) == 1}
+        by_norm = {
+            norm: next(iter(pairs))
+            for norm, pairs in norm_pairs.items()
+            if len(pairs) == 1
+        }
+    except Exception as exc:                                                           # noqa: BLE001
+        log.warning("failed to load lines artifact from %s: %s", LINES_KEY, exc)
+        by_team, by_norm = {}, {}
+
+    _LINES_CACHE["t"] = time.monotonic()
+    _LINES_CACHE["by_team"] = by_team
+    _LINES_CACHE["by_norm"] = by_norm
+    return by_team, by_norm
+
+
+def _annotate_nhl_lines(rows: list[dict], by_team: dict, by_norm: dict) -> int:
+    annotated = 0
+    for row in rows:
+        team = str(row.get("team") or "").upper().strip()
+        norm = row.get("player_norm")
+        if team:
+            if (team, norm) in by_team:
+                row["line_id"] = by_team[(team, norm)]
+                annotated += 1
+        elif norm in by_norm:
+            team_abbr, line_id = by_norm[norm]
+            row["line_id"] = line_id
+            row["team"] = team_abbr
+            annotated += 1
+    return annotated
+
+
 def build_board(sport: str, events: list | None, now: datetime, meta: dict | None = None) -> dict:
     """Banked events -> the odds-board payload for one sport (rows sorted nearest game first, then player, then stat).
 
@@ -319,6 +396,10 @@ def build_board(sport: str, events: list | None, now: datetime, meta: dict | Non
     kept = [r for _, r in cands[:MAX_ROWS]]
     kept.sort(key=lambda r: (r["commence"], r["player_norm"], r["stat"], r["line"]))
     out = [{k: v for k, v in r.items() if k not in ("alt_src", "one_sided", "n_two", "med")} for r in kept]
+    lines_rows = 0
+    if sport.lower() == "nhl":
+        by_team, by_norm = _load_lines_maps()
+        lines_rows = _annotate_nhl_lines(out, by_team, by_norm)
     book_keys = sorted({b["book"] for r in out for b in r["books"]})
     return {
         "sport": sport, "ts": now.isoformat(), "validated": False, "count": len(out), "rows": out,
@@ -331,7 +412,8 @@ def build_board(sport: str, events: list | None, now: datetime, meta: dict | Non
         "lines_age_minutes": meta.get("age_min"), "lines_source": list(meta.get("lines_source") or []),
         "summary": {"events": n_events, "events_started": n_started, "rows_cut": cut,
                     "alt_rows": sum(1 for r in out if r["is_alt"]),
-                    "curve_rows": sum(1 for r in out if r["curve_fair_over"] is not None)},
+                    "curve_rows": sum(1 for r in out if r["curve_fair_over"] is not None),
+                    "lines_rows": lines_rows},
     }
 
 

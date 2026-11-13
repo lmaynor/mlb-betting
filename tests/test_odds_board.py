@@ -385,3 +385,128 @@ def test_junk_books_do_not_feed_the_curve_or_modal_line():
     junk = [book(j, -110, -110, point=26.5) for j in ("bovada", "betonline", "mybookie")]
     b = ob.build_board("nba", [event([*real, *junk])], NOW)
     assert [r["line"] for r in b["rows"]] == [24.5] and b["rows"][0]["modal_point"] == 24.5
+
+
+# ---- NHL line annotation (2026-11-13) --------------------------------------------------------------------------------
+def test_annotate_nhl_lines_hint_match():
+    by_team = {("EDM", "connor mcdavid"): "EDM-F1"}
+    by_norm = {"connor mcdavid": ("EDM", "EDM-F1")}
+    rows = [{"player": "Connor McDavid", "player_norm": "connor mcdavid", "team": "EDM"}]
+    cnt = ob._annotate_nhl_lines(rows, by_team, by_norm)
+    assert cnt == 1
+    assert rows[0]["line_id"] == "EDM-F1"
+    assert rows[0]["team"] == "EDM"
+
+
+def test_annotate_nhl_lines_unique_norm_backfills_team():
+    by_team = {("EDM", "connor mcdavid"): "EDM-F1"}
+    by_norm = {"connor mcdavid": ("EDM", "EDM-F1")}
+    rows = [{"player": "Connor McDavid", "player_norm": "connor mcdavid", "team": None}]
+    cnt = ob._annotate_nhl_lines(rows, by_team, by_norm)
+    assert cnt == 1
+    assert rows[0]["line_id"] == "EDM-F1"
+    assert rows[0]["team"] == "EDM"
+
+
+def test_annotate_nhl_lines_ambiguous_norm_untouched():
+    by_team = {("CAR", "sebastian aho"): "CAR-F1", ("NYI", "sebastian aho"): "NYI-D3"}
+    by_norm = {}  # ambiguous norm excluded from by_norm
+    rows = [{"player": "Sebastian Aho", "player_norm": "sebastian aho", "team": None}]
+    cnt = ob._annotate_nhl_lines(rows, by_team, by_norm)
+    assert cnt == 0
+    assert "line_id" not in rows[0]
+    assert rows[0]["team"] is None
+
+
+def test_annotate_nhl_lines_never_overwrites_team():
+    by_team = {("EDM", "connor mcdavid"): "EDM-F1"}
+    by_norm = {"connor mcdavid": ("EDM", "EDM-F1")}
+    rows = [{"player": "Connor McDavid", "player_norm": "connor mcdavid", "team": "NYR"}]
+    cnt = ob._annotate_nhl_lines(rows, by_team, by_norm)
+    assert cnt == 0
+    assert "line_id" not in rows[0]
+    assert rows[0]["team"] == "NYR"
+
+
+def test_load_lines_maps_caches_and_filters_ambiguous(monkeypatch):
+    import json
+    import mlb_core.storage as st
+    ob._LINES_CACHE.update({"t": 0.0, "by_team": {}, "by_norm": {}})
+    artifact = {
+        "version": 1,
+        "as_of": "2024-11-20",
+        "teams": {
+            "EDM": {
+                "lines": [
+                    {
+                        "line_id": "EDM-F1",
+                        "players": [{"player_id": 8478402, "name": "Connor McDavid", "player_norm": "connor mcdavid"}],
+                    }
+                ]
+            },
+            "CAR": {
+                "lines": [
+                    {
+                        "line_id": "CAR-F1",
+                        "players": [{"player_id": 8478427, "name": "Sebastian Aho", "player_norm": "sebastian aho"}],
+                    }
+                ]
+            },
+            "NYI": {
+                "lines": [
+                    {
+                        "line_id": "NYI-D3",
+                        "players": [{"player_id": 8480222, "name": "Sebastian Aho", "player_norm": "sebastian aho"}],
+                    }
+                ]
+            },
+        },
+    }
+    calls = []
+
+    def fake_read(key):
+        calls.append(key)
+        return json.dumps(artifact).encode("utf-8")
+
+    monkeypatch.setattr(st, "read_bytes", fake_read)
+    by_team, by_norm = ob._load_lines_maps()
+    assert len(calls) == 1
+    assert calls[0] == ob.LINES_KEY
+    assert by_team[("EDM", "connor mcdavid")] == "EDM-F1"
+    assert by_team[("CAR", "sebastian aho")] == "CAR-F1"
+    assert by_team[("NYI", "sebastian aho")] == "NYI-D3"
+    assert by_norm["connor mcdavid"] == ("EDM", "EDM-F1")
+    assert "sebastian aho" not in by_norm
+
+    # second call within TTL hits cache
+    by_team2, by_norm2 = ob._load_lines_maps()
+    assert len(calls) == 1
+    assert by_team2 is by_team and by_norm2 is by_norm
+
+
+def test_load_lines_maps_storage_error_falls_back_empty_and_caches(monkeypatch):
+    import mlb_core.storage as st
+    ob._LINES_CACHE.update({"t": 0.0, "by_team": {}, "by_norm": {}})
+
+    def fail_read(key):
+        raise RuntimeError("GCS unavailable")
+
+    monkeypatch.setattr(st, "read_bytes", fail_read)
+    by_team, by_norm = ob._load_lines_maps()
+    assert by_team == {} and by_norm == {}
+    assert ob._LINES_CACHE["t"] > 0
+
+
+def test_build_board_nhl_lines_annotation_and_summary_count(monkeypatch):
+    ob._LINES_CACHE.update({"t": 0.0, "by_team": {}, "by_norm": {}})
+    monkeypatch.setattr(ob, "_load_lines_maps", lambda: (
+        {("EDM", "jo doe"): "EDM-F1"},
+        {"jo doe": ("EDM", "EDM-F1")}
+    ))
+    b_nhl = ob.build_board("nhl", [event(FAIR, away="Edmonton Oilers", home="Calgary Flames")], NOW)
+    assert b_nhl["summary"]["lines_rows"] == 1
+    assert b_nhl["rows"][0]["line_id"] == "EDM-F1"
+
+    b_nba = ob.build_board("nba", [event(FAIR)], NOW)
+    assert b_nba["summary"]["lines_rows"] == 0
+    assert "line_id" not in b_nba["rows"][0]
