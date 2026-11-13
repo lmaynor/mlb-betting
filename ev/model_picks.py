@@ -63,7 +63,13 @@ MAX_STAKE_UNITS = 2.0
 # Official tier also needs the market-anchored blended EV to clear this. The engines' own standalone P(side) is noisier than the
 # market (NBA log loss 0.7164 vs 0.6859), so a raw model-vs-market gap is mostly winner's curse; the blend shrinks it to what the
 # stat's measured c says the engine adds (points / pra c = 0.02 add almost nothing, so they rarely clear this).
-OFFICIAL_MIN_BLEND_EV = 0.025
+# SUPERSEDED 2026-11-10 (Argon data-methods D4): the Official Card caps are now a BAND on the official EV,
+# 3.5% .. 10.0% INCLUSIVE, with >= 4 books and sharp agreement required -- see official_caps() below. The
+# official EV is the winner's-curse-shrunk blended EV (mlb_core.risk.calibration.concave_shrink_edge on
+# blend_ev with the raw model-vs-market gap), so the old 0.025 floor constant now carries the D4 floor.
+OFFICIAL_MIN_BLEND_EV = 0.035
+OFFICIAL_MAX_BLEND_EV = 0.10
+OFFICIAL_MIN_BOOKS = 4
 # Official tier also needs the stat to carry MEASURED information beyond the market on the engine that prices it (blend c >= 0.08,
 # t >= 2.5 in the repo's own real-line studies). A stat that fails stays on the board and in the tracked tier (still settled and
 # closed, so the forward record keeps accumulating) but is never posted; it is still Kelly-sized on its blend like every pick. Measured, per the study docs:
@@ -194,6 +200,56 @@ def _best(r: dict, side: str):
         return None
 
 
+def official_ev(r: dict) -> float | None:
+    """The OFFICIAL EV of a board row: its blended EV after winner's-curse concave shrinkage
+    (Argon data-methods D4: edge_shrunk = edge_blend * exp(-max(0, |gap_raw| - 0.08) / 0.04)).
+
+    Uses the board's own `blend_ev_shrunk` stamp when present (ev.daily_projections computes it from
+    the unrounded probabilities); otherwise recomputes from `blend_ev` and the raw gap
+    p_model_side - p_mkt_side. No blend -> None; no gap fields -> the unshrunk blend_ev (factor 1)."""
+    stamped = _num(r.get("blend_ev_shrunk"))
+    if stamped is not None:
+        return stamped
+    blend_ev = _num(r.get("blend_ev"))
+    if blend_ev is None:
+        return None
+    p_model, p_mkt = _num(r.get("p_model_side")), _num(r.get("p_mkt_side"))
+    if p_model is None or p_mkt is None:
+        return blend_ev
+    from mlb_core.risk.calibration import concave_shrink_edge
+    return concave_shrink_edge(blend_ev, p_model - p_mkt)
+
+
+def official_caps(r: dict) -> dict:
+    """The Argon data-methods D4 Official Card caps, checked in the picks path. Returns
+    {ev_ok, books_ok, sharp_ok, official_ev, passes} -- every cap must pass for tier 'official':
+
+      * official EV (shrunk blended EV, see official_ev) within [3.5%, 10.0%] INCLUSIVE;
+      * >= 4 books in the reference consensus;
+      * sharp agreement REQUIRED: a row whose sharp fields are present must have sharp_agrees True,
+        and when a sharp book actually quotes (n_sharp > 0) agreement must be affirmatively True.
+        Rows carrying NO sharp fields at all (a board written before the fields existed) keep the
+        documented fail-open of test_props_signal_gates -- absence of the fields is not disagreement."""
+    ev = official_ev(r)
+    ev_ok = ev is not None and OFFICIAL_MIN_BLEND_EV <= ev <= OFFICIAL_MAX_BLEND_EV
+    try:
+        n_books = int(r.get("n_books") or 0)
+    except (TypeError, ValueError):
+        n_books = 0
+    books_ok = n_books >= OFFICIAL_MIN_BOOKS
+    sharp_ok = True
+    if r.get("sharp_agrees") is not None:
+        sharp_ok = r.get("sharp_agrees") is True
+    try:
+        n_sharp = int(r.get("n_sharp") or 0)
+    except (TypeError, ValueError):
+        n_sharp = 0
+    if n_sharp > 0 and r.get("sharp_agrees") is not True:
+        sharp_ok = False
+    return {"ev_ok": ev_ok, "books_ok": books_ok, "sharp_ok": sharp_ok, "official_ev": ev,
+            "passes": bool(ev_ok and books_ok and sharp_ok)}
+
+
 def qualifies(r: dict, now: datetime | None = None) -> str | None:
     """None when the board row is not a tracked pick, else its tier: 'official' | 'tracked'."""
     if not r.get("has_line") or r.get("line") is None:
@@ -212,13 +268,13 @@ def qualifies(r: dict, now: datetime | None = None) -> str | None:
         return None
     if not DC.is_official_card_play(r, allow_dislocation=False):
         return "tracked"
-    # no measured information on this stat, or a sharp reference book (Novig / ProphetX / Pinnacle, when one quotes) prices our side
-    # lower than the pack: monitored, never staked. A board with no sharp fields (older schema) passes the sharp test (fail-open).
-    if not has_measured_signal(r) or r.get("sharp_agrees") is False:
+    # no measured information on this stat: monitored, never posted as official.
+    if not has_measured_signal(r):
         return "tracked"
-    # a board written before `blend_ev` existed (or a row with no blend) cannot show the engine clears the bar: not official
-    blend_ev = _num(r.get("blend_ev"))
-    return "official" if blend_ev is not None and blend_ev >= OFFICIAL_MIN_BLEND_EV else "tracked"
+    # Argon data-methods D4 Official Card caps (see official_caps): official EV in [3.5%, 10%] on the
+    # winner's-curse-shrunk blended EV, >= 4 books, sharp agreement required. A board written before
+    # `blend_ev` existed (or a row with no blend) cannot show the engine clears the bar: not official.
+    return "official" if official_caps(r)["passes"] else "tracked"
 
 
 def to_pick(r: dict) -> dict:
@@ -232,6 +288,7 @@ def to_pick(r: dict) -> dict:
         "point": float(r["line"]), "book": book, "american": price, "odds": price,
         "ev": _num(r.get("market_ev")), "p_fair": p_mkt, "p_model": p_model, "model_edge": _num(r.get("model_edge")),
         "p_blend": _num(r.get("p_blend_side")), "blend_ev": _num(r.get("blend_ev")),
+        "blend_ev_shrunk": official_ev(r),
         "n_books": r.get("n_books"), "score": r.get("beezy_score"), "game_key": r.get("game_key"),
         "commence": r.get("commence"), "mins_to_start": r.get("mins_to_start"), "proj_mean": _num(r.get("proj_mean")),
         "engine": r.get("engine"), "team": r.get("team"), "opp": r.get("opp"), "row_key": DP.row_key(r),

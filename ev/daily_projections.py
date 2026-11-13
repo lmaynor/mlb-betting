@@ -1159,9 +1159,17 @@ def blend_p_over(p_model_over: float | None, p_mkt_over: float | None, c: float 
     studies. It is display-only: it feeds neither the edge, the confluence flag nor the Beezy Score (the Official-tier `blend_ev`
     gate of ev.model_picks aside). None unless both engines have a probability.
 
-    `c` explicit wins; else the per-stat weight for (sport, stat) (blend_c); else BLEND_C."""
+    `c` explicit wins; else the per-stat weight for (sport, stat) (blend_c); else BLEND_C.
+
+    PRE-BLEND CALIBRATION (Argon model-improvement D2 / data-methods D4, 2026-11-10): when a per-stat
+    isotonic calibrator has been registered in mlb_core.risk.calibration for (sport, stat), the MODEL
+    probability is calibrated BEFORE it enters this blend (target ECE <= 0.015 on validation). With
+    nothing registered -- the default -- this is a passthrough and the blend is exactly as before."""
     if p_model_over is None or p_mkt_over is None:
         return None
+    if sport is not None and stat is not None:
+        from mlb_core.risk.calibration import pre_blend_calibrate
+        p_model_over, _was_calibrated = pre_blend_calibrate(p_model_over, sport, stat)
     if c is None:
         c = blend_c(sport, stat, trained)
     explicit_ab = a is not None or b is not None
@@ -1731,6 +1739,12 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
     bo, bu = best["over"], best["under"]
     p_blend_over = blend_p_over(p_model_over, p_mkt_over, sport=sport, stat=stat, trained=extra.get("nhl_model") == "trained_v1")
     p_blend_side, blend_ev = blend_side_ev(p_blend_over, side, best)
+    # Winner's-curse concave shrinkage (Argon data-methods D4): the blended edge is damped by the RAW
+    # model-vs-market gap -- edge_shrunk = edge_blend * exp(-max(0, |gap_raw| - 0.08) / 0.04). Stamped
+    # alongside the unshrunk blend_ev; ev.model_picks prices its Official caps off the shrunk value.
+    from mlb_core.risk.calibration import concave_shrink_edge
+    gap_raw = (p_model_side - p_mkt_side) if (p_model_side is not None and p_mkt_side is not None) else None
+    blend_ev_shrunk = concave_shrink_edge(blend_ev, gap_raw) if blend_ev is not None else None
     sharp = sharp_fields(cons, side, best)
     row = {
         "sport": sport, "stat": stat, "stat_label": STAT_LABEL.get(stat, stat), "player": player, "player_norm": pn,
@@ -1741,6 +1755,7 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
         "proj_p10": _f(p_floor, 1), "proj_p90": _f(p_ceil, 1),
         "p_over_model": _f(p_model_over),
         "p_over_blend": _f(p_blend_over), "p_blend_side": _f(p_blend_side), "blend_ev": _f(blend_ev),
+        "gap_raw": _f(gap_raw), "blend_ev_shrunk": _f(blend_ev_shrunk),
         "p_sharp_over": _f(sharp["p_sharp_over"]), "n_sharp": sharp["n_sharp"], "sharp_agrees": sharp["sharp_agrees"],
         "p_model_side": _f(p_model_side), "p_mkt_side": _f(p_mkt_side),
         "l5_hit_rate": form["l5_rate"] if form else None, "l10_hit_rate": form["l10_rate"] if form else None,
