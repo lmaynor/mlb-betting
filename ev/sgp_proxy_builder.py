@@ -632,6 +632,9 @@ def build_sgp_proxy_candidates(
 
         # ----------------------------------------------------------------------
         # Teammate 1: NHL Linemates 1+ Point Stack
+        #
+        # Pairs are restricted to skaters sharing a line_id annotated from
+        # nhl.data.lines (real shared-5v5 lines); skaters without a line_id never pair.
         # ----------------------------------------------------------------------
         if sp == "nhl":
             arch = SGP_ARCHETYPES["nhl_linemate_pts_stack"]
@@ -639,91 +642,99 @@ def build_sgp_proxy_candidates(
             for pn, pl_rows in team_players.items():
                 pts_row = next((r for r in pl_rows if str(r.get("stat")).lower() == "points" and float(r.get("line", 0.0)) == 0.5), None)
                 if pts_row:
+                    line_id = pts_row.get("line_id")
+                    if not line_id:
+                        continue
                     f_pts = _fair_prob_of_row(pts_row)
                     if f_pts is not None and 0.04 <= f_pts <= 0.88 and (_n_books_backing(pts_row) >= 2 or pts_row.get("curve_fair_over") is not None):
                         skaters.append({
                             "player": pts_row.get("player", pn),
                             "player_norm": pn,
                             "fair_prob": f_pts,
+                            "line_id": line_id,
                             "row": pts_row,
                         })
-            skaters.sort(key=lambda s: s["fair_prob"], reverse=True)
-            top_skaters = skaters[:3]
 
-            for i in range(len(top_skaters)):
-                for j in range(i + 1, len(top_skaters)):
-                    s1 = top_skaters[i]
-                    s2 = top_skaters[j]
-                    b1_map = {str(b.get("book", "")).lower(): b for b in s1["row"].get("books", []) if b.get("over") is not None}
-                    b2_map = {str(b.get("book", "")).lower(): b for b in s2["row"].get("books", []) if b.get("over") is not None}
-                    common = set(b1_map.keys()).intersection(b2_map.keys()).intersection(allowed_books)
+            by_line: Dict[str, List[Dict[str, Any]]] = {}
+            for s in skaters:
+                by_line.setdefault(s["line_id"], []).append(s)
 
-                    for b_name in sorted(common):
-                        b1 = b1_map[b_name]
-                        b2 = b2_map[b_name]
-                        am1, am2 = int(b1["over"]), int(b2["over"])
-                        q1, q2 = american_to_implied_prob(am1), american_to_implied_prob(am2)
-                        p_naive = q1 * q2
+            for lid in sorted(by_line.keys()):
+                group = by_line[lid]
+                for i in range(len(group)):
+                    for j in range(i + 1, len(group)):
+                        s1 = group[i]
+                        s2 = group[j]
+                        b1_map = {str(b.get("book", "")).lower(): b for b in s1["row"].get("books", []) if b.get("over") is not None}
+                        b2_map = {str(b.get("book", "")).lower(): b for b in s2["row"].get("books", []) if b.get("over") is not None}
+                        common = set(b1_map.keys()).intersection(b2_map.keys()).intersection(allowed_books)
 
-                        fa = _fair_excl(s1["row"], b_name)
-                        fb = _fair_excl(s2["row"], b_name)
-                        if fa is None or fb is None:
-                            continue
-                        p_true = copula_joint([fa, fb], arch.rho_true)
-                        pred = predict_book_sgp_odds(b_name, arch.key, [am1, am2])
-                        ev_pct = (p_true * pred.decimal - 1.0) * 100.0
-                        if ev_pct < min_ev_pct:
-                            continue
+                        for b_name in sorted(common):
+                            b1 = b1_map[b_name]
+                            b2 = b2_map[b_name]
+                            am1, am2 = int(b1["over"]), int(b2["over"])
+                            q1, q2 = american_to_implied_prob(am1), american_to_implied_prob(am2)
+                            p_naive = q1 * q2
 
-                        legs = [
-                            SgpLegCandidate(
-                                stat="points",
-                                line=0.5,
-                                side="OVER",
-                                book_american=am1,
-                                fair_prob=round(fa, 4),
-                                label=f"{s1['player']} 1+ Pt",
-                                sid=b1.get("over_sid") or b1.get("sid"),
-                            ),
-                            SgpLegCandidate(
-                                stat="points",
-                                line=0.5,
-                                side="OVER",
-                                book_american=am2,
-                                fair_prob=round(fb, 4),
-                                label=f"{s2['player']} 1+ Pt",
-                                sid=b2.get("over_sid") or b2.get("sid"),
-                            ),
-                        ]
-                        dlink = build_sgp_deeplink(b_name, game_key, [leg.__dict__ for leg in legs], sport="nhl")
-                        pair_player = f"{s1['player']} + {s2['player']} ({team_code})"
-                        pair_norm = f"{s1['player_norm']}+{s2['player_norm']}"
-                        raw_candidates.append(
-                            SgpCandidate(
-                                archetype=arch.key,
-                                archetype_label=arch.label,
-                                sport="nhl",
-                                player=pair_player,
-                                player_norm=pair_norm,
-                                game_key=game_key,
-                                commence=commence,
-                                away=away,
-                                home=home,
-                                book=b_name,
-                                legs=legs,
-                                naive_product_american=int(implied_to_american(p_naive)),
-                                est_sgp_dec=pred.decimal,
-                                est_sgp_american=pred.american,
-                                fair_joint_prob=round(p_true, 4),
-                                fair_joint_american=int(implied_to_american(p_true)),
-                                rho_true=arch.rho_true,
-                                rho_book=pred.rho_used,
-                                hold_book=pred.hold_used,
-                                ev_pct=round(ev_pct, 2),
-                                team=team_code,
-                                deeplink=dlink,
+                            fa = _fair_excl(s1["row"], b_name)
+                            fb = _fair_excl(s2["row"], b_name)
+                            if fa is None or fb is None:
+                                continue
+                            p_true = copula_joint([fa, fb], arch.rho_true)
+                            pred = predict_book_sgp_odds(b_name, arch.key, [am1, am2])
+                            ev_pct = (p_true * pred.decimal - 1.0) * 100.0
+                            if ev_pct < min_ev_pct:
+                                continue
+
+                            legs = [
+                                SgpLegCandidate(
+                                    stat="points",
+                                    line=0.5,
+                                    side="OVER",
+                                    book_american=am1,
+                                    fair_prob=round(fa, 4),
+                                    label=f"{s1['player']} 1+ Pt",
+                                    sid=b1.get("over_sid") or b1.get("sid"),
+                                ),
+                                SgpLegCandidate(
+                                    stat="points",
+                                    line=0.5,
+                                    side="OVER",
+                                    book_american=am2,
+                                    fair_prob=round(fb, 4),
+                                    label=f"{s2['player']} 1+ Pt",
+                                    sid=b2.get("over_sid") or b2.get("sid"),
+                                ),
+                            ]
+                            dlink = build_sgp_deeplink(b_name, game_key, [leg.__dict__ for leg in legs], sport="nhl")
+                            pair_player = f"{s1['player']} + {s2['player']} ({team_code})"
+                            pair_norm = f"{s1['player_norm']}+{s2['player_norm']}"
+                            raw_candidates.append(
+                                SgpCandidate(
+                                    archetype=arch.key,
+                                    archetype_label=arch.label,
+                                    sport="nhl",
+                                    player=pair_player,
+                                    player_norm=pair_norm,
+                                    game_key=game_key,
+                                    commence=commence,
+                                    away=away,
+                                    home=home,
+                                    book=b_name,
+                                    legs=legs,
+                                    naive_product_american=int(implied_to_american(p_naive)),
+                                    est_sgp_dec=pred.decimal,
+                                    est_sgp_american=pred.american,
+                                    fair_joint_prob=round(p_true, 4),
+                                    fair_joint_american=int(implied_to_american(p_true)),
+                                    rho_true=arch.rho_true,
+                                    rho_book=pred.rho_used,
+                                    hold_book=pred.hold_used,
+                                    ev_pct=round(ev_pct, 2),
+                                    team=team_code,
+                                    deeplink=dlink,
+                                )
                             )
-                        )
 
         # ----------------------------------------------------------------------
         # Teammate 2: NFL QB Pass Yds + WR Rec Yds Stack
