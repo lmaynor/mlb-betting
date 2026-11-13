@@ -245,6 +245,35 @@ def oddsaccum_csv_key(sport: str, date: str, kind: str, hhmm: str) -> str:
     return f"{ODDSACCUM_PREFIX}/{sport}/{date}/{kind}_{hhmm}.csv"
 
 
+# -- First-scorer micro markets (first basket / first TD; spike 2026-11-11) -----
+# Forward-only banking: ParlayAPI is the only carrier and keeps no historical props, so these markets
+# are banked by nba.odds.first_scorer from the day the job is provisioned. NOT added to
+# PARLAY_PROP_MARKETS / _ALT: the props accumulator's best-book flattening would destroy the per-book
+# outcome sets this market is made of, and its spend is budgeted separately at provisioning time
+# (carved from the existing basketball_nba cap; the pinned total in tests/test_parlay_budget.py is
+# unchanged). NFL first-TD uses the accumulator ledger for americanfootball_nfl, whose default budget
+# is 0, so its job MUST set ODDS_BANK_BUDGET_AMERICANFOOTBALL_NFL (see deploy/setup_first_scorer_banking.sh).
+FIRST_SCORER_MARKETS = {
+    "basketball_nba": ["player_first_basket", "player_first_team_basket"],
+    "americanfootball_nfl": ["player_1st_td"],
+}
+FIRST_SCORER_SNAPSHOTS = (120, 30, 5)          # minutes before tip/kick: T-120, T-30, T-5
+FIRST_SCORER_MIN_OUTCOMES = 8                  # completeness gate: a book must list >=8 outcomes
+FIRST_SCORER_PREFIX = "FirstScorer"
+
+
+def first_scorer_raw_key(sport: str, date: str, event_id: str, snapshot: str) -> str:
+    return f"{FIRST_SCORER_PREFIX}/{sport}/raw/{date}/{event_id}_{snapshot}.json"
+
+
+def first_scorer_summary_key(sport: str, date: str, snapshot: str) -> str:
+    return f"{FIRST_SCORER_PREFIX}/{sport}/{date}/summary_{snapshot}.json"
+
+
+def first_scorer_latest_key(sport: str) -> str:
+    return f"{FIRST_SCORER_PREFIX}/{sport}/latest.json"
+
+
 def oddsaccum_latest_key(sport: str) -> str:
     return f"{ODDSACCUM_PREFIX}/{sport}/latest.json"
 
