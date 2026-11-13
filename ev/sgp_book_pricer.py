@@ -207,17 +207,6 @@ SGP_ARCHETYPES: Dict[str, SgpArchetype] = {
         direct_market="ra",
         description="Over Reb + Over Ast compared against direct R+A combo market",
     ),
-    "nhl_goal_ast_vs_pts": SgpArchetype(
-        key="nhl_goal_ast_vs_pts",
-        name="NHL 1+ Goal + 1+ Assist vs 2+ Points",
-        sport="nhl",
-        rho_true=0.25,
-        rho_book_default=0.10,
-        hold_book_default=0.15,
-        label="G+A PROXY",
-        direct_market="points",
-        description="Over 0.5 Goals + Over 0.5 Assists compared against Over 1.5 Points",
-    ),
     "nhl_linemate_pts_stack": SgpArchetype(
         key="nhl_linemate_pts_stack",
         name="NHL Linemates 1+ Point Stack",
