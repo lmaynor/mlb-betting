@@ -3,7 +3,7 @@
 import { Fragment, useState } from 'react'
 import { useIsMobile } from '@/components/ui/mobile-sheet'
 import { PlayerHeadshot, SportLogo } from '@/components/ui/sport-assets'
-import { LAMBDA_LEGEND, FormBars, LambdaBar, ProbPair } from '@/components/picks/lambda-bar'
+import { LAMBDA_LEGEND, LambdaBar, ProbPair } from '@/components/picks/lambda-bar'
 import { fairAmerican, isOfficialRow, isOutlierRow, type BoardRow } from '@/lib/board-rows'
 import { formatOdds } from '@/lib/odds'
 import { hasHeadshots } from '@/lib/sport-assets'
@@ -15,7 +15,7 @@ const TH = { ...TABLE_TH, textAlign: 'left', position: 'sticky', top: 0, whiteSp
 const TD = { ...TABLE_TD, verticalAlign: 'middle', whiteSpace: 'nowrap' } as const
 const PAGE = 80
 /** columns a phone drops from the row (they move into the tap-to-open detail line): the table keeps Score, Player, Pick, Model, Best price and Edge */
-const HIDE_ON_PHONE = new Set(['Team', 'Market fair', 'Form', 'Price EV', 'Result', 'Range', 'Model vs market'])
+const HIDE_ON_PHONE = new Set(['Team', 'Market fair', 'Price EV', 'Result', 'Range', 'Model vs market'])
 const TAP_PX = 44
 const HEAD_TIPS: Record<string, string> = {
   Score: 'Beezy Score, 0-100: how strong the play is. Not a win probability.',
@@ -29,18 +29,17 @@ const HEAD_TIPS: Record<string, string> = {
 const pct = (x: number | null | undefined, d = 0) => (x == null ? '--' : `${(x * 100).toFixed(d)}%`)
 const signed = (x: number | null | undefined) => (x == null ? '--' : `${x > 0 ? '+' : ''}${(x * 100).toFixed(1)}%`)
 const num = (x: number | null) => (x == null ? '--' : Math.abs(x) >= 100 ? x.toFixed(0) : Math.abs(x) >= 3 ? x.toFixed(1) : x.toFixed(2))
-const hitColor = (x: number | null) => (x == null ? 'var(--color-text-secondary)' : x >= 0.6 ? 'var(--signal)' : x < 0.4 ? 'var(--loss)' : 'var(--color-neutral-300)')
 const RESULT_COLOR = { win: 'var(--signal)', loss: 'var(--loss)', push: 'var(--color-neutral-300)', void: 'var(--color-text-secondary)' } as const
 
 /**
  * The one table every sport's picks, projections and system pages render: the model's expected value beside the line, the
- * market's consensus, the player's form and the best price. Rows arrive already shaped (lib/board-rows.ts), already cut by
+ * market's consensus and the best price. Rows arrive already shaped (lib/board-rows.ts), already cut by
  * the access policy and already filtered and sorted by the page (the FilterBar above is the only set of controls), so this
  * component only draws them. A column nothing in the table fills is left out rather than printed as a column of dashes.
  */
 export function SportProjectionsBoard({ sport, rows, status, statusWarn = false, emptyBody, note, visuals = false }: {
   sport: SportSlug; rows: BoardRow[]; status?: string; statusWarn?: boolean; emptyBody?: string; note?: React.ReactNode
-  /** the Projections tab: draw lambda against the line (RANGE), model against market and form as bars instead of numbers alone */
+  /** the Projections tab: draw lambda against the line (RANGE) and model against market as bars instead of numbers alone */
   visuals?: boolean
 }) {
   const pillar = SPORT_PILLARS[sport]
@@ -61,14 +60,13 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
   }
 
   const showFair = rows.some(r => r.pFair != null)
-  const showForm = rows.some(r => r.l5 != null || r.l10 != null || r.avg10 != null || r.avgSzn != null)
   const showResult = rows.some(r => r.result != null)
   const showEv = rows.some(r => r.marketEv != null)
   const showModel = rows.some(r => r.proj != null || r.pModel != null)
   const showRange = visuals && rows.some(r => r.proj != null)
   const heads = ['Score', 'Player', 'Team', 'Market & line', ...(showModel ? ['Model'] : []), ...(showRange ? ['Range'] : []),
     ...(showFair ? [visuals ? 'Model vs market' : 'Market fair'] : []),
-    ...(showForm ? ['Form'] : []), 'Best price', 'Model edge', ...(showEv ? ['Price EV'] : []), ...(showResult ? ['Result'] : [])]
+    'Best price', 'Model edge', ...(showEv ? ['Price EV'] : []), ...(showResult ? ['Result'] : [])]
 
   return (
     <div>
@@ -151,20 +149,6 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
                       {r.pFair == null ? '--' : <span>{pct(r.pFair)}{fair != null ? ` ${formatOdds(fair)}` : ''}{r.nBooks != null ? <span style={{ color: r.nBooks >= 3 ? 'var(--color-text-secondary)' : 'var(--warn)' }}> {r.nBooks} bk</span> : null}</span>}
                     </td>
                   ))}
-                  {showForm && (
-                    <td className="mono pb-hide-m" style={{ ...TD, fontSize: '12px' }}>
-                      {visuals && (r.l5 != null || r.l10 != null) ? <FormBars l5={r.l5} l10={r.l10} />
-                      : r.l5 != null || r.l10 != null ? (
-                        <span title="Share of the last 5 and last 10 games that landed on the listed side of the line">
-                          <span style={{ color: hitColor(r.l5) }}>L5 {pct(r.l5)}</span> <span className="text-text-secondary">&middot;</span> <span style={{ color: hitColor(r.l10) }}>L10 {pct(r.l10)}</span>
-                        </span>
-                      ) : r.avg10 != null || r.avgSzn != null ? (
-                        <span title="The player's average in this stat over his last 10 games and this season" className="text-neutral-300">
-                          L10 avg {num(r.avg10)} <span className="text-text-secondary">&middot;</span> szn {num(r.avgSzn)}
-                        </span>
-                      ) : <span className="text-text-secondary">--</span>}
-                    </td>
-                  )}
                   <td className="pb-price" style={TD}>
                     {r.odds == null || !b ? <span className="text-text-secondary">--</span> : (
                       <span className="inline-flex items-center gap-[7px]">
@@ -197,11 +181,6 @@ export function SportProjectionsBoard({ sport, rows, status, statusWarn = false,
       {rows.length > limit && (
         <button onClick={() => setLimit(limit + PAGE)} className="btn btn-ghost tap-m mt-[10px]">Show {Math.min(PAGE, rows.length - limit)} more</button>
       )}
-      <p className="text-[12px] text-text-secondary mt-2.5 leading-[1.55]">
-        Model edge is the model&rsquo;s probability minus the market&rsquo;s fair probability: where the model disagrees. Price EV is the best
-        price against the market&rsquo;s own fair probability: whether a book is actually off-market. A big edge with a negative EV means only the
-        model likes the play. Rows with no line are projections only: prices have not posted.
-      </p>
       {visuals && showRange && (
         <ul className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 p-0 list-none text-[12px] text-text-secondary" aria-label="How to read RANGE">
           {LAMBDA_LEGEND.map(l => (
@@ -232,14 +211,12 @@ function DetailRow({ r, span, showResult, visuals = false }: { r: BoardRow; span
           {r.pModel != null && item('Model', `${pct(r.pModel)} ${r.side === 'under' ? 'under' : 'over'}`)}
           {visuals && r.proj != null && item('Range', <LambdaBar mean={r.proj} p10={r.p10} p90={r.p90} line={r.hasLine ? r.line : null} side={r.side} />)}
           {r.pFair != null && item('Market fair', `${pct(r.pFair)}${fair != null ? ` ${formatOdds(fair)}` : ''}${r.nBooks != null ? ` \u00b7 ${r.nBooks} bk` : ''}`)}
-          {(r.l5 != null || r.l10 != null) && item('Form', `L5 ${pct(r.l5)} \u00b7 L10 ${pct(r.l10)}`)}
-          {r.l5 == null && r.l10 == null && (r.avg10 != null || r.avgSzn != null) && item('AVG', `L10 ${num(r.avg10)} \u00b7 szn ${num(r.avgSzn)}`)}
+          {(r.avg10 != null || r.avgSzn != null) && item('AVG', `L10 ${num(r.avg10)} \u00b7 szn ${num(r.avgSzn)}`)}
           {r.marketEv != null && item('Price EV', signed(r.marketEv))}
           {r.confluence && item('Signal', 'Model + market agree')}
           {showResult && r.result && item('Result', r.result.toUpperCase())}
           {r.engine && item('Engine', r.engine)}
         </dl>
-        {r.sport !== 'mlb' && <div className="mt-2 text-mini text-warn">Unvalidated model output. Paper only, not in the public results.</div>}
       </td>
     </tr>
   )

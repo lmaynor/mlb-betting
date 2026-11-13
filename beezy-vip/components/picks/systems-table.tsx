@@ -63,7 +63,7 @@ export function SystemsTable({ sport, kind, stats = [], today = {}, level = 'h2'
               ) : (
                 <>
                   <th style={{ ...TH, ...R }} title="Projections on the board right now, and how many of them have a posted line">TODAY (ROWS / PRICED)</th>
-                  <th style={{ ...TH, ...R }} title="Mean absolute error of the mean the live board uses on past games, against the trailing-5 average (lower is better). Accuracy of the projection, not edge against a price.">LIVE MAE (ENGINE / L5)</th>
+                  <th style={{ ...TH, ...R }} title="Mean absolute error of the mean the live board uses on past games, against the trailing-5 average (lower is better).">LIVE MAE (ENGINE / L5)</th>
                   <th style={{ ...TH, ...R }} title="Out-of-sample mean absolute error of the trained research model, and of the trailing-average baseline">RESEARCH MAE (MODEL / BASE)</th>
                   <th style={{ ...TH, ...R }} title="Brier score against proxy or real lines in the study">Brier</th>
                   <th style={{ ...TH, ...R }} title="Blend coefficient c vs the market and its t-statistic: > 0 means the research model adds information">BLEND c (t)</th>

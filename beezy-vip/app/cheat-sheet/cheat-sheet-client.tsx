@@ -261,10 +261,10 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
                   Every play that clears the gate: the model and the market agree on the side, 4+ books behind the price, a measured edge and a blended EV that survives shrinking toward the market.
                 </div>
                 <div className="text-mini text-signal bg-[rgba(87,242,135,0.08)] border border-[color:rgba(87,242,135,0.22)] rounded-chip py-1.5 px-2.5 mt-2 leading-[1.4]">
-                  <span className="mono font-semibold">{shown.length}</span> Official Play{shown.length !== 1 ? 's' : ''} today. No cap and no filler: the number is whatever the gate lets through.
+                  <span className="mono font-semibold">{shown.length}</span> Official Play{shown.length !== 1 ? 's' : ''} today.
                 </div>
                 {wk.days > 0 && (
-                  <Link href="/picks/history" className="block no-underline mono text-micro text-neutral-300 border border-separator-border rounded-chip py-1.5 px-2.5 mt-2 leading-[1.4]" title="Every past day's plays with their results">
+                  <Link href="/picks/history" className="block no-underline mono text-micro text-neutral-300 border border-separator-border rounded-chip py-1.5 px-2.5 mt-2 leading-[1.4]">
                     LAST {wk.days} DAYS {wk.graded > 0 ? <>
                       <span className="text-text-primary">{wk.wins}-{wk.losses}{wk.pushes ? `-${wk.pushes}` : ''}</span>{' \u00b7 '}
                       <span style={{ color: wk.units >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{wk.units >= 0 ? '+' : ''}{wk.units.toFixed(1)}u flat</span>

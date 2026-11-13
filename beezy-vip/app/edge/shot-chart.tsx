@@ -478,7 +478,7 @@ export function ShotChartBody({ data, onSeason, filters = NO_FILTERS, onFilters,
       )}
       {stale && (
         <div role="note" className="rounded-lg border border-separator-border bg-background-secondary-default px-3 py-2 text-compact leading-[1.5] text-neutral-300">
-          Shot data ends {monthDay(data.last_game)}: this is {data.label}, not the current season. Shots from games since are not loaded yet.
+          Shot data ends {monthDay(data.last_game)}: this is {data.label}, not the current season.
         </div>
       )}
 
@@ -518,7 +518,7 @@ export function ShotChartPanel({ row }: { row: CockpitRow }) {
   }, [player, season, opp, filters])
 
   if (res == null) return <div className="py-1.5 text-body-2-regular text-text-secondary" role="status">Loading shot chart...</div>
-  if (res === 'error') return <div className="py-1.5 text-body-2-regular text-text-secondary">The shot chart could not be loaded. The line and price above are still live.</div>
+  if (res === 'error') return <div className="py-1.5 text-body-2-regular text-text-secondary">The shot chart could not be loaded.</div>
   if (res.status === 'locked') return <div className="py-1.5 text-body-2-regular text-text-secondary">Shot charts are part of full NBA prop research.</div>
   if (res.status !== 'ok') {
     return <div className="py-1.5 text-body-2-regular text-text-secondary">{res.status === 'no_data' ? 'Shot data is not available right now.' : `No shot data for ${player ?? 'this player'}: the loaded seasons do not include enough of their attempts (rookies and recent signings first).`}</div>

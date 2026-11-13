@@ -45,7 +45,7 @@ const rotation = row({ player: 'Sam Rotation', player_norm: 'sam rotation', has_
 const board = (rows: SportProjectionRow[], sport: 'nba' | 'nfl' | 'nhl' = 'nba') => <SportProjectionsBoard sport={sport} rows={fromSportProjections(rows)} />
 
 describe('unified projections board', () => {
-  it('renders score and tier, player and team, game, market and line, model, market fair, form, best price and edge', () => {
+  it('renders score and tier, player and team, game, market and line, model, market fair, best price and edge', () => {
     render(board([row()]))
     const tr = screen.getByText('Jo Doe').closest('tr')!
     const t = within(tr)
@@ -59,8 +59,8 @@ describe('unified projections board', () => {
     expect(t.getByText('60%')).toBeInTheDocument()
     expect(t.getByText(/52% -108/)).toBeInTheDocument()
     expect(t.getByText(/6 bk/)).toBeInTheDocument()
-    expect(t.getByText('L5 80%')).toBeInTheDocument()
-    expect(t.getByText('L10 70%')).toBeInTheDocument()
+    expect(t.queryByText(/L5 /)).toBeNull()                     // no Form column: the row's hit rates are in the data, never on the board
+    expect(t.queryByText(/L10 /)).toBeNull()
     expect(t.getByText('+120')).toBeInTheDocument()
     expect(t.getByText('FanDuel')).toBeInTheDocument()
     expect(t.getByText('+8.0%')).toBeInTheDocument()
@@ -68,7 +68,7 @@ describe('unified projections board', () => {
     expect(t.getByText('Model + market')).toBeInTheDocument()
     expect(document.querySelectorAll('thead').length).toBe(1)
     expect(screen.getAllByRole('columnheader').map(h => h.textContent)).toEqual(
-      ['Score', 'Player', 'Team', 'Market & line', 'Model', 'Market fair', 'Form', 'Best price', 'Model edge', 'Price EV'])
+      ['Score', 'Player', 'Team', 'Market & line', 'Model', 'Market fair', 'Best price', 'Model edge', 'Price EV'])
   })
 
   it('the team column falls back to the matchup only when the feed does not name the player\'s team', () => {
@@ -84,23 +84,23 @@ describe('unified projections board', () => {
     expect(screen.queryByRole('group')).toBeNull()
   })
 
-  it('hit rates and price follow the listed side: an under pick shows the share that stayed under and the under price', () => {
+  it('price follows the listed side: an under pick shows the under price, and its hit rates stay off the board', () => {
     render(board([row({ side: 'under', l5_hit_rate: 0.8, l10_hit_rate: 0.7 })]))
     const t = within(screen.getByText('Jo Doe').closest('tr')!)
-    expect(t.getByText('L5 20%')).toBeInTheDocument()
-    expect(t.getByText('L10 30%')).toBeInTheDocument()
+    expect(t.queryByText(/L5 /)).toBeNull()
+    expect(t.queryByText(/L10 /)).toBeNull()
     expect(t.getByText('Under 24.5')).toBeInTheDocument()
     expect(t.getByText('-110')).toBeInTheDocument()
     expect(t.getByText('BetMGM')).toBeInTheDocument()
   })
 
-  it('a row with no line shows its projection and the player\'s own averages, never fake odds or hit rates', () => {
+  it('a row with no line shows its projection, never fake odds or hit rates', () => {
     render(board([row(), rotation]))
     const rot = within(screen.getByText('Sam Rotation').closest('tr')!)
     expect(rot.getByText('7.2')).toBeInTheDocument()
     expect(rot.getByText('(no line yet)')).toBeInTheDocument()
-    expect(rot.getByText(/L10 avg 26\.0/)).toBeInTheDocument()
-    expect(rot.getByText(/szn 25\.1/)).toBeInTheDocument()
+    expect(rot.queryByText(/L10 avg/)).toBeNull()               // the averages rode in the removed Form column; the table no longer prints them
+    expect(rot.queryByText(/szn /)).toBeNull()
     expect(rot.queryByText('Model + market')).toBeNull()
     expect(rot.queryByText(/%/)).toBeNull()
   })
@@ -109,7 +109,7 @@ describe('unified projections board', () => {
     render(board([rotation]))
     expect(screen.getAllByRole('columnheader').map(h => h.textContent)).not.toContain('Market fair')
     expect(screen.getAllByRole('columnheader').map(h => h.textContent)).not.toContain('RESULT')
-    expect(screen.getAllByRole('columnheader').map(h => h.textContent)).toContain('Form')
+    expect(screen.getAllByRole('columnheader').map(h => h.textContent)).not.toContain('Form')
   })
 
   it('shows a RESULT column when a settled pick is on the board', () => {

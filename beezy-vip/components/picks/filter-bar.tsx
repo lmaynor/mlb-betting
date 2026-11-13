@@ -202,7 +202,6 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                       </button>
                       <button className="py-[3px] px-[7px] min-h-[26px] cursor-pointer shrink-0"
                         type="button"
-                        title="Select only +EV alerts"
                         aria-label="Only +EV alerts"
                         onClick={() => push(p => { p.set('market', 'EV') })}
                         style={{

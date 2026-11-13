@@ -88,7 +88,7 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
             <h1 className="text-[20px] font-bold text-text-primary m-0">{kind === 'game' ? `${pillar.shortName} game picks` : copy.h1(pillar.shortName)}</h1>
             <span className="ui-heading text-micro py-[2px] px-2" title={pillar.description} style={{ color: pillar.accent, border: `1px solid ${pillar.accent}66`, borderRadius: '6px' }}>{STATUS_LABEL[pillar.status]}</span>
             {!tracked && (
-              <span className="ui-heading text-micro text-warn border border-[color:rgba(245,158,11,0.45)] rounded-[6px] py-0.5 px-2" title="NFL, NHL and NBA projections are model output with no tested edge against prices. They are not tracked in the public results."
+              <span className="ui-heading text-micro text-warn border border-[color:rgba(245,158,11,0.45)] rounded-[6px] py-0.5 px-2"
                >Unvalidated</span>
             )}
           </div>

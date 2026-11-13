@@ -16,7 +16,7 @@ function SgpNotice({ extremeCount, includeExtreme, onToggle }: { extremeCount: n
     <div role="note" className="mb-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-separator-border border-l-[3px] border-l-[#facc15] bg-background-primary-default px-3 py-2 shadow-card">
       <span className="mono text-[11px] font-semibold text-warn">Unvalidated</span>
       <span className="min-w-[240px] flex-1 text-caption-1-regular text-text-secondary">
-        {SGP_UNVALIDATED_LABEL}. Correlation and book hold are assumed constants, so a gap here is a place to look, not an edge.
+        {SGP_UNVALIDATED_LABEL}.
       </span>
       <span className={cx('mono text-mini', extremeCount > 0 ? 'text-[#ff5a4f]' : 'text-text-secondary')}>
         {extremeCount} EXTREME (EV OVER {SGP_ARTIFACT_EV_PCT}%){includeExtreme ? ' SHOWN' : ' HIDDEN'}
@@ -28,11 +28,11 @@ function SgpNotice({ extremeCount, includeExtreme, onToggle }: { extremeCount: n
   )
 }
 
-function Empty({ title, body }: { title: string; body: string }) {
+function Empty({ title, body }: { title: string; body?: string }) {
   return (
     <div className="rounded-xl border border-separator-border bg-background-primary-default px-5 py-9 text-center shadow-card">
       <div className="mb-1.5 text-body-semibold text-text-primary">{title}</div>
-      <div className="mx-auto max-w-[60ch] text-body-2-regular text-text-secondary">{body}</div>
+      {body ? <div className="mx-auto max-w-[60ch] text-body-2-regular text-text-secondary">{body}</div> : null}
     </div>
   )
 }
@@ -216,7 +216,7 @@ function PropTableView({ odds }: { odds: OddsScreen }) {
             {mode === 'outliers' && (
               <>
                 <th scope="col" className="odds-ev" title="Average price across all peer books quoting this side">Market avg</th>
-                <th scope="col" className="odds-ev" title="The single book hanging a number off the market">Outlier book</th>
+                <th scope="col" className="odds-ev">Outlier book</th>
                 <th scope="col" title="Payout premium above peer average, and de-vigged EV" className="text-right">Dislocation</th>
               </>
             )}
@@ -237,7 +237,7 @@ function PropTableView({ odds }: { odds: OddsScreen }) {
             {mode === 'longshots' && (
               <>
                 <th scope="col" className="odds-ev" title="Fair over / under price: the reference books' consensus, or the player's curve when they are too few">Fair anchor</th>
-                <th scope="col" className="odds-ev" title="The side with the higher EV">Best action</th>
+                <th scope="col" className="odds-ev">Best action</th>
                 <th scope="col" title="Implied probability of the best price against the fair probability, for the best action's side" className="text-right">Implied / true</th>
               </>
             )}
@@ -287,7 +287,7 @@ export function OddsResults({ odds }: { odds: OddsScreen }) {
       ) : sport !== 'all' && !sportOptions.includes(sport) ? (
         <LeagueNote value={sport} live={sportOptions} onPick={v => { if (isGameLinesOnly(v)) { window.location.assign(gameLinesHref(v)); return } setSport(v); setLimit(PAGE) }} />
       ) : allRows.length === 0 ? (
-        <Empty title="No prop prices posted" body="No book has posted player props for the games on the board yet." />
+        <Empty title="No prop prices posted" />
       ) : nRows === 0 ? (
         <Empty title={emptyBody.title} body={emptyBody.body} />
       ) : isMobile && mobileView === 'cards' ? (

@@ -22,7 +22,7 @@ export default function OddsCalculatorPage() {
 
   return (
     <div className="max-w-[680px] mx-auto py-6 px-5">
-      <ToolHeader title="Odds & Vig Calculator" hint="Example values shown; edit them" current="/tools/odds-calculator" />
+      <ToolHeader title="Odds & Vig Calculator" hint="Example values shown" current="/tools/odds-calculator" />
 
       <div className="border border-separator-border rounded-control bg-background-primary-default p-6 mb-4">
         <div className="grid grid-cols-2 gap-4">

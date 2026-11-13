@@ -195,9 +195,9 @@ describe('FormSparkline', () => {
 describe('UsageSparkline', () => {
   it('reports the opportunity trend in the metric of the sport', () => {
     render(<UsageSparkline form={form(VALS, 63.5)} />)
-    expect(screen.getByRole('img', { name: /Targets over the last 10 games, trending up/ })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /Targets over the last 10 games/ })).toBeInTheDocument()
     expect(screen.getByText('TREND').previousElementSibling).toHaveTextContent('+50%')   // 9 over the last 3 vs 6 before
-    expect(screen.getByText(/Targets are/)).toHaveTextContent('trending up')
+    expect(screen.getByText(/Targets:/)).toHaveTextContent('9 over the last 3 games vs 6 before that.')
   })
 
   it('asks for history instead of drawing a line through one point', () => {

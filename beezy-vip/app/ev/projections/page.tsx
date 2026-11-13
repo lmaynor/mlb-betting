@@ -135,7 +135,7 @@ export default async function ProjectionsPage({ searchParams }: Props) {
         <EdgeEvLegend />
         <p className="text-[12px] text-text-secondary leading-[1.55] max-w-[90ch]" style={{ margin: '14px 2px 0' }}>
           Model is the projected value for the stat (the lambda behind the price) and the probability it goes over the line. Range draws that value against the line inside the model&rsquo;s own
-          10th-90th percentile band. Rows with no line yet are projections only; nothing here is a recommendation, and {league === 'mlb'
+          10th-90th percentile band. Rows with no line yet are projections only; {league === 'mlb'
             ? 'only the highest-edge MLB plays are tracked in the public results'
             : `${pillar.shortName} projections are unvalidated`}. The plays that clear the official gate are on the <Link className="text-link" href="/cheat-sheet">Daily Card</Link>.
         </p>

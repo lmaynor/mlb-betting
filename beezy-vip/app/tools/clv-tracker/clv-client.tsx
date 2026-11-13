@@ -187,7 +187,7 @@ export function CLVClient({ initial }: { initial: CLVDataPoint[] }) {
 
       {/* Header */}
       <div className="flex items-baseline justify-between gap-3 flex-wrap mb-4">
-        <h1 title="Each dot is a settled pick: edge at bet time (x) against closing line value (y)." className="text-[20px] font-bold text-text-primary m-0">CLV Tracker</h1>
+        <h1 className="text-[20px] font-bold text-text-primary m-0">CLV Tracker</h1>
         <span className="mono text-compact text-text-secondary">Edge at bet time vs closing line value &middot; axes show the 1st-99th percentile</span>
       </div>
 

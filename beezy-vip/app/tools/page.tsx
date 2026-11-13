@@ -29,7 +29,6 @@ export default function ToolsPage() {
     <div className="mx-auto max-w-[1000px] p-6">
       <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-3">
         <h1 className="text-title-2-bold text-text-primary">Tools</h1>
-        <span className="mono text-caption-1-regular text-text-secondary">3 free calculators &middot; 2 Pro dashboards &middot; 1 coming soon</span>
       </div>
       <div className="overflow-x-auto rounded-xl border border-separator-border bg-background-primary-default shadow-card">
         <table className="w-full border-collapse md:min-w-[560px]">

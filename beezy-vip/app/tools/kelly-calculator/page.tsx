@@ -26,7 +26,7 @@ export default function KellyCalculatorPage() {
 
   return (
     <div className="max-w-[680px] mx-auto p-6">
-      <ToolHeader title="Kelly Calculator" hint="Example values shown; edit them" current="/tools/kelly-calculator" />
+      <ToolHeader title="Kelly Calculator" hint="Example values shown" current="/tools/kelly-calculator" />
 
       <div className="border border-separator-border rounded-control bg-background-primary-default p-6 mb-4">
         <div className="mb-4">

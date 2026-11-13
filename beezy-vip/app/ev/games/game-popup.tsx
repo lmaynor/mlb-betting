@@ -190,7 +190,7 @@ function MovePane({ g }: { g: GameBoardEntry }) {
           </section>
         )
       })}
-      <p className="m-0 text-[12px] text-text-tertiary">Market fair price, de-vigged from the books. Shown, never read as a signal.</p>
+      <p className="m-0 text-[12px] text-text-tertiary">Market fair price, de-vigged from the books.</p>
     </div>
   )
 }

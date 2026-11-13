@@ -171,11 +171,6 @@ export function PricingSection() {
         </div>
       </div>
 
-      {PRE_LAUNCH && (
-        <p className="mt-3.5 text-caption-1-regular text-text-secondary">
-          Models enter paid mode after clearing the 200-bet gate. Projections and signals are in paper mode and not yet part of the public results.
-        </p>
-      )}
       <p className="mt-2 text-caption-1-regular text-text-secondary">
         Cancel anytime in 1 click from your account settings. All tools and projections are for informational purposes only; beezy.fyi is not a sportsbook.
         Questions: <a href={`mailto:${SITE_CONFIG.supportEmail}`} className="text-link">{SITE_CONFIG.supportEmail}</a> or the <a href={DISCORD_URL} className="text-link">Discord</a>.

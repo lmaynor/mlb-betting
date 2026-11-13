@@ -51,7 +51,7 @@ function MoveCell({ g }: { g: GameBoardEntry }) {
     ? `${mv.market === 'total' ? 'O/U ' : `${g.home} `}${mv.m.lineOpen} → ${mv.m.lineNow}`
     : f.pDelta != null ? `${f.pDelta >= 0 ? '▲' : '▼'} ${Math.abs(f.pDelta * 100).toFixed(1)} pts` : ''
   return (
-    <span className="inline-flex items-center gap-1.5" data-testid="row-move" title="Since the board first saw this game. Market data, not a signal.">
+    <span className="inline-flex items-center gap-1.5" data-testid="row-move" title="Since the board first saw this game.">
       <Sparkline values={values} w={48} h={18} label={`${g.away} at ${g.home} movement`} />
       <span className="mono text-[11px] text-text-secondary whitespace-nowrap">{text}</span>
     </span>
@@ -143,9 +143,9 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen, nav }: { 
       </div>
 
       {unavailable ? (
-        <div role="status" className="py-6 text-neutral-300 text-cozy">Game-line prices are not published yet. Moneyline, spread and total prices refresh with the odds banker; check back shortly.</div>
+        <div role="status" className="py-6 text-neutral-300 text-cozy">Game-line prices are not published yet. Check back shortly.</div>
       ) : entries.length === 0 ? (
-        <div role="status" className="py-6 text-neutral-300 text-cozy">No book has posted game lines for this slate yet. Prices appear as soon as a slate and its lines are posted.</div>
+        <div role="status" className="py-6 text-neutral-300 text-cozy">No book has posted game lines for this slate yet.</div>
       ) : (
         <>
           {!(activeSport !== 'all' && !available.includes(activeSport)) && (
@@ -155,7 +155,7 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen, nav }: { 
               <span className="text-[12px] text-text-tertiary">2%+ over fair price on 3+ books. Unvalidated{myBooks.enabled ? ', at your books' : ''}</span>
             </div>
             {edges.length === 0 ? (
-              <p className="m-0 rounded-xl border border-separator-border bg-background-primary-default px-3.5 py-3 text-compact text-text-secondary" data-testid="edges-none">Nothing clears the bar right now. The market is tight on every game below.</p>
+              <p className="m-0 rounded-xl border border-separator-border bg-background-primary-default px-3.5 py-3 text-compact text-text-secondary" data-testid="edges-none">Nothing clears the bar right now.</p>
             ) : (
               <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollSnapType: 'x proximity' }}>
                 {edges.map((e: EdgeItem) => (
@@ -226,7 +226,7 @@ export function BestBoard({ feeds: initial, initialSport, initialOpen, nav }: { 
                         <td className="px-3 py-2 hidden md:table-cell"><EdgeCell g={g} /></td>
                         <td className="px-3 py-2 hidden lg:table-cell"><MoveCell g={g} /></td>
                         <td className="px-2 py-2 text-right hidden md:table-cell">
-                          <button type="button" onClick={e => { e.stopPropagation(); openCard(g.key) }} aria-label={`Open the card for ${g.away} at ${g.home}`} title="Open the card (or double-click the row)"
+                          <button type="button" onClick={e => { e.stopPropagation(); openCard(g.key) }} aria-label={`Open the card for ${g.away} at ${g.home}`}
                             className="inline-flex items-center gap-1 h-7 px-2.5 rounded-control border border-separator-border bg-transparent text-[12px] font-semibold text-text-secondary hover:text-text-primary hover:border-[color:var(--color-border-button-hover)] cursor-pointer whitespace-nowrap transition-colors duration-150">Open <span aria-hidden>&rsaquo;</span></button>
                         </td>
                       </tr>
