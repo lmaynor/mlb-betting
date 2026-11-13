@@ -72,15 +72,16 @@ def good_payload(picked="light_restriction", probs=None, confidence=0.7):
         "full_workload": 0.25,
     }
     return {
-        "answers": [
-            {
-                "question_id": "minutes_band",
+        "answers": {
+            "minutes_band": {
                 "type": "choice",
-                "picked": picked,
+                "choice": picked,
                 "probabilities": probs,
                 "confidence": confidence,
             }
-        ]
+        },
+        "usage": {"total_input_tokens": 100, "total_output_tokens": 0,
+                  "total_tokens": 100},
     }
 
 
@@ -130,10 +131,11 @@ def test_one_call_per_case_choice_question_and_context():
     assert call["timeout"] == 20.0  # hard timeout
     body = call["body"]
     assert body["model"] == "gemini-decision-1"
-    (q,) = body["questions"]
+    q = body["questions"]["minutes_band"]
     assert q["type"] == "choice"
-    assert q["options"] == list(BANDS)
-    ctx = body["context"]
+    assert set(q["criteria"]) == set(BANDS)
+    assert "workload band" in q["instructions"]
+    ctx = body["input"]
     assert "Questionable" in ctx and "Oblique" in ctx  # designation + reason
     assert "Practices fully" in ctx                    # pre-decision blurb
     assert "AT-CUTOFF" in ctx                          # exactly at cutoff: in
@@ -165,10 +167,13 @@ def test_parse_distribution_and_pick():
 
 
 @pytest.mark.parametrize("payload", [
-    {"answers": [{"picked": "light_restriction"}]},                       # no distribution
-    {"answers": [{"picked": "bogus", "probabilities": {b: 0.25 for b in BANDS}}]},
-    {"answers": [{"picked": "out", "probabilities": {"out": 0.5}}]},       # partial dist
-    {"answers": []},
+    {"answers": {"minutes_band": {"choice": "light_restriction"}}},        # no distribution
+    {"answers": {"minutes_band": {"choice": "bogus",
+                                  "probabilities": {b: 0.25 for b in BANDS}}}},
+    {"answers": {"minutes_band": {"choice": "out",
+                                  "probabilities": {"out": 0.5}}}},       # partial dist
+    {"answers": {}},
+    {"answers": [{"choice": "out"}]},                                      # list shape: not the API's
     {"nonsense": True},
     "not-a-dict",
     None,
