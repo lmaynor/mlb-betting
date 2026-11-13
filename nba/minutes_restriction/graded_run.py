@@ -715,7 +715,10 @@ def run_graded_execution(
     dev_shared = dev_t[~dev_t["abstention"].fillna(True)]
     if len(dev_shared):
         dev_model = arm_s.ArmSModel().fit(arm_s.dev_fit_frame(frame))
-        dev_s = dev_fit[["case_id", "baseline_minutes"]].copy()
+        # case_id + prediction only: carrying baseline_minutes here would
+        # collide with dev_fit's own column on the merge below (suffixed
+        # to baseline_minutes_x/_y, breaking the itertuples access).
+        dev_s = dev_fit[["case_id"]].copy()
         dev_s["s_pred_minutes"] = (
             dev_model.predict_ratio(dev_fit)
             * dev_fit["baseline_minutes"].astype(float).to_numpy()
