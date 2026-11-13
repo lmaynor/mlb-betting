@@ -46,4 +46,4 @@ Full Kelly is the optimum only when your probability is exactly right. If you ov
 
 ## Try it
 
-The free [Kelly Calculator](/tools/kelly-calculator) does this math for any bankroll, price and win probability. Everything here is educational and paper-traded; it is not financial advice. 21+. If gambling is a problem, call 1-800-GAMBLER.
+This math works for any bankroll, price and win probability. Everything here is educational and paper-traded; it is not financial advice. 21+. If gambling is a problem, call 1-800-GAMBLER.

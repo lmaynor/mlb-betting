@@ -126,9 +126,9 @@ Your job as a bettor is to find these mispricings before the sharps do.
 
 ## How to Check Your Work
 
-Use the [Odds & Vig Calculator](/tools/odds-calculator) to verify your math:
-1. Enter both sides of the market
-2. The calculator shows each side's implied probability, the vig-free fair probability and the vig
+To verify your math:
+1. Take both sides of the market
+2. Work out each side's implied probability, the vig-free fair probability and the vig
 3. Compare to your estimate
 4. If yours is higher, you have potential edge
 

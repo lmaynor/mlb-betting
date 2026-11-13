@@ -165,7 +165,7 @@ Full Kelly is the optimum only when your probability is exactly right. If you ov
 
 ## Try it
 
-The free [Kelly Calculator](/tools/kelly-calculator) does this math for any bankroll, price and win probability. Everything here is educational and paper-traded; it is not financial advice. 21+. If gambling is a problem, call 1-800-GAMBLER.
+This math works for any bankroll, price and win probability. Everything here is educational and paper-traded; it is not financial advice. 21+. If gambling is a problem, call 1-800-GAMBLER.
 `,
   },
   {
@@ -304,9 +304,9 @@ Your job as a bettor is to find these mispricings before the sharps do.
 
 ## How to Check Your Work
 
-Use the [Odds & Vig Calculator](/tools/odds-calculator) to verify your math:
-1. Enter both sides of the market
-2. The calculator shows each side's implied probability, the vig-free fair probability and the vig
+To verify your math:
+1. Take both sides of the market
+2. Work out each side's implied probability, the vig-free fair probability and the vig
 3. Compare to your estimate
 4. If yours is higher, you have potential edge
 
@@ -477,14 +477,12 @@ When you see -110 on both sides, the vig-free breakdown is **50-50**. The two im
 
 Dividing each side by the total assumes the book spread its margin in proportion to each side's probability. Books often shade favorites and longshots differently, and thin markets (props) can be mispriced on both sides at once. Other methods exist, but proportional removal is the common default.
 
-## Tools to help
+## The method
 
 1. Calculate the implied probability for each side
 2. Add them together
 3. Divide each by the total
 4. Multiply by 100 to get percentages
-
-Or let the free [Odds & Vig Calculator](/tools/odds-calculator) do it.
 
 ## The bottom line
 
@@ -1660,7 +1658,7 @@ If you bet the Giants at +130 and the line closes at +112:
 
 If you bet the Dodgers at -130 and the line closes at -110, the market moved away from you: negative CLV.
 
-**Hit rate alone is noisy.** Over a few hundred bets a 52% win rate can be luck. At -110 the break-even win rate is 52.38%, so 52% actually loses about 0.8% per bet. A bettor who consistently takes prices better than the close is doing something repeatable, which is why CLV is tracked alongside results. See the [CLV guide](/learn/closing-line-value-clv) and the [CLV Tracker](/tools/clv-tracker).
+**Hit rate alone is noisy.** Over a few hundred bets a 52% win rate can be luck. At -110 the break-even win rate is 52.38%, so 52% actually loses about 0.8% per bet. A bettor who consistently takes prices better than the close is doing something repeatable, which is why CLV is tracked alongside results. See the [CLV guide](/learn/closing-line-value-clv).
 
 ## Line Movement Signals
 
@@ -1794,7 +1792,7 @@ Why does this matter more than whether the bet won? Because the closing line is 
 
 ROI can be inflated by accident: train a model on data that overlaps the backtest window and it will "predict" games it has already seen. CLV is much harder to fool this way, because it is measured on prices that moved after you bet. Either the line moved toward your bet, or it did not. It requires no settled outcomes, resolves within hours, and reaches statistical significance far faster than win-loss records -- a meaningful CLV signal shows up in about 100 bets, where ROI needs 1,000+.
 
-That is why CLV matters to us. Today a Beezy system needs at least 200 settled bets, a positive ROI and good calibration before it can leave paper mode (the [Models](/models) page shows each system's sample and status), and we are moving toward a CLV requirement as well. A system that shows positive ROI but flat-or-negative CLV may be beating a soft historical line rather than the market, so we treat it as unproven. Track it yourself in the [CLV Tracker](/tools/clv-tracker).
+That is why CLV matters to us. Today a Beezy system needs at least 200 settled bets, a positive ROI and good calibration before it can leave paper mode (the [Models](/models) page shows each system's sample and status), and we are moving toward a CLV requirement as well. A system that shows positive ROI but flat-or-negative CLV may be beating a soft historical line rather than the market, so we treat it as unproven.
 
 ## How to use CLV yourself
 
@@ -1826,7 +1824,7 @@ Every normal price a sportsbook posts carries vig -- typically 5-12% on props. T
 
 An **odds boost** flips the arithmetic. The book takes a market price, improves it as a marketing expense, and caps your stake so it cannot be exploited at scale. When the boosted price exceeds the market's fair price, the bet is +EV *by construction* -- no model, no handicapping skill, no inside information required. It is the single most dependable source of positive expected value available to a recreational bettor.
 
-The catch: not every boost clears the bar. A boost from -150 to -135 on a market whose fair price is -190 is a winning bet, but the same boost on a market whose fair price is -125 is a losing one. You have to do the math every time, or use the free Boost EV Calculator at /tools/boost-ev.
+The catch: not every boost clears the bar. A boost from -150 to -135 on a market whose fair price is -190 is a winning bet, but the same boost on a market whose fair price is -125 is a losing one. You have to do the math every time.
 
 ## The three-step calculation
 
@@ -1844,7 +1842,7 @@ The catch: not every boost clears the bar. A boost from -150 to -135 on a market
 
 A +30% EV bet is enormous -- for reference, professional bettors grind out careers on 2-4% edges. This is why sharp bettors max out every qualifying boost they see: the per-bet dollar amounts are capped, but the edge per dollar is often 10x anything obtainable at normal prices.
 
-Our [Boost EV calculator](/tools/boost-ev) does all three steps -- enter the boosted price and the market's normal two-sided prices, and it returns the true EV plus a [Kelly-sized](/learn/kelly-criterion-sports-betting) stake.
+Work all three steps by hand: take the boosted price and the market's normal two-sided prices, and you get the true EV plus a [Kelly-sized](/learn/kelly-criterion-sports-betting) stake.
 
 ## Rules of thumb
 

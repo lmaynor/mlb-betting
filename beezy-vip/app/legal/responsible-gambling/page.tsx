@@ -52,7 +52,7 @@ export default function ResponsibleGamblingPage() {
       <ul>
         <li>Only stake money you can afford to lose. Never use rent, bills, savings, or borrowed money.</li>
         <li>Set a budget and a time limit before you start, and stop when you reach either.</li>
-        <li>Size every stake as a small fraction of your bankroll. The Kelly calculators on this site are a sizing aid, not a guarantee; fractional Kelly is safer than full Kelly.</li>
+        <li>Size every stake as a small fraction of your bankroll. Kelly sizing is an aid, not a guarantee; fractional Kelly is safer than full Kelly.</li>
         <li>Never chase losses by raising stakes.</li>
       </ul>
 

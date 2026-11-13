@@ -5,7 +5,7 @@ import { cx } from '@/utils/cx'
 import { SectionHeader } from './section-header'
 
 const TIERS = [
-  { name: 'Explorer', price: '$0', period: 'free', body: 'Daily Top 10 cross-sport picks, the public results ledger and betting calculators.' },
+  { name: 'Explorer', price: '$0', period: 'free', body: 'Daily Top 10 cross-sport picks and the public results ledger.' },
   { name: 'Single-Sport Pass', price: `$${PLANS.single.price}`, period: PLANS.single.period, body: 'Full projections, picks and the prop research cockpit for one league: NFL, NBA, NHL or MLB.' },
   { name: 'All-Access Pro', price: `$${PLANS.monthly.price}`, period: `${PLANS.monthly.period} or $${PLANS.annual.price}${PLANS.annual.period}`, body: 'Live Odds Terminal with +EV, arbitrage and alt longshots across all four sports.', featured: true },
 ]
