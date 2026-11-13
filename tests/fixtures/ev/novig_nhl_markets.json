@@ -1,0 +1,108 @@
+{
+ "events": [
+  {
+   "description": "Calgary Flames @ Los Angeles Kings",
+   "eventId": "ev-kings-flames",
+   "league": "NHL",
+   "sport": "ICE_HOCKEY",
+   "startsTs": 1794538800000,
+   "status": "OPEN_PREGAME"
+  },
+  {
+   "description": "San Jose Sharks @ Utah Mammoth",
+   "eventId": "ev-mammoth-sharks",
+   "league": "NHL",
+   "sport": "ICE_HOCKEY",
+   "startsTs": 1794531600000,
+   "status": "OPEN_PREGAME"
+  },
+  {
+   "description": "Team Rocket @ Los Angeles Kings",
+   "eventId": "ev-unknown",
+   "league": "NHL",
+   "sport": "ICE_HOCKEY",
+   "startsTs": 1794538800000,
+   "status": "OPEN_PREGAME"
+  }
+ ],
+ "markets": [
+  {
+   "description": "Patrick Kane 3.5 SHOTS_ON_GOAL",
+   "eventId": "ev-kings-flames",
+   "fee": {
+    "charged": "WHEN_LIVE",
+    "coefficient": "0.06",
+    "makerCredit": "0.25"
+   },
+   "marketId": "m-sog-kane",
+   "marketType": "SHOTS_ON_GOAL",
+   "outcomes": [
+    {
+     "name": "Over 3.5",
+     "outcomeId": "o-kane-over",
+     "status": "TBD"
+    },
+    {
+     "name": "Under 3.5",
+     "outcomeId": "o-kane-under",
+     "status": "TBD"
+    }
+   ],
+   "status": "OPEN",
+   "strike": "3.5",
+   "voids": "FMV"
+  },
+  {
+   "description": "Ilya Sorokin 24.5 SAVES",
+   "eventId": "ev-mammoth-sharks",
+   "fee": {
+    "charged": "WHEN_LIVE",
+    "coefficient": "0.06",
+    "makerCredit": "0.25"
+   },
+   "marketId": "m-saves-sorokin",
+   "marketType": "SAVES",
+   "outcomes": [
+    {
+     "name": "Under 24.5",
+     "outcomeId": "o-sorokin-under",
+     "status": "TBD"
+    },
+    {
+     "name": "Over 24.5",
+     "outcomeId": "o-sorokin-over",
+     "status": "TBD"
+    }
+   ],
+   "status": "OPEN",
+   "strike": "24.5",
+   "voids": "FMV"
+  },
+  {
+   "description": "Patrick Kane 0.5 PLAYER_GOALS",
+   "eventId": "ev-kings-flames",
+   "fee": {
+    "charged": "WHEN_LIVE",
+    "coefficient": "0.06",
+    "makerCredit": "0.25"
+   },
+   "marketId": "m-goals-kane",
+   "marketType": "PLAYER_GOALS",
+   "outcomes": [
+    {
+     "name": "Over 0.5",
+     "outcomeId": "o-kg-over",
+     "status": "TBD"
+    },
+    {
+     "name": "Under 0.5",
+     "outcomeId": "o-kg-under",
+     "status": "TBD"
+    }
+   ],
+   "status": "OPEN",
+   "strike": "0.5",
+   "voids": "FMV"
+  }
+ ]
+}

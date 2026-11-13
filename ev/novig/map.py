@@ -1,11 +1,16 @@
 """
-ev.novig.map -- Novig NFL player-prop markets -> proposition (STRICT, fail closed).
+ev.novig.map -- Novig player-prop markets -> proposition (STRICT, fail closed). NFL first (2026-10-12);
+NHL shots on goal + saves added 2026-11-12 (the Novig taker wiring Argon's market-making ruling made a
+precondition). One mapper, parameterized by league: the market shape is identical across leagues.
 
-Shape (public catalog, verified live 2026-10-12): market.description "<Player> <strike> <TYPE>" (e.g.
-"Marvin Harrison Jr. 22.5 RECEIVING_YARDS"), marketType, strike "22.5", outcomes "Over 22.5" / "Under 22.5"
+Shape (public catalog, verified live 2026-10-12 NFL / 2026-11-12 NHL): market.description "<Player> <strike>
+<TYPE>" (e.g. "Marvin Harrison Jr. 22.5 RECEIVING_YARDS", "Patrick Kane 3.5 SHOTS_ON_GOAL",
+"Ilya Sorokin 24.5 SAVES"), marketType, strike "22.5", outcomes "Over 22.5" / "Under 22.5"
 (identified by NAME, never by array position -- the docs warn the order is not fixed), fee {coefficient, charged},
 voids "FMV". Event description "Away Team @ Home Team" (full names) + startsTs (ms).
 YES-equivalent: Novig "Over N-0.5" == Kalshi "N+" == a sportsbook over at N-0.5.
+NHL game keys use the NHL-API abbrevs (LAK/NJD/SJS/TBL/UTA) -- the vocabulary the rest of the NHL pipeline
+(nhl.config.team_abbrev, ev.sweep_props_alerts) builds its game keys in.
 """
 
 from __future__ import annotations
@@ -19,10 +24,17 @@ from ev.kalshi_map import game_key
 from ev.props import norm_name
 from ev.sports.nfl import TEAM_NAMES
 from mlb.execution.kalshi.mapping import MapFail
+from nhl.config import TEAMS as _NHL_TEAMS
 
 _ET = ZoneInfo("America/New_York")
 STAT_BY_TYPE = {"RECEIVING_YARDS": "rec_yds", "RUSHING_YARDS": "rush_yds", "PASSING_YARDS": "pass_yds",
                 "RECEPTIONS": "receptions", "PASSING_TOUCHDOWNS": "pass_tds"}
+# NHL: only the two stats with a served NHL fair behind them (SOG first, saves second). Every other NHL
+# marketType (PLAYER_GOALS / ASSISTS / POINTS / ...) stays unmapped on purpose, same fail-closed rule as NFL.
+STAT_BY_TYPE_NHL = {"SHOTS_ON_GOAL": "sog", "SAVES": "saves"}
+STAT_TABLES = {"NFL": STAT_BY_TYPE, "NHL": STAT_BY_TYPE_NHL}
+NHL_TEAM_NAMES = {name: api for api, name, _kalshi in _NHL_TEAMS}   # full name -> NHL-API abbrev
+TEAM_TABLES = {"NFL": TEAM_NAMES, "NHL": NHL_TEAM_NAMES}
 
 
 @dataclass(frozen=True)
@@ -42,23 +54,24 @@ class NovigLeg:
     description: str
 
 
-def event_index(events: list) -> dict:
+def event_index(events: list, league: str = "NFL") -> dict:
     """{eventId: (game_key, start_utc)} for events whose teams we know."""
+    names = TEAM_TABLES[league]
     out = {}
     for e in events:
         parts = (e.get("description") or "").split(" @ ")
         if len(parts) != 2:
             continue
-        away, home = TEAM_NAMES.get(parts[0].strip()), TEAM_NAMES.get(parts[1].strip())
+        away, home = names.get(parts[0].strip()), names.get(parts[1].strip())
         if not away or not home or not e.get("startsTs"):
             continue
         start = datetime.fromtimestamp(e["startsTs"] / 1000, timezone.utc)
-        out[e["eventId"]] = (game_key("nfl", start.astimezone(_ET).date().isoformat(), away, home), start)
+        out[e["eventId"]] = (game_key(league.lower(), start.astimezone(_ET).date().isoformat(), away, home), start)
     return out
 
 
-def map_prop_market(m: dict, events: dict):
-    stat = STAT_BY_TYPE.get(m.get("marketType"))
+def map_prop_market(m: dict, events: dict, league: str = "NFL"):
+    stat = STAT_TABLES[league].get(m.get("marketType"))
     if stat is None:
         return MapFail("REJ_UNMAPPED", f"marketType {m.get('marketType')!r} not enabled")
     if m.get("status") != "OPEN":
