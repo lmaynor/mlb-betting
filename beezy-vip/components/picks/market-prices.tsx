@@ -50,10 +50,10 @@ export function MarketPrices({ sport, rows, locked = 0, block, confluenceKeys = 
     <div className="grid gap-4">
       <div role="note" className="border border-[color:rgba(56,189,248,0.30)] bg-[rgba(56,189,248,0.06)] rounded-[10px] py-3 px-3.5 text-[13px] text-neutral-300 leading-[1.55]">
         <strong className="text-link">Preview.</strong> {short} sportsbook and exchange prices beating the consensus of the other books on the same player, stat and line. Not yet tracked in the public results. {sweepStatus(block)}
-        {' '}Kalshi asks are on the <Link className="text-link" href="/ev">Odds Terminal</Link>.
+        {' '}Kalshi asks are on the <Link className="text-link" href="/ev">Odds Screen</Link>.
       </div>
       {rows.length === 0
-        ? <Empty title="No prices beating the market" body={`No ${short} prop price is beating the other books at the moment. Rows appear around game windows, before the game starts.`} cta={{ href: '/ev', label: 'Open the Odds Terminal' }} />
+        ? <Empty title="No prices beating the market" body={`No ${short} prop price is beating the other books at the moment. Rows appear around game windows, before the game starts.`} cta={{ href: '/ev', label: 'Open the Odds Screen' }} />
         : <OutlierTable rows={rows} sport={sport} confluence={confluence} />}
       <LockedNotice locked={locked} shown={rows.length} what={`${short} market prices`} plan={`All of them are on the ${short} Pass or All-Access Pro.`} />
     </div>

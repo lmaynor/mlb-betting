@@ -26,7 +26,7 @@ export async function Hero() {
           </p>
 
           <div className="mb-3.5 flex flex-wrap gap-2.5">
-            <Link href="/ev" className="btn btn-primary">Open Odds Terminal &rarr;</Link>
+            <Link href="/ev" className="btn btn-primary">Open Odds Screen &rarr;</Link>
             <Link href="/picks" className="btn btn-ghost">Today&apos;s picks</Link>
           </div>
 

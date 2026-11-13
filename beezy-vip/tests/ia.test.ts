@@ -26,7 +26,7 @@ describe('information architecture', () => {
   })
 
   it('the nav questions plus Learn are the only top-level items', () => {
-    expect(NAV.map(n => n.label)).toEqual(['Home', 'Odds Terminal', 'Picks', 'Results', 'Learn'])
+    expect(NAV.map(n => n.label)).toEqual(['Home', 'Scanner', 'Picks', 'Results', 'Learn'])
     expect(navActive('/learn/f5-betting-mlb', NAV[4])).toBe(true)
     expect(sectionFor('/learn')).toBeNull()   // a nav item, not a section with tabs
   })
@@ -39,27 +39,31 @@ describe('information architecture', () => {
     expect(sectionFor('/edge')?.id).toBe('scanner')
   })
 
-  it('Scanner tabs: Odds Terminal (props), Projections (lambda for props and game lines), Game Lines (NBA / NHL prices) and Prop Research; each is exactly one tab', () => {
+  it('Scanner tabs: Odds Screen (props), Projections (lambda for props and game lines), Game Lines (NBA / NHL prices) and Prop Research; each is exactly one tab', () => {
     const scanner = SECTIONS.find(x => x.id === 'scanner')!
-    expect(scanner.tabs.map(t => t.label)).toEqual(['Odds Terminal', 'Projections', 'Game Lines', 'Prop Research'])
+    expect(scanner.tabs.map(t => t.label)).toEqual(['Odds Screen', 'Projections', 'Game Lines', 'Prop Research'])
     expect(sectionFor('/ev/games')?.id).toBe('scanner')
     expect(sectionFor('/ev/projections')?.id).toBe('scanner')
     const [terminal, projections, games, research] = scanner.tabs
     expect(tabActive('/ev/projections', null, projections)).toBe(true)
     expect(tabActive('/ev/projections', null, terminal)).toBe(false)
     expect(tabActive('/ev', null, terminal)).toBe(true)
-    expect(tabActive('/ev/games', null, terminal)).toBe(false)   // /ev/games must not also light the Odds Terminal tab
+    expect(tabActive('/ev/games', null, terminal)).toBe(false)   // /ev/games must not also light the Odds Screen tab
     expect(tabActive('/ev/games', null, games)).toBe(true)
     expect(tabActive('/edge', null, research)).toBe(true)
-    expect(navActive('/ev/games', NAV[1])).toBe(true)            // the nav item stays Odds Terminal
+    expect(navActive('/ev/games', NAV[1])).toBe(true)            // the nav item stays Scanner
   })
 
-  it('analytics tabs are chosen by ?tab= and default to bankroll', () => {
-    const books = SECTIONS[2].tabs.find(t => t.href.includes('books'))!
-    const bankroll = SECTIONS[2].tabs.find(t => t.href.includes('bankroll'))!
-    expect(tabActive('/analytics', 'books', books)).toBe(true)
-    expect(tabActive('/analytics', null, bankroll)).toBe(true)
-    expect(tabActive('/analytics', 'books', bankroll)).toBe(false)
+  it('Results tabs are Settled Bets, Analytics, Models; the single Analytics tab is lit for every ?tab= sub-view (Q1(g))', () => {
+    const results = SECTIONS[2]
+    expect(results.tabs.map(t => t.label)).toEqual(['Settled Bets', 'Analytics', 'Models'])
+    const analytics = results.tabs.find(t => t.href === '/analytics')!
+    expect(tabActive('/analytics', 'books', analytics)).toBe(true)
+    expect(tabActive('/analytics', null, analytics)).toBe(true)
+    expect(tabActive('/analytics', 'health', analytics)).toBe(true)
+    expect(tabActive('/results', null, analytics)).toBe(false)
+    expect(tabActive('/results', null, results.tabs[0])).toBe(true)
+    expect(tabActive('/models', null, results.tabs[2])).toBe(true)
   })
 
   it('Picks tabs are the all-sports views only: Daily Card, Top Signals, Graded History (Game Picks is hidden)', () => {
@@ -113,14 +117,14 @@ describe('scanner tabs', () => {
   const scanner = SECTIONS.find(s => s.id === 'scanner')!
   const terminal = scanner.tabs.find(t => t.href === '/ev')!
   const research = scanner.tabs.find(t => t.href === '/edge')!
-  it('lists the Odds Terminal, Projections, Game Lines, then prop research', () => {
-    expect(scanner.tabs.map(t => t.label)).toEqual(['Odds Terminal', 'Projections', 'Game Lines', 'Prop Research'])
+  it('lists the Odds Screen, Projections, Game Lines, then prop research', () => {
+    expect(scanner.tabs.map(t => t.label)).toEqual(['Odds Screen', 'Projections', 'Game Lines', 'Prop Research'])
   })
   it('lights exactly one tab on /ev and on /edge', () => {
     expect([tabActive('/ev', null, terminal), tabActive('/ev', null, research)]).toEqual([true, false])
     expect([tabActive('/edge', null, terminal), tabActive('/edge', null, research)]).toEqual([false, true])
   })
-  it('keeps /ev in the Scanner section and the Odds Terminal nav item', () => {
+  it('keeps /ev in the Scanner section and the Scanner nav item', () => {
     expect(sectionFor('/ev')?.id).toBe('scanner')
     expect(navActive('/ev', NAV.find(n => n.href === '/ev')!)).toBe(true)
   })

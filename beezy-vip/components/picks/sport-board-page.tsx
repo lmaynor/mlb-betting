@@ -67,7 +67,7 @@ export async function SportBoardPage({ sport, view, searchParams, kind }: {
 
   const emptyBody = base.length === 0
     ? (view === 'picks' && !tracked && board.rows.length > 0
-      ? `No ${pillar.shortName} prop lines are banked for these games yet, so there is nothing to price a pick against. Every projection is in the Odds Terminal's Projections tab; picks appear here once lines post.`
+      ? `No ${pillar.shortName} prop lines are banked for these games yet, so there is nothing to price a pick against. Every projection is in the Scanner's Projections tab; picks appear here once lines post.`
       : board.emptyBody)
     : 'No rows match these filters. Clear a filter, or pick another game.'
 

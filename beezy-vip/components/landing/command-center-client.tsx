@@ -25,7 +25,7 @@ export function CommandCenterClient({ bets, headshots }: { bets: Bet[]; headshot
       <div className="mb-3 flex items-center justify-between gap-4">
         <h2 className="text-headline-bold text-text-primary">Today&apos;s top plays</h2>
         <span className="flex gap-3.5">
-          <Link href="/ev" className="text-caption-1-semibold text-link hover:underline">Odds Terminal &rarr;</Link>
+          <Link href="/ev" className="text-caption-1-semibold text-link hover:underline">Odds Screen &rarr;</Link>
           <Link href="/picks" className="text-caption-1-semibold text-link hover:underline">All picks &rarr;</Link>
         </span>
       </div>

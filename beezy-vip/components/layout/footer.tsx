@@ -41,10 +41,13 @@ export function Footer() {
               </div>
             )}
           </div>
+          {/* Columns mirror lib/ia.ts sections exactly: canonical labels, section tab order, each destination once. */}
           {[
-            { title: 'Picks',   links: [['Odds Terminal','/ev'],['Projections','/ev/projections'],['Prop Research','/edge'],['Top Signals','/picks'],['Graded History','/picks/history'],['Daily Card','/cheat-sheet'],['Results','/results'],['Analytics','/analytics']] },
+            { title: 'Scanner', links: [['Odds Screen','/ev'],['Projections','/ev/projections'],['Game Lines','/ev/games'],['Prop Research','/edge']] },
+            { title: 'Picks',   links: [['Daily Card','/cheat-sheet'],['Top Signals','/picks'],['Graded History','/picks/history']] },
+            { title: 'Results', links: [['Settled Bets','/results'],['Analytics','/analytics'],['Models','/models']] },
             { title: 'Sports',  links: [['MLB','/picks/mlb'],['NFL','/sports/nfl'],['NHL','/sports/nhl'],['NBA','/sports/nba']] },
-            { title: 'Company', links: [['Models','/models'],['Results','/results'],['Pricing','/pricing'],['Learn','/learn'],['Contact',`mailto:${SITE_CONFIG.contactEmail}`]] },
+            { title: 'Company', links: [['Pricing','/pricing'],['Learn','/learn'],['Contact',`mailto:${SITE_CONFIG.contactEmail}`]] },
             { title: 'Legal',   links: [['Terms of Service','/legal/terms'],['Privacy Policy','/legal/privacy'],['Responsible Gambling','/legal/responsible-gambling'],['Refund Policy','/legal/refunds'],['Support',`mailto:${SITE_CONFIG.supportEmail}`],[SITE_CONFIG.xHandle,SITE_CONFIG.xUrl]] },
           ].map(col => (
             <div key={col.title}>

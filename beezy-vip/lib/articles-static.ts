@@ -154,7 +154,7 @@ Full Kelly says bet 5.5% of your bankroll, which is $55 on $1,000. The book's pr
 
 ## Why most people bet a fraction
 
-Full Kelly is the optimum only when your probability is exactly right. If you overestimate it, you overbet, and bankroll swings get large fast. Most bettors use a fraction, usually half or a quarter. At quarter Kelly the 55% / -110 example is 1.4%, or about $14 on $1,000. The [Odds Terminal](/ev) on this site sizes at quarter Kelly with a 5% cap per bet.
+Full Kelly is the optimum only when your probability is exactly right. If you overestimate it, you overbet, and bankroll swings get large fast. Most bettors use a fraction, usually half or a quarter. At quarter Kelly the 55% / -110 example is 1.4%, or about $14 on $1,000. The [Odds Screen](/ev) on this site sizes at quarter Kelly with a 5% cap per bet.
 
 ## Pitfalls
 
@@ -1685,7 +1685,7 @@ If you bet the Dodgers at -130 and the line closes at -110, the market moved awa
 ## How to Track Line Movement
 
 Tools to use:
-1. **Beezy's [Odds Terminal](/ev)** — every book's current price for a market on one screen, so a move at one book stands out against the rest
+1. **Beezy's [Odds Screen](/ev)** — every book's current price for a market on one screen, so a move at one book stands out against the rest
 2. **Action Network** — shows opening, closing, and line movement history
 3. **Covers.com** — historical odds from all books
 4. **BookMaker.eu** — European odds archive (sharper than US lines)
