@@ -49,9 +49,9 @@ identifying headers -- no login, no cookies, no project or contact tokens. Reque
 
 Player IDs: the puller takes an input player map (CSV or JSON: player name, rotowire_id, slug).
 `build_case_set` emits the case list + the distinct player list from banked box scores; `resolve_player`
-can populate rotowire_id/slug from the player-page URL pattern when a future run assembles the map
-(it performs ONE search-page fetch per name through the injectable session -- it is never called by the
-disabled paths and was not run while building this module).
+can populate rotowire_id/slug from the site search box's typeahead endpoint when a run assembles the
+map (it performs ONE typeahead fetch per name through the injectable session -- it is never called by
+the disabled paths).
 """
 from __future__ import annotations
 
@@ -93,7 +93,8 @@ BASE = "https://www.rotowire.com"
 PLAYER_URL_TEMPLATE = BASE + "/basketball/player/{slug}-{rotowire_id}"
 AJAX_URL = BASE + "/basketball/ajax/get-more-updates.php"
 RSS_URL = BASE + "/rss/news.php?sport=NBA"
-SEARCH_URL = BASE + "/search"
+TYPEAHEAD_URL = BASE + "/frontend/ajax/search-players.php"
+TYPEAHEAD_SPORT = "NBA"
 
 PREFIX = f"{NBA_PREFIX}/news/rotowire_archive"
 DEFAULT_DELAY_S = 2.5          # polite pacing floor between requests
@@ -232,21 +233,69 @@ def load_player_map(source) -> list:
     return out
 
 
-def resolve_player(session, name: str, timeout: float = DEFAULT_TIMEOUT_S) -> Optional[PlayerRef]:
-    """Resolve a player name to its RotoWire (slug, id) via ONE search-page fetch.
+def _slug_match_key(slug: str) -> str:
+    """Slug comparison key for resolver matching. RotoWire drops some punctuation outright
+    where `slugify` hyphenates it (live example: "P.J. Tucker" -> link slug "pj-tucker" vs
+    slugified "p-j-tucker"), so slugs are compared on their alphanumeric skeleton."""
+    return re.sub(r"[^a-z0-9]", "", (slug or "").lower())
 
-    For the future map-assembly run only: this performs a live request through the injectable
+
+def resolve_player(session, name: str, timeout: float = DEFAULT_TIMEOUT_S) -> Optional[PlayerRef]:
+    """Resolve a player name to its RotoWire (slug, id) via ONE typeahead fetch.
+
+    The live route is the site search box's own endpoint (verified live 2026-11-11 against the
+    three VERIFIED_SEED_PLAYERS after the /search page this replaces returned 404):
+        GET {TYPEAHEAD_URL}?searchTerm=<name>&sport=NBA
+        -> {"success": true, "players": [{"name", "rotoPlayerID", "link", ...}, ...]}
+    where `link` is the player-page path ("/basketball/player/{slug}-{id}").
+
+    A resolution counts only on a CONFIDENT match: exactly one returned player whose link
+    parses, whose `rotoPlayerID` agrees with the link's id, and whose link slug matches
+    slugify(name) on the alphanumeric skeleton (see `_slug_match_key`: the endpoint
+    ASCII-folds names and drops some punctuation outright, so "P.J. Tucker" -> "pj-tucker").
+    Zero matches, an ambiguous payload, or an entry whose id
+    field disagrees with its link all return None -- an unresolved player is a map-build
+    problem, never a reason to guess an ID. A non-200 response or a non-JSON payload raises,
+    like the archive fetcher: a blocked or changed route must fail loudly, never silently
+    empty the map.
+
+    For the map-assembly run only: this performs a live request through the injectable
     `session`, so tests drive it with a fake session and the disabled pull paths never call it.
-    Returns None when the search page carries no player-page link for the name.
     """
-    resp = session.get(SEARCH_URL, params={"query": name}, headers=HEADERS, timeout=timeout)
-    html = getattr(resp, "text", "") or ""
-    for m in _PLAYER_URL_RE.finditer(html):
-        slug, rid = m.group(1), int(m.group(2))
-        if slugify(name) == slug or slug.startswith(slugify(name)):
-            return PlayerRef(player=name, rotowire_id=rid, slug=slug)
-    m = _PLAYER_URL_RE.search(html)
-    return PlayerRef(player=name, rotowire_id=int(m.group(2)), slug=m.group(1)) if m else None
+    resp = session.get(TYPEAHEAD_URL, params={"searchTerm": name, "sport": TYPEAHEAD_SPORT},
+                       headers=HEADERS, timeout=timeout)
+    if getattr(resp, "status_code", 200) != 200:
+        raise RuntimeError(f"rotowire resolver: HTTP {resp.status_code} resolving {name!r}")
+    try:
+        payload = resp.json()
+    except Exception:
+        try:
+            payload = json.loads(getattr(resp, "text", "") or "")
+        except Exception as exc:
+            raise RuntimeError(f"rotowire resolver: typeahead payload was not JSON for {name!r}") from exc
+    players = payload.get("players") if isinstance(payload, dict) else None
+    if not isinstance(players, list):
+        raise RuntimeError(f"rotowire resolver: unexpected typeahead payload for {name!r}")
+    want = _slug_match_key(slugify(name))
+    by_id: dict = {}
+    for entry in players:
+        if not isinstance(entry, dict):
+            continue
+        parsed = parse_player_url(str(entry.get("link") or ""))
+        if parsed is None:
+            continue
+        slug, rid = parsed
+        try:
+            rid_field = int(entry.get("rotoPlayerID"))
+        except (TypeError, ValueError):
+            rid_field = None
+        if rid_field is not None and rid_field != rid:
+            continue  # the payload's two id carriers disagree: not a confident match
+        if _slug_match_key(slug) == want:
+            by_id[rid] = PlayerRef(player=name, rotowire_id=rid, slug=slug)
+    if len(by_id) != 1:
+        return None
+    return next(iter(by_id.values()))
 
 
 # ---------------------------------------------------------------------------
@@ -283,6 +332,44 @@ def _norm_ts(value) -> Optional[float]:
     return ts / 1000.0 if ts > 1e11 else ts
 
 
+_CURSOR_TEXT_FORMATS = ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d")
+
+
+def _cursor_date(value) -> Optional[date]:
+    """Calendar date of an archive cursor, or None when it cannot be parsed.
+
+    The live cursor is a datetime STRING ("2025-04-25 22:57:42.090", the player page's
+    `data-last-update-time` shape, threaded through `newLastUpdateTime`); synthetic payloads
+    carry epoch numbers instead. Both are accepted -- the shipped code ran the string form
+    through the epoch-only `_norm_ts`, got None, and read the cursor as 1970-01-01, which
+    would have stopped every real pass after its first AJAX page as "passed_oldest_window".
+    """
+    if value is None:
+        return None
+    ts = _norm_ts(value)
+    if ts is not None:
+        return datetime.fromtimestamp(ts, tz=timezone.utc).date()
+    text = str(value).strip()
+    for fmt in _CURSOR_TEXT_FORMATS:
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+_PAGE_CURSOR_RE = re.compile(r'data-last-update-time="([^"]+)"')
+
+
+def _page_cursor(page_html: str) -> Optional[str]:
+    """The archive's initial cursor, carried on the player page itself (the "Read More"
+    button's `data-last-update-time` attribute). The AJAX endpoint rejects a request with
+    no cursor (`{"error":"The Last Update Time cannot be empty."}`), so the first archive
+    call must be seeded with this value verbatim, exactly as the site's own UI does."""
+    m = _PAGE_CURSOR_RE.search(page_html or "")
+    return m.group(1) if m else None
+
+
 class _UpdateHTMLParser(HTMLParser):
     """Collect the text of each news-update container, split by the fragment's landmarks.
 
@@ -294,6 +381,15 @@ class _UpdateHTMLParser(HTMLParser):
 
     _CONTAINER_HINTS = ("news-update",)
     _SKIP_HINTS = ("analysis", "subscribe")
+    # HTML void elements never have end tags, so they must never move the depth counter:
+    # live news-update blocks carry an <img> logo (and <br> in the analysis upsell), and
+    # counting them nested every block inside the first and collapsed a whole page into
+    # one record (the 2026-11-11 smoke defect).
+    _VOID_TAGS = frozenset({"area", "base", "br", "col", "embed", "hr", "img", "input",
+                            "link", "meta", "param", "source", "track", "wbr"})
+    # Container chrome whose text is not prose: the meta row (position / team, around the
+    # injury tag), the player-head wrapper, the player-name link, and the position marker.
+    _SKIP_SEGMENTS = frozenset({"meta", "playerhead", "player-link", "pos"})
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -307,19 +403,24 @@ class _UpdateHTMLParser(HTMLParser):
         # Classify on each class token's trailing segment (after "__") so the container's own
         # "news-update" prefix cannot false-match ("date" is a substring of "update").
         segs = " ".join(tok.rsplit("__", 1)[-1] for tok in classes.lower().split())
+        tokens = segs.split()
         if any(h in segs for h in self._SKIP_HINTS):
+            return "skip"
+        if any(t in self._SKIP_SEGMENTS for t in tokens):
             return "skip"
         if "headline" in segs or "title" in segs:
             return "headline"
-        if "injur" in segs:
+        if "injur" in segs or "inj" in tokens:
             return "injury_tag"
         if "date" in segs or "time" in segs:
             return "date"
-        if "body" in segs or "text" in segs or "desc" in segs:
+        if "body" in segs or "text" in segs or "desc" in segs or "news" in tokens:
             return "body"
         return None
 
     def handle_starttag(self, tag, attrs):
+        if tag in self._VOID_TAGS:
+            return
         a = dict(attrs)
         classes = a.get("class", "") or ""
         if self._cur is None:
@@ -339,6 +440,8 @@ class _UpdateHTMLParser(HTMLParser):
             self._field_depth = self._depth
 
     def handle_endtag(self, tag):
+        if tag in self._VOID_TAGS:
+            return
         if self._cur is None:
             return
         if self._field is not None and self._depth == self._field_depth and tag in ("div", "span", "a", "p", "li"):
@@ -473,7 +576,10 @@ def fetch_player_archive(session, player: PlayerRef, oldest_date: Optional[date]
     raw_pages.append({"kind": "page", "url": player.page_url, "body": page.text})
     records.extend(parse_updates_html(page.text, player, "page", fetched_at))
 
-    cursor = None
+    # The archive endpoint rejects a cursorless first call with an error payload; the
+    # initial cursor is the player page's own `data-last-update-time` attribute, seeded
+    # verbatim (probe-verified 2026-11-11: two paced calls, 100 updates each).
+    cursor = _page_cursor(page.text)
     seq = 0
     stopped = "no_more_updates"
     while True:
@@ -487,19 +593,30 @@ def fetch_player_archive(session, player: PlayerRef, oldest_date: Optional[date]
             raise RuntimeError(f"rotowire archive: AJAX payload was not JSON for {player.player}") from exc
         raw_pages.append({"kind": "ajax", "url": AJAX_URL, "params": params, "body": resp.text})
         seq += 1
+        if (not isinstance(payload, dict) or payload.get("error")
+                or not any(k in payload for k in ("updatesHTML", "newLastUpdateTime", "noMoreUpdates"))):
+            # An error payload (e.g. {"error":"The Last Update Time cannot be empty."}) is a
+            # FAILED pass, never the end of the archive: the shipped code read one as a
+            # clean finish and banked a truncated corpus as complete (2026-11-11 smoke).
+            raise RuntimeError(
+                f"rotowire archive: AJAX error payload for {player.player}: {str(payload)[:200]}")
         records.extend(parse_updates_html(payload.get("updatesHTML") or "", player, "ajax", fetched_at))
-        cursor = payload.get("newLastUpdateTime")
+        new_cursor = payload.get("newLastUpdateTime")
         if payload.get("noMoreUpdates"):
             stopped = "no_more_updates"
             break
-        if cursor is None:
+        if new_cursor is None:
             stopped = "no_more_updates"
             break
         if oldest_date is not None:
-            cursor_date = datetime.fromtimestamp(_norm_ts(cursor) or 0, tz=timezone.utc).date()
-            if cursor_date < oldest_date:
+            cursor_date = _cursor_date(new_cursor)
+            if cursor_date is not None and cursor_date < oldest_date:
                 stopped = "passed_oldest_window"
                 break
+        if new_cursor == cursor:
+            stopped = "no_more_updates"  # cursor did not move: no further progress to page
+            break
+        cursor = new_cursor
     return {"records": dedupe_records(records), "raw_pages": raw_pages,
             "requests": requests_made, "stopped": stopped, "fetched_at": fetched_at}
 
@@ -571,18 +688,26 @@ def build_case_set(boxscores: pd.DataFrame, min_missed: int = DEFAULT_MIN_MISSED
                    designations: Optional[pd.DataFrame] = None) -> list:
     """Injury-return cases from a banked player-box-score frame (hoopR `player_boxscores` shape).
 
-    A spell is a run of consecutive TEAM games (the player's team schedule order, via game_date) in
-    which the player did not play, bounded on both sides by played games; the case is the first played
-    game after the spell. Baseline is the mean minutes over the prior `baseline_games` PLAYED games.
-    Spells whose box-score reasons are all non-injury (coach's decision / rest / personal / G League)
-    are excluded; a spell with any injury-flavoured or blank reason is kept.
+    Spells are walked on the TEAM game calendar, not on the player's own rows: between two
+    consecutive PLAYED games for the same team, every team game in between that the player did
+    not appear in is a missed game, and the later played game is the return. Walking the
+    player's own rows instead (the shipped method through 2026-11-11) structurally misses
+    long-term injured players, because ESPN omits them from box scores entirely -- Kawhi
+    Leonard has zero `did_not_play` rows in five seasons of banked box scores, so the own-rows
+    walk emitted 182 cases and none for him; the calendar walk emits the design population
+    (1,318 cases / 417 players on the 2022-2026 banked frame, validated 2026-11-11).
+    Baseline is the mean minutes over the prior `baseline_games` PLAYED games (the player's
+    full played history, across team stints). A spell is excluded only when every DNP reason
+    recorded inside it is non-injury (coach's decision / rest / personal / G League); a spell
+    with any injury-flavoured reason, or no recorded reasons at all (UNLISTED), is kept.
 
     With `designations` (columns: player or athlete_id, game_date, status) the population widens at
     the margins: a played game whose pre-game designation was Questionable/Probable after a spell of
     >= 1 missed game also emits a case flagged via reasons=["designation:<status>"] -- this is the
     design population's Q/P-at-decision-time class, available only when designations are provided.
+    Without designations the population is exactly the calendar population above.
     """
-    need = {"athlete_display_name", "game_date", "minutes"}
+    need = {"athlete_display_name", "game_date", "minutes", "game_id", "team_abbreviation"}
     missing = need - set(boxscores.columns)
     if missing:
         raise ValueError(f"boxscores missing columns: {sorted(missing)}")
@@ -590,68 +715,72 @@ def build_case_set(boxscores: pd.DataFrame, min_missed: int = DEFAULT_MIN_MISSED
     df["game_date"] = pd.to_datetime(df["game_date"]).dt.date
     df["minutes"] = pd.to_numeric(df["minutes"], errors="coerce")
     df["played_flag"] = _played_mask(df)
-    df = df.sort_values(["athlete_display_name", "game_date", "game_id"] if "game_id" in df.columns
-                        else ["athlete_display_name", "game_date"])
+
+    # Team calendars from the frame itself: distinct (team, game_id, date) in date order.
+    cal = (df[["team_abbreviation", "game_id", "game_date"]]
+           .drop_duplicates().sort_values("game_date"))
+    calendars = {team: list(zip(g["game_date"], g["game_id"]))
+                 for team, g in cal.groupby("team_abbreviation")}
+
+    # DNP reasons by (player, game_id); games with no row at all are UNLISTED (no reasons).
+    reasons_by_pg: dict = {}
+    if "reason" in df.columns:
+        for (name, gid), g in df[~df["played_flag"]].groupby(["athlete_display_name", "game_id"]):
+            rs = [str(r).strip() for r in g["reason"].dropna() if str(r).strip()]
+            if rs:
+                reasons_by_pg[(name, gid)] = rs
+
+    played = df[df["played_flag"]].sort_values(["athlete_display_name", "game_date", "game_id"])
     cases: list = []
-    group_cols = (["athlete_display_name", "athlete_id"] if "athlete_id" in df.columns
-                  else ["athlete_display_name"])
-    for key, g in df.groupby(group_cols, sort=False):
-        name, athlete_id = key if len(group_cols) == 2 else (key, None)
+    for name, g in played.groupby("athlete_display_name", sort=False):
         rows = list(g.itertuples(index=False))
         cols = list(g.columns)
         def _get(row, col):
             return getattr(row, col) if col in cols else None
-        played_minutes: list = []
-        i = 0
-        while i < len(rows):
-            if _get(rows[i], "played_flag"):
-                m = _get(rows[i], "minutes")
-                if m is not None and not pd.isna(m):
-                    played_minutes.append(float(m))
-                i += 1
-                continue
-            j = i
-            reasons = []
-            while j < len(rows) and not _get(rows[j], "played_flag"):
-                r = _get(rows[j], "reason")
-                if r and not pd.isna(r):
-                    reasons.append(str(r).strip())
-                j += 1
-            missed = j - i
-            has_prior = len(played_minutes) >= 1
-            has_return = j < len(rows)
-            if has_prior and has_return and missed >= 1:
-                baseline = (float(pd.Series(played_minutes[-baseline_games:]).mean())
-                            if len(played_minutes) >= baseline_games else None)
-                injury_spell = (not reasons) or any(
-                    not any(k in r.upper() for k in _NON_INJURY_REASONS) for r in reasons)
-                ret = rows[j]
-                if (missed >= min_missed and baseline is not None and baseline >= min_baseline
-                        and injury_spell):
-                    cases.append(ReturnCase(
-                        player=str(name), athlete_id=int(athlete_id) if athlete_id is not None and not pd.isna(athlete_id) else None,
-                        team=str(_get(rows[i], "team_abbreviation") or ""),
-                        season=int(_get(ret, "season")) if _get(ret, "season") is not None and not pd.isna(_get(ret, "season")) else None,
-                        return_date=_get(ret, "game_date").isoformat(),
-                        spell_start=_get(rows[i], "game_date").isoformat(),
-                        spell_end=_get(rows[j - 1], "game_date").isoformat(),
-                        missed=int(missed), baseline_minutes=round(baseline, 2),
-                        return_minutes=float(_get(ret, "minutes")) if not pd.isna(_get(ret, "minutes")) else None,
-                        reasons=sorted(set(reasons))))
-                elif designations is not None and baseline is not None and baseline >= min_baseline:
-                    st = _designation_for(designations, name, athlete_id, _get(ret, "game_date"))
-                    if st in ("Questionable", "Probable"):
-                        cases.append(ReturnCase(
-                            player=str(name), athlete_id=int(athlete_id) if athlete_id is not None and not pd.isna(athlete_id) else None,
-                            team=str(_get(rows[i], "team_abbreviation") or ""),
-                            season=int(_get(ret, "season")) if _get(ret, "season") is not None and not pd.isna(_get(ret, "season")) else None,
-                            return_date=_get(ret, "game_date").isoformat(),
-                            spell_start=_get(rows[i], "game_date").isoformat(),
-                            spell_end=_get(rows[j - 1], "game_date").isoformat(),
-                            missed=int(missed), baseline_minutes=round(baseline, 2),
-                            return_minutes=float(_get(ret, "minutes")) if not pd.isna(_get(ret, "minutes")) else None,
-                            reasons=[f"designation:{st}"]))
-            i = j
+        prior_minutes: list = []  # the player's played-minutes history before the current game
+        for idx, row in enumerate(rows):
+            m = _get(row, "minutes")
+            if idx > 0:
+                prev = rows[idx - 1]
+                team = _get(row, "team_abbreviation")
+                if team and team == _get(prev, "team_abbreviation"):
+                    lo, hi = _get(prev, "game_date"), _get(row, "game_date")
+                    missed_games = [(d, gid) for (d, gid) in calendars.get(team, [])
+                                    if lo < d < hi]
+                    if missed_games:
+                        baseline = (float(pd.Series(prior_minutes[-baseline_games:]).mean())
+                                    if len(prior_minutes) >= baseline_games else None)
+                        if baseline is not None and baseline >= min_baseline:
+                            reasons = []
+                            for _, gid in missed_games:
+                                reasons.extend(reasons_by_pg.get((name, gid), []))
+                            injury_spell = (not reasons) or any(
+                                not any(k in r.upper() for k in _NON_INJURY_REASONS)
+                                for r in reasons)
+                            athlete_id = _get(row, "athlete_id")
+                            season = _get(row, "season")
+                            base = dict(
+                                player=str(name),
+                                athlete_id=int(athlete_id) if athlete_id is not None
+                                and not pd.isna(athlete_id) else None,
+                                team=str(team),
+                                season=int(season) if season is not None
+                                and not pd.isna(season) else None,
+                                return_date=_get(row, "game_date").isoformat(),
+                                spell_start=missed_games[0][0].isoformat(),
+                                spell_end=missed_games[-1][0].isoformat(),
+                                missed=len(missed_games), baseline_minutes=round(baseline, 2),
+                                return_minutes=float(m) if m is not None and not pd.isna(m)
+                                else None)
+                            if len(missed_games) >= min_missed and injury_spell:
+                                cases.append(ReturnCase(reasons=sorted(set(reasons)), **base))
+                            elif designations is not None:
+                                st = _designation_for(designations, name, base["athlete_id"],
+                                                      _get(row, "game_date"))
+                                if st in ("Questionable", "Probable"):
+                                    cases.append(ReturnCase(reasons=[f"designation:{st}"], **base))
+            if m is not None and not pd.isna(m):
+                prior_minutes.append(float(m))
     return cases
 
 
