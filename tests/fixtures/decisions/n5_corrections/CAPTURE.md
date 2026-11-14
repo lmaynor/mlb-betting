@@ -23,8 +23,9 @@ as `capture_sample.jsonl`.
 ## Results of the first pass
 
 - Settled rows paired: **5,353** (NHL paper track, Nov 2–12, 2026).
-- Boxscore matched: 5,272. **Unmatched: 81** (player/game absent from the
-  masters — e.g. dressed-but-no-TOI skaters; carried with
+- Boxscore matched: 5,272. **Unmatched: 81** (all 81 player-absent:
+  did-not-dress players with no boxscore row in the masters, per the
+  2026-11-13 join audit; zero game-join failures; carried with
   `boxscore_current: null`, never guessed).
 - **Corrections detected: 31** — settled actual differs from the current
   master value: 25 saves, 3 assists, 3 points. Worked example:
@@ -42,7 +43,15 @@ as `capture_sample.jsonl`.
 `{capture_id, source, game_key, game_id, game_date, player_id, player,
 stat, line, settled_actual, settled_result, settled_ts, void,
 boxscore_current, boxscore_source, boxscore_captured_ts, delta,
-correction_detected, prose_items, prose_note}`.
+correction_detected, unmatched_reason, prose_items, prose_note}`.
+
+`unmatched_reason` (added 2026-11-13, join audit) is null on paired
+records; on unpaired records it is `game_unresolved` (the game did not
+resolve against the games master) or `player_absent_from_boxscore` (the
+game resolved but the player has no boxscore row for it: did-not-dress).
+The first pass predates the field; the join audit characterized its 81
+unmatched records directly and found all 81 were player-absent with zero
+game-join failures. Future runs are self-describing.
 
 ## Cadence and format (documented, not scheduled)
 

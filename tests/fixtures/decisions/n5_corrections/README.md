@@ -12,11 +12,18 @@ retrieved source; nothing was invented to reach the count.
 
 By league: NHL 9, NFL 9, NBA 4, MLB 3.
 
-These 25 items come from **23 distinct announced correction events**: one
-NHLPR scoring-change post credited two players (Batherson and Stützle,
-assists on the same Cozens goal), and one Elias weekly list changed two
-stat lines for the same player (Fred Warner, forced fumbles and assists,
-same game).
+These 25 items come from **24 distinct announced correction events**,
+where an event is counted as one player's stat line corrected for one
+game (a distinct (player, game_date) pair). Two items share a single
+announcement vehicle without being the same event under this definition:
+one NHLPR scoring-change post credited two players (Batherson and
+Stützle, assists on the same Cozens goal — two events, two players).
+Conversely, one Elias weekly list changed two stat lines for the same
+player in the same game (Fred Warner, forced fumbles and assists — two
+items, one event), which is why 25 items count to 24 events. (An earlier
+version of this README said 23 with no stated definition; the count is
+restated with its definition per the 2026-11-13 join audit, which could
+not reproduce 23 under any mechanical counting rule.)
 
 ## Item schema
 

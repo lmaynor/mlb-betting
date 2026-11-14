@@ -53,6 +53,15 @@ from typing import Any, Iterable, Mapping, Optional, Sequence
 CAPTURE_SOURCE_NHL_PAPER = "nhl_paper_track"
 CAPTURE_SOURCE_TRACKER = "bet_tracker"
 
+# unmatched_reason values (join audit, 2026-11-13): a record whose settled
+# row could not be paired with a current boxscore value says WHY, so the
+# unmatched residue is self-describing instead of a bare count. The two
+# failure modes are distinct: the game itself did not resolve against the
+# games master, or the game resolved but the player has no boxscore row
+# for it (did-not-dress: settled pre-game, absent from the master).
+UNMATCHED_GAME_UNRESOLVED = "game_unresolved"
+UNMATCHED_PLAYER_ABSENT = "player_absent_from_boxscore"
+
 SKATER_STATS = ("goals", "assists", "points", "sog")
 GOALIE_STATS = ("saves",)
 
@@ -111,12 +120,15 @@ def build_capture_record(
     captured_ts: str,
     prose_items: Sequence[Mapping[str, Any]] = (),
     prose_note: Optional[str] = None,
+    unmatched_reason: Optional[str] = None,
 ) -> dict:
     """One capture record: settled row + realized ground truth pairing.
 
     ``settled_actual`` is the value settlement consumed (None for tracker
     rows, which do not store it). ``delta`` is boxscore_current -
     settled_actual when both exist; correction_detected is delta != 0.
+    ``unmatched_reason`` is None when a boxscore value was paired, else
+    one of UNMATCHED_GAME_UNRESOLVED / UNMATCHED_PLAYER_ABSENT.
     """
     settled_actual = settled.get("actual")
     delta = None
@@ -146,6 +158,7 @@ def build_capture_record(
         "boxscore_captured_ts": captured_ts,
         "delta": delta,
         "correction_detected": (delta is not None and delta != 0),
+        "unmatched_reason": unmatched_reason,
         "prose_items": list(prose_items),
         "prose_note": prose_note,
     }
@@ -246,6 +259,11 @@ def run_nhl_paper_capture(
             current = box_index.get((gid, int(row["player_id"])), {}).get(row["stat"])
         if current is None:
             unmatched += 1
+            unmatched_reason = (
+                UNMATCHED_GAME_UNRESOLVED if gid is None else UNMATCHED_PLAYER_ABSENT
+            )
+        else:
+            unmatched_reason = None
         records.append(
             build_capture_record(
                 row,
@@ -255,6 +273,7 @@ def run_nhl_paper_capture(
                 boxscore_source="NHL/skater_boxscores_master.csv+NHL/goalie_boxscores_master.csv",
                 captured_ts=captured_ts,
                 prose_note="no banked NHL postgame prose source; field reserved",
+                unmatched_reason=unmatched_reason,
             )
         )
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -265,6 +284,12 @@ def run_nhl_paper_capture(
         "settled_rows": len(settled),
         "records": len(records),
         "unmatched_boxscore": unmatched,
+        "unmatched_game_unresolved": sum(
+            1 for r in records if r["unmatched_reason"] == UNMATCHED_GAME_UNRESOLVED
+        ),
+        "unmatched_player_absent": sum(
+            1 for r in records if r["unmatched_reason"] == UNMATCHED_PLAYER_ABSENT
+        ),
         "corrections_detected": sum(1 for r in records if r["correction_detected"]),
     }
 

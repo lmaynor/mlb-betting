@@ -44,6 +44,27 @@ game-time-decision sentence plus a late resolution update matching the
 realized outcome), in beat-report style; the outcome facts and designations
 are records, the sentences are composed.
 
+### Designation assertion and errata (2026-11-13, join audit)
+
+Every designation in the fixture is re-derived from the banked reports
+with the repo's own rule (`select_designation`, tip - 60, tip from the
+boxscore mirror) by `scripts/derive_status_designations.py`; run against
+the source data it fails (exit 1) on any disagreement, and the committed
+derivation record `status_derivation.jsonl` is pinned to the fixture by
+`tests/test_decisions_availability_fixture.py`. The join audit caught
+S154 (Trey Lyles) carrying the 19:30 report's Questionable where the
+rule yields the 20:30 report's Available; the full re-derivation found
+9 such stale items, all corrected 2026-11-13 (designation field only;
+blurbs and labels unchanged): S001 Questionable -> Out, S009
+Questionable -> Out, S020 Questionable -> Out, S050 Questionable ->
+Doubtful, S109 Questionable -> Available, S125 Questionable ->
+Available, S137 Probable -> Available, S143 Questionable -> Available,
+S154 Questionable -> Available. The corrected items' cached eval
+answers were invalidated so they are re-asked under the corrected
+designations. Note the pool description above is the sampling frame as
+built; after correction the fixture also contains decision-time Out
+and Available designations, which is what the rule actually yields.
+
 ## Bars (Nov 13 ruling / Nov 11 item verdicts)
 
 - Goalie: 0 false positives (no late_scratch or unconfirmed item gated as a
