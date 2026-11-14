@@ -7,7 +7,7 @@ import { CommandCenterClient } from './command-center-client'
 
 function evToBet(r: EvMlbRow): Bet {
   return {
-    id: -r.id, system: 'EV', game_date: r.game_date, game_pk: r.game_pk ?? 0, bet_type: r.bet_type,
+    id: -(4000000 + r.id), system: 'EV', game_date: r.game_date, game_pk: r.game_pk ?? 0, bet_type: r.bet_type,
     player: r.player, away_team: r.away_team, home_team: r.home_team, odds: r.odds, stake: r.stake,
     model_prob: r.model_prob ?? 0, market_prob: r.market_prob ?? 0, edge: r.edge, kelly_pct: r.kelly_pct,
     kelly_triggered: true, result: r.result, profit: r.profit, paper: true, book: r.book, notes: r.notes,
@@ -15,9 +15,9 @@ function evToBet(r: EvMlbRow): Bet {
   }
 }
 
-function outlierToBet(r: EvBookOutlierRow, idx: number): Bet {
+function outlierToBet(r: EvBookOutlierRow, idx: number, base: number): Bet {
   return {
-    id: -(idx + 1000),
+    id: -(base + idx),
     sport: r.sport ?? null,
     system: 'EV',
     game_date: r.commence ? r.commence.split('T')[0] : siteDateKey(),
@@ -48,17 +48,17 @@ export async function CommandCenter() {
     apiGetEvFeed({ sport: 'all', minEv: 0.03, limit: 40 }).catch(() => null),
   ])
   const evMlb = (feed?.mlb?.rows ?? []).filter(r => r.result == null && r.game_date >= siteDateKey()).map(evToBet)
-  const evNfl = (feed?.nfl?.book_outliers ?? []).map(outlierToBet)
-  const evNba = (feed?.nba?.rows ?? []).map(outlierToBet)
-  const evNhl = (feed?.nhl?.rows ?? []).map(outlierToBet)
+  const evNfl = (feed?.nfl?.book_outliers ?? []).map((r, idx) => outlierToBet(r, idx, 1000000))
+  const evNba = (feed?.nba?.rows ?? []).map((r, idx) => outlierToBet(r, idx, 2000000))
+  const evNhl = (feed?.nhl?.rows ?? []).map((r, idx) => outlierToBet(r, idx, 3000000))
   const bets = [...picks.filter(p => p.result == null), ...evMlb, ...evNfl, ...evNba, ...evNhl]
   // Name -> id needs the server-only player maps, so resolve here; the client table only renders.
-  const headshots: Record<number, { sport: HeadshotSport; id: number | string | null }> = {}
+  const headshots: Record<number, { sport: HeadshotSport; id: number | string | null; name: string | null }> = {}
   for (const b of bets) {
     if (!b.player) continue
     const lower = b.sport?.toLowerCase() ?? 'mlb'
     const sport = (hasHeadshots(lower) ? lower : 'mlb') as HeadshotSport
-    headshots[b.id] = { sport, id: playerIdByName(sport, b.player, sport === 'nfl' ? b.home_team ?? b.away_team : null) }
+    headshots[b.id] = { sport, id: playerIdByName(sport, b.player, sport === 'nfl' ? b.home_team ?? b.away_team : null), name: b.player }
   }
   return <CommandCenterClient bets={bets} headshots={headshots} />
 }

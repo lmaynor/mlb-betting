@@ -25,7 +25,7 @@ export function SectionTabs() {
     <nav aria-label={`${section.label} views`} className="border-b border-separator-border bg-background-secondary-default">
       {/* Up to four tabs share a phone row evenly, with short labels, so nothing scrolls. More than that scrolls, with a right-edge fade as the cue. */}
       <div ref={row} className={cx('relative mx-auto max-w-[1280px] md:px-6 md:flex md:gap-0.5 md:overflow-x-auto md:whitespace-nowrap md:[mask-image:none]',
-        fit ? 'grid grid-flow-col auto-cols-fr px-2' : 'flex gap-0.5 overflow-x-auto whitespace-nowrap pl-6 pr-10 [mask-image:linear-gradient(to_right,#000_calc(100%-32px),transparent)]')}>
+        fit ? 'grid grid-flow-col auto-cols-fr px-2' : 'flex gap-0.5 overflow-x-auto no-scrollbar whitespace-nowrap pl-6 pr-10 [mask-image:linear-gradient(to_right,#000_calc(100%-32px),transparent)]')}>
         {section.tabs.map(t => {
           const active = tabActive(pathname, sp.get('tab'), t)
           return (

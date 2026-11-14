@@ -40,7 +40,7 @@ const pill = (on: boolean): React.CSSProperties => ({
   border: `1px solid ${on ? 'var(--color-border-button-hover)' : 'transparent'}`,
 })
 const PILL_CLASS = 'text-compact font-semibold py-[7px] px-[13px] no-underline whitespace-nowrap'
-const GROUP_CLASS = 'inline-flex gap-0.5 p-[3px] bg-background-secondary-default border border-separator-border rounded-control'
+const GROUP_CLASS = 'inline-flex gap-0.5 p-[3px] bg-background-secondary-default border border-separator-border rounded-control max-w-full overflow-x-auto no-scrollbar'
 
 /**
  * The Scanner's Projections tab: the model's expected value (lambda) for everything the site prices, beside what the market says.

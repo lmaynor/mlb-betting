@@ -171,90 +171,65 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
                 </div>
               </div>
             ) : !fixedMarket && (
-              <div className="flex flex-col gap-[6px] bg-background-secondary-default p-[10px]" style={{ borderRadius: '8px', border: B }}>
-                <div className="flex items-center justify-between">
-                  <span className="ui-heading text-micro text-text-secondary">Market / system</span>
+              <div>
+                <div className="ui-heading text-micro text-text-secondary mb-1.5">Market / system</div>
+                <div role="group" aria-label="Market" className="flex flex-wrap gap-1 bg-background-secondary-default p-1" style={{ borderRadius: '8px', border: B }}>
                   <button
                     type="button"
-                    className="btn btn-ghost py-[3px] px-2 text-mini min-h-[26px]"
-                   
+                    className="py-[6px] px-[10px] min-h-[34px] cursor-pointer"
                     onClick={() => set('market', 'ALL', 'ALL')}
+                    style={{
+                      borderRadius: '6px',
+                      fontSize: '11px',
+                      fontFamily: 'var(--font-mono)',
+                      fontWeight: 600,
+                      border: market === 'ALL' ? '1px solid var(--color-border-button-hover)' : '1px solid transparent',
+                      background: market === 'ALL' ? 'var(--color-background-tertiary-default)' : 'transparent',
+                      color: market === 'ALL' ? 'var(--color-text-primary)' : 'var(--color-neutral-300)',
+                    }}
                   >
                     All Markets
                   </button>
-                </div>
-                <div className="grid gap-[3px] max-h-[180px] overflow-y-auto pr-[2px]" style={{ WebkitOverflowScrolling: 'touch' }}>
                   {sport === 'mlb' && (
-                    <div className="flex items-center justify-between min-h-[38px] py-1 px-2"
+                    <button
+                      type="button"
+                      className="py-[6px] px-[10px] min-h-[34px] cursor-pointer"
+                      aria-pressed={market === 'EV'}
+                      onClick={() => set('market', market === 'EV' ? 'ALL' : 'EV', 'ALL')}
                       style={{
                         borderRadius: '6px',
-                        background: market === 'EV' ? 'rgba(87, 242, 135, 0.08)' : 'transparent',
-                        border: market === 'EV' ? '1px solid rgba(87, 242, 135, 0.3)' : '1px solid transparent',
+                        fontSize: '11px',
+                        fontFamily: 'var(--font-mono)',
+                        fontWeight: 600,
+                        border: market === 'EV' ? '1px solid var(--color-border-button-hover)' : '1px solid transparent',
+                        background: market === 'EV' ? 'var(--color-background-tertiary-default)' : 'transparent',
+                        color: market === 'EV' ? 'var(--color-text-primary)' : 'var(--color-neutral-300)',
                       }}
                     >
-                      <button className="bg-transparent border-0 text-left flex-1 cursor-pointer p-0"
-                        type="button"
-                        onClick={() => set('market', market === 'EV' ? 'ALL' : 'EV', 'ALL')}
-                        aria-pressed={market === 'EV'}
-                        style={{ color: market === 'EV' ? 'var(--color-text-primary)' : 'var(--color-neutral-300)', fontSize: '12px', fontWeight: market === 'EV' ? 700 : 400 }}
-                      >
-                        +EV alerts
-                      </button>
-                      <button className="py-[3px] px-[7px] min-h-[26px] cursor-pointer shrink-0"
-                        type="button"
-                        aria-label="Only +EV alerts"
-                        onClick={() => push(p => { p.set('market', 'EV') })}
-                        style={{
-                          fontSize: '10px',
-                          fontFamily: 'var(--font-mono)',
-                          fontWeight: 600,
-                          borderRadius: '4px',
-                          border: market === 'EV' ? '1px solid var(--signal)' : `1px solid var(--color-separator-border)`,
-                          background: market === 'EV' ? 'var(--win-wash)' : 'transparent',
-                          color: market === 'EV' ? 'var(--signal)' : 'var(--color-text-secondary)',
-                        }}
-                      >
-                        ONLY
-                      </button>
-                    </div>
+                      +EV alerts
+                    </button>
                   )}
                   {systems.map(s => {
                     const isActive = market === s.key
                     return (
-                      <div className="flex items-center justify-between min-h-[38px] py-1 px-2"
+                      <button
                         key={s.key}
+                        type="button"
+                        className="py-[6px] px-[10px] min-h-[34px] cursor-pointer"
+                        aria-pressed={isActive}
+                        onClick={() => set('market', isActive ? 'ALL' : s.key, 'ALL')}
                         style={{
                           borderRadius: '6px',
-                          background: isActive ? 'rgba(87, 242, 135, 0.08)' : 'transparent',
-                          border: isActive ? '1px solid rgba(87, 242, 135, 0.3)' : '1px solid transparent',
+                          fontSize: '11px',
+                          fontFamily: 'var(--font-mono)',
+                          fontWeight: 600,
+                          border: isActive ? '1px solid var(--color-border-button-hover)' : '1px solid transparent',
+                          background: isActive ? 'var(--color-background-tertiary-default)' : 'transparent',
+                          color: isActive ? 'var(--color-text-primary)' : 'var(--color-neutral-300)',
                         }}
                       >
-                        <button className="bg-transparent border-0 text-left flex-1 cursor-pointer p-0"
-                          type="button"
-                          onClick={() => set('market', isActive ? 'ALL' : s.key, 'ALL')}
-                          aria-pressed={isActive}
-                          style={{ color: isActive ? 'var(--color-text-primary)' : 'var(--color-neutral-300)', fontSize: '12px', fontWeight: isActive ? 700 : 400 }}
-                        >
-                          {SYSTEM_LABEL_SHORT[s.key] ?? s.shortName}
-                        </button>
-                        <button className="py-[3px] px-[7px] min-h-[26px] cursor-pointer shrink-0"
-                          type="button"
-                          title={`Select only ${SYSTEM_LABEL_SHORT[s.key] ?? s.shortName}`}
-                          aria-label={`Only ${SYSTEM_LABEL_SHORT[s.key] ?? s.shortName}`}
-                          onClick={() => push(p => { p.set('market', s.key) })}
-                          style={{
-                            fontSize: '10px',
-                            fontFamily: 'var(--font-mono)',
-                            fontWeight: 600,
-                            borderRadius: '4px',
-                            border: isActive ? '1px solid var(--signal)' : `1px solid var(--color-separator-border)`,
-                            background: isActive ? 'var(--win-wash)' : 'transparent',
-                            color: isActive ? 'var(--signal)' : 'var(--color-text-secondary)',
-                          }}
-                        >
-                          ONLY
-                        </button>
-                      </div>
+                        {SYSTEM_LABEL_SHORT[s.key] ?? s.shortName}
+                      </button>
                     )
                   })}
                 </div>
@@ -288,90 +263,85 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
               </div>
             </div>
 
-            <div className="flex flex-col gap-[6px] bg-background-secondary-default p-[10px]" style={{ borderRadius: '8px', border: B }}>
-              <div className="flex items-center justify-between">
-                <span className="ui-heading text-micro text-text-secondary">BOOK</span>
-                <div className="flex gap-1">
+            <div>
+              <div className="ui-heading text-micro text-text-secondary mb-1.5">Book</div>
+              <div role="group" aria-label="Book" className="flex flex-wrap gap-1 bg-background-secondary-default p-1" style={{ borderRadius: '8px', border: B }}>
+                <button
+                  type="button"
+                  className="py-[6px] px-[10px] min-h-[34px] cursor-pointer"
+                  onClick={() => push(p => { p.delete('book'); p.delete('books') })}
+                  style={{
+                    borderRadius: '6px',
+                    fontSize: '11px',
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 600,
+                    border: bookValue === 'ALL' ? '1px solid var(--color-border-button-hover)' : '1px solid transparent',
+                    background: bookValue === 'ALL' ? 'var(--color-background-tertiary-default)' : 'transparent',
+                    color: bookValue === 'ALL' ? 'var(--color-text-primary)' : 'var(--color-neutral-300)',
+                  }}
+                >
+                  All books
+                </button>
+                {my.books.length > 0 && (
                   <button
                     type="button"
-                    className="btn btn-ghost py-[3px] px-2 text-mini min-h-[26px]"
-                   
-                    onClick={() => push(p => { p.delete('book'); p.delete('books') })}
+                    className="py-[6px] px-[10px] min-h-[34px] cursor-pointer"
+                    onClick={() => push(p => { p.delete('book'); if (mineKey) p.set('books', mineKey) })}
+                    style={{
+                      borderRadius: '6px',
+                      fontSize: '11px',
+                      fontFamily: 'var(--font-mono)',
+                      fontWeight: 600,
+                      border: bookValue === 'MY' ? '1px solid var(--color-border-button-hover)' : '1px solid transparent',
+                      background: bookValue === 'MY' ? 'var(--color-background-tertiary-default)' : 'transparent',
+                      color: bookValue === 'MY' ? 'var(--color-text-primary)' : 'var(--color-neutral-300)',
+                    }}
                   >
-                    All
+                    My books
                   </button>
-                  {my.books.length > 0 && (
-                    <button
-                      type="button"
-                      className="btn btn-ghost py-[3px] px-2 text-mini min-h-[26px]"
-                     
-                      onClick={() => push(p => { p.delete('book'); if (mineKey) p.set('books', mineKey) })}
-                    >
-                      My books
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="btn btn-ghost py-[3px] px-2 text-mini min-h-[26px]"
-                   
-                    onClick={() => push(p => { p.set('book', '__none__'); p.delete('books') })}
-                  >
-                    None
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid gap-[3px] max-h-[180px] overflow-y-auto pr-[2px]" style={{ WebkitOverflowScrolling: 'touch' }}>
+                )}
+                <button
+                  type="button"
+                  className="py-[6px] px-[10px] min-h-[34px] cursor-pointer"
+                  onClick={() => push(p => { p.set('book', '__none__'); p.delete('books') })}
+                  style={{
+                    borderRadius: '6px',
+                    fontSize: '11px',
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 600,
+                    border: book === '__none__' ? '1px solid var(--color-border-button-hover)' : '1px solid transparent',
+                    background: book === '__none__' ? 'var(--color-background-tertiary-default)' : 'transparent',
+                    color: book === '__none__' ? 'var(--color-text-primary)' : 'var(--color-neutral-300)',
+                  }}
+                >
+                  None
+                </button>
                 {BOOK_CHIPS.map(b => {
                   const param = bookParam(b)
                   const isSelected = bookValue === param
                   return (
-                    <div className="flex items-center justify-between min-h-[38px] py-1 px-2"
+                    <button
                       key={b}
+                      type="button"
+                      className="py-[6px] px-[10px] min-h-[34px] cursor-pointer"
+                      aria-pressed={isSelected}
+                      onClick={() => push(p => {
+                        p.delete('books')
+                        if (isSelected) p.delete('book')
+                        else p.set('book', param)
+                      })}
                       style={{
                         borderRadius: '6px',
-                        background: isSelected ? 'rgba(87, 242, 135, 0.08)' : 'transparent',
-                        border: isSelected ? '1px solid rgba(87, 242, 135, 0.3)' : '1px solid transparent',
+                        fontSize: '11px',
+                        fontFamily: 'var(--font-mono)',
+                        fontWeight: 600,
+                        border: isSelected ? '1px solid var(--color-border-button-hover)' : '1px solid transparent',
+                        background: isSelected ? 'var(--color-background-tertiary-default)' : 'transparent',
+                        color: isSelected ? 'var(--color-text-primary)' : 'var(--color-neutral-300)',
                       }}
                     >
-                      <button className="bg-transparent border-0 text-left flex-1 cursor-pointer p-0"
-                        type="button"
-                        onClick={() => {
-                          push(p => {
-                            p.delete('books')
-                            if (isSelected) p.delete('book')
-                            else p.set('book', param)
-                          })
-                        }}
-                        style={{ color: isSelected ? 'var(--color-text-primary)' : 'var(--color-neutral-300)', fontSize: '12px', fontWeight: isSelected ? 700 : 400 }}
-                      >
-                        {b}
-                      </button>
-                      <button className="py-[3px] px-[7px] min-h-[26px] cursor-pointer shrink-0"
-                        type="button"
-                        title={`Select only ${b}`}
-                        aria-label={`Only ${b}`}
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          push(p => {
-                            p.delete('books')
-                            p.set('book', param)
-                          })
-                        }}
-                        style={{
-                          fontSize: '10px',
-                          fontFamily: 'var(--font-mono)',
-                          fontWeight: 600,
-                          borderRadius: '4px',
-                          border: isSelected ? '1px solid var(--signal)' : `1px solid var(--color-separator-border)`,
-                          background: isSelected ? 'var(--win-wash)' : 'transparent',
-                          color: isSelected ? 'var(--signal)' : 'var(--color-text-secondary)',
-                        }}
-                      >
-                        ONLY
-                      </button>
-                    </div>
+                      {b}
+                    </button>
                   )
                 })}
               </div>
