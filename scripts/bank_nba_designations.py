@@ -41,6 +41,8 @@ Usage (plan only -- safe anywhere, no fetches, no writes):
     python3 scripts/bank_nba_designations.py --days 2026-04-01,2026-04-02
     python3 scripts/bank_nba_designations.py --start 2026-04-01 --end 2026-04-07 --all-hours
     python3 scripts/bank_nba_designations.py --box-dir <hoopr mirror dir> --seasons 2025 2026
+    # the full publication grid (MIN-07: 2026-27 season to date, quarter-hour versions):
+    python3 scripts/bank_nba_designations.py --start 2026-10-19 --end 2026-11-12 --grid-hours --grid-minutes
 
 Trigger (later, deliberately -- BOTH gates):
     MINUTES_RUN_ENABLED=1 python3 scripts/bank_nba_designations.py --execute --box-dir <hoopr mirror dir> --seasons 2025 2026
@@ -91,11 +93,21 @@ def resolve_days(args) -> list:
 
 
 def resolve_hours(args) -> tuple:
+    if getattr(args, "grid_hours", False):
+        return R.GRID_STAMP_HOURS              # 11..23 ET: the window the bank is actually built on
     if args.all_hours:
         return ALL_HOURS
     if args.hours:
         return tuple(sorted(set(args.hours)))
     return tuple(DEFAULT_HOURS)
+
+
+def resolve_minutes(args) -> tuple:
+    if getattr(args, "stamp_minutes", None):
+        return tuple(sorted(set(args.stamp_minutes)))
+    if getattr(args, "grid_minutes", False):
+        return R.GRID_STAMP_MINUTES            # (0, 15, 30, 45): the quarter-hour publication grid
+    return (0,)
 
 
 def _hoopr_season(day_iso: str) -> int:
@@ -104,9 +116,9 @@ def _hoopr_season(day_iso: str) -> int:
     return d.year + 1 if d.month >= 8 else d.year
 
 
-def build_plan(days, hours, source: str = "official-pdf") -> dict:
+def build_plan(days, hours, source: str = "official-pdf", stamp_minutes=(0,)) -> dict:
     """Pure plan arithmetic (no fetches, no storage): what an execute run WOULD ask for."""
-    n = len(days) * len(hours)
+    n = len(days) * len(hours) * len(stamp_minutes)
     if source == "sportsdataverse":
         seasons = sorted({_hoopr_season(d) for d in days})
         est = f"{len(seasons)} season file(s) {seasons} (one per hoopR season spanned)"
@@ -115,20 +127,25 @@ def build_plan(days, hours, source: str = "official-pdf") -> dict:
         est = f"{n} report fetches (each tries up to 2 URL variants: hourly + quarter-hour names)"
         reports = n
     return {"source": source, "target_prefix": TARGET_PREFIX, "days": list(days), "n_days": len(days),
-            "hours": list(hours), "n_hours": len(hours), "n_reports": reports, "est_requests": est}
+            "hours": list(hours), "n_hours": len(hours), "minutes": list(stamp_minutes),
+            "n_minutes": len(stamp_minutes), "n_reports": reports, "est_requests": est}
 
 
 def format_plan(plan: dict) -> str:
     days = plan["days"]
     span = f"{days[0]} .. {days[-1]}" if days else "(none)"
-    return "\n".join([
+    n_stamps = plan["n_hours"] * plan.get("n_minutes", 1)
+    lines = [
         f"source: {plan['source']}",
         f"target prefix: {plan['target_prefix']}",
-        f"{plan['n_days']} days x {plan['n_hours']} stamps = {plan['n_reports']} reports",
+        f"{plan['n_days']} days x {n_stamps} stamps = {plan['n_reports']} reports",
         f"days: {span} ({plan['n_days']})",
         f"stamp hours (ET): {', '.join(str(h) for h in plan['hours'])}",
-        f"est. requests: {plan['est_requests']}",
-    ])
+    ]
+    if plan.get("n_minutes", 1) > 1:
+        lines.append(f"stamp minutes: {', '.join(str(m) for m in plan['minutes'])}")
+    lines.append(f"est. requests: {plan['est_requests']}")
+    return "\n".join(lines)
 
 
 def execution_allowed(execute_flag: bool, environ) -> tuple:
@@ -150,6 +167,12 @@ def main(argv=None, environ=None) -> int:
     ap.add_argument("--seasons", nargs="+", type=int, help="hoopR seasons (year the season ends), with --box-dir")
     ap.add_argument("--hours", nargs="+", type=int, help="ET stamp hours (24h); default 13 17")
     ap.add_argument("--all-hours", action="store_true", help="every hourly stamp 0-23 ET (overrides --hours)")
+    ap.add_argument("--grid-hours", action="store_true",
+                    help="the banked publication window 11-23 ET (overrides --hours/--all-hours)")
+    ap.add_argument("--stamp-minutes", nargs="+", type=int,
+                    help="ET stamp minutes within each hour; default 0 (hourly-era stamps)")
+    ap.add_argument("--grid-minutes", action="store_true",
+                    help="quarter-hour stamps 0 15 30 45 (the current publication grid)")
     ap.add_argument("--source", choices=SOURCES, default="official-pdf",
                     help="official-pdf (default): league PDFs via nba_injury_report; sportsdataverse: "
                          "adapter interface only, not implemented (fails closed on execute)")
@@ -165,7 +188,8 @@ def main(argv=None, environ=None) -> int:
     except ValueError as exc:
         ap.error(str(exc))
     hours = resolve_hours(a)
-    plan = build_plan(days, hours, a.source)
+    minutes = resolve_minutes(a)
+    plan = build_plan(days, hours, a.source, minutes)
     print(format_plan(plan))
 
     allowed, reason = execution_allowed(a.execute, environ)
@@ -183,7 +207,7 @@ def main(argv=None, environ=None) -> int:
             print(f"FAILED: {exc}")
             return 1
         return 0                                                        # unreachable until implemented
-    res = R.backfill(days, hours, a.delay,
+    res = R.backfill(days, hours, a.delay, stamp_minutes=minutes,
                      progress=lambda o: log.info("progress %s", {k: (len(v) if isinstance(v, list) else v)
                                                                  for k, v in o.items()}))
     print(json.dumps({k: (len(v) if isinstance(v, list) else v) for k, v in res.items()}))
