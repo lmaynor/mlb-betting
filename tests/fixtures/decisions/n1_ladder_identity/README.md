@@ -159,7 +159,8 @@ Labels derive only from deterministic evidence, strongest first.
 `same_book_main_anchor+cross_book_consensus`; `grounding_detail`
 spells out the evidence (book counts, modal point) for audit. No entry
 carries `ungrounded_excluded`: ungroundable candidates were excluded
-from the fixture entirely (326 counted above) rather than shipped.
+from the fixture entirely (286 by the itemized counts above; see the errata
+note under Counts) rather than shipped.
 
 ## Counts
 
@@ -178,6 +179,16 @@ By stat: rec_yds 224, rush_yds 141, receptions 129, pass_yds 90,
 pass_tds 73, anytime_td 2, rush_attempts 1.
 By day: 2026-10-04: 51, 10-12: 40, 10-18: 120, 10-25: 167, 11-01: 199,
 11-05: 6, 11-08: 57, 11-12: 20.
+
+## Errata (2026-11-13, join audit)
+
+The exclusion total originally published here and in the prep report was
+326. The itemized exclusions in Grounding above sum to **286**
+(unmapped_key 10; onesided_ladder_rung 158 two-sided in some snapshot + 77
+one-sided at the main point; twosided_offmain_rung 41). The labeling
+program was run once and not retained, and no surviving prep record
+itemizes the remaining 40, so the stated total is corrected to the
+itemized sum: **286**. The labels themselves are unaffected.
 
 ## Known limits
 

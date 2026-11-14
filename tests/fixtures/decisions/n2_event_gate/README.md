@@ -80,6 +80,33 @@ NBC Sports EDGE / RotoWire-style corpus at
 Schema: `{"league", "game": {"date", "context"}, "blurb_text", "source",
 "label": "no_change"}`.
 
+### Normals v2 (2026-11-13, join audit)
+
+In v1 a normal's `game.date` was the prose PUBLISH date and there was
+no team pair, so the eval's deterministic slate matcher could never
+match a normal to its game and the material-change false rate was null
+by construction (reported as not evaluable, never 0.0). v2 joins every
+normal to the actual game its prose discusses, rebuilt by
+`scripts/build_n2_normals_v2.py`:
+
+- `game` is now `{"away", "home", "date", "context"}` with full team
+  display names and the TRUE game date, item for item like the
+  disruptions; the publish date moves to `prose_published_date`, the
+  corpus subject to `player`, and each normal carries a unique
+  `item_id` (`N2N-001`..`N2N-200`).
+- Join evidence (first tier that yields exactly one game; the subject's
+  own boxscore row is never required, ESPN omits inactives): boxscore
+  slate uniqueness 140, headline weekday 50, banked official injury
+  reports 10. Per-item provenance: `normals_v2_build.json`.
+- 193 of the 200 v1 normals joined uniquely and were kept with their
+  original blurb and context; 7 did not join uniquely (5 no candidate,
+  2 ambiguous) and were replaced by 7 backfills drawn from the same
+  corpus under the v1 selection rules above, keeping only draws that
+  join uniquely. The fixture stays at 200 normals.
+- The v1 normals are preserved verbatim in `normals_v1.jsonl`. The 50
+  disruption items are byte-identical to v1, so their cached eval
+  answers remain valid.
+
 ## Known limits
 
 - `completed_early` has only 2 items, both NFL preseason games shortened
