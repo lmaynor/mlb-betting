@@ -10,11 +10,27 @@ No book-consensus fair value is computed here. The reference books and the de-vi
 screen, so the payload carries raw American prices only. One-sided quotes (an anytime-TD "Yes" ladder, a BettingPros alt
 rung) are kept with `under: null`.
 
+Per-quote timestamps (`ts`) carry each market's `last_update` ISO timestamp.
+Placeholder-cap flags identify prices outside [CAP_LO, CAP_HI] (-5000, 10000) via `over_cap`/`under_cap` on book
+entries and `is_placeholder_cap` on rows. `is_one_sided` indicates rungs with no two-sided quotes.
+
+Per-rung consensus and gate metrics provide `disp` (MAD of included books' fair P(over)), `p_cons` (median fair P(over)),
+`n_ref` (count of included reference books within 120m of freshest), `n_fresh_ref` (reference books within 30m of build time),
+`rung_vig` (median vig), and `best_over`/`best_under` with leave-one-out (LOO) consensus statistics (`p_cons_loo`,
+`disp_loo`, `n_ref_loo`).
+
+Group metadata on every row includes `grp_books_any`, `grp_books_2sided`, `modal_open`, `modal_first_ts`, and
+book-level `stale_opener` flags when the modal line has shifted while a book's quote remains near the opener.
+The payload persists `ladder_opens` tracking modal openers across builds.
+
+Under the MAX_ROWS cap, rows are capped atomically by group key (game, player, stat) ordered by group priority
+`(min tier among its rows, commence, player_norm, stat)` so that complete ladders are preserved without splitting.
+
 Alternate lines are kept too, tagged so the screen can tell them apart: `is_alt` (the line is off the player's modal line
 by >= 1.0, or every quote at it came from an alternate / one-sided ladder market), `modal_point` (the line most books
 price two-sided) and `curve_fair_over`, a per-player fair P(over) read off a monotone curve through the player's own
-multi-book rungs (see `fit_curve`). The curve is the only fair-looking number in the payload and it is a fallback for
-lines too thinly quoted to de-vig; it is unvalidated, like every row here.
+multi-book rungs (see `fit_curve`). Note that the scalar `curve_fair_over` remains for other views but ladders v1 does
+not use it as a standalone fair.
 
 Written to EVSweep/{sport}_props/odds_board_latest.json by ev.daily_projections.run_sport (the `daily-projections` job),
 served by mlb/runners/public_api.py::get_odds_board at GET /api/public/odds/board. Never computed on a web request.
@@ -26,10 +42,20 @@ import json
 import logging
 import time
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from statistics import median
 
-from ev.props import DFS_BOOKS, JUNK_OFFSHORE_BOOKS, OFFSHORE_BOOKS, POOL_SD_FRAC, parse_event_props, shift_p_over
+import numpy as np
+
+from ev.props import (
+    DFS_BOOKS,
+    JUNK_OFFSHORE_BOOKS,
+    OFFSHORE_BOOKS,
+    POOL_SD_FRAC,
+    _mad,
+    parse_event_props,
+    shift_p_over,
+)
 from mlb_core.odds.utils import american_to_decimal, american_to_implied_prob, devig_two_way
 
 log = logging.getLogger("ev.odds_board")
@@ -38,7 +64,7 @@ SPORTS = ("nfl", "nhl", "nba", "mlb")
 MLB_RAW_PREFIX = "OddsAccum/baseball_mlb/raw"   # props_{HHMM}.json: a list of ParlayAPI single-event odds objects, banked by the snapshot job
 OUT_KEY = "EVSweep/{sport}_props/odds_board_latest.json"
 LINES_KEY = "NHL/lines/lines_latest.json"
-MAX_ROWS = 3000                      # main lines first, then actionable alts; nearest game first within a tier
+MAX_ROWS = 3000                      # atomic group cap; main lines first, then actionable alts; nearest game first within a tier
 MIN_BOOKS = 2                        # a one-book line is not a comparison (an actionable alt rung is the exception)
 ALT_GAP = 1.0                        # a line this far from the player's modal line is an alt line
 MIN_ALT_EDGE = 0.015                 # raw edge vs the curve that keeps a single-book alt rung under the cap
@@ -49,9 +75,26 @@ CURVE_SINGLE_MAX_SD = 1.0            # the single-anchor tail model is not exten
 CURVE_LO, CURVE_HI = 0.01, 0.99
 CACHE_TTL_SEC = 5 * 60               # the job rewrites the file every 30 min
 STALE_MINUTES = 90
+CAP_LO, CAP_HI = -5000, 10000
 
 _CACHE: dict = {}                    # sport -> (time.monotonic() loaded, payload)
 _LINES_CACHE: dict = {"t": 0.0, "by_team": {}, "by_norm": {}}
+
+
+def _is_cap(p: int | float | None) -> bool:
+    return p is not None and (p <= CAP_LO or p >= CAP_HI)
+
+
+def _parse_ts(ts: str | None) -> datetime | None:
+    if not ts:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
 
 
 def _logit(p: float) -> float:
@@ -267,14 +310,17 @@ def _annotate_nhl_lines(rows: list[dict], by_team: dict, by_norm: dict) -> int:
     return annotated
 
 
-def build_board(sport: str, events: list | None, now: datetime, meta: dict | None = None) -> dict:
+def build_board(sport: str, events: list | None, now: datetime, meta: dict | None = None,
+                prev_opens: dict | None = None) -> dict:
     """Banked events -> the odds-board payload for one sport (rows sorted nearest game first, then player, then stat).
 
     Main lines and alternate rungs are both kept (see the module docstring for `is_alt` / `modal_point` /
     `curve_fair_over`); DFS / pick'em apps are skipped (they carry the number, not a price), and a game that has started
-    is dropped. Under the MAX_ROWS cap main lines come first (nearest game first), then alt rungs that are quoted two-sided
-    by >= 2 books or are actionable against the curve, then the remaining multi-book alt rungs."""
+    is dropped. Under the MAX_ROWS cap, candidate rows are grouped atomically by (game_key, player_norm, stat) and
+    prioritized by (min tier among its rows, commence, player_norm, stat) so whole ladders are preserved."""
     meta = meta or {}
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
     # imported here, not at module top: ev.daily_projections imports this module lazily from run_sport
     from ev.daily_projections import canon_team as _canon_team, game_key_of
 
@@ -311,7 +357,7 @@ def build_board(sport: str, events: list | None, now: datetime, meta: dict | Non
                                    "away": away, "home": home, "player": q.player, "player_norm": q.player_norm,
                                    "player_id": q.player_id, "team": q.team_hint, "stat": q.stat, "line": q.point,
                                    "books": {}}
-            new = {"book": q.book, "over": q.over, "under": q.under, "alt": bool(q.alt)}
+            new = {"book": q.book, "over": q.over, "under": q.under, "alt": bool(q.alt), "ts": q.ts}
             if q.over_link is not None:
                 new["over_link"] = q.over_link
             if q.under_link is not None:
@@ -351,15 +397,92 @@ def build_board(sport: str, events: list | None, now: datetime, meta: dict | Non
     groups: dict = {}
     for row in rows.values():
         books = sorted(row["books"].values(), key=lambda b: b["book"])
+        for b in books:
+            if _is_cap(b.get("over")):
+                b["over_cap"] = True
+            if _is_cap(b.get("under")):
+                b["under_cap"] = True
         row["alt_src"] = all(b["alt"] for b in books)
-        row["one_sided"] = all(b["over"] is None or b["under"] is None for b in books)
+        row["is_one_sided"] = all(b.get("over") is None or b.get("under") is None for b in books)
+        row["one_sided"] = row["is_one_sided"]
+        row["is_placeholder_cap"] = bool(any(b.get("over_cap") or b.get("under_cap") for b in books))
         two = [f for f in (_two_sided_fair(b) for b in books) if f is not None]
         row["n_two"], row["med"] = len(two), (median(two) if two else None)
         row["books"] = [{k: v for k, v in b.items() if k != "alt"} for b in books]
+
+        # Consensus and gate data for this row
+        two_sided_books = [b for b in row["books"] if b.get("over") is not None and b.get("under") is not None]
+        ts_pairs = [(b, _parse_ts(b.get("ts"))) for b in two_sided_books]
+        valid_dts = [dt for _, dt in ts_pairs if dt is not None]
+        freshest = max(valid_dts) if valid_dts else None
+
+        included_two_sided = []
+        for b, dt in ts_pairs:
+            if dt is not None and freshest is not None and (freshest - dt).total_seconds() > 120 * 60:
+                continue
+            included_two_sided.append((b, dt))
+
+        n_ref = len(included_two_sided)
+        row["n_ref"] = n_ref
+        included_fairs = [(b["book"], _two_sided_fair(b)) for b, _ in included_two_sided]
+        fair_vals = [f for _, f in included_fairs if f is not None]
+
+        if n_ref < 2:
+            row["disp"] = None
+        else:
+            row["disp"] = round(_mad(fair_vals), 4)
+
+        if n_ref == 0:
+            row["p_cons"] = None
+            row["rung_vig"] = None
+        else:
+            row["p_cons"] = round(float(np.median(fair_vals)), 4)
+            vigs = [american_to_implied_prob(b["over"]) + american_to_implied_prob(b["under"]) - 1.0
+                    for b, _ in included_two_sided]
+            row["rung_vig"] = round(float(np.median(vigs)), 4)
+
+        row["n_fresh_ref"] = sum(
+            1 for _, dt in included_two_sided
+            if dt is None or (now - dt).total_seconds() <= 30 * 60
+        )
+
+        # best_over and best_under
+        for side in ("over", "under"):
+            cands_side = [
+                b for b in row["books"]
+                if b.get(side) is not None and not _is_cap(b.get(side))
+            ]
+            if not cands_side:
+                row[f"best_{side}"] = None
+            else:
+                best_book = max(cands_side, key=lambda b: _safe_decimal(b[side]) or 0.0)
+                best_book_name = best_book["book"]
+                loo_fairs = [f for b_name, f in included_fairs if b_name != best_book_name and f is not None]
+                n_ref_loo = len(loo_fairs)
+                p_cons_loo = round(float(np.median(loo_fairs)), 4) if n_ref_loo > 0 else None
+                disp_loo = round(_mad(loo_fairs), 4) if n_ref_loo >= 2 else None
+                row[f"best_{side}"] = {
+                    "book": best_book_name,
+                    "american": int(best_book[side]),
+                    "p_cons_loo": p_cons_loo,
+                    "disp_loo": disp_loo,
+                    "n_ref_loo": n_ref_loo,
+                }
+
         groups.setdefault((row["game_key"], row["player_norm"], row["stat"]), []).append(row)
 
-    cands = []
-    for (_, _, stat), grp in groups.items():
+    if prev_opens is not None:
+        base_opens = dict(prev_opens)
+    else:
+        try:
+            prev = read_board(sport)
+            base_opens = dict((prev or {}).get("ladder_opens") or {})
+        except Exception:
+            base_opens = {}
+    ladder_opens: dict = {}
+
+    cand_groups = []
+    for (gk, pn, stat), grp in groups.items():
         def modal_of(rs):
             rs = [r for r in rs if r["n_two"] >= 1]
             return min(rs, key=lambda r: (-r["n_two"], abs(r["med"] - 0.5), r["line"]))["line"] if rs else None
@@ -371,6 +494,37 @@ def build_board(sport: str, events: list | None, now: datetime, meta: dict | Non
         if not anchors and modal_row is not None and modal_row["n_two"] >= CURVE_SINGLE_MIN_BOOKS:
             anchors = [(modal_row["line"], modal_row["med"], modal_row["n_two"])]
         curve = fit_curve(anchors, stat) if anchors else None
+
+        # Group metadata & opens
+        grp_books_any = len({b["book"] for r in grp for b in r["books"]})
+        grp_books_2sided = len({
+            b["book"] for r in grp for b in r["books"]
+            if b.get("over") is not None and b.get("under") is not None
+        })
+        gkey = f"{gk}|{pn}|{stat}"
+        if gkey in base_opens:
+            entry = dict(base_opens[gkey])
+            ladder_opens[gkey] = entry
+        elif modal is not None:
+            entry = {"modal": float(modal), "ts": now.isoformat()}
+            ladder_opens[gkey] = entry
+        else:
+            entry = {"modal": None, "ts": None}
+
+        modal_open = entry.get("modal")
+        modal_first_ts = entry.get("ts")
+
+        # Stale-opener check
+        is_stale_group = False
+        first_dt = None
+        if modal is not None and modal_open is not None and modal_first_ts is not None:
+            threshold = 1.5 if stat.endswith("yds") else 0.5
+            if abs(modal - modal_open) >= threshold:
+                first_dt = _parse_ts(modal_first_ts)
+                if first_dt is not None:
+                    is_stale_group = True
+
+        group_cands = []
         for r in grp:
             if modal is None:
                 is_alt = r["alt_src"]
@@ -381,6 +535,17 @@ def build_board(sport: str, events: list | None, now: datetime, meta: dict | Non
             r["is_alt"], r["modal_point"] = bool(is_alt), modal
             r["curve_fair_over"] = curve(r["line"]) if curve else None
             r["curve_n"] = len({a[0] for a in anchors}) if curve else 0
+            r["grp_books_any"] = grp_books_any
+            r["grp_books_2sided"] = grp_books_2sided
+            r["modal_open"] = modal_open
+            r["modal_first_ts"] = modal_first_ts
+
+            if is_stale_group and first_dt is not None:
+                for b in r["books"]:
+                    b_dt = _parse_ts(b.get("ts"))
+                    if b_dt is not None and b_dt <= first_dt + timedelta(minutes=5):
+                        b["stale_opener"] = True
+
             n_books = len(r["books"])
             if not is_alt:
                 tier = 1 if n_books >= MIN_BOOKS else None
@@ -389,11 +554,30 @@ def build_board(sport: str, events: list | None, now: datetime, meta: dict | Non
             else:
                 tier = 2 if _actionable(r) else None
             if tier is not None:
-                cands.append((tier, r))
+                group_cands.append((tier, r))
 
-    cands.sort(key=lambda t: (t[0], t[1]["commence"], t[1]["player_norm"], t[1]["stat"], t[1]["line"]))
-    cut = max(len(cands) - MAX_ROWS, 0)
-    kept = [r for _, r in cands[:MAX_ROWS]]
+        if group_cands:
+            min_tier = min(t for t, _ in group_cands)
+            cand_groups.append({
+                "min_tier": min_tier,
+                "commence": grp[0]["commence"],
+                "player_norm": grp[0]["player_norm"],
+                "stat": grp[0]["stat"],
+                "rows": [r for _, r in group_cands],
+            })
+
+    cand_groups.sort(key=lambda g: (g["min_tier"], g["commence"], g["player_norm"], g["stat"]))
+    budget = MAX_ROWS
+    kept = []
+    total_cands = sum(len(g["rows"]) for g in cand_groups)
+    for g in cand_groups:
+        g_rows = g["rows"]
+        if len(g_rows) <= budget:
+            kept.extend(g_rows)
+            budget -= len(g_rows)
+            if budget == 0:
+                break
+    cut = total_cands - len(kept)
     kept.sort(key=lambda r: (r["commence"], r["player_norm"], r["stat"], r["line"]))
     out = [{k: v for k, v in r.items() if k not in ("alt_src", "one_sided", "n_two", "med")} for r in kept]
     lines_rows = 0
@@ -405,6 +589,7 @@ def build_board(sport: str, events: list | None, now: datetime, meta: dict | Non
         "sport": sport, "ts": now.isoformat(), "validated": False, "count": len(out), "rows": out,
         "books": book_keys, "offshore_books": sorted(b for b in book_keys if b in OFFSHORE_BOOKS),
         "stats": sorted({r["stat"] for r in out}),
+        "ladder_opens": ladder_opens,
         "games": [{"game_key": g[0], "start": g[1], "away": g[2], "home": g[3]}
                   for g in sorted({(r["game_key"], r["commence"], r["away"], r["home"]) for r in out},
                                   key=lambda g: (g[1], g[0]))],
