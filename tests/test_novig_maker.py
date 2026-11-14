@@ -163,6 +163,7 @@ def test_study_config_is_the_ruling_verbatim():
     assert ms.KILL_BARS["news_window_share"] == {"over": 0.25, "min_fills": 45}
     assert ms.KILL_BARS["winners_curse_gap"] == {"pp_over": 2.50}
     assert "p_cons_close" in ms.QUOTE_LOG_FIELDS and "in_news_window" in ms.FILL_FIELDS
+    assert "p_novig_close" in ms.FILL_FIELDS                        # clv_same_book report field
 
 
 def _fill(day, i, drift_pp=0.5, close_c=4.5, m30_c=1.5, news=False):

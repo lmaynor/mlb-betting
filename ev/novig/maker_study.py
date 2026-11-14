@@ -38,10 +38,11 @@ QUOTE_LOG_FIELDS = ("order_id", "game_key", "sport", "stat", "player_norm", "lin
                     "t_post", "t_end", "quote_price", "novig_bid_at_post", "novig_ask_at_post",
                     "novig_spread_at_post", "p_cons_at_post", "p_blend_at_post", "p_cons_close",
                     "terminal_status")
-# every paper fill (from /v3/portfolio/fills, joined to its quote + closing consensus)
+# every paper fill (from /v3/portfolio/fills, joined to its quote + closing consensus;
+# p_novig_close is Novig's own T-15m close on our side, for the clv_same_book report field)
 FILL_FIELDS = ("order_id", "game_key", "game_day", "sport", "stat", "side", "p_fill",
                "p_cons_at_post", "p_cons_close", "p_cons_fill_plus_5m", "p_cons_fill_plus_30m",
-               "in_news_window")
+               "p_novig_close", "in_news_window")
 
 # ------------------------------------------------------------- pre-registered bars (ruling Q4)
 PROMOTION_BARS = {
@@ -100,6 +101,8 @@ def compute_metrics(quotes: list, fills: list) -> dict:
            if f.get("p_cons_fill_plus_30m") is not None]
     m5 = [(f["p_cons_fill_plus_5m"] - f["p_fill"]) * 100.0 for f in fills
           if f.get("p_cons_fill_plus_5m") is not None]
+    same_book = [(f["p_novig_close"] - f["p_fill"]) * 100.0 for f in fills
+                 if f.get("p_novig_close") is not None]
     news_share = (sum(1 for f in fills if f.get("in_news_window")) / n_fills) if n_fills else None
     unfilled_drift = [(q["p_cons_at_post"] - q["p_cons_close"]) * 100.0
                       for q in quotes if not q.get("filled") and q.get("p_cons_close") is not None]
@@ -114,6 +117,7 @@ def compute_metrics(quotes: list, fills: list) -> dict:
         "closing_markout_c": close_mean, "closing_markout_ci_c": (close_lo, close_hi),
         "markout_5m_c": (sum(m5) / len(m5)) if m5 else None,
         "markout_30m_c": (sum(m30) / len(m30)) if m30 else None,
+        "clv_same_book_c": (sum(same_book) / len(same_book)) if same_book else None,
         "news_window_share": news_share,
         "winners_curse_gap_pp": curse,
     }
