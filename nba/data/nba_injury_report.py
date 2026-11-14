@@ -13,6 +13,9 @@ Source facts verified 2026-10-16 (range GETs; no auth):
   * layout: landscape table, columns Game Date | Game Time | Matchup | Team | Player Name ("Last, First") | Current Status |
     Reason. Date/time/matchup/team appear once per group and are carried down; the reason WRAPS onto lines above/below
     the player's line; page 1 carries the header, later pages only repeat the title.
+  * layout era change (verified 2026-11-13 on the real 2026-10-19 11:00 AM report): "NOT YET SUBMITTED" moved from the
+    player column (2026-04 layout) to the REASON column of the team's line, and an early report can be ALL team flags
+    with zero player rows. parse_words accepts both placements and only raises when a report has neither.
 
 PARSER: `pdftotext -bbox` (poppler) gives every word with coordinates; columns are cut at the midpoints between header x
 positions (defaults when no header), rows are anchored on player-name words, wrapped reason words go to the NEAREST player
@@ -22,17 +25,30 @@ exist: poppler-utils is NOT in the current Docker image (see the handoff). Missi
 FAIL CLOSED: a report with zero parsed player rows, an unreadable PDF, or a row whose status is not a known status raises /
 is dropped and counted; a team not listed in a report is "nothing reported", NOT "healthy" unless the report parsed fully
 (the league lists every team with a player on it; "NOT YET SUBMITTED" rows are kept as team-level flags).
+
+PROVENANCE (MIN-07): the parse contract (COLUMNS) is unchanged, but every row a bank writes carries
+its provenance -- `source_url`, `source_pdf_sha256`, `banked_at_utc` (PROVENANCE_COLUMNS, appended
+by bank_report whenever the PDF or its URL is known). The 2021-2026 bank predates this and carries
+no provenance columns; its raw PDFs are banked beside the parses, so any of its rows can still be
+re-derived and hash-checked after the fact.
+
+FETCH USER AGENT: fetch_report sends a generic Chrome UA, never a bot-shaped one. Verified
+2026-11-13 from the dev VM: ak-static stalls on non-browser UAs (CONNECT and TLS complete, the
+HTTP response never arrives) while a Chrome UA is answered in ~2s (403 unpublished / 200
+published). The old "beezy-fyi-data" UA was answered from the environment the historical bank
+ran in; from this VM it hangs. Same pattern as the NBC/RotoWire pullers (anonymous Chrome UA).
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import re
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 
@@ -50,6 +66,16 @@ STATUSES = ("Out", "Doubtful", "Questionable", "Probable", "Available")
 NOT_SUBMITTED = "NOT_SUBMITTED"
 COLUMNS = ["report_ts_et", "game_date", "game_time_et", "matchup", "team", "team_code", "player_raw", "player",
            "status", "reason", "reason_cat"]
+PROVENANCE_COLUMNS = ["source_url", "source_pdf_sha256", "banked_at_utc"]
+FETCH_USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/141.0 Safari/537.36")
+# The publication grid the bank is built on: file stamps 11:00-23:00 ET hourly through the
+# 2025-26 season; from January 2026 the league also publishes quarter-hour files, and by
+# 2026-27 the quarter-hour names are the ONLY names (the hourly name 403s -- probed
+# 2026-11-13 on 2026-11-12: _05PM 403, _05_00PM/_05_15PM/_05_30PM/_05_45PM all 200, and in
+# this era the filename stamp equals the report's title time).
+GRID_STAMP_HOURS = tuple(range(11, 24))
+GRID_STAMP_MINUTES = (0, 15, 30, 45)
 _ET = ZoneInfo(TIMEZONE)
 _TITLE = re.compile(r"Injury Report:\s*(\d{2}/\d{2}/\d{2})\s+(\d{1,2}:\d{2})\s*([AP]M)", re.I)
 _FOOTER = re.compile(r"^Page\s+\d+\s+of\s+\d+$", re.I)
@@ -87,7 +113,7 @@ def fetch_report(ts_et: datetime, session=None, timeout: float = 30.0) -> Option
     import requests
     s = session or requests
     for url in report_urls(ts_et):
-        r = s.get(url, timeout=timeout, headers={"User-Agent": "Mozilla/5.0 (compatible; beezy-fyi-data/1.0)"})
+        r = s.get(url, timeout=timeout, headers={"User-Agent": FETCH_USER_AGENT})
         if r.status_code in (403, 404):
             continue
         r.raise_for_status()
@@ -228,9 +254,19 @@ def parse_words(pages: list) -> pd.DataFrame:
                 continue
             parsed.append({"y": ln["y"] + 10000.0 * k, **txt})
     players = [p for p in parsed if p.get("player")]
-    if not players:
+    # CURRENT-ERA team flags: since the 2026-27 layout, "NOT YET SUBMITTED" is printed in the
+    # REASON column of the team's line (the 2026-04 layout put it in the player column, handled
+    # below via player_raw). An early report can consist of NOTHING but these flags (verified on
+    # the real 2026-10-19 11:00 AM report: 6 teams, zero player rows) -- that is a legitimate
+    # published version whose content is "no team had submitted", not a parse failure. Flag
+    # lines become team-flag rows and are kept OUT of the reason pool, so a flag can never leak
+    # onto a neighbouring player's reason in a mixed report.
+    flag_lines = [p for p in parsed
+                  if (p.get("reason") or "").strip().upper() == "NOT YET SUBMITTED"]
+    flag_ids = {id(p) for p in flag_lines}
+    if not players and not flag_lines:
         raise ReportParseError("no player rows found (layout changed, empty report, or wrong file)")
-    reason_lines = [p for p in parsed if p.get("reason")]
+    reason_lines = [p for p in parsed if p.get("reason") and id(p) not in flag_ids]
     carry = {k: [p for p in parsed if p.get(k)] for k in ("date", "time", "matchup")}
     merged_team: list = []                         # wrapped team-name lines (adjacent < 16pt apart) are one name
     for p in (p for p in parsed if p.get("team")):
@@ -239,20 +275,29 @@ def parse_words(pages: list) -> pd.DataFrame:
             merged_team[-1]["y_last"] = p["y"]
         else:
             merged_team.append({"y": p["y"], "y_last": p["y"], "team": p["team"]})
+    def above(key, y):
+        c = [p for p in carry[key] if p["y"] <= y + 8]
+        return c[-1][key] if c else None
+
+    def team_at(y):
+        c = [p for p in merged_team if p["y"] <= y + 8]
+        return c[-1]["team"] if c else None
+
     by_player: dict = {i: [] for i in range(len(players))}
     for rl in reason_lines:
         i = min(range(len(players)), key=lambda j: abs(players[j]["y"] - rl["y"]))
         if abs(players[i]["y"] - rl["y"]) <= 30:
             by_player[i].append(rl)
     for i, pl in enumerate(players):
-        def above(key):
-            c = [p for p in carry[key] if p["y"] <= pl["y"] + 8]
-            return c[-1][key] if c else None
-        c = [p for p in merged_team if p["y"] <= pl["y"] + 8]
         reason = " ".join(r["reason"] for r in sorted(by_player[i], key=lambda r: r["y"]))
-        rows.append({"game_date": above("date"), "game_time_et": above("time"), "matchup": above("matchup"),
-                     "team": c[-1]["team"] if c else None, "player_raw": pl["player"], "status": pl.get("status"),
+        rows.append({"game_date": above("date", pl["y"]), "game_time_et": above("time", pl["y"]),
+                     "matchup": above("matchup", pl["y"]),
+                     "team": team_at(pl["y"]), "player_raw": pl["player"], "status": pl.get("status"),
                      "reason": reason})
+    for fl in flag_lines:
+        rows.append({"game_date": above("date", fl["y"]), "game_time_et": above("time", fl["y"]),
+                     "matchup": above("matchup", fl["y"]), "team": team_at(fl["y"]),
+                     "player_raw": "NOT YET SUBMITTED", "status": None, "reason": ""})
     if not rows:
         raise ReportParseError("no player rows found (layout changed, empty report, or wrong file)")
     df = pd.DataFrame(rows)
@@ -301,16 +346,40 @@ def resolve_ids(df: pd.DataFrame, rows: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+# ----------------------------------------------------------------------------------------------- provenance
+def pdf_sha256(pdf: bytes) -> str:
+    """SHA-256 of the raw PDF bytes -- the identity of the source document a parse came from."""
+    return hashlib.sha256(pdf).hexdigest()
+
+
+def with_provenance(df: pd.DataFrame, source_url: Optional[str] = None, pdf: Optional[bytes] = None,
+                    banked_at: Optional[datetime] = None) -> pd.DataFrame:
+    """Copy of `df` with PROVENANCE_COLUMNS appended: where this parse came from (the URL it was
+    fetched from), what it came from (the raw PDF's SHA-256), and when it was banked (UTC).
+    `banked_at` is injectable for tests; the parse columns and row order are untouched."""
+    out = df.copy()
+    out["source_url"] = source_url
+    out["source_pdf_sha256"] = pdf_sha256(pdf) if pdf is not None else None
+    ts = banked_at or datetime.now(timezone.utc)
+    out["banked_at_utc"] = ts.astimezone(timezone.utc).isoformat()
+    return out
+
+
 # ----------------------------------------------------------------------------------------------- bank
 def bank_key(ts_et: datetime) -> str:
     t = ts_et.astimezone(_ET) if ts_et.tzinfo else ts_et.replace(tzinfo=_ET)
     return f"{PREFIX}/{t.date().isoformat()}/report_{t.strftime('%H%M')}.csv"
 
 
-def bank_report(df: pd.DataFrame, ts_et: datetime, pdf: Optional[bytes] = None) -> str:
-    """Write the parsed report (and the raw PDF beside it, the durable source of truth) under NBA/injuries/official/."""
+def bank_report(df: pd.DataFrame, ts_et: datetime, pdf: Optional[bytes] = None,
+                source_url: Optional[str] = None) -> str:
+    """Write the parsed report (and the raw PDF beside it, the durable source of truth) under NBA/injuries/official/.
+    When the PDF or its URL is known, the written rows carry PROVENANCE_COLUMNS; a bare frame
+    banked without either (tests, re-banks of old parses) keeps the historical column shape."""
     from mlb_core import storage
     key = bank_key(ts_et)
+    if pdf is not None or source_url is not None:
+        df = with_provenance(df, source_url=source_url, pdf=pdf)
     storage.write_bytes(df.to_csv(index=False).encode(), key)
     if pdf:
         storage.write_bytes(pdf, key.replace("/report_", "/raw_report_").replace(".csv", ".pdf"))
@@ -333,10 +402,15 @@ DEFAULT_STAMP_HOURS = (13, 17)         # the ~1:30 PM and ~5:30 PM ET reports (t
 
 
 def backfill(days, stamp_hours=DEFAULT_STAMP_HOURS, delay: float = 0.25, fetch=fetch_report, parse=parse_pdf,
-             progress=None) -> dict:
-    """Fetch + parse + bank the reports for each ET day in `days` at each stamp hour. Resumable (a banked CSV is skipped), never
-    raises on one bad file (counted), throttled. -> {"banked", "skipped_present", "not_published", "failed": [...]}.
-    Not-published stamps are recorded in NBA/injuries/official/_missing.json so a re-run does not re-ask for them."""
+             progress=None, stamp_minutes=(0,)) -> dict:
+    """Fetch + parse + bank the reports for each ET day in `days` at each stamp (hour x minute).
+    Resumable (a banked CSV is skipped), never raises on one bad file (counted), throttled.
+    -> {"banked", "skipped_present", "not_published", "failed": [...]}.
+    Not-published stamps are recorded in NBA/injuries/official/_missing.json so a re-run does not re-ask for them.
+    Only run this over COMPLETE days: a stamp recorded missing is never re-asked, so a stamp that
+    simply has not published yet (today, late evening) must go through the capture path
+    (nba.data.official_report_capture), which never writes _missing.json.
+    Banked rows carry provenance (source_url + PDF SHA-256 + banked_at_utc)."""
     from mlb_core import storage
     miss_key = f"{PREFIX}/_missing.json"
     missing = set(json.loads(storage.read_bytes(miss_key).decode())) if storage.exists(miss_key) else set()
@@ -344,31 +418,31 @@ def backfill(days, stamp_hours=DEFAULT_STAMP_HOURS, delay: float = 0.25, fetch=f
     for day in days:
         d = pd.Timestamp(day).date()
         for h in stamp_hours:
-            ts = datetime(d.year, d.month, d.day, h, 0, tzinfo=_ET)
-            key = bank_key(ts)
-            if storage.exists(key):
-                out["skipped_present"] += 1
-                continue
-            if key in missing:
-                out["not_published"] += 1
-                continue
-            try:
-                got = fetch(ts)
-                time.sleep(delay)
-                if got is None:
-                    missing.add(key)
+            for m in stamp_minutes:
+                ts = datetime(d.year, d.month, d.day, h, m, tzinfo=_ET)
+                key = bank_key(ts)
+                if storage.exists(key):
+                    out["skipped_present"] += 1
+                    continue
+                if key in missing:
                     out["not_published"] += 1
                     continue
-                url, pdf = got
-                df = parse(pdf)
-                df.attrs["url"] = url
-                bank_report(df, ts, pdf)
-                out["banked"] += 1
-            except Exception as exc:                                                     # noqa: BLE001
-                log.warning("official report %s failed: %r", key, exc)
-                out["failed"].append({"key": key, "error": f"{type(exc).__name__}: {exc}"})
-            if progress and (out["banked"] + out["not_published"]) % 100 == 0:
-                progress(out)
+                try:
+                    got = fetch(ts)
+                    time.sleep(delay)
+                    if got is None:
+                        missing.add(key)
+                        out["not_published"] += 1
+                        continue
+                    url, pdf = got
+                    df = parse(pdf)
+                    bank_report(df, ts, pdf, source_url=url)
+                    out["banked"] += 1
+                except Exception as exc:                                                 # noqa: BLE001
+                    log.warning("official report %s failed: %r", key, exc)
+                    out["failed"].append({"key": key, "error": f"{type(exc).__name__}: {exc}"})
+                if progress and (out["banked"] + out["not_published"]) % 100 == 0:
+                    progress(out)
     storage.write_bytes(json.dumps(sorted(missing)).encode(), miss_key)
     return out
 
