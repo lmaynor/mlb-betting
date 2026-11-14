@@ -205,10 +205,18 @@ def test_status_sets_shape_for_the_live_feature_path(df):
 @pytest.mark.skipif(shutil.which("pdftotext") is None, reason="poppler pdftotext not installed")
 def test_real_report_parses_completely():
     out = R.parse_pdf(FIX.read_bytes())
-    assert len(out) == 115 and out.attrs["n_bad_status"] == 0
+    # 115 player rows + 12 NOT YET SUBMITTED team-flag rows. The flags print in the REASON
+    # column (x0=667 in this PDF's geometry); before MIN-07 the parser dropped them entirely
+    # and could glue their text onto a neighbouring player's reason (the historical bank has
+    # rows reading "...; Pain NOT YET SUBMITTED"). Player status counts are unchanged.
+    assert len(out) == 127 and out.attrs["n_bad_status"] == 0
     assert out["team"].notna().all() and out["matchup"].notna().all() and out["game_date"].notna().all()
-    assert out["status"].value_counts().to_dict() == {"Out": 83, "Questionable": 17, "Available": 9, "Probable": 5, "Doubtful": 1}
-    assert out["matchup"].nunique() == 9 and out["team"].nunique() == 18
+    assert out["status"].value_counts().to_dict() == {"Out": 83, "Questionable": 17, "Available": 9,
+                                                      "Probable": 5, "Doubtful": 1, "NOT_SUBMITTED": 12}
+    # the report covers 15 games, not 9: the 6 next-day (04-02) games had NO submitted team
+    # at 5 PM and were invisible to the old parse entirely. 28 distinct teams (GSW and SAS
+    # play both days), 18 with players + 12 flag rows.
+    assert out["matchup"].nunique() == 15 and out["team"].nunique() == 28
     sizes = out.groupby("team").size()
     assert sizes["Atlanta Hawks"] == 3 and sizes["Orlando Magic"] == 5 and sizes["Washington Wizards"] == 10
     assert out.loc[out["player"] == "Joel Embiid", "status"].iloc[0] == "Out"
