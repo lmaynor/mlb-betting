@@ -4,15 +4,17 @@ Evaluates the committed claims.jsonl fixture against Decisions API entailment
 gates, scoring recall on planted flaws (contradicted, unsupported, stale,
 wrong_scope) and false-block rates on clean claims.
 
+Argon ruling RUL-20261113-dec-gate-design Q1 bars:
+1. Contradicted recall: 100% (bar: 1.0)
+2. Planted-flaw recall: >= 90% (bar: 0.90) AND 100% on multi-artifact synthesis flaws (bar: 1.0)
+3. Clean false-block rate: <= 5% (bar: 0.05) overall AND on the multi-artifact clean subset (bar: 0.05)
+Held thresholds: supported >= 0.90 / contradicted <= 0.05 / wrong_scope+stale < 0.25.
+
 DOCTRINE:
 - Offline by default: uses AnswersCache (answers.jsonl) next to the fixture to
   avoid repeated API calls.
 - Live fetching: only when missing answers exist and GEMINI_API_KEY is present,
   using live_client, Pacer, and run_batched.
-- Grades against Argon ruling kill criteria:
-  1. Contradicted recall: 100% (bar: 1.0)
-  2. Planted-flaw recall: >= 90% (bar: 0.90)
-  3. Clean false-block rate: <= 5% (bar: 0.05)
 """
 
 from __future__ import annotations
@@ -24,10 +26,12 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
-from ev.decisions_claim_auditor import EVIDENCE_CAP, audit_claims
+from ev.decisions_claim_auditor import audit_claims
 from ev.decisions_client import BatchResult
+from ev.decisions_common import estimate_tokens
 from ev.decisions_evals.common import AnswersCache, Pacer, live_client, run_batched
 from ev.decisions_prep.n3_claim_auditor import build_questions
+from ev.decisions_prep.n3_evidence_packaging import package_evidence
 
 FLAW_LABELS: tuple[str, ...] = ("contradicted", "unsupported", "stale", "wrong_scope")
 LABEL_ORDER: tuple[str, ...] = ("clean", "contradicted", "unsupported", "stale", "wrong_scope")
@@ -44,30 +48,6 @@ def _find_fixture_dir() -> Path:
         if (c / "claims.jsonl").is_file():
             return c
     return candidates[0]
-
-
-def _build_evidence_text(claim: Mapping[str, Any]) -> str:
-    """Construct evidence text capped at EVIDENCE_CAP characters.
-
-    Evidence text per claim = fixture 'evidence' value, plus (when the file
-    exists) the content of source_doc expanded with os.path.expanduser.
-    """
-    ev = str(claim.get("evidence", ""))
-    source_doc = claim.get("source_doc")
-    doc_content = ""
-    if source_doc:
-        expanded = Path(os.path.expanduser(str(source_doc)))
-        if expanded.is_file():
-            try:
-                doc_content = expanded.read_text(encoding="utf-8", errors="replace")
-            except OSError:
-                doc_content = ""
-
-    if doc_content:
-        combined = f"{ev}\n\n{doc_content}" if ev else doc_content
-    else:
-        combined = ev
-    return combined[:EVIDENCE_CAP]
 
 
 class CachedDecisionsClient:
@@ -125,37 +105,34 @@ def run_eval(
             if line:
                 claims.append(json.loads(line))
 
-    evidence_texts = {c["claim_id"]: _build_evidence_text(c) for c in claims}
+    packaged_by_id = {c["claim_id"]: package_evidence(c) for c in claims}
+    evidence_texts = {c["claim_id"]: packaged_by_id[c["claim_id"]]["evidence_text"] for c in claims}
 
     # 1. Manage AnswersCache
     cache = AnswersCache(answers_path)
     cached = cache.load()
     uncached = [c for c in claims if c["claim_id"] not in cached]
 
-    if uncached:
+    # Skip claims whose packaging has missing pointers (deterministically blocked in scoring; no live answers needed)
+    uncached_to_fetch = [c for c in uncached if not packaged_by_id[c["claim_id"]]["missing"]]
+
+    if uncached_to_fetch:
         if os.environ.get("GEMINI_API_KEY"):
-            # Live path via harness
+            # Live path via harness.
+            # Per RUL-20261113-dec-gate-design Q1: the clearance re-eval is mandated at 1 claim/call.
             client = live_client()
             pacer = Pacer()
-            items = [
-                (
-                    build_questions(c, evidence_texts[c["claim_id"]])["input"],
-                    build_questions(c, evidence_texts[c["claim_id"]])["questions"],
+            for c in uncached_to_fetch:
+                cid = c["claim_id"]
+                item = (
+                    build_questions(c, evidence_texts[cid])["input"],
+                    build_questions(c, evidence_texts[cid])["questions"],
                 )
-                for c in uncached
-            ]
-            # Packet-scale chunks: this route audits a research packet's claims
-            # against their cited docs, and long multi-document contexts were
-            # measured to dilute per-claim entailment confidence materially
-            # (Nov 13 experiment: 5 of 8 batched-blocked clean claims passed
-            # when re-asked singly). ~2 claims per call keeps contexts at the
-            # packet scale the route is operated at.
-            batched = run_batched(client, items, pacer=pacer, max_input_tokens=7_000)
-            for idx, c in enumerate(uncached):
-                cache.store(c["claim_id"], batched[idx])
+                batched = run_batched(client, [item], pacer=pacer)
+                cache.store(cid, batched[0])
         else:
             raise RuntimeError(
-                f"GEMINI_API_KEY is not set and {len(uncached)} claims have no cached "
+                f"GEMINI_API_KEY is not set and {len(uncached_to_fetch)} claims have no cached "
                 "answers. This evaluation only scores live Decisions answers or "
                 "previously cached live answers; it never synthesizes answers."
             )
@@ -167,19 +144,36 @@ def run_eval(
         tag_map[f"i{idx+1:03d}"] = c["claim_id"]
 
     cache_client = CachedDecisionsClient(cache, id_map=tag_map)
-    # Score in groups: full cited docs make a 100-claim single batch exceed
-    # the route's joined-input token guard, which is the intended production
-    # behavior (audit packets, not whole corpora, per run).
+
+    # Adaptive groups: accumulate claims into a group while the summed estimate_tokens
+    # of their build_questions inputs stays <= 200_000; a single claim always forms a valid group.
+    groups: list[list[dict[str, Any]]] = []
+    current_group: list[dict[str, Any]] = []
+    current_tokens: int = 0
+
+    for c in claims:
+        cid = c["claim_id"]
+        q_input = build_questions(c, evidence_texts[cid])["input"]
+        toks = estimate_tokens(q_input)
+        if current_group and (current_tokens + toks > 200_000):
+            groups.append(current_group)
+            current_group = [c]
+            current_tokens = toks
+        else:
+            current_group.append(c)
+            current_tokens += toks
+    if current_group:
+        groups.append(current_group)
+
     all_results: list[dict[str, Any]] = []
-    for start in range(0, len(claims), 20):
-        group = claims[start:start + 20]
+    for group in groups:
         group_out = audit_claims(
             group,
             client=cache_client,
-            evidence_texts=evidence_texts,
             mode="shadow",
         )
         all_results.extend(group_out["results"])
+
     audit_output = {
         "results": all_results,
         "blocked_ids": [r["claim_id"] for r in all_results if r["blocked"]],
@@ -220,7 +214,47 @@ def run_eval(
     clean_false_block_rate = clean_data["blocked"] / clean_data["total"] if clean_data["total"] > 0 else 0.0
     clean_passed = clean_false_block_rate <= 0.05
 
-    passed_all = contradicted_passed and planted_flaw_passed and clean_passed
+    # Multi-artifact clean false-block (bar <= 5%)
+    ma_clean = [
+        c for c in claims
+        if c["label"] == "clean" and packaged_by_id[c["claim_id"]]["multi_artifact"]
+    ]
+    ma_clean_total = len(ma_clean)
+    if ma_clean_total == 0:
+        ma_clean_val = None
+        ma_clean_passed = True
+        ma_clean_blocked = 0
+    else:
+        ma_clean_blocked = sum(1 for c in ma_clean if results_by_id[c["claim_id"]]["blocked"])
+        ma_clean_val = round(ma_clean_blocked / ma_clean_total, 4)
+        ma_clean_passed = (ma_clean_blocked / ma_clean_total) <= 0.05
+
+    # Multi-artifact flaw recall (bar 100%)
+    ma_flaw = [
+        c for c in claims
+        if c["label"] in FLAW_LABELS and packaged_by_id[c["claim_id"]]["multi_artifact"]
+    ]
+    ma_flaw_total = len(ma_flaw)
+    if ma_flaw_total == 0:
+        ma_flaw_val = None
+        ma_flaw_passed = True
+        ma_flaw_blocked = 0
+    else:
+        ma_flaw_blocked = sum(1 for c in ma_flaw if results_by_id[c["claim_id"]]["blocked"])
+        ma_flaw_val = round(ma_flaw_blocked / ma_flaw_total, 4)
+        ma_flaw_passed = (ma_flaw_blocked / ma_flaw_total) >= 1.0
+
+    passed_all = (
+        contradicted_passed
+        and planted_flaw_passed
+        and clean_passed
+        and (ma_clean_passed if ma_clean_total > 0 else True)
+        and (ma_flaw_passed if ma_flaw_total > 0 else True)
+    )
+
+    all_ext: set[str] = set()
+    for p in packaged_by_id.values():
+        all_ext.update(p["external"])
 
     report_data = {
         "manifest_check": "not_applicable_no_manifests",
@@ -228,6 +262,15 @@ def run_eval(
         "blocked_count": len(audit_output["blocked_ids"]),
         "clear_count": len(audit_output["clear_ids"]),
         "passed_all": passed_all,
+        "packaging": {
+            "claims_with_missing_pointers": [
+                c["claim_id"] for c in claims if packaged_by_id[c["claim_id"]]["missing"]
+            ],
+            "multi_artifact_claim_ids": [
+                c["claim_id"] for c in claims if packaged_by_id[c["claim_id"]]["multi_artifact"]
+            ],
+            "external_pointers": sorted(list(all_ext)),
+        },
         "metrics": {
             "contradicted_recall": {
                 "value": round(contradicted_recall, 4),
@@ -249,6 +292,20 @@ def run_eval(
                 "passed": clean_passed,
                 "blocked": clean_data["blocked"],
                 "total": clean_data["total"],
+            },
+            "multi_artifact_clean_false_block": {
+                "value": ma_clean_val,
+                "bar": 0.05,
+                "passed": ma_clean_passed,
+                "blocked": ma_clean_blocked,
+                "total": ma_clean_total,
+            },
+            "multi_artifact_flaw_recall": {
+                "value": ma_flaw_val,
+                "bar": 1.0,
+                "passed": ma_flaw_passed,
+                "blocked": ma_flaw_blocked,
+                "total": ma_flaw_total,
             },
         },
         "per_label": per_label,
@@ -285,13 +342,20 @@ def _print_report(data: dict[str, Any], claims_path: str, out_path: str) -> None
     c_rec = m["contradicted_recall"]
     f_rec = m["planted_flaw_recall"]
     cl_rate = m["clean_false_block_rate"]
+    ma_cl = m["multi_artifact_clean_false_block"]
+    ma_fl = m["multi_artifact_flaw_recall"]
 
     def _status(p: bool) -> str:
         return "PASS" if p else "FAIL"
 
-    print(f"  Contradicted recall:    {c_rec['value'] * 100:5.1f}%  (bar: 100.0%) -> {_status(c_rec['passed'])}")
-    print(f"  Planted-flaw recall:    {f_rec['value'] * 100:5.1f}%  (bar: >=90.0%) -> {_status(f_rec['passed'])}")
-    print(f"  Clean false-block rate: {cl_rate['value'] * 100:5.1f}%  (bar: <= 5.0%) -> {_status(cl_rate['passed'])}")
+    ma_cl_str = f"{ma_cl['value'] * 100:5.1f}%" if ma_cl["value"] is not None else " N/A "
+    ma_fl_str = f"{ma_fl['value'] * 100:5.1f}%" if ma_fl["value"] is not None else " N/A "
+
+    print(f"  Contradicted recall:              {c_rec['value'] * 100:5.1f}%  (bar: 100.0%) -> {_status(c_rec['passed'])}")
+    print(f"  Planted-flaw recall:              {f_rec['value'] * 100:5.1f}%  (bar: >=90.0%) -> {_status(f_rec['passed'])}")
+    print(f"  Clean false-block rate:           {cl_rate['value'] * 100:5.1f}%  (bar: <= 5.0%) -> {_status(cl_rate['passed'])}")
+    print(f"  Multi-artifact clean false-block: {ma_cl_str}  (bar: <= 5.0%) -> {_status(ma_cl['passed'])}")
+    print(f"  Multi-artifact flaw recall:       {ma_fl_str}  (bar: 100.0%) -> {_status(ma_fl['passed'])}")
     print("-" * 72)
     overall = "PASS" if data["passed_all"] else "FAIL"
     print(f"OVERALL EVALUATION: {overall}")

@@ -2,14 +2,17 @@
 
 Verdicts only: no function in this module modifies claim text.
 
-Argon ruling (Nov 13, 2026; candidate N3, ADOPT standalone): an internal gate
-auditing research packets and build briefs before downstream consumption.
-Pairs deterministic literal-number checks against structured manifests with
-batched Decisions API entailment, scope, and freshness questions.
+Argon ruling (Nov 13, 2026; candidate N3, ADOPT standalone; RUL-20261113-dec-gate-design Q1):
+an internal gate auditing research packets and build briefs before downstream
+consumption. Pairs deterministic literal-number checks against structured manifests
+with deterministic evidence-chain packaging (failing closed with MISSING_ARTIFACT)
+and a single batched Decisions API call for entailment, scope, and freshness questions.
 
 DOCTRINE:
 - Deterministic checks run first: claims with numeric mismatches are blocked
   immediately and never sent over the wire to Decisions API.
+- Evidence packaging: claims without explicit evidence overrides are packaged with
+  their full cited evidence chain; missing local artifacts block fail-closed immediately.
 - All eligible claims in a run are batched into exactly ONE Decisions API call
   using ItemBatch.
 - Fail closed: batch abstention, missing client key, or missing supported
@@ -36,11 +39,15 @@ from ev.decisions_common import (
     route_mode,
 )
 from ev.decisions_prep.n3_claim_auditor import build_questions, check_numbers, gate
+from ev.decisions_prep.n3_evidence_packaging import package_evidence
 
 ROUTE_NAME: str = "n3_claim_auditor"
 ENV_ROUTE_MODE: str = "DECISIONS_CLAIMS_MODE"
 _KEY_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 EVIDENCE_CAP: int = 40000  # chars of evidence per claim (full cited doc in practice)
+
+
+# Superseded by ev.decisions_prep.n3_evidence_packaging in main; retained for test compatibility.
 def _resolve_source_text(
     doc_path: Optional[str],
     source_root: Optional[Union[str, os.PathLike[str]]] = None,
@@ -74,6 +81,7 @@ def audit_claims(
     *,
     manifests: Optional[Mapping[str, Any]] = None,
     evidence_texts: Optional[Mapping[str, str]] = None,
+    packaging_roots: Optional[Sequence[Any]] = None,
     mode: Optional[str] = None,
     log_path: Optional[Union[str, os.PathLike[str]]] = None,
 ) -> dict[str, Any]:
@@ -89,6 +97,7 @@ def audit_claims(
         manifests: Optional mapping of claim_id -> expected numbers (either
             {"numbers": [...]} or a plain list of numbers).
         evidence_texts: Optional mapping of claim_id -> evidence string override.
+        packaging_roots: Optional sequence of extra search roots for evidence packaging.
         mode: Route mode ("shadow" or "live"). Defaults to env var
             DECISIONS_CLAIMS_MODE or "shadow".
         log_path: Optional path to JSONL log file for decision records.
@@ -101,6 +110,7 @@ def audit_claims(
 
     results_by_index: dict[int, dict[str, Any]] = {}
     batch_candidates: list[tuple[int, Any, str, str]] = []
+    packaging_by_index: dict[int, dict[str, Any]] = {}
 
     # a) Deterministic numeric check first
     for idx, claim in enumerate(claims):
@@ -148,8 +158,30 @@ def audit_claims(
         ev_text = ""
         if evidence_texts is not None and claim_id in evidence_texts:
             ev_text = evidence_texts[claim_id]
-        elif isinstance(claim, Mapping):
-            ev_text = str(claim.get("evidence", ""))
+            packaging_by_index[idx] = {"attached": [], "missing": []}
+        else:
+            packaged = package_evidence(claim, extra_roots=packaging_roots or ())
+            if packaged["missing"]:
+                results_by_index[idx] = {
+                    "claim_id": claim_id,
+                    "verdict": "missing_artifact",
+                    "blocked": True,
+                    "reasons": [f"missing_artifact:{p}" for p in packaged["missing"]],
+                    "numeric_findings": [],
+                    "gate_result": None,
+                    "mode": resolved_mode,
+                    "applied": applied,
+                    "packaging": {
+                        "attached": [a["pointer"] for a in packaged["attached"]],
+                        "missing": packaged["missing"],
+                    },
+                }
+                continue
+            ev_text = packaged["evidence_text"]
+            packaging_by_index[idx] = {
+                "attached": [a["pointer"] for a in packaged["attached"]],
+                "missing": [],
+            }
 
         batch_candidates.append((idx, claim, claim_id, ev_text))
 
@@ -198,6 +230,7 @@ def audit_claims(
                     "gate_result": None,
                     "mode": resolved_mode,
                     "applied": applied,
+                    "packaging": packaging_by_index.get(idx, {"attached": [], "missing": []}),
                 }
         else:
             batch_result = active_client.call(input_text, wire_questions)
@@ -213,6 +246,7 @@ def audit_claims(
                         "gate_result": None,
                         "mode": resolved_mode,
                         "applied": applied,
+                        "packaging": packaging_by_index.get(idx, {"attached": [], "missing": []}),
                     }
             else:
                 # d) Otherwise per claim
@@ -231,6 +265,7 @@ def audit_claims(
                             "gate_result": None,
                             "mode": resolved_mode,
                             "applied": applied,
+                            "packaging": packaging_by_index.get(idx, {"attached": [], "missing": []}),
                         }
                     else:
                         gate_answer: dict[str, Any] = dict(raw_answer_dict)
@@ -259,6 +294,7 @@ def audit_claims(
                             "gate_result": gate_result,
                             "mode": resolved_mode,
                             "applied": applied,
+                            "packaging": packaging_by_index.get(idx, {"attached": [], "missing": []}),
                         }
 
     # e) Collect ordered results
@@ -323,22 +359,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 1
         manifests = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-    evidence_texts: dict[str, str] = {}
-    for c in claims:
-        cid = str(c.get("claim_id", ""))
-        ev = str(c.get("evidence", ""))
-        src = c.get("source_doc")
-        resolved = _resolve_source_text(src, args.source_root)
-        if resolved:
-            combined = f"{ev}\n\n{resolved}" if ev else resolved
-            evidence_texts[cid] = combined[:EVIDENCE_CAP]
-        else:
-            evidence_texts[cid] = ev[:EVIDENCE_CAP] if ev else ""
+    packaging_roots = [args.source_root] if args.source_root else None
 
     result = audit_claims(
         claims,
         manifests=manifests,
-        evidence_texts=evidence_texts,
+        packaging_roots=packaging_roots,
         mode=args.mode,
         log_path=args.log,
     )
