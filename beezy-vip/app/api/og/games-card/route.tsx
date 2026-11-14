@@ -1,45 +1,45 @@
 import { ImageResponse } from "next/og";
-import { OgBrandBadge, type OgPick } from "@/lib/og-brand";
+import { OgBrandBadge, ogTeamLogoUrl, type OgPick } from "@/lib/og-brand";
 import { limitRows } from "@/lib/access";
 import { DISCORD_INVITE_LABEL } from "@/lib/links";
 export const runtime = "edge";
 
 const API = process.env.BETTING_API_URL!;
 const KEY = process.env.BETTING_API_KEY!;
-const BASE = process.env.NEXT_PUBLIC_BASE_URL ?? "https://beezy.fyi";
 
-// Team abbrev -> { primary, secondary, logo }
-const TEAMS: Record<string, { p: string; s: string; slug: string }> = {
-  ARI: { p: "167,25,48",   s: "0,0,0",       slug: "ari" },
-  ATL: { p: "206,17,65",   s: "19,39,79",     slug: "atl" },
-  BAL: { p: "223,70,1",    s: "39,37,31",     slug: "bal" },
-  BOS: { p: "189,48,57",   s: "12,35,64",     slug: "bos" },
-  CHC: { p: "14,51,134",   s: "204,52,51",    slug: "chc" },
-  CWS: { p: "39,37,31",    s: "196,206,212",  slug: "cws" },
-  CIN: { p: "198,1,31",    s: "0,0,0",        slug: "cin" },
-  CLE: { p: "0,56,93",     s: "229,0,34",     slug: "cle" },
-  COL: { p: "51,51,102",   s: "35,31,32",     slug: "col" },
-  DET: { p: "12,35,64",    s: "250,70,22",    slug: "det" },
-  HOU: { p: "0,45,98",     s: "235,110,31",   slug: "hou" },
-  KC:  { p: "0,70,135",    s: "189,155,96",   slug: "kc"  },
-  LAA: { p: "0,50,99",     s: "186,0,33",     slug: "laa" },
-  LAD: { p: "0,90,156",    s: "239,62,66",    slug: "lad" },
-  MIA: { p: "0,163,224",   s: "0,0,0",        slug: "mia" },
-  MIL: { p: "18,40,75",    s: "255,197,47",   slug: "mil" },
-  MIN: { p: "0,43,92",     s: "211,17,69",    slug: "min" },
-  NYM: { p: "0,45,114",    s: "252,89,16",    slug: "nym" },
-  NYY: { p: "0,48,135",    s: "12,35,64",     slug: "nyy" },
-  OAK: { p: "0,56,49",     s: "239,178,30",   slug: "oak" },
-  PHI: { p: "232,24,40",   s: "0,45,114",     slug: "phi" },
-  PIT: { p: "39,37,31",    s: "253,184,39",   slug: "pit" },
-  SD:  { p: "47,36,29",    s: "255,196,37",   slug: "sd"  },
-  SF:  { p: "253,90,30",   s: "39,37,31",     slug: "sf"  },
-  SEA: { p: "12,44,86",    s: "0,92,92",      slug: "sea" },
-  STL: { p: "196,30,58",   s: "12,35,64",     slug: "stl" },
-  TB:  { p: "9,44,92",     s: "143,188,230",  slug: "tb"  },
-  TEX: { p: "0,50,120",    s: "192,17,31",    slug: "tex" },
-  TOR: { p: "19,74,142",   s: "232,41,28",    slug: "tor" },
-  WSH: { p: "171,0,3",     s: "20,34,90",     slug: "wsh" },
+// Team abbrev -> { primary, secondary } brand colors. Logos do NOT come from this map: they resolve
+// through the (league, abbrev) mapping (lib/og-brand ogTeamLogoUrl), so an unknown abbrev gets no logo.
+const TEAMS: Record<string, { p: string; s: string }> = {
+  ARI: { p: "167,25,48",   s: "0,0,0" },
+  ATL: { p: "206,17,65",   s: "19,39,79" },
+  BAL: { p: "223,70,1",    s: "39,37,31" },
+  BOS: { p: "189,48,57",   s: "12,35,64" },
+  CHC: { p: "14,51,134",   s: "204,52,51" },
+  CWS: { p: "39,37,31",    s: "196,206,212" },
+  CIN: { p: "198,1,31",    s: "0,0,0" },
+  CLE: { p: "0,56,93",     s: "229,0,34" },
+  COL: { p: "51,51,102",   s: "35,31,32" },
+  DET: { p: "12,35,64",    s: "250,70,22" },
+  HOU: { p: "0,45,98",     s: "235,110,31" },
+  KC:  { p: "0,70,135",    s: "189,155,96" },
+  LAA: { p: "0,50,99",     s: "186,0,33" },
+  LAD: { p: "0,90,156",    s: "239,62,66" },
+  MIA: { p: "0,163,224",   s: "0,0,0" },
+  MIL: { p: "18,40,75",    s: "255,197,47" },
+  MIN: { p: "0,43,92",     s: "211,17,69" },
+  NYM: { p: "0,45,114",    s: "252,89,16" },
+  NYY: { p: "0,48,135",    s: "12,35,64" },
+  OAK: { p: "0,56,49",     s: "239,178,30" },
+  PHI: { p: "232,24,40",   s: "0,45,114" },
+  PIT: { p: "39,37,31",    s: "253,184,39" },
+  SD:  { p: "47,36,29",    s: "255,196,37" },
+  SF:  { p: "253,90,30",   s: "39,37,31" },
+  SEA: { p: "12,44,86",    s: "0,92,92" },
+  STL: { p: "196,30,58",   s: "12,35,64" },
+  TB:  { p: "9,44,92",     s: "143,188,230" },
+  TEX: { p: "0,50,120",    s: "192,17,31" },
+  TOR: { p: "19,74,142",   s: "232,41,28" },
+  WSH: { p: "171,0,3",     s: "20,34,90" },
 };
 
 // Per-system identity colors (match lib/tokens.ts SYSTEM_COLOR).
@@ -63,7 +63,9 @@ function fmtPick(bt: string, sys: string) {
   return bt;
 }
 function teamInfo(abbrev: string | null | undefined) {
-  return TEAMS[(abbrev ?? "").toUpperCase()] ?? { p: "30,30,40", s: "10,10,15", slug: "nyy" };
+  // Colors only. An unknown abbrev gets the neutral gradient; its LOGO comes from ogTeamLogoUrl and is
+  // simply absent when the (league, abbrev) pair is unknown -- never a default team's logo.
+  return TEAMS[(abbrev ?? "").toUpperCase()] ?? { p: "30,30,40", s: "10,10,15" };
 }
 
 export async function GET() {
@@ -126,6 +128,8 @@ export async function GET() {
         ) : picks.map((pick, i) => {
           const away = teamInfo(pick.away_team);
           const home = teamInfo(pick.home_team);
+          const awayLogo = ogTeamLogoUrl("mlb", pick.away_team);
+          const homeLogo = ogTeamLogoUrl("mlb", pick.home_team);
           const sys = SYS[pick.system] ?? { accent: "#9ca3af", bg: "#171a24" };
           const notes = (pick.notes ?? "").trim();
           const isBettingHome = pick.bet_type === "HOME";
@@ -144,11 +148,11 @@ export async function GET() {
                 {/* rank */}
                 <span style={{ fontSize:"13px", color:"rgba(255,255,255,0.4)", fontWeight:700, minWidth:"20px" }}>#{i+1}</span>
 
-                {/* team logos */}
+                {/* team logos (absent, not defaulted, when a team is unknown to the mapping) */}
                 <div style={{ display:"flex", alignItems:"center", gap:"6px" }}>
-                  <img src={`${BASE}/logos/${away.slug}.png`} width={52} height={52} style={{ objectFit:"contain" }} />
+                  {awayLogo && <img src={awayLogo} width={52} height={52} style={{ objectFit:"contain" }} />}
                   <span style={{ fontSize:"14px", color:"rgba(255,255,255,0.5)", fontWeight:700 }}>@</span>
-                  <img src={`${BASE}/logos/${home.slug}.png`} width={52} height={52} style={{ objectFit:"contain" }} />
+                  {homeLogo && <img src={homeLogo} width={52} height={52} style={{ objectFit:"contain" }} />}
                 </div>
 
                 {/* matchup + pick info */}

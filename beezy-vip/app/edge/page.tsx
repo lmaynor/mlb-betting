@@ -14,6 +14,7 @@ import { EdgeClient, type EdgePick } from './edge-client'
 import { COCKPIT_SPORTS, type CockpitSport } from './cockpit'
 import { PlayerSearch } from '@/components/search/player-search'
 import { headshotUrlByName, playerIdByName } from '@/lib/sport-assets.server'
+import { anyTeamLogoUrl } from '@/lib/sport-assets'
 
 export const metadata: Metadata = {
   title: 'Prop Research',
@@ -24,18 +25,8 @@ export const metadata: Metadata = {
   },
 }
 
-const TEAM_SLUG: Record<string, string> = {
-  ARI: 'ari', ATL: 'atl', BAL: 'bal', BOS: 'bos', CHC: 'chc', CIN: 'cin', CLE: 'cle',
-  COL: 'col', CWS: 'cws', DET: 'det', HOU: 'hou', KC: 'kc', LAA: 'laa', LAD: 'lad',
-  MIA: 'mia', MIL: 'mil', MIN: 'min', NYM: 'nym', NYY: 'nyy', OAK: 'oak', PHI: 'phi',
-  PIT: 'pit', SD: 'sd', SEA: 'sea', SF: 'sf', STL: 'stl', TB: 'tb', TEX: 'tex',
-  TOR: 'tor', WSH: 'wsh',
-}
-
-function logoUrl(abbrev: string | null): string | null {
-  const slug = TEAM_SLUG[(abbrev ?? '').toUpperCase()] ?? null
-  return slug ? `/logos/${slug}.png` : null
-}
+// Team logos come from the canonical (league, abbrev) mapping in lib/sport-assets (this board is MLB-only).
+const logoUrl = (abbrev: string | null): string | null => anyTeamLogoUrl('mlb', abbrev)
 
 // edge stored as fraction (0.08) on some rows, already-pct on others -- normalize to pct
 function edgePct(e: number | null): number | null {

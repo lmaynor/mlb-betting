@@ -6,12 +6,11 @@ import { limitRows } from '@/lib/access'
 import { getViewer } from '@/lib/auth'
 import { addDaysToDateKey, formatCentralDate, siteDateKey } from '@/lib/dates'
 import { buildSheets, SHEET_SIZE } from '@/lib/cheat-sheet-post'
-import { teamLogoUrl, type AssetSport } from '@/lib/sport-assets'
+import { anyTeamLogoUrl } from '@/lib/sport-assets'
 import { headshotUrlByName } from '@/lib/sport-assets.server'
 import { SPORT_SLUGS, type SportSlug } from '@/lib/sports'
 import { recordOf, selectNearMisses, type TopPick } from '@/lib/top-picks'
 import { loadDailyPlaysHistory, loadTopPlayerPicks } from '@/lib/top-picks-data'
-import type { Bet } from '@/lib/types'
 import { CheatSheetClient, type CardPick } from '../cheat-sheet/cheat-sheet-client'
 import { GateReceipt } from './gate-receipt'
 import { NearMissZone } from './near-miss'
@@ -32,36 +31,18 @@ export const metadata: Metadata = {
   },
 }
 
-const TEAM_SLUG: Record<string, string> = {
-  ARI: 'ari', ATL: 'atl', BAL: 'bal', BOS: 'bos', CHC: 'chc', CIN: 'cin', CLE: 'cle',
-  COL: 'col', CWS: 'cws', DET: 'det', HOU: 'hou', KC: 'kc', LAA: 'laa', LAD: 'lad',
-  MIA: 'mia', MIL: 'mil', MIN: 'min', NYM: 'nym', NYY: 'nyy', OAK: 'oak', PHI: 'phi',
-  PIT: 'pit', SD: 'sd', SEA: 'sea', SF: 'sf', STL: 'stl', TB: 'tb', TEX: 'tex',
-  TOR: 'tor', WSH: 'wsh',
-}
-
-function logoUrl(abbrev: string | null): string | null {
-  const slug = TEAM_SLUG[(abbrev ?? '').toUpperCase()] ?? null
-  return slug ? `/logos/${slug}.png` : null
-}
-
 function dateLabel(): string {
   return formatCentralDate(new Date(), { weekday: 'long', month: 'long', day: 'numeric' })
 }
 
-// bets.sport is mlb unless a row says otherwise (lib/sport-assets handles nhl / nba logos)
-function assetSport(bet: Bet): AssetSport | null {
-  const s = (bet as Bet & { sport?: string }).sport
-  return s === 'nhl' || s === 'nba' ? s : null
-}
-
-/** Headshot for a player pick (NFL: nfl.com image token via the team-keyed map) and team logos for a game pick. */
+/** Headshot for a player pick (NFL: nfl.com image token via the team-keyed map) and team logos for a game pick.
+ *  Logos resolve through the (league, abbrev) mapping in lib/sport-assets: the pick's own sport keys the lookup,
+ *  so an NFL game's teams never land on MLB logos and an unknown pair renders no logo at all. */
 function enrich(p: TopPick): CardPick {
   const isPlayer = p.sport !== 'mlb' || !!p.bet?.player
   const headshotUrl = isPlayer ? headshotUrlByName(p.sport, p.who, p.team) : null
   const bet = p.bet
-  const sp = bet ? assetSport(bet) : null
-  const logo = (team: string | null) => (sp ? teamLogoUrl(sp, team) : logoUrl(team))
+  const logo = (team: string | null) => anyTeamLogoUrl(p.sport, team)
   return { ...p, headshotUrl, awayLogoUrl: bet ? logo(bet.away_team) : null, homeLogoUrl: bet ? logo(bet.home_team) : null }
 }
 

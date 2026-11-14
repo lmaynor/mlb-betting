@@ -1,4 +1,18 @@
 import { BRAND_EMERALD, BRAND_MONO, BRAND_PATHS, BRAND_VIEWBOX_H, BRAND_VIEWBOX_W } from '@/lib/brand-paths'
+import { anyTeamLogoUrl, type LogoSport } from '@/lib/sport-assets'
+
+const OG_BASE = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://beezy.fyi'
+
+/**
+ * Absolute logo URL for a team on an OG card, or null when the (league, abbrev) pair is unknown: the card then
+ * renders NO logo, never another team's. Resolution is the canonical mapping in lib/sport-assets; the league is
+ * an explicit argument because an abbreviation alone collides across leagues (ATL, MIA, KC, ...).
+ */
+export function ogTeamLogoUrl(sport: LogoSport, abbrev: string | null | undefined): string | null {
+  const path = anyTeamLogoUrl(sport, abbrev)
+  if (!path) return null
+  return path.startsWith('http') ? path : `${OG_BASE}${path}`
+}
 
 /**
  * Satori-safe brand lockup for the OG cards: the bare fin plus the wordmark, flexbox only, literal hex, inline <svg>.

@@ -171,7 +171,7 @@ function TableRow({ bet }: { bet: Bet }) {
       </div>
 
       <div className="py-2.5 px-1.5">
-        <Matchup away={bet.away_team} home={bet.home_team} size={18} fontSize="12px" />
+        <Matchup sport={bet.sport} away={bet.away_team} home={bet.home_team} size={18} fontSize="12px" />
       </div>
 
       <div className="py-2.5 px-1.5 min-w-0">
@@ -246,7 +246,7 @@ function BetCard({ bet }: { bet: Bet }) {
         <CompactScore bet={bet} align="center" />
       </div>
 
-      <div><Matchup away={bet.away_team} home={bet.home_team} size={20} fontSize="13px" /></div>
+      <div><Matchup sport={bet.sport} away={bet.away_team} home={bet.home_team} size={20} fontSize="13px" /></div>
 
       <div>
         {hasProp && bet.player ? (

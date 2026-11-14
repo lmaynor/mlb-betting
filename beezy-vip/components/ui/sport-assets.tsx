@@ -54,7 +54,7 @@ export function PlayerHeadshot({ sport, id, name, size = 48 }: {
     style={{ objectFit: 'contain', objectPosition: 'center bottom', flex: '0 0 auto' }} />
 }
 
-/** A team logo for any sport (MLB / NHL / NBA files, the NFL from ESPN's CDN). Renders nothing when the team is unknown or the image fails. */
+/** A team logo for any sport (MLB / NHL / NBA files, the NFL and NCAAB from ESPN's CDN). Renders nothing when the team is unknown or the image fails. */
 export function SportLogo({ sport, team, size = 20 }: { sport: LogoSport; team: string | null | undefined; size?: number }) {
   const [bad, setBad] = useState(false)
   const src = anyTeamLogoUrl(sport, team)
