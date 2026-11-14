@@ -1,0 +1,92 @@
+{
+  "summary": {
+    "total_entries": 25,
+    "divergent_entries": 15,
+    "clean_entries": 10,
+    "quarantined_entries": 15,
+    "consistent_entries": 10
+  },
+  "entry_level": {
+    "precision": 1.0,
+    "recall": 1.0,
+    "tp": 15,
+    "fp": 0,
+    "fn": 0,
+    "tn": 10,
+    "clean_false_flag_rate": 0.0,
+    "clean_quarantined": 0,
+    "clean_total": 10
+  },
+  "per_dimension": {
+    "overtime_included": {
+      "planted": 2,
+      "flagged_planted": 2,
+      "recall": 1.0,
+      "unplanted": 23,
+      "false_flags": 1,
+      "false_flag_rate": 0.0435
+    },
+    "dnp_or_starter_rule": {
+      "planted": 4,
+      "flagged_planted": 4,
+      "recall": 1.0,
+      "unplanted": 21,
+      "false_flags": 1,
+      "false_flag_rate": 0.0476
+    },
+    "stat_source_mismatch": {
+      "planted": 3,
+      "flagged_planted": 3,
+      "recall": 1.0,
+      "unplanted": 22,
+      "false_flags": 0,
+      "false_flag_rate": 0.0
+    },
+    "postponement_cutoff_mismatch": {
+      "planted": 4,
+      "flagged_planted": 4,
+      "recall": 1.0,
+      "unplanted": 21,
+      "false_flags": 0,
+      "false_flag_rate": 0.0
+    },
+    "tie_push_grading": {
+      "planted": 2,
+      "flagged_planted": 2,
+      "recall": 1.0,
+      "unplanted": 23,
+      "false_flags": 0,
+      "false_flag_rate": 0.0
+    }
+  },
+  "quarantined_entry_ids": [
+    "SA-002",
+    "SA-004",
+    "SA-007",
+    "SA-008",
+    "SA-010",
+    "SA-011",
+    "SA-012",
+    "SA-015",
+    "SA-016",
+    "SA-017",
+    "SA-019",
+    "SA-021",
+    "SA-022",
+    "SA-023",
+    "SA-025"
+  ],
+  "consistent_entry_ids": [
+    "SA-001",
+    "SA-003",
+    "SA-005",
+    "SA-006",
+    "SA-009",
+    "SA-013",
+    "SA-014",
+    "SA-018",
+    "SA-020",
+    "SA-024"
+  ],
+  "unresolved_entry_ids": []
+}
