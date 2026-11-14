@@ -439,6 +439,69 @@ def test_sse_a_healthy_stream_resets_the_failure_count_and_the_overall_deadline_
     assert got == [1]
 
 
+# -- Token seed persistence (OPS-01: issuance is browser-gated since Nov 2026) ----------------
+
+@pytest.fixture
+def token_state(monkeypatch):
+    """A fake GCS token state + a clean cookie jar; yields the captured writes."""
+    writes = []
+    monkeypatch.setattr("mlb_core.config.GCS_BUCKET", "test-bucket")
+    monkeypatch.setattr("mlb_core.storage.read_bytes",
+                        lambda key: json.dumps({"bb": "seed-token"}).encode())
+    monkeypatch.setattr("mlb_core.storage.write_bytes",
+                        lambda data, key: writes.append((key, json.loads(data.decode()))))
+    monkeypatch.setattr(bb, "_last_persisted_token", None)
+    bb._session.cookies.clear()
+    yield writes
+    bb._session.cookies.clear()
+    monkeypatch.setattr(bb, "_last_persisted_token", None)
+
+
+def _resp(status):
+    r = MagicMock()
+    r.status_code = status
+    return r
+
+
+def test_bootstrap_renews_the_persisted_seed_instead_of_the_homepage(token_state):
+    urls = []
+    with patch.object(bb._session, "get", side_effect=lambda url, **kw: (urls.append(url), _resp(204))[1]):
+        bb.bootstrap()
+    assert urls == [f"{bb.BASE}/t"]                       # no homepage GET: the seed was renewed
+    assert bb._session.cookies.get("bb") == "seed-token"
+
+
+def test_bootstrap_dead_seed_fails_with_the_turnstile_gate_named(token_state):
+    def get(url, **kw):
+        return _resp(403) if url.endswith("/t") else _resp(200)   # homepage 200 but sets no cookie
+    with patch.object(bb._session, "get", side_effect=get):
+        with pytest.raises(bb.BestBookError, match="Turnstile"):
+            bb.bootstrap()
+
+
+def test_renew_persists_a_rotated_token(token_state):
+    bb._session.cookies.set("bb", "seed-token")
+
+    def get(url, **kw):
+        bb._session.cookies.set("bb", "rotated-token")    # what a real /t Set-Cookie does to the jar
+        return _resp(204)
+    with patch.object(bb._session, "get", side_effect=get):
+        bb.renew_token()
+    assert len(token_state) == 1
+    assert token_state[0][0] == bb.TOKEN_STATE_KEY and token_state[0][1]["bb"] == "rotated-token"
+
+
+def test_no_bucket_configured_means_no_persistence_and_homepage_fallback(monkeypatch):
+    monkeypatch.setattr("mlb_core.config.GCS_BUCKET", "")
+    monkeypatch.setattr(bb, "_last_persisted_token", None)
+    bb._session.cookies.clear()
+    assert bb._load_persisted_token() is None
+    with patch.object(bb._session, "get", return_value=_resp(200)):
+        with pytest.raises(bb.BestBookError, match="Turnstile"):
+            bb.bootstrap()
+    bb._session.cookies.clear()
+
+
 def test_fetch_slate_returns_on_the_first_snapshot_message(monkeypatch, sse):
     status = {"slate": {"games": [{"key": "2026-11-02-CHI-SEA", "away": "CHI", "home": "SEA",
                                    "start": "2026-11-02T01:15:00Z", "venues": ["dk"]}]}}

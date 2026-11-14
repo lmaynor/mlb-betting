@@ -4472,6 +4472,12 @@ Catch-up for 20 commits (6835c26..2408d6a) that had no CONTEXT entry, plus the a
   2026-11-01), unioned with ParlayAPI and BettingPros in `ev.daily_projections.load_events`. No ToS / licensing review was done
   (`docs/solutions/conventions/bestbook-needs-tos-decision.md`); kill switches: `BESTBOOK_DISABLED=1` on the job, `PAUSE=1 deploy/setup_bestbook_live.sh`.
   The earlier "born paused" claim was never implemented in the script (schedulers were created enabled); the gate is gone, not hidden.
+  **Token gate (2026-11, OPS-01):** bestbook.app stopped setting the `bb` cookie on the homepage -- issuance now requires a browser
+  Cloudflare Turnstile check (POST /t), and per-game streams stopped yielding prices to the old token on 2026-11-05; every bb-live-* run
+  failed from 2026-11-05 until the feed was declared dead (last good write 2026-11-04 23:22 UTC). The client now persists a browser-issued
+  token in `Odds/bestbook_live/token_state.json` and renews it via GET /t across runs; a dead seed fails bootstrap with the gate named.
+  `monitor_ops` watches the four latest.json keys (3 h) so a frozen feed pages instead of sitting silent, and every publish banks a dated
+  copy under `Odds/bestbook_live/{sport}/history/{day}/`.
 - **MLB offseason pause** (`deploy/pause_mlb_offseason.sh` / `resume_mlb_season.sh`): keeps `mlb-settle`, tweets, `mlb-free-plays`, `mlb-monitor-ops`,
   `mlb-kalshi-rfq-recorder-daily`; stamps `[offseason-paused:DATE]` in the scheduler description and resume only touches stamped jobs. Offseason cutoff is
   Nov 5 in America/Chicago (`MLB_OFFSEASON_START=MM-DD` overrides).

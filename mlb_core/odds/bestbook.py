@@ -12,10 +12,23 @@ Transport is NOT a WebSocket and NOT a scrape, despite the page showing
 2026-10-30 (reading the site's own /assets/js/app.js, then hitting the
 endpoints directly):
 
-  1. GET {BASE}/            -> 200 HTML; sets the `bb` token cookie (24 h).
-                                The cookie is the ONLY auth. No account, no key.
+  1. GET {BASE}/            -> 200 HTML; set the `bb` token cookie (24 h)
+                                until 2026-11. SINCE 2026-11 (OPS-01): the
+                                homepage sets NO cookie for a plain HTTP
+                                client. Token issuance moved behind a
+                                Cloudflare Turnstile check in the browser:
+                                the page POSTs the Turnstile token to /t and
+                                only then is the `bb` cookie set (~1 h life,
+                                per the site's own client comments). The
+                                cookie is still the ONLY auth. No account, no
+                                key -- but issuance is browser-only now, so
+                                this client persists a browser-issued token
+                                (TOKEN_STATE_KEY) and renews it via (2); see
+                                the token-handling section below.
   2. GET {BASE}/t           -> 204 + fresh `bb` cookie (hourly renewal in the
-                               web client). 403 = token expired -> re-do (1).
+                               web client). 403 = token expired -> a browser
+                               must issue a new one (see 1). POST /t without
+                               a valid Turnstile token also answers 403.
                                 Without any cookie, /events returns the plain
                                 text "Open https://bestbook.app to see this."
   3. GET {BASE}/events?...  -> text/event-stream (SSE / EventSource):
@@ -142,19 +155,89 @@ class BestBookError(RuntimeError):
 
 
 class TokenExpired(BestBookError):
-    """/t answered 403: the bb cookie outlived its 24 h. Re-bootstrap."""
+    """/t answered 403: the bb cookie outlived its lifetime (~1 h since Nov 2026). Re-bootstrap."""
 
 
 # ---------------------------------------------------------------------------
 # Token handling (the bb cookie is the whole auth model)
 # ---------------------------------------------------------------------------
+#
+# Since Nov 2026 the token can only be ISSUED to a browser that passes the
+# site's Cloudflare Turnstile check (homepage POSTs the Turnstile token to
+# /t; plain-HTTP GET / and GET /t set nothing and /t answers 403 -- the
+# bb-live-* outage of 2026-11-05..13, OPS-01). Renewal of a live token is
+# still a plain GET /t, so the token is persisted to a GCS state object and
+# renewed across runs: one browser-issued seed keeps the hourly jobs alive
+# as long as every run renews inside the token's lifetime. When the seed is
+# dead, bootstrap fails with the gate named -- the remedy is a fresh seed
+# planted in TOKEN_STATE_KEY (the cookie value from any browser that opened
+# bestbook.app), not a code change. The token value is never logged.
+
+TOKEN_STATE_KEY = "Odds/bestbook_live/token_state.json"
+_last_persisted_token: str | None = None   # last value this process saved (write de-dup)
+
+
+def _load_persisted_token() -> str | None:
+    """The browser-issued bb token from the GCS state object, or None.
+
+    Fully guarded: persistence is a route around the gated issuance, never a
+    new failure mode -- any storage problem reads as 'no seed'."""
+    try:
+        from mlb_core.config import GCS_BUCKET
+        if not GCS_BUCKET:
+            return None
+        from mlb_core import storage
+        data = json.loads(storage.read_bytes(TOKEN_STATE_KEY).decode())
+        value = data.get("bb") if isinstance(data, dict) else None
+        return value if isinstance(value, str) and value else None
+    except Exception as e:  # noqa: BLE001
+        logger.debug("bestbook: no persisted token (%s)", type(e).__name__)
+        return None
+
+
+def _persist_token(value: str | None) -> None:
+    """Save the live bb token so the next run renews instead of re-issuing."""
+    global _last_persisted_token
+    if not value or value == _last_persisted_token:
+        return
+    _last_persisted_token = value
+    try:
+        from mlb_core.config import GCS_BUCKET
+        if not GCS_BUCKET:
+            return
+        from mlb_core import storage
+        storage.write_bytes(
+            json.dumps({"bb": value, "saved_at": datetime.now(timezone.utc).isoformat()}).encode(),
+            TOKEN_STATE_KEY,
+        )
+        logger.info("bestbook: token persisted for renewal by the next run")
+    except Exception as e:  # noqa: BLE001
+        logger.debug("bestbook: token persist failed (%s)", type(e).__name__)
+
 
 def bootstrap() -> None:
-    """GET the homepage so the server sets the `bb` token cookie."""
+    """Get a live `bb` token cookie: renew the persisted browser-issued seed
+    if there is one; else GET the homepage (which set the cookie directly
+    until the Nov 2026 Turnstile gate, and remains the fallback)."""
+    seed = _load_persisted_token()
+    if seed is not None:
+        _session.cookies.set("bb", seed, domain="bestbook.app", path="/")
+        try:
+            renew_token()
+            return
+        except BestBookError:
+            _session.cookies.clear()      # dead seed: fall through to the homepage path
     r = _session.get(f"{BASE}/", timeout=30)
     r.raise_for_status()
     if _session.cookies.get("bb") is None:
-        raise BestBookError("homepage did not set a bb token cookie")
+        raise BestBookError(
+            "homepage did not set a bb token cookie "
+            "(since Nov 2026 bestbook.app issues the token only after a browser "
+            "Turnstile check via POST /t; restore the feed by planting a "
+            "browser-issued bb cookie in Odds/bestbook_live/token_state.json "
+            "-- OPS-01)"
+        )
+    _persist_token(_session.cookies.get("bb"))
 
 
 def renew_token() -> None:
@@ -166,6 +249,7 @@ def renew_token() -> None:
     if r.status_code == 403:
         raise TokenExpired("bb token expired")
     r.raise_for_status()
+    _persist_token(_session.cookies.get("bb"))
 
 
 def _ensure_token() -> None:

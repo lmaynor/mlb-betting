@@ -44,6 +44,8 @@ _ET = ZoneInfo("America/New_York")
 SPORTS = ("nfl", "nhl", "nba", "cbb")
 OUT_KEY = "Odds/bestbook_live/{sport}/latest.json"
 GAME_LINES_KEY = "Odds/bestbook_live/{sport}/game_lines_latest.json"   # full-game ML / spread / total ladders (ev.bestbook_game_lines)
+HISTORY_KEY = "Odds/bestbook_live/{sport}/history/{day}/latest-{stamp}.json"          # dated copy of every publish (OPS-01:
+GAME_LINES_HISTORY_KEY = "Odds/bestbook_live/{sport}/history/{day}/game_lines-{stamp}.json"  # latest.json keeps no history)
 
 # Derivative archive (see module docstring): short sport -> the long OddsAccum sport key.
 DERIV_SPORT_LONG = {"nfl": "americanfootball_nfl", "nba": "basketball_nba", "nhl": "icehockey_nhl", "cbb": "basketball_ncaab"}
@@ -618,15 +620,37 @@ def write_latest(result: dict, key: str | None = None) -> str:
             log.exception("bestbook %s: derivative archive write failed; continuing with latest.json",
                           result.get("sport"))
     props = {k: v for k, v in result.items() if k not in ("game_lines", "derivative_games")}      # the props reader never parses the ladders
-    storage.write_bytes(json.dumps(props, default=str).encode(), key)
+    props_payload = json.dumps(props, default=str).encode()
+    storage.write_bytes(props_payload, key)
+    games_payload = None
     games = result.get("game_lines") or []
     if default_path and games:                                          # an empty crawl keeps the previous good file
         c = result.get("counts") or {}
-        storage.write_bytes(json.dumps({
+        games_payload = json.dumps({
             "sport": result["sport"], "fetched_at": result["fetched_at"], "window": result.get("window"), "games": games,
             "counts": {"games": c.get("game_lines_games", len(games)), "quotes": c.get("game_lines_quotes")},
-        }, default=str).encode(), GAME_LINES_KEY.format(sport=result["sport"]))
+        }, default=str).encode()
+        storage.write_bytes(games_payload, GAME_LINES_KEY.format(sport=result["sport"]))
+    if default_path:
+        _write_history(result, props_payload, games_payload)
     return key
+
+
+def _write_history(result: dict, props_payload: bytes, games_payload: bytes | None) -> None:
+    """Bank a dated copy of the publish under history/{day}/ -- latest.json is overwritten hourly and keeps no
+    history, which is what made the Nov 2026 outage impossible to reconstruct after the fact (OPS-01). History is
+    evidence, never a publish dependency: any failure here is logged and swallowed."""
+    from mlb_core import storage
+
+    try:
+        fetched = datetime.fromisoformat(str(result["fetched_at"]).replace("Z", "+00:00"))
+        day, stamp = fetched.strftime("%Y-%m-%d"), fetched.strftime("%H%M%S")
+        storage.write_bytes(props_payload, HISTORY_KEY.format(sport=result["sport"], day=day, stamp=stamp))
+        if games_payload is not None:
+            storage.write_bytes(games_payload,
+                                GAME_LINES_HISTORY_KEY.format(sport=result["sport"], day=day, stamp=stamp))
+    except Exception as e:  # noqa: BLE001
+        log.warning("bestbook history write failed for %s (%s)", result.get("sport"), e)
 
 
 def read_latest(sport: str, now: datetime, max_age_min: float) -> tuple[list | None, dict]:

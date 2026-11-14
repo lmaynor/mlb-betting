@@ -155,3 +155,37 @@ def test_board_feed_check_flags_stale_files_only_and_skips_the_offseason(monkeyp
     assert len(out) == 3 and any("NHL picks board stale" in f for f in out)           # nhl board + nfl / nba BP lines
     assert not any("NBA picks board" in f for f in out)                                # a missing file is silent
     assert mo._check_board_feeds(month=7) == [f for f in out if "picks board" in f]     # July: no BP live check
+
+
+def _bb_live(monkeypatch, ages, payload):
+    """BestBook state: per-key ages (None = unreadable) + one payload served for every latest.json."""
+    monkeypatch.setattr(mo, "_gcs_age_hours", lambda key: ages[key])
+    monkeypatch.setattr("mlb_core.storage.exists", lambda key: True)
+    monkeypatch.setattr("mlb_core.storage.read_bytes", lambda key: json.dumps(payload).encode())
+
+
+def test_bestbook_live_flags_every_sport_when_the_feed_freezes(monkeypatch):
+    _bb_live(monkeypatch, dict.fromkeys(mo.BB_LIVE_KEYS.values(), 240.0),
+             {"counts": {"events_upcoming": 14, "events_priced": 9, "game_lines_quotes": 900}})
+    out = mo._check_bestbook_live(month=11)
+    assert len(out) == 4 and all("BestBook live lines stale" in f for f in out)         # the actual Nov 2026 state
+
+
+def test_bestbook_live_flags_a_fresh_file_that_priced_nothing(monkeypatch):
+    _bb_live(monkeypatch, dict.fromkeys(mo.BB_LIVE_KEYS.values(), 0.5),
+             {"counts": {"events_upcoming": 14, "events_priced": 0, "game_lines_quotes": 0}})
+    out = mo._check_bestbook_live(month=11)
+    assert len(out) == 4 and all("feed empty" in f for f in out)                        # the Nov 5-8 failure shape
+
+
+def test_bestbook_live_is_silent_when_healthy_offseason_or_unreadable(monkeypatch):
+    _bb_live(monkeypatch, dict.fromkeys(mo.BB_LIVE_KEYS.values(), 0.5),
+             {"counts": {"events_upcoming": 14, "events_priced": 9, "game_lines_quotes": 900}})
+    assert mo._check_bestbook_live(month=11) == []
+    _bb_live(monkeypatch, dict.fromkeys(mo.BB_LIVE_KEYS.values(), 0.5),
+             {"counts": {"events_upcoming": 0, "events_priced": 0, "game_lines_quotes": 0}})
+    assert mo._check_bestbook_live(month=11) == []                                     # no upcoming games is legit
+    assert mo._check_bestbook_live(month=7) == []                                      # every bb-live cron is off in July
+    _bb_live(monkeypatch, dict.fromkeys(mo.BB_LIVE_KEYS.values(), None),
+             {"counts": {"events_upcoming": 14, "events_priced": 9, "game_lines_quotes": 900}})
+    assert mo._check_bestbook_live(month=11) == []                                     # bucket unreadable: silent
