@@ -25,10 +25,10 @@ export function LedgerStrip({ h }: { h: EvHeadline | null }) {
   return (
     <section aria-label="Paper track record" style={{ ...SURFACE_CARD, overflow: 'hidden', marginBottom: '10px' }}>
       <div className="flex flex-wrap">
-        <Metric label="+EV RECORD (MLB)" value={`${h.wins.toLocaleString()}-${h.losses.toLocaleString()}${h.pushes ? `-${h.pushes}` : ''}`}
+        <Metric label="+EV record (MLB)" value={`${h.wins.toLocaleString()}-${h.losses.toLocaleString()}${h.pushes ? `-${h.pushes}` : ''}`}
           sub={`${winPct != null ? `${winPct.toFixed(1)}% win \u00b7 ` : ''}${h.graded.toLocaleString()} graded`} />
         <Metric label="Flat stakes" value={fmtMoney(h.flat_pnl_dollars, true)} tone={tone(h.flat_roi_pct)} sub={`${roi(h.flat_roi_pct)} ROI`} />
-        <Metric label="1/4 KELLY" value={fmtMoney(h.kelly_ending_bankroll)} tone={tone(h.kelly_roi_pct)} sub={`from ${fmtMoney(h.bankroll)} \u00b7 ${roi(h.kelly_roi_pct)} ROI`} />
+        <Metric label="1/4 Kelly" value={fmtMoney(h.kelly_ending_bankroll)} tone={tone(h.kelly_roi_pct)} sub={`from ${fmtMoney(h.bankroll)} \u00b7 ${roi(h.kelly_roi_pct)} ROI`} />
         <details style={{ marginLeft: 'auto', padding: '10px 18px', alignSelf: 'center', flex: '1 1 260px', minWidth: 0 }}>
           <summary style={{ fontSize: '12px', color: 'var(--color-neutral-300)', cursor: 'pointer', textAlign: 'right' }}>Methodology &amp; audit notes</summary>
           <p className="times text-compact text-neutral-300 leading-[1.6]" style={{ margin: '10px 0 0' }}>

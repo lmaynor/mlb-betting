@@ -35,7 +35,7 @@ export const LONGSHOT_MIN_REF = 2 // ... on the Alt & Longshots view, where a li
 export const CELL_EDGE = 0.015    // a book cell is tinted when its price beats the row's fair value by this much EV
 export const NEAR_ARB_PCT = -1.5
 export const MID_COST = [2, 5, 8]                       // the most a missed middle may cost, percent of the outlay
-export const MID_GAP = [{ label: 'ANY', v: 0 }, { label: '2+', v: 2 }, { label: '3+', v: 3 }, { label: '5+', v: 5 }]
+export const MID_GAP = [{ label: 'Any', v: 0 }, { label: '2+', v: 2 }, { label: '3+', v: 3 }, { label: '5+', v: 5 }]
 export const MIDDLE_MIN_REF = 2
 
 export const OUTLIER_GAP_OPTIONS = [

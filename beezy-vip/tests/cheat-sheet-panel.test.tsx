@@ -53,7 +53,7 @@ describe('the card and the post text list the same picks', () => {
     const { card, mobile } = renderCard()
     const cardNames = NBA.map(p => p.who)
     for (const n of cardNames) expect(card).toHaveTextContent(n)                    // all six, including the sixth: there is no cap of five
-    expect(card).toHaveTextContent('6 PLAYS')
+    expect(card).toHaveTextContent('6 plays')
     const text = (within(mobile).getByLabelText('OVERALL post') as HTMLTextAreaElement).value
     const inText = NBA.filter(p => text.includes(lastName(p.who)))
     expect(inText.length).toBeGreaterThanOrEqual(1)
@@ -110,7 +110,7 @@ describe('POST TO X panel', () => {
     const writeText = jest.fn().mockResolvedValue(undefined)
     Object.assign(navigator, { clipboard: { writeText } })
     const { mobile } = renderCard()
-    const buttons = within(mobile).getAllByRole('button', { name: 'COPY' })
+    const buttons = within(mobile).getAllByRole('button', { name: 'Copy' })
     expect(buttons).toHaveLength(SHEETS.length + 1)
     fireEvent.click(buttons[1])
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(SHEETS[1].text))
@@ -154,9 +154,9 @@ describe('a play whose game has started stays on the card', () => {
     const view = render(<CheatSheetClient sheets={[]} sportPicks={{ nba: picks }} players={picks} locked={0} today="THURSDAY, NOVEMBER 12" yesterday={[]} weekRecord={NO_RECORD} />)
     const card = view.container.querySelector('.cheat-sheet-layout > div') as HTMLElement
     expect(card).toHaveTextContent('Started Player')
-    expect(card).toHaveTextContent('STARTED · GRADED AT FINAL')
+    expect(card).toHaveTextContent('Started · graded at final')
     expect(card).toHaveTextContent('Graded Player')
-    expect(card).toHaveTextContent('WIN')
-    expect(within(card).getAllByText('STARTED · GRADED AT FINAL')).toHaveLength(1)
+    expect(card).toHaveTextContent('Win')
+    expect(within(card).getAllByText('Started · graded at final')).toHaveLength(1)
   })
 })

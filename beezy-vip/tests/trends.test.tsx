@@ -224,6 +224,6 @@ describe('NBA inspector tabs', () => {
     apiGetTrends.mockResolvedValue({ status: 'no_player' })
     render(<Cockpit feed={feed} sport="nba" updated={Date.now()} loading={false} onRefresh={() => {}} />)
     await waitFor(() => expect(screen.getByText(/No box-score history for Jalen Brunson/)).toBeInTheDocument())
-    expect(screen.getByText(/GAME LOG VS LINE/)).toBeInTheDocument()
+    expect(screen.getByText(/game log vs line/i)).toBeInTheDocument()
   })
 })

@@ -121,7 +121,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
             style={{ background: 'var(--color-background-secondary-default)', color: 'var(--color-text-primary)', border: `1px solid ${HAIR}`, borderRadius: '6px', height: '34px', padding: '0 10px', fontSize: '12px', width: '190px' }}
           />
           <BookPicker
-            label={`BOOKS (${columns.length})`}
+            label={`Books (${columns.length})`}
             books={bookList} selected={[...shownSet]} onChange={next => setShown(next)}
             presets={[
               { label: 'Defaults', keys: defaultShown },
@@ -133,7 +133,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
             align="right"
           />
           <BookPicker
-            label={refs.length ? `REFERENCE BOOKS (${refs.length})` : 'REFERENCE BOOKS (ALL)'}
+            label={refs.length ? `Reference books (${refs.length})` : 'Reference books (all)'}
             books={bookList} selected={refs} onChange={setRefs} emptyMeansAll
             presets={[
               { label: 'Sharp', keys: SHARP_PRESET.filter(k => bookList.some(b => b.key === k)) },
@@ -154,6 +154,9 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
         </div>
       </div>
 
+      {/* The second row holds per-mode controls for the four table modes. Alt Ladders carries its own
+          segment controls in the view itself, so the row (and its hairline) is not rendered for it. */}
+      {mode !== 'longshots' && (
       <div style={{ padding: '8px 14px', borderTop: `1px solid ${HAIR}`, display: 'flex', gap: '10px 18px', flexWrap: 'wrap', alignItems: 'center' }}>
         {mode === 'ev' && (
           <>
@@ -165,7 +168,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
             </Field>
             <Field label="O/U">
               <PillGroup>
-                {(['both', 'over', 'under'] as SideFilter[]).map(s => <Pill key={s} active={side === s} onClick={() => setSide(s)}>{s === 'both' ? 'BOTH' : s === 'over' ? 'OVER' : 'UNDER'}</Pill>)}
+                {(['both', 'over', 'under'] as SideFilter[]).map(s => <Pill key={s} active={side === s} onClick={() => setSide(s)}>{s === 'both' ? 'Both' : s === 'over' ? 'Over' : 'Under'}</Pill>)}
               </PillGroup>
             </Field>
             <Field label="Min EV">
@@ -225,13 +228,13 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
           <>
             <Field label="Show">
               <PillGroup>
-                <Pill active={arbView === 'live'} onClick={() => { setArbView('live'); setLimit(PAGE) }}>LIVE ARBS (&gt; 0%)</Pill>
-                <Pill active={arbView === 'near'} onClick={() => { setArbView('near'); setLimit(PAGE) }}>NEAR ARBS (&gt; -1.5%)</Pill>
+                <Pill active={arbView === 'live'} onClick={() => { setArbView('live'); setLimit(PAGE) }}>Live arbs (&gt; 0%)</Pill>
+                <Pill active={arbView === 'near'} onClick={() => { setArbView('near'); setLimit(PAGE) }}>Near arbs (&gt; -1.5%)</Pill>
               </PillGroup>
             </Field>
             <Field label="Exchanges">
               <PillGroup>
-                <Pill active={exchanges} onClick={() => setExchanges(v => !v)} title="Kalshi, Novig and ProphetX quotes. Kalshi's taker fee is taken off its leg; Novig charges none before the game.">INCLUDE KALSHI / NOVIG (FEE-ADJUSTED)</Pill>
+                <Pill active={exchanges} onClick={() => setExchanges(v => !v)} title="Kalshi, Novig and ProphetX quotes. Kalshi's taker fee is taken off its leg; Novig charges none before the game.">Include Kalshi / Novig (fee-adjusted)</Pill>
               </PillGroup>
             </Field>
             <Field label="Outlay" htmlFor="odds-outlay">
@@ -254,7 +257,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
             </Field>
             <Field label="Value">
               <PillGroup>
-                <Pill active={midPosEv} onClick={() => { setMidPosEv(v => !v); setLimit(PAGE) }} title="Only middles whose window chance, estimated from the reference books' fair price at each line, beats the break-even chance">+EV ONLY</Pill>
+                <Pill active={midPosEv} onClick={() => { setMidPosEv(v => !v); setLimit(PAGE) }} title="Only middles whose window chance, estimated from the reference books' fair price at each line, beats the break-even chance">+EV only</Pill>
               </PillGroup>
             </Field>
             <Field label="Window">
@@ -264,7 +267,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
             </Field>
             <Field label="Exchanges">
               <PillGroup>
-                <Pill active={exchanges} onClick={() => setExchanges(v => !v)} title="Kalshi, Novig and ProphetX quotes. Kalshi's taker fee is taken off its leg; Novig charges none before the game.">INCLUDE KALSHI / NOVIG (FEE-ADJUSTED)</Pill>
+                <Pill active={exchanges} onClick={() => setExchanges(v => !v)} title="Kalshi, Novig and ProphetX quotes. Kalshi's taker fee is taken off its leg; Novig charges none before the game.">Include Kalshi / Novig (fee-adjusted)</Pill>
               </PillGroup>
             </Field>
             <Field label="Outlay" htmlFor="odds-outlay-mid">
@@ -279,6 +282,7 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
           </>
         )}
       </div>
+      )}
     </section>
   )
 }

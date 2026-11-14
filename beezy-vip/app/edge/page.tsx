@@ -17,10 +17,10 @@ import { headshotUrlByName, playerIdByName } from '@/lib/sport-assets.server'
 
 export const metadata: Metadata = {
   title: 'Prop Research',
-  description: 'Multi-sport prop research cockpit: MLB, NFL, NHL and NBA lines with last-10 game logs, volume trends and every book price side by side.',
+  description: 'Multi-sport prop research: MLB, NFL, NHL and NBA lines with last-10 game logs, usage volume and every book price side by side.',
   openGraph: {
     title: 'Prop Research',
-    description: 'Prop research across MLB, NFL, NHL and NBA: price, form and volume for every flagged line.',
+    description: 'Prop research across MLB, NFL, NHL and NBA: every book price and last-10 log for every flagged line.',
   },
 }
 

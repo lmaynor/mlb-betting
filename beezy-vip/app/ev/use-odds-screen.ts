@@ -377,15 +377,15 @@ export function useOddsScreen({ initial, initialLocked, fullAccess }: { initial:
   }, [outlay])
 
   const emptyBody = mode === 'outliers'
-    ? { title: 'No market outliers clear these filters', body: 'An outlier needs one bettable book hanging a price significantly above the market average of at least 3 peer books. Lower the MIN GAP threshold, widen books, or turn off Verified +EV Only.' }
+    ? { title: 'No market outliers clear these filters', body: 'An outlier needs one bettable book hanging a price significantly above the market average of at least 3 peer books. Lower the Min gap threshold, widen the books shown, or turn off Verified +EV Only.' }
     : mode === 'middles'
     ? { title: 'No middles at this cost', body: 'A middle needs the over of a lower line and the under of a higher line, priced close enough that a miss costs little. Raise the max cost, loosen the window filter, or include exchanges.' }
     : mode === 'arb'
     ? { title: arbView === 'live' ? 'No live arbitrage on the board' : 'No near arbitrage on the board',
-        body: 'A live arb needs the best over and the best under at two different books to pay more than the outlay together. Try Near Arbs, include exchanges, or widen the books you can bet at.' }
+        body: 'A live arb needs the best over and the best under at two different books to pay more than the outlay together. Try Near arbs, include exchanges, or widen the books you can bet at.' }
     : mode === 'longshots'
-      ? { title: 'No longshots clear these filters', body: 'Set the strategy to All, lower the odds range or MIN EV, or turn on curve-fitted fair value. Alt rungs are quoted by few books, so many have no fair value without the curve.' }
-      : { title: 'Nothing clears these filters', body: 'Set MIN EV to All to see every line, widen the devig books, or clear the prop and game filters. A +EV row needs at least three devig books pricing the line both ways.' }
+      ? { title: 'No ladders clear these filters', body: 'Clear the sport, prop or game filters above. Ladder cards carry their own segment control, and the verified feed shows only rungs that four or more books quote two-sided.' }
+      : { title: 'Nothing clears these filters', body: 'Set Min EV to All to see every line, widen the reference books, or clear the prop and game filters. A +EV row needs at least three reference books pricing the line both ways.' }
   const refsNote = mode === 'longshots' ? 'Needs 4 books behind a verified ladder.' : 'Needs 3 books behind a row.'
 
   return { isMobile, meta, nRows, loading, refresh, mode, limit, setLimit, locked, allRows, columns, inspectItem, setInspectItem, stat, setStat, game, setGame, side, setSide, lines, setLines, minEv, setMinEv, setQ, method, setMethod, refs, setRefs, setShown, sort, setSort, arbView, setArbView, exchanges, setExchanges, outlayText, setOutlayText, midCost, setMidCost, midGap, setMidGap, midPosEv, setMidPosEv, longSub, setLongSub, oddsMin, setOddsMin, useCurve, setUseCurve, outlierGap, setOutlierGap, outlierReqEv, setOutlierReqEv, outlierOddsBand, setOutlierOddsBand, outlierMinBooks, setOutlierMinBooks, outlierView, setOutlierView, myBooks, mobileFiltersOpen, setMobileFiltersOpen, bookList, defaultShown, shownSet, statOptions, games, refsNote, sport, setSport, sportOptions, q, activeFilterCount, switchMode, badgeFor, copied, revealed, revealMsg, setRevealMsg, bankroll, setMobileView, handleReveal, screen, outliers, arbs, middles, outlay, copyHedge, copyMiddle, fullAccess, refWeight, refSet, mobileView, unpublished, emptyBody, ladderSegment, setLadderSegment, ladderAll, setLadderAll, ladders, ladderTotal, inspectLadder }

@@ -57,7 +57,7 @@ describe('sport switcher', () => {
   it('offers ALL SPORTS | MLB | NFL | NHL | NBA with live counts and filters the list', () => {
     render(<EdgeClient picks={[]} updated="now" cockpit={feed} />)
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.map(t => t.textContent)).toEqual(['ALL SPORTS3', 'MLB1', 'NFL1', 'NHL1', 'NBA0'])
+    expect(tabs.map(t => t.textContent)).toEqual(['All sports3', 'MLB1', 'NFL1', 'NHL1', 'NBA0'])
     expect(inList().getByText('Test Receiver')).toBeInTheDocument()
     expect(inList().getByText('Alex Ovechkin')).toBeInTheDocument()
     expect(inList().getByText('Slugger Jones')).toBeInTheDocument()
@@ -75,10 +75,10 @@ describe('sport switcher', () => {
   it('filters by market chip and by player search', () => {
     render(<EdgeClient picks={[]} updated="now" cockpit={feed} />)
     const markets = screen.getByRole('group', { name: 'Market' })
-    fireEvent.click(within(markets).getByRole('button', { name: /SHOTS ON GOAL/ }))
+    fireEvent.click(within(markets).getByRole('button', { name: /Shots on Goal/ }))
     expect(inList().getByText('Alex Ovechkin')).toBeInTheDocument()
     expect(screen.queryByText('Test Receiver')).toBeNull()
-    fireEvent.click(within(markets).getByRole('button', { name: /ALL MARKETS/ }))
+    fireEvent.click(within(markets).getByRole('button', { name: /All markets/ }))
     fireEvent.change(screen.getByLabelText('Search player or team'), { target: { value: 'slugger' } })
     expect(screen.queryByText('Test Receiver')).toBeNull()
     expect(inList().getByText('Slugger Jones')).toBeInTheDocument()
@@ -109,7 +109,7 @@ describe('prop list cards', () => {
     // no click: the deep link alone selects the row in the inspector
     const aside = screen.getByRole('complementary', { name: 'Prop inspector' })
     expect(within(aside).getByRole('heading', { level: 2 })).toHaveTextContent('Test Receiver')
-    expect(aside).toHaveTextContent(/MULTI-BOOK ODDS MATRIX/)
+    expect(aside).toHaveTextContent(/Multi-book odds matrix/)
   })
 
   it('shows L10: n/a when no game log exists', () => {
@@ -127,9 +127,9 @@ describe('inspector', () => {
     expect(within(aside).getByRole('heading', { level: 2 })).toHaveTextContent('Test Receiver')
     expect(aside).toHaveTextContent('Best Price: +115 on FanDuel vs -108 Consensus Fair')
     expect(aside).toHaveTextContent('+7.1%')
-    expect(aside).toHaveTextContent(/L10 GAME LOG VS LINE/)
-    expect(aside).toHaveTextContent(/OPPORTUNITY AND VOLUME TREND/)
-    expect(aside).toHaveTextContent(/MULTI-BOOK ODDS MATRIX/)
+    expect(aside).toHaveTextContent(/L10 game log vs line/)
+    expect(aside).toHaveTextContent(/Opportunity and volume/)
+    expect(aside).toHaveTextContent(/Multi-book odds matrix/)
     expect(aside).toHaveTextContent('De-vigged consensus of 5 reference books.')
     expect(aside).not.toHaveTextContent(/SHADOW|unvalidated|Evidence/i)
   })
@@ -148,8 +148,8 @@ describe('inspector', () => {
     const aside = screen.getByRole('complementary', { name: 'Prop inspector' })
     expect(within(aside).getByRole('img', { name: 'exit velocity versus launch angle' })).toBeInTheDocument()
     expect(within(aside).getByRole('img', { name: /batted-ball spray chart/ })).toBeInTheDocument()
-    expect(aside).toHaveTextContent(/CONTACT QUALITY AND BATTED BALLS/)
-    expect(aside).not.toHaveTextContent(/OPPORTUNITY AND VOLUME/)
+    expect(aside).toHaveTextContent(/Contact quality and batted balls/)
+    expect(aside).not.toHaveTextContent(/Opportunity and volume/)
   })
 
   it('degrades each panel when the game log is missing', () => {
@@ -180,7 +180,7 @@ describe('FormSparkline', () => {
     expect(container.querySelectorAll('rect[fill="#57F287"]')).toHaveLength(7)
     expect(container.querySelectorAll('rect[fill="#ef4444"]')).toHaveLength(3)
     expect(container.querySelector('line[stroke-dasharray]')).not.toBeNull()
-    for (const [label, value] of [['L5 HIT%', '100%'], ['L10 HIT%', '70%'], ['SEASON AVG', '71.4'], ['LINE', '63.5']]) {
+    for (const [label, value] of [['L5 hit %', '100%'], ['L10 hit %', '70%'], ['Season avg', '71.4'], ['Line', '63.5']]) {
       expect(screen.getByText(label).previousElementSibling).toHaveTextContent(value)
     }
   })
@@ -189,14 +189,14 @@ describe('FormSparkline', () => {
     const { container } = render(<FormSparkline form={form(VALS, 63.5)} under />)
     expect(container.querySelectorAll('rect[fill="#57F287"]')).toHaveLength(3)
     expect(container.querySelectorAll('rect[fill="#ef4444"]')).toHaveLength(7)
-    expect(screen.getByText('L10 HIT%').previousElementSibling).toHaveTextContent('30%')
+    expect(screen.getByText('L10 hit %').previousElementSibling).toHaveTextContent('30%')
   })
 
   it('does not color bars when the line is unknown', () => {
     const { container } = render(<FormSparkline form={form(VALS, 63.5, { line: null })} under={false} />)
     expect(container.querySelectorAll('rect[fill="#57F287"]')).toHaveLength(0)
     expect(container.querySelector('line[stroke-dasharray]')).toBeNull()
-    expect(screen.getByText('L10 HIT%').previousElementSibling).toHaveTextContent('--')
+    expect(screen.getByText('L10 hit %').previousElementSibling).toHaveTextContent('--')
   })
 })
 
@@ -204,7 +204,7 @@ describe('UsageSparkline', () => {
   it('reports the opportunity trend in the metric of the sport', () => {
     render(<UsageSparkline form={form(VALS, 63.5)} />)
     expect(screen.getByRole('img', { name: /Targets over the last 10 games/ })).toBeInTheDocument()
-    expect(screen.getByText('TREND').previousElementSibling).toHaveTextContent('+50%')   // 9 over the last 3 vs 6 before
+    expect(screen.getByText('Change').previousElementSibling).toHaveTextContent('+50%')   // 9 over the last 3 vs 6 before
     expect(screen.getByText(/Targets:/)).toHaveTextContent('9 over the last 3 games vs 6 before that.')
   })
 
@@ -243,16 +243,16 @@ describe('OddsMatrix', () => {
 describe('without a cockpit feed', () => {
   it('opens on the MLB model board and hides the sport tabs that cannot work without a feed', () => {
     render(<EdgeClient picks={[]} updated="now" cockpit={null} />)
-    expect(screen.queryAllByRole('tab', { name: /^(NFL|NHL|NBA|ALL SPORTS)/ })).toHaveLength(0)
+    expect(screen.queryAllByRole('tab', { name: /^(NFL|NHL|NBA|All sports)/ })).toHaveLength(0)
     expect(screen.getByText('No model picks scored yet today.')).toBeInTheDocument()
   })
 
-  it('keeps the model board reachable next to the cockpit for MLB', () => {
+  it('keeps the model board reachable next to the shortlist for MLB', () => {
     render(<EdgeClient picks={[]} updated="now" cockpit={feed} />)
     fireEvent.click(screen.getByRole('tab', { name: /^MLB/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'MODEL BOARD' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Model board' }))
     expect(screen.getByText('No model picks scored yet today.')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'PROP COCKPIT' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Shortlist' }))
     expect(inList().getByText('Slugger Jones')).toBeInTheDocument()
   })
 })

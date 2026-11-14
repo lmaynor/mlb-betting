@@ -250,10 +250,10 @@ export function FormSparkline({ form, under }: { form: CockpitForm; under: boole
         <span className="text-text-secondary">{cleared} of {games.length} games</span>
       </div>
       <StatPills items={[
-        { label: 'L5 HIT%', value: pct0(l5), color: rateColor(l5) },
-        { label: 'L10 HIT%', value: pct0(l10), color: rateColor(l10) },
-        { label: 'SEASON AVG', value: form.szn_avg == null ? '--' : String(form.szn_avg) },
-        { label: 'LINE', value: line == null ? '--' : String(line) },
+        { label: 'L5 hit %', value: pct0(l5), color: rateColor(l5) },
+        { label: 'L10 hit %', value: pct0(l10), color: rateColor(l10) },
+        { label: 'Season avg', value: form.szn_avg == null ? '--' : String(form.szn_avg) },
+        { label: 'Line', value: line == null ? '--' : String(line) },
       ]} />
       {szn != null && (
         <div className="text-mini text-text-secondary mt-2">
@@ -310,9 +310,9 @@ export function UsageSparkline({ form }: { form: CockpitForm }) {
         ))}
       </svg>
       <StatPills items={[
-        { label: `${label.toUpperCase()} L10 AVG`, value: fmt(avg) },
-        { label: 'LAST 3 AVG', value: fmt(recent) },
-        { label: 'TREND', value: change == null ? 'steady' : `${change >= 0 ? '+' : ''}${Math.round(change * 100)}%`, color: trendColor },
+        { label: `${label} L10 avg`, value: fmt(avg) },
+        { label: 'Last 3 avg', value: fmt(recent) },
+        { label: 'Change', value: change == null ? 'steady' : `${change >= 0 ? '+' : ''}${Math.round(change * 100)}%`, color: trendColor },
       ]} />
       <div className="text-compact text-neutral-300 mt-2 leading-[1.5]">
         {label}
@@ -343,7 +343,7 @@ export function OddsMatrix({ r }: { r: CockpitRow }) {
     <div>
       <div role="table" aria-label={`Prices from every book quoting ${propText(r)}`} className="overflow-x-auto">
         <div role="row" className="grid min-w-[320px] gap-2 border-b border-separator-border px-1 pb-1.5" style={{ gridTemplateColumns: cols }}>
-          {['BOOK', 'OVER', 'UNDER', 'FAIR O%'].map(h => (
+          {['Book', 'Over', 'Under', 'Fair O%'].map(h => (
             <span key={h} role="columnheader" className="ui-heading text-text-secondary">{h}</span>
           ))}
         </div>
@@ -386,10 +386,10 @@ function Inspector({ r, renderMlbExtras, renderLadderSection, onClose }: { r: Co
   const [nbaTab, setNbaTab] = useState<NbaTab>('trends')
   const logPanels = (
     <>
-      <Panel title={`L${form?.n_games ?? 10} GAME LOG VS LINE`} sub={form ? `${propStatLabel(r.stat)} \u00b7 ${under ? 'Under' : 'Over'} ${form.line ?? ''}` : undefined}>
+      <Panel title={`L${form?.n_games ?? 10} game log vs line`} sub={form ? `${propStatLabel(r.stat)} \u00b7 ${under ? 'Under' : 'Over'} ${form.line ?? ''}` : undefined}>
         {form && form.games.length ? <FormSparkline form={form} under={under} /> : <NoData>No game log is available for this player and stat yet.</NoData>}
       </Panel>
-      {r.sport === 'nba' && (form && form.games.length ? <Panel title="OPPORTUNITY AND VOLUME TREND" sub={form.usage_label ?? undefined}><UsageSparkline form={form} /></Panel> : null)}
+      {r.sport === 'nba' && (form && form.games.length ? <Panel title="Opportunity and volume" sub={form.usage_label ?? undefined}><UsageSparkline form={form} /></Panel> : null)}
     </>
   )
   return (
@@ -432,17 +432,17 @@ function Inspector({ r, renderMlbExtras, renderLadderSection, onClose }: { r: Co
             ))}
           </AriaTabList>
           <AriaTabPanel id="trends">
-            <Panel title="TRENDS" sub={`${propStatLabel(r.stat)} \u00b7 ${under ? 'Under' : 'Over'} ${r.line ?? ''}`}>
+            <Panel title="Trends" sub={`${propStatLabel(r.stat)} \u00b7 ${under ? 'Under' : 'Over'} ${r.line ?? ''}`}>
               <TrendsPanel row={r} fallback={logPanels} />
             </Panel>
           </AriaTabPanel>
           <AriaTabPanel id="shots">
-            <Panel title="SHOT CHART" sub="vs league">
+            <Panel title="Shot chart" sub="vs league">
               <ShotChartPanel row={r} />
             </Panel>
           </AriaTabPanel>
           <AriaTabPanel id="prices">
-            <Panel title="MULTI-BOOK ODDS MATRIX" sub={r.all_books ? `${onshoreQuotes(r.all_books).length} books` : undefined}>
+            <Panel title="Multi-book odds matrix" sub={r.all_books ? `${onshoreQuotes(r.all_books).length} books` : undefined}>
               <OddsMatrix r={r} />
             </Panel>
           </AriaTabPanel>
@@ -450,13 +450,13 @@ function Inspector({ r, renderMlbExtras, renderLadderSection, onClose }: { r: Co
       ) : (
         <>
           {logPanels}
-          <Panel title={r.sport === 'mlb' ? 'CONTACT QUALITY AND BATTED BALLS' : 'OPPORTUNITY AND VOLUME TREND'} sub={r.sport === 'mlb' ? 'Statcast' : form?.usage_label ?? undefined}>
+          <Panel title={r.sport === 'mlb' ? 'Contact quality and batted balls' : 'Opportunity and volume'} sub={r.sport === 'mlb' ? 'Statcast' : form?.usage_label ?? undefined}>
             {r.sport === 'mlb'
               ? (mlbExtras ?? <NoData>No Statcast batted-ball charts for this player today.</NoData>)
               : form && form.games.length ? <UsageSparkline form={form} /> : <NoData>No volume history for this player yet.</NoData>}
           </Panel>
 
-          <Panel title="MULTI-BOOK ODDS MATRIX" sub={r.all_books ? `${onshoreQuotes(r.all_books).length} books` : undefined}>
+          <Panel title="Multi-book odds matrix" sub={r.all_books ? `${onshoreQuotes(r.all_books).length} books` : undefined}>
             <OddsMatrix r={r} />
           </Panel>
 
@@ -485,7 +485,7 @@ function PropCard({ r, active, onSelect }: { r: CockpitRow; active: boolean; onS
         <span className="flex min-w-0 items-center gap-[7px]">
           <span className="ui-heading shrink-0 rounded-chip border px-[5px] py-px" style={{ color: accent, borderColor: `${accent}55` }}>{r.sport.toUpperCase()}</span>
           {r.flag && <span className="ui-heading shrink-0 text-signal" title="A book is hanging this line well off the market and it passed the credibility gates">Flagged</span>}
-          <span className="ui-heading shrink-0 text-text-secondary" title={r.source === 'model' ? 'A model projection row from the daily boards' : 'A market sweep row: a flagged price from the live odds sweep'}>{r.source === 'model' ? 'MODEL PROJECTION' : 'MARKET SWEEP'}</span>
+          <span className="ui-heading shrink-0 text-text-secondary" title={r.source === 'model' ? 'A model projection row from the daily boards' : 'A market sweep row: a flagged price from the live odds sweep'}>{r.source === 'model' ? 'Model projection' : 'Market sweep'}</span>
           <span className="mono min-w-0 flex-1 truncate text-mini text-text-secondary">{meta}</span>
         </span>
       </span>
@@ -632,19 +632,19 @@ export function Cockpit({ feed, sport, updated, loading, onRefresh, renderMlbExt
 
   return (
     <div>
-      <section aria-label="Cockpit filters" className="mb-3.5 grid gap-2.5">
+      <section aria-label="Shortlist filters" className="mb-3.5 grid gap-2.5">
         <div className="flex flex-wrap items-center gap-2.5">
           <Segmented<string> label="Market" value={activeMarket} onChange={setMarket}
-            options={[{ id: 'all', label: `ALL MARKETS ${inSport.length}` }, ...markets.map(([k, n]) => ({ id: k, label: `${propStatLabel(k).toUpperCase()} ${n}` }))]} />
+            options={[{ id: 'all', label: `All markets ${inSport.length}` }, ...markets.map(([k, n]) => ({ id: k, label: `${propStatLabel(k)} ${n}` }))]} />
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex flex-wrap items-center gap-2.5">
             <Segmented<SortKey> label="Sort" value={sort} onChange={setSort}
-              options={[{ id: 'ev', label: 'NET EV %' }, { id: 'l10', label: 'L10 HIT%' }, { id: 'start', label: 'STARTS SOON' }]} />
+              options={[{ id: 'ev', label: 'Net EV %' }, { id: 'l10', label: 'L10 hit %' }, { id: 'start', label: 'Starts soon' }]} />
             <Segmented<string> label="Confidence" value={credibleOnly ? 'credible' : 'all'} onChange={v => setCredibleOnly(v === 'credible')}
               options={[{ id: 'all', label: 'All players' }, { id: 'credible', label: 'Flagged only' }]} />
             <Segmented<string> label="Source" value={sourceFilter} onChange={v => setSourceFilter(v as 'all' | 'sweep' | 'model')}
-              options={[{ id: 'all', label: 'All sources' }, { id: 'sweep', label: 'Market Sweep' }, { id: 'model', label: 'Model Projection' }]} />
+              options={[{ id: 'all', label: 'All sources' }, { id: 'sweep', label: 'Market sweep' }, { id: 'model', label: 'Model projection' }]} />
           </div>
           <input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search player or team" aria-label="Search player or team"
             className="h-[34px] min-w-0 max-w-[300px] flex-[1_1_180px] rounded-lg border border-border-button-default bg-background-secondary-default px-2.5 text-body-2-regular text-text-primary outline-none placeholder:text-text-placeholder focus:border-accent-500" />
@@ -652,7 +652,7 @@ export function Cockpit({ feed, sport, updated, loading, onRefresh, renderMlbExt
       </section>
 
       <div className="mx-0.5 mb-2.5 flex flex-wrap items-baseline justify-between gap-2.5">
-        <span className="mono text-caption-1-regular text-text-secondary">{rows.length} PROPS &middot; UPDATED {ageLabel.toUpperCase()}</span>
+        <span className="mono text-caption-1-regular text-text-secondary">{rows.length} props &middot; updated {ageLabel}</span>
         <button onClick={onRefresh} disabled={loading} className="btn btn-ghost px-3 py-[5px] text-xs">{loading ? 'Refreshing...' : 'Refresh'}</button>
       </div>
       {statusLine && (

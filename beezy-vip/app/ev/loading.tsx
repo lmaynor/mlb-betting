@@ -3,7 +3,7 @@ const ROWS = Array.from({ length: 12 }, (_, i) => i)
 
 export default function Loading() {
   return (
-    <div className="max-w-[1600px] mx-auto p-4" aria-busy="true" aria-label="Loading odds terminal">
+    <div className="max-w-[1680px] mx-auto px-6 py-5" aria-busy="true" aria-label="Loading odds terminal">
       <div  className="h-7 w-[180px] bg-background-tertiary-default mb-4"/>
       <div className="border border-[color:#232634] bg-background-primary-default">
         {ROWS.map(i => (

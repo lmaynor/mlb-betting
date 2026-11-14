@@ -122,7 +122,7 @@ export function BookPicker({ label, books, selected, onChange, presets, note, em
                       flexShrink: 0,
                     }}
                   >
-                    ONLY
+                    Only
                   </button>
                 </div>
               )
@@ -158,7 +158,7 @@ export function MobileBookChecklist({
   const [collapsed, setCollapsed] = useState(false)
   const on = new Set(selected)
   const toggle = (k: string) => onChange(on.has(k) ? selected.filter(x => x !== k) : [...selected, k])
-  const countLabel = emptyMeansAll && selected.length === 0 ? 'ALL' : `${selected.length}`
+  const countLabel = emptyMeansAll && selected.length === 0 ? 'All' : `${selected.length}`
   const hasNonePreset = presets.some(p => p.label.toLowerCase() === 'none')
   const hasAllPreset = presets.some(p => p.label.toLowerCase() === 'all')
 
@@ -309,7 +309,7 @@ export function MobileBookChecklist({
                       flexShrink: 0,
                     }}
                   >
-                    ONLY
+                    Only
                   </button>
                 </div>
               )

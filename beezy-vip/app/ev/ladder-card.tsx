@@ -188,6 +188,7 @@ export function LadderCard({ group }: { group: LadderGroup }) {
               type="button"
               onClick={() => setSelectedIdx(idx)}
               style={{
+                minHeight: '32px',
                 padding: '4px 8px',
                 borderRadius: '6px',
                 fontSize: '11px',
@@ -404,7 +405,7 @@ export function LadderCard({ group }: { group: LadderGroup }) {
             return (
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="mono text-micro px-1.5 py-0.5 rounded border border-separator-border text-text-secondary">
-                  1-Sided · Overround Unremovable
+                  One-sided · overround unremovable
                 </span>
                 {nQuoting >= 2 && (
                   <span className="mono text-micro text-text-secondary">
@@ -427,7 +428,7 @@ export function LadderCard({ group }: { group: LadderGroup }) {
                       border: '1px solid rgba(87,242,135,0.25)',
                     }}
                   >
-                    +{rung.premiumPct.toFixed(1)}% vs Mkt
+                    +{rung.premiumPct.toFixed(1)}% vs market
                   </span>
                 )}
               </div>
@@ -495,7 +496,7 @@ export function LadderCard({ group }: { group: LadderGroup }) {
         {/* Rung Vig pill: whenever rungVig != null AND (state is verified or a premium badge shows) */}
         {rung.rungVig != null && (rung.state === 'verified' || rung.premiumPct != null) && (
           <span className="mono text-micro px-1.5 py-0.5 rounded border border-separator-border text-text-secondary">
-            Rung Vig: {(rung.rungVig <= 1 ? rung.rungVig * 100 : rung.rungVig).toFixed(1)}%
+            Rung vig: {(rung.rungVig <= 1 ? rung.rungVig * 100 : rung.rungVig).toFixed(1)}%
           </span>
         )}
       </div>
@@ -520,6 +521,7 @@ export function LaddersView({ odds }: { odds: OddsScreen }) {
     fontFamily: 'var(--font-text), sans-serif',
     fontSize: '11px',
     fontWeight: 600,
+    minHeight: '32px',
     padding: '4px 10px',
     borderRadius: '4px',
     border: 0,
@@ -621,7 +623,7 @@ export function LadderSectionForRow({
   if (!g) return null
   return (
     <section className="mt-3">
-      <div className="ui-heading text-micro text-text-secondary mb-2">FULL LADDER</div>
+      <div className="ui-heading text-micro text-text-secondary mb-2">Full ladder</div>
       <LadderCard group={g} />
     </section>
   )

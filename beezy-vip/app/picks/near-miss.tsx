@@ -9,9 +9,9 @@ import { holdReasonFor, type TopPick } from '@/lib/top-picks'
 export function NearMissZone({ picks }: { picks: TopPick[] }) {
   if (picks.length === 0) return null
   return (
-    <div className="mx-auto max-w-page px-6 pb-8">
+    <div className="mx-auto max-w-[900px] px-6 pb-8">
       <hr className="my-6 border-t-2 border-separator-border" />
-      <h2 className="text-body-semibold text-text-primary">Shadow Monitoring &middot; Near-Miss Candidates (Not Official Plays)</h2>
+      <h2 className="text-body-semibold text-text-primary">Shadow Monitoring &middot; Near-Miss Candidates</h2>
       <p className="mt-1.5 max-w-[90ch] text-body-2-regular text-text-secondary">
         The closest candidates that did not clear the official gate today, and the reason each is held. Watching
         only: these rows are not plays and are not graded.

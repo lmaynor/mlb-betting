@@ -128,7 +128,7 @@ export function MobileCompareSheet({
 
         {ladderGroup && item.type !== 'longshots' && (
           <div>
-            <div className="ui-heading text-micro text-text-secondary mb-2">FULL LADDER</div>
+            <div className="ui-heading text-micro text-text-secondary mb-2">Full ladder</div>
             <LadderCard group={ladderGroup} />
           </div>
         )}

@@ -48,7 +48,7 @@ export interface EdgePick extends Bet {
 }
 
 // -- sport switcher: ALL SPORTS | MLB | NFL | NHL | NBA (all five drive the prop cockpit; MLB also keeps the model board) --
-const SPORT_TAB_LABEL: Record<CockpitSport, string> = { all: 'ALL SPORTS', mlb: 'MLB', nfl: 'NFL', nhl: 'NHL', nba: 'NBA' }
+const SPORT_TAB_LABEL: Record<CockpitSport, string> = { all: 'All sports', mlb: 'MLB', nfl: 'NFL', nhl: 'NHL', nba: 'NBA' }
 type View = 'cockpit' | 'board'
 
 const PITCHER_SYSTEMS = new Set(['K', 'OUTS', 'PITCHER_ER'])
@@ -270,7 +270,7 @@ function SprayChart({ points, color }: { points: NonNullable<EdgePick['spray']>;
   return (
     <div className="edge-ctx edge-ctx-wide">
       <div className="edge-ctx-k">Where the ball goes</div>
-      <Take><b>{hits} hits</b> on {points.length} batted balls &mdash; {dom}.</Take>
+      <Take><b>{hits} hits</b> on {points.length} batted balls: {dom}.</Take>
       <svg className="edge-spray" viewBox={`0 0 ${S} ${S}`} role="img"
         aria-label={`batted-ball spray chart, ${hits} hits of ${points.length}`}>
         {/* outfield arc + foul lines, home plate at bottom-center */}
@@ -319,7 +319,7 @@ function EvLaScatter({ points, color }: { points: NonNullable<EdgePick['evLa']>;
   return (
     <div className="edge-ctx edge-ctx-wide">
       <div className="edge-ctx-k">Quality of contact</div>
-      <Take><b>{verdict}</b> &mdash; averaging <span className="mono">{avg.toFixed(1)} mph</span> off the bat, <b>{hardPct}%</b> hit hard.</Take>
+      <Take><b>{verdict}</b>: averaging <span className="mono">{avg.toFixed(1)} mph</span> off the bat, <b>{hardPct}%</b> hit hard.</Take>
       <svg className="edge-viz" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="exit velocity versus launch angle">
         {/* sweet-spot band + barrel zone */}
         <rect x={xa(8)} y={y0} width={xa(32) - xa(8)} height={y1 - y0} fill="#57f287" opacity="0.06" />
@@ -363,7 +363,7 @@ function VeloBars({ velo }: { velo: NonNullable<EdgePick['velo']> }) {
   return (
     <div className="edge-ctx edge-ctx-wide">
       <div className="edge-ctx-k">Pitch arsenal &amp; velocity</div>
-      <Take>Leads with the <b>{PITCH_NAME[top.pitch] ?? top.pitch}</b> at <span className="mono">{top.mph.toFixed(1)} mph</span> &mdash; {tier}. {velo.length} pitches in the mix.</Take>
+      <Take>Leads with the <b>{PITCH_NAME[top.pitch] ?? top.pitch}</b> at <span className="mono">{top.mph.toFixed(1)} mph</span>, {tier}. {velo.length} pitches in the mix.</Take>
       <div className="edge-velo">
         {sorted.map(v => {
           const share = totN > 0 ? Math.round(v.n / totN * 100) : 0
@@ -397,7 +397,7 @@ function ReleasePoint({ release }: { release: NonNullable<EdgePick['release']> }
   return (
     <div className="edge-ctx">
       <div className="edge-ctx-k">Release point <span className="edge-ctx-dim">(catcher&apos;s view)</span></div>
-      <Take>Lets go at <span className="mono">{mz.toFixed(1)} ft</span> high, from the {side} &mdash; a repeatable slot.</Take>
+      <Take>Lets go at <span className="mono">{mz.toFixed(1)} ft</span> high, from the {side}, a repeatable slot.</Take>
       <svg className="edge-viz-sq" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`release point, ${mz.toFixed(1)} feet`}>
         <line x1={cx} y1={6} x2={cx} y2={H - 14} stroke="#202026" strokeWidth="0.7" strokeDasharray="2 3" />
         {[4, 5, 6, 7].map(z => (
@@ -432,7 +432,7 @@ function ZoneGrid({ zone }: { zone: NonNullable<EdgePick['zone']> }) {
       <div className="edge-ctx-k">Pitch location <span className="edge-ctx-dim">(catcher&apos;s view)</span></div>
       <Take>Lives <b>{spot}</b>.</Take>
       <div className="edge-zone-wrap">
-        <div className="edge-zone-side"><span>HIGH</span><span>LOW</span></div>
+        <div className="edge-zone-side"><span>High</span><span>Low</span></div>
         <div>
           <div className="edge-zone">
             {cells.map((c, i) => (
@@ -442,7 +442,7 @@ function ZoneGrid({ zone }: { zone: NonNullable<EdgePick['zone']> }) {
               </div>
             ))}
           </div>
-          <div className="edge-zone-x"><span>LEFT</span><span>Right</span></div>
+          <div className="edge-zone-x"><span>Left</span><span>Right</span></div>
         </div>
       </div>
       <div className="edge-zone-scale">
@@ -658,7 +658,7 @@ function Detail({ p, bankroll, inSlip, onToggleSlip }: {
             </div>
             <div className="edge-alert-s">
               Priced <b>+{(p.alert.ev * 100).toFixed(1)}%</b> better than the cross-book fair line
-              {p.alert.anchored ? ' (sharp-anchor confirmed)' : ''} &mdash; stale quotes correct fast.
+              {p.alert.anchored ? ' (sharp-anchor confirmed)' : ''} . Stale quotes correct fast.
             </div>
           </div>
         </div>
@@ -973,7 +973,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
           </AriaTabList></AriaTabs>}
           {sport === 'mlb' && feed != null && (
             <div role="group" aria-label="MLB view" className="inline-flex gap-0.5 rounded-lg border border-separator-border bg-background-secondary-default p-[3px]">
-              {([['cockpit', 'PROP COCKPIT'], ['board', 'MODEL BOARD']] as [View, string][]).map(([k, label]) => {
+              {([['cockpit', 'Shortlist'], ['board', 'Model board']] as [View, string][]).map(([k, label]) => {
                 const active = view === k
                 return (
                   <button key={k} onClick={() => setView(k)} aria-pressed={active}
@@ -1218,7 +1218,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
             <span className="edge-slip-t">
               ${slipTotal.toFixed(0)}
               <span className="edge-slip-pct" style={{ color: slipPct > 10 ? 'var(--warn)' : 'var(--color-text-secondary)' }}>
-                {' '}&middot; {slipPct.toFixed(1)}% of bankroll{slipPct > 10 ? ' \u2014 heavy' : ''}
+                {' '}&middot; {slipPct.toFixed(1)}% of bankroll{slipPct > 10 ? ', heavy' : ''}
               </span>
             </span>
             <button className="edge-slip-clear" onClick={() => { setSlip({}); setSlipOpen(false) }}>Clear all</button>
@@ -1255,10 +1255,10 @@ function Styles() {
   return (
     <style>{`@layer components {
 .edge { max-width: 1120px; margin: 0 auto; padding: 28px 16px 80px; color: var(--color-text-primary);
-  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+  font-family: var(--font-text), ui-sans-serif, system-ui, -apple-system, sans-serif; }
 .edge-header { border-bottom: 1px solid var(--color-separator-border); padding-bottom: 18px; margin-bottom: 18px; }
 .edge-title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.edge-title { font-size: 20px; font-weight: 600; letter-spacing: -0.01em;
+.edge-title { font-size: 20px; font-weight: 700; letter-spacing: -0.01em;
   margin: 0; text-wrap: balance; }
 .edge-updated { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 600;
   color: var(--signal); }

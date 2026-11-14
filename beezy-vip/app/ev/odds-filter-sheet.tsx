@@ -11,7 +11,7 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
     <MobileBottomSheet
       open={mobileFiltersOpen}
       onClose={() => setMobileFiltersOpen(false)}
-      title="Terminal Filters"
+      title="Filters"
       subtitle={`${MODES.find(m => m.key === mode)?.label} \u00b7 ${nRows} matching lines`}
       footer={
         <div className="flex gap-2">
@@ -51,7 +51,7 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
             className="btn btn-primary"
             style={{ flex: 2, padding: '9px 0', fontSize: '12px' }}
           >
-            Show {nRows} Results
+            Show {nRows} results
           </button>
         </div>
       }
@@ -119,7 +119,7 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
               </PillGroup>
             </div>
             <div>
-              <div className="ui-heading mb-1.5 text-micro text-text-secondary">VIEW</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">View</div>
               <PillGroup>
                 <Pill active={outlierView === 'cards'} onClick={() => setOutlierView('cards')}>Visual Cards</Pill>
                 <Pill active={outlierView === 'table'} onClick={() => setOutlierView('table')}>Compact Table</Pill>
@@ -131,10 +131,10 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
         {mode === 'arb' && (
           <>
             <div>
-              <div className="ui-heading mb-1.5 text-micro text-text-secondary">SHOW</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">Show</div>
               <PillGroup>
-                <Pill active={arbView === 'live'} onClick={() => { setArbView('live'); setLimit(PAGE) }}>LIVE ARBS (&gt; 0%)</Pill>
-                <Pill active={arbView === 'near'} onClick={() => { setArbView('near'); setLimit(PAGE) }}>NEAR ARBS (&gt; -1.5%)</Pill>
+                <Pill active={arbView === 'live'} onClick={() => { setArbView('live'); setLimit(PAGE) }}>Live arbs (&gt; 0%)</Pill>
+                <Pill active={arbView === 'near'} onClick={() => { setArbView('near'); setLimit(PAGE) }}>Near arbs (&gt; -1.5%)</Pill>
               </PillGroup>
             </div>
             <div>
@@ -144,7 +144,7 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
               </PillGroup>
             </div>
             <div>
-              <div className="ui-heading mb-1.5 text-micro text-text-secondary">OUTLAY ($)</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">Outlay ($)</div>
               <input
                 inputMode="decimal"
                 value={outlayText}
@@ -166,7 +166,7 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
             <div>
               <div className="ui-heading mb-1.5 text-micro text-text-secondary">Value</div>
               <PillGroup>
-                <Pill active={midPosEv} onClick={() => { setMidPosEv(v => !v); setLimit(PAGE) }}>+EV ONLY</Pill>
+                <Pill active={midPosEv} onClick={() => { setMidPosEv(v => !v); setLimit(PAGE) }}>+EV only</Pill>
               </PillGroup>
             </div>
             <div>
@@ -182,7 +182,7 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
               </PillGroup>
             </div>
             <div>
-              <div className="ui-heading mb-1.5 text-micro text-text-secondary">OUTLAY ($)</div>
+              <div className="ui-heading mb-1.5 text-micro text-text-secondary">Outlay ($)</div>
               <input
                 inputMode="decimal"
                 value={outlayText}

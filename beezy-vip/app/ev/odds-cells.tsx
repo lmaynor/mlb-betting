@@ -46,7 +46,7 @@ export function TierPill({ alt, modalPoint }: { alt: boolean; modalPoint?: numbe
   return (
     <span className="mono" title={tip}
       style={{ fontSize: '10px', fontWeight: 600, padding: '0 5px', borderRadius: '4px', border: `1px solid ${alt ? 'var(--color-border-button-hover)' : HAIR}`, color: alt ? 'var(--color-neutral-400)' : 'var(--color-text-secondary)' }}>
-      {alt ? '[ALT]' : 'MAIN'}
+      {alt ? 'Alt' : 'Main'}
     </span>
   )
 }
