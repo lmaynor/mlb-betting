@@ -250,10 +250,10 @@ export function FormSparkline({ form, under }: { form: CockpitForm; under: boole
         <span className="text-text-secondary">{cleared} of {games.length} games</span>
       </div>
       <StatPills items={[
-        { label: 'L5 HIT%', value: pct0(l5), color: rateColor(l5) },
-        { label: 'L10 HIT%', value: pct0(l10), color: rateColor(l10) },
-        { label: 'SEASON AVG', value: form.szn_avg == null ? '--' : String(form.szn_avg) },
-        { label: 'LINE', value: line == null ? '--' : String(line) },
+        { label: 'L5 hit %', value: pct0(l5), color: rateColor(l5) },
+        { label: 'L10 hit %', value: pct0(l10), color: rateColor(l10) },
+        { label: 'Season avg', value: form.szn_avg == null ? '--' : String(form.szn_avg) },
+        { label: 'Line', value: line == null ? '--' : String(line) },
       ]} />
       {szn != null && (
         <div className="text-mini text-text-secondary mt-2">
@@ -310,9 +310,9 @@ export function UsageSparkline({ form }: { form: CockpitForm }) {
         ))}
       </svg>
       <StatPills items={[
-        { label: `${label.toUpperCase()} L10 AVG`, value: fmt(avg) },
-        { label: 'LAST 3 AVG', value: fmt(recent) },
-        { label: 'TREND', value: change == null ? 'steady' : `${change >= 0 ? '+' : ''}${Math.round(change * 100)}%`, color: trendColor },
+        { label: `${label} L10 avg`, value: fmt(avg) },
+        { label: 'Last 3 avg', value: fmt(recent) },
+        { label: 'Change', value: change == null ? 'steady' : `${change >= 0 ? '+' : ''}${Math.round(change * 100)}%`, color: trendColor },
       ]} />
       <div className="text-compact text-neutral-300 mt-2 leading-[1.5]">
         {label}
@@ -343,7 +343,7 @@ export function OddsMatrix({ r }: { r: CockpitRow }) {
     <div>
       <div role="table" aria-label={`Prices from every book quoting ${propText(r)}`} className="overflow-x-auto">
         <div role="row" className="grid min-w-[320px] gap-2 border-b border-separator-border px-1 pb-1.5" style={{ gridTemplateColumns: cols }}>
-          {['BOOK', 'OVER', 'UNDER', 'FAIR O%'].map(h => (
+          {['Book', 'Over', 'Under', 'Fair O%'].map(h => (
             <span key={h} role="columnheader" className="ui-heading text-text-secondary">{h}</span>
           ))}
         </div>
@@ -386,10 +386,10 @@ function Inspector({ r, renderMlbExtras, renderLadderSection, onClose }: { r: Co
   const [nbaTab, setNbaTab] = useState<NbaTab>('trends')
   const logPanels = (
     <>
-      <Panel title={`L${form?.n_games ?? 10} GAME LOG VS LINE`} sub={form ? `${propStatLabel(r.stat)} \u00b7 ${under ? 'Under' : 'Over'} ${form.line ?? ''}` : undefined}>
+      <Panel title={`L${form?.n_games ?? 10} game log vs line`} sub={form ? `${propStatLabel(r.stat)} \u00b7 ${under ? 'Under' : 'Over'} ${form.line ?? ''}` : undefined}>
         {form && form.games.length ? <FormSparkline form={form} under={under} /> : <NoData>No game log is available for this player and stat yet.</NoData>}
       </Panel>
-      {r.sport === 'nba' && (form && form.games.length ? <Panel title="OPPORTUNITY AND VOLUME TREND" sub={form.usage_label ?? undefined}><UsageSparkline form={form} /></Panel> : null)}
+      {r.sport === 'nba' && (form && form.games.length ? <Panel title="Opportunity and volume" sub={form.usage_label ?? undefined}><UsageSparkline form={form} /></Panel> : null)}
     </>
   )
   return (
@@ -432,17 +432,17 @@ function Inspector({ r, renderMlbExtras, renderLadderSection, onClose }: { r: Co
             ))}
           </AriaTabList>
           <AriaTabPanel id="trends">
-            <Panel title="TRENDS" sub={`${propStatLabel(r.stat)} \u00b7 ${under ? 'Under' : 'Over'} ${r.line ?? ''}`}>
+            <Panel title="Trends" sub={`${propStatLabel(r.stat)} \u00b7 ${under ? 'Under' : 'Over'} ${r.line ?? ''}`}>
               <TrendsPanel row={r} fallback={logPanels} />
             </Panel>
           </AriaTabPanel>
           <AriaTabPanel id="shots">
-            <Panel title="SHOT CHART" sub="vs league">
+            <Panel title="Shot chart" sub="vs league">
               <ShotChartPanel row={r} />
             </Panel>
           </AriaTabPanel>
           <AriaTabPanel id="prices">
-            <Panel title="MULTI-BOOK ODDS MATRIX" sub={r.all_books ? `${onshoreQuotes(r.all_books).length} books` : undefined}>
+            <Panel title="Multi-book odds matrix" sub={r.all_books ? `${onshoreQuotes(r.all_books).length} books` : undefined}>
               <OddsMatrix r={r} />
             </Panel>
           </AriaTabPanel>
@@ -450,13 +450,13 @@ function Inspector({ r, renderMlbExtras, renderLadderSection, onClose }: { r: Co
       ) : (
         <>
           {logPanels}
-          <Panel title={r.sport === 'mlb' ? 'CONTACT QUALITY AND BATTED BALLS' : 'OPPORTUNITY AND VOLUME TREND'} sub={r.sport === 'mlb' ? 'Statcast' : form?.usage_label ?? undefined}>
+          <Panel title={r.sport === 'mlb' ? 'Contact quality and batted balls' : 'Opportunity and volume'} sub={r.sport === 'mlb' ? 'Statcast' : form?.usage_label ?? undefined}>
             {r.sport === 'mlb'
               ? (mlbExtras ?? <NoData>No Statcast batted-ball charts for this player today.</NoData>)
               : form && form.games.length ? <UsageSparkline form={form} /> : <NoData>No volume history for this player yet.</NoData>}
           </Panel>
 
-          <Panel title="MULTI-BOOK ODDS MATRIX" sub={r.all_books ? `${onshoreQuotes(r.all_books).length} books` : undefined}>
+          <Panel title="Multi-book odds matrix" sub={r.all_books ? `${onshoreQuotes(r.all_books).length} books` : undefined}>
             <OddsMatrix r={r} />
           </Panel>
 
