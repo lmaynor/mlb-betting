@@ -14,6 +14,8 @@ Checks:
      must not report a failed data contract
   6. The picks-board feeds (2026-10-17): EVSweep/{nfl,nhl,nba}_props/projections_latest.json (rewritten every 30 min by
      the daily-projections job) < 3 h old, and in season Odds/bettingpros_live/{sport}/latest.json (hourly crawl) < 6 h old
+  7. The BestBook live filler feed (2026-11-13, OPS-01): in season Odds/bestbook_live/{sport}/latest.json (bb-live-* jobs,
+     hourly) < 3 h old, and a fresh file must not report games listed with zero priced output
 
 Called by main.py /monitor-ops.
 """
@@ -248,6 +250,46 @@ def _check_board_feeds(month: int | None = None) -> list[str]:
     return failures
 
 
+BB_LIVE_KEYS = {sp: f"Odds/bestbook_live/{sp}/latest.json" for sp in ("nfl", "nhl", "nba", "cbb")}
+BB_LIVE_STALE_HOURS = 3.0             # the bb-live-* crawls run hourly; ev.game_odds_board drops BestBook at 180 min
+BB_LIVE_MONTHS = {"nfl": {9, 10, 11, 12, 1, 2}, "nhl": {10, 11, 12, 1, 2, 3, 4, 5, 6},
+                  "nba": {10, 11, 12, 1, 2, 3, 4, 5, 6}, "cbb": {11, 12, 1, 2, 3, 4}}
+
+
+def _check_bestbook_live(month: int | None = None) -> list[str]:
+    """The BestBook live filler feed (bb-live-* jobs): a STALE latest.json or a fresh one that priced nothing is the
+    failure. This check exists because the feed froze on 2026-11-04 and stayed dead for 9 days with no alert: nothing
+    watched these keys, and the scheduler check above only sees the successful trigger call, not the failing Cloud Run
+    execution downstream of it. A bucket that cannot be read from here is silent (same contract as the model-picks
+    check); only in-season sports are judged (the bb-live crons are month-gated in deploy/setup_bestbook_live.sh)."""
+    import json
+    from mlb_core.storage import exists, read_bytes
+    month = month or datetime.now(timezone.utc).month
+    failures = []
+    for sp, key in BB_LIVE_KEYS.items():
+        if month not in BB_LIVE_MONTHS[sp]:
+            continue
+        age = _gcs_age_hours(key)
+        if age is None:
+            continue
+        if age > BB_LIVE_STALE_HOURS:
+            failures.append(f"{sp.upper()} BestBook live lines stale: `{key}` {age:.1f}h old (bb-live-{sp} job)")
+            continue
+        try:
+            if not exists(key):
+                continue
+            data = json.loads(read_bytes(key).decode())
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"monitor_ops: BestBook content check failed for {key}: {e}")
+            continue
+        c = data.get("counts") or {}
+        if (c.get("events_upcoming") or 0) > 0 and not (c.get("events_priced") or 0) \
+                and not (c.get("game_lines_quotes") or 0):
+            failures.append(f"{sp.upper()} BestBook feed empty: latest crawl priced 0 events and 0 game-line quotes "
+                            f"with {c.get('events_upcoming')} upcoming (bb-live-{sp} job)")
+    return failures
+
+
 MODEL_PICKS_KEY = "ModelPicks/last_run.json"          # written by ev.model_picks after every pass
 MODEL_PICKS_STALE_HOURS = 3.0                         # the props-model-picks job runs hourly
 MODEL_PICKS_MONTHS = BP_LIVE_MONTHS                   # same in-season windows as the live line crawls
@@ -404,6 +446,7 @@ def run(run_date: str = None) -> dict:
     failures += _check_model_picks()
     failures += _check_nfl_contracts()
     failures += _check_board_feeds()
+    failures += _check_bestbook_live()
     failures += _check_stuck_bets()
     failures += _check_feature_freshness()
     failures += _check_model_artifacts()
