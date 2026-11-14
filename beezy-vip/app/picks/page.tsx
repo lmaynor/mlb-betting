@@ -20,13 +20,13 @@ export const metadata: Metadata = {
   title: "Today's Card",
   description: "Today's Card: every official play across MLB, NFL, NHL and NBA, no cap and no filler, with the graded record behind it.",
   openGraph: {
-    title: 'Today\'s Card \u2014 beezy.fyi',
+    title: 'Today\'s Card',
     description: 'Every official play with its price and edge, and the graded record behind them.',
     images: ['/api/og/picks-card'],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Today\'s Card \u2014 beezy.fyi',
+    title: 'Today\'s Card',
     description: 'Every official play with its price and edge, and the graded record behind them.',
     images: ['/api/og/picks-card'],
   },

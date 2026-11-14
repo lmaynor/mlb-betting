@@ -109,7 +109,7 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
         <span className="mono text-[22px] font-semibold leading-[1]" style={{ color: tierColor }}>{pick.score}</span>
         <span className="ui-heading text-micro py-0.5 px-[5px] rounded-chip border border-[color:#57F287] bg-[rgba(87,242,135,0.12)] text-signal whitespace-nowrap">Official play</span>
         {!pick.result && pick.started && (
-          <span className="ui-heading text-micro py-0.5 px-[5px] rounded-chip whitespace-nowrap" style={{ color: 'var(--color-neutral-300)', border: '1px solid var(--color-neutral-300)' }}>STARTED · GRADED AT FINAL</span>
+          <span className="ui-heading text-micro py-0.5 px-[5px] rounded-chip whitespace-nowrap" style={{ color: 'var(--color-neutral-300)', border: '1px solid var(--color-neutral-300)' }}>Started · graded at final</span>
         )}
         {pick.result && <ResultTag result={pick.result} />}
       </div>
@@ -117,7 +117,7 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
   )
 }
 
-const RESULT_LABEL = { win: 'WIN', loss: 'LOSS', push: 'PUSH', void: 'VOID' } as const
+const RESULT_LABEL = { win: 'Win', loss: 'Loss', push: 'Push', void: 'Void' } as const
 const RESULT_COLOR = { win: 'var(--signal)', loss: 'var(--loss)', push: 'var(--color-neutral-300)', void: 'var(--color-text-secondary)' } as const
 
 /** A graded play's outcome: the card keeps a play on the list after its game, with the result in place of the clock. */
@@ -174,7 +174,7 @@ function PostToX({ sheets }: { sheets: Sheet[] }) {
               <span className="ui-heading text-mini text-text-primary">{sh.label}</span>
               <span className="mono text-micro text-border-button-active">{n}/{POST_LIMIT}</span>
               <div  className="flex-1"/>
-              <button onClick={() => copy(sh.id, sh.text)} className="mono" style={copyBtn(copied === sh.id)}>{copied === sh.id ? 'Copied' : 'COPY'}</button>
+              <button onClick={() => copy(sh.id, sh.text)} className="mono" style={copyBtn(copied === sh.id)}>{copied === sh.id ? 'Copied' : 'Copy'}</button>
             </div>
             <textarea readOnly value={sh.text} rows={sh.lines + 2} onFocus={e => e.currentTarget.select()} aria-label={`${sh.label} post`} className="mono" style={field} />
             {sh.lines < sh.offered && <p className="text-mini text-text-secondary" style={{ margin: '4px 0 0' }}>Showing {sh.lines} of {sh.offered}: the lowest-ranked {sh.offered - sh.lines === 1 ? 'pick was' : 'picks were'} cut so the post fits {POST_LIMIT}.</p>}
@@ -185,13 +185,13 @@ function PostToX({ sheets }: { sheets: Sheet[] }) {
         <div className="flex items-center gap-2.5 mb-1.5">
           <span className="ui-heading text-mini text-text-primary">Reply</span>
           <div  className="flex-1"/>
-          <button onClick={() => copy('reply', LINK_REPLY)} className="mono" style={copyBtn(copied === 'reply')}>{copied === 'reply' ? 'Copied' : 'COPY'}</button>
+          <button onClick={() => copy('reply', LINK_REPLY)} className="mono" style={copyBtn(copied === 'reply')}>{copied === 'reply' ? 'Copied' : 'Copy'}</button>
         </div>
         <textarea readOnly value={LINK_REPLY} rows={3} onFocus={e => e.currentTarget.select()} aria-label="Link reply" className="mono" style={field} />
       </div>
       <p className="text-mini text-text-secondary" style={{ margin: '10px 0 0' }}>
         Each box lists the same picks, in the same order, as the card above for that sport. No links in the posts (X deprioritizes them): post a sheet,
-        then paste the REPLY under it. A line says EV only when it is a real +EV price; otherwise it says edge (model vs market). NFL, NHL and NBA rows are
+        then paste the Reply under it. A line says EV only when it is a real +EV price; otherwise it says edge (model vs market). NFL, NHL and NBA rows are
         unvalidated projection signals.
       </p>
     </div>
@@ -266,12 +266,12 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
                 </div>
                 {wk.days > 0 && (
                   <Link href="/picks/history" className="block no-underline mono text-micro text-neutral-300 border border-separator-border rounded-chip py-1.5 px-2.5 mt-2 leading-[1.4]">
-                    LAST {wk.days} DAYS {wk.graded > 0 ? <>
+                    Last {wk.days} days {wk.graded > 0 ? <>
                       <span className="text-text-primary">{wk.wins}-{wk.losses}{wk.pushes ? `-${wk.pushes}` : ''}</span>{' \u00b7 '}
                       <span style={{ color: wk.units >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{wk.units >= 0 ? '+' : ''}{wk.units.toFixed(1)}u flat</span>
                       {wkRoi != null && <>{' \u00b7 '}<span style={{ color: wkRoi >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{wkRoi >= 0 ? '+' : ''}{wkRoi.toFixed(0)}% ROI</span></>}
                     </> : <span className="text-text-secondary">{wk.pending > 0 ? `${wk.pending} pending` : 'no graded plays yet'}</span>}
-                    {' '}<span className="text-link">GRADED HISTORY &rarr;</span>
+                    {' '}<span className="text-link">Graded history &rarr;</span>
                   </Link>
                 )}
               </div>
@@ -294,8 +294,8 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
 
           {list.length > 0 && (
             <div className="py-[7px] px-4 border-b border-b-[color:var(--color-separator-border)] flex flex-wrap gap-2.5 items-center">
-              <span className="mono text-micro text-text-secondary">{list.length} {list.length === 1 ? 'PLAY' : 'PLAYS'}</span>
-              {best > 0 && <span className="ui-heading text-micro text-signal">BEST EDGE +{best.toFixed(1)}%</span>}
+              <span className="mono text-micro text-text-secondary">{list.length} {list.length === 1 ? 'play' : 'plays'}</span>
+              {best > 0 && <span className="ui-heading text-micro text-signal">Best edge +{best.toFixed(1)}%</span>}
             </div>
           )}
 
