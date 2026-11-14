@@ -1,0 +1,82 @@
+{
+  "goalie": {
+    "total_items": 100,
+    "false_positives": 0,
+    "false_positives_bar_passed": true,
+    "confirmation_recall": 1.0,
+    "per_label": {
+      "confirmed_starter": {
+        "total": 50,
+        "confirmed": 50,
+        "unconfirmed": 0
+      },
+      "unconfirmed": {
+        "total": 30,
+        "confirmed": 0,
+        "unconfirmed": 30
+      },
+      "late_scratch": {
+        "total": 20,
+        "confirmed": 0,
+        "unconfirmed": 20
+      }
+    },
+    "bars_passed": true
+  },
+  "status": {
+    "total_items": 200,
+    "scratch_recall": 1.0,
+    "scratch_recall_bar_passed": true,
+    "false_scratch_rate": 0.0,
+    "false_scratch_bar_passed": true,
+    "uncertain_counts": {
+      "total": 100,
+      "scratched_out": 0,
+      "played": 100
+    },
+    "bars_passed": true
+  },
+  "n2": {
+    "total_items": 250,
+    "matched_items": 50,
+    "unmatched_items": 200,
+    "postponement_suspension_recall": 1.0,
+    "postponement_suspension_bar_passed": true,
+    "material_change_false_rate": null,
+    "material_change_false_rate_bar_passed": null,
+    "material_change_evaluable": false,
+    "matched_no_change_items": 0,
+    "notes": "The 200 no_change normals are NBC player-availability prose with no team pair in their game object, so the deterministic slate matcher excludes them fail-closed (event_unconfirmed) and they are never judged; the false-material-change rate is therefore not evaluable on this fixture (null), not 0.0.",
+    "bars_passed": true
+  },
+  "n6": {
+    "total_items": 241,
+    "pp_only_items": 59,
+    "pp_only_leakage": 0,
+    "pp_only_bar_passed": true,
+    "no_change_items": 9,
+    "false_suspension_rate": 0.0,
+    "false_suspension_bar_passed": true,
+    "promotion_shuffle_recall": 1.0,
+    "promotion_demotion_shuffle_recall": 1.0,
+    "compound_items": 12,
+    "compound_item_ids": [
+      "n6-compound-ANA",
+      "n6-compound-ARI",
+      "n6-compound-BOS",
+      "n6-compound-BUF",
+      "n6-compound-CAR",
+      "n6-compound-CGY",
+      "n6-compound-COL",
+      "n6-compound-DAL",
+      "n6-compound-EDM",
+      "n6-compound-FLA",
+      "n6-compound-MIN",
+      "n6-compound-MTL"
+    ],
+    "compound_prong_active": 0.75,
+    "compound_suspended": 0.8333333333333334,
+    "bars_passed": false
+  },
+  "all_bars_passed": false
+}
