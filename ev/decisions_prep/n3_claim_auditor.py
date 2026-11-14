@@ -18,6 +18,11 @@ Gate (ruling, tightened): BLOCK a packet or brief where a load-bearing claim
 scores P(supported) < 0.90, P(contradicted) > 0.05, or
 P(wrong_scope) + P(stale) >= 0.25. ``gate`` below implements exactly that.
 
+NOTE: Per RUL-20261113-dec-gate-design Q1, the supported question uses
+factual entailment (not verbatim identity) and claims are packaged with
+their full cited evidence chain by ev.decisions_prep.n3_evidence_packaging;
+gate thresholds unchanged.
+
 Kill criterion the prep is graded against (offline, on the seeded fixture in
 tests/fixtures/decisions/n3_claims/): recall on contradicted claims must be
 100%, overall planted-flaw recall >= 90%, and the false-block rate on clean
@@ -189,9 +194,12 @@ def check_numbers(
 
 _QUESTION_INSTRUCTIONS: dict[str, str] = {
     "supported": (
-        "What is the probability that the evidence fully supports the claim "
-        "exactly as stated -- every literal number, date, name, and scope "
-        "qualifier included?"
+        "What is the probability that the claim is factually entailed by the "
+        "evidence -- the evidence establishes every fact the claim asserts, the "
+        "claim asserts no fact the evidence does not establish, and the claim "
+        "omits no caveat in the evidence that materially changes the claim's "
+        "meaning? A faithful paraphrase of the evidence counts as supported; "
+        "verbatim wording is not required."
     ),
     "contradicted": (
         "What is the probability that the evidence directly contradicts the "
