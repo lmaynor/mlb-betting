@@ -21,7 +21,7 @@ import {
 
 const CARD = 'rounded-xl border border-separator-border bg-background-primary-default shadow-card'
 const LBL = 'mono text-micro text-text-secondary'
-const PILLBTN = 'button-press-motion cursor-pointer rounded-full border px-3 py-1.5 text-mini '
+const PILLBTN = 'button-press-motion inline-flex min-h-9 cursor-pointer items-center justify-center rounded-full border px-3 py-1.5 text-mini '
 const COL = '80px 65px 180px 1fr 80px 70px 60px 80px 70px 70px'
 const PILL = SYSTEM_COLOR
 
@@ -212,7 +212,7 @@ function ResultBetCard({ bet, daily }: { bet: Bet; daily?: boolean }) {
         <div className="flex min-w-0 items-center gap-2">
           <SystemBadge system={bet.system} />
           <span className="mono whitespace-nowrap text-mini text-text-secondary">{fmtDisplayDate(bet.game_date)}</span>
-          {daily && <span className="ui-heading text-micro text-link">DAILY CARD</span>}
+          {daily && <span className="ui-heading text-micro text-link">Daily Card</span>}
         </div>
         <ResultPill result={bet.result} />
       </div>
@@ -345,7 +345,7 @@ export function ResultsClient({
   )
 
   return (
-    <div className="mx-auto max-w-page px-6 py-10">
+    <div className="mx-auto max-w-page px-6 py-6">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
         <h1 className="text-title-2-bold text-text-primary">Results</h1>
         <span className="mono text-caption-1-regular text-text-secondary">{filtered.length} bets shown &middot; {asOf ? `as of ${asOf} \u00b7 ` : ''}Central Time &middot; paper</span>
@@ -601,7 +601,7 @@ export function ResultsClient({
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             <span className={cx(LBL, 'mr-1')}>Sort</span>
-            {(['date', 'edge', 'odds', 'pnl'] as const).map(s => (
+            {([['date', 'Date'], ['edge', 'Edge'], ['odds', 'Odds'], ['pnl', 'P&L']] as const).map(([s, label]) => (
               <button key={s}
                 onClick={() => {
                   if (sortBy === s) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
@@ -610,7 +610,7 @@ export function ResultsClient({
                 className={cx('mono', PILLBTN, sortBy === s
                   ? 'border-border-button-hover bg-background-tertiary-default text-text-primary'
                   : 'border-separator-border bg-background-primary-default text-text-secondary hover:bg-background-primary-hover')}>
-                {s}{sortBy === s ? (sortDir === 'desc' ? ' v' : ' ^') : ''}
+                {label}{sortBy === s ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
               </button>
             ))}
           </div>
@@ -629,8 +629,8 @@ export function ResultsClient({
       {/* Bets table */}
       {filtered.length === 0 ? (
         <div className={cx('px-5 py-16 text-center', CARD)}>
-          <p className="mono mb-2 text-xs text-text-secondary">No bets match these filters.</p>
-          <p className="times mb-3.5 text-caption-1-regular text-text-secondary">Try a different system, result, or date range.</p>
+          <p className="mb-1.5 text-body-semibold text-text-primary">No bets match these filters</p>
+          <p className="mb-3.5 text-body-2-regular text-text-secondary">Try a different system or result, or reset the filters.</p>
           <button className="mono button-press-motion cursor-pointer rounded-2lg border border-border-button-default bg-transparent px-3.5 py-1.5 text-mini text-text-secondary hover:bg-background-primary-hover" onClick={() => { setSystem('ALL'); setResult('ALL'); setPage(0) }}>
             Reset filters
           </button>
