@@ -1,7 +1,8 @@
 """
 ev.novig.exec -- Novig as a second SHADOW venue for NFL props (public books, paper fills, no key needed).
-NHL (SOG + saves) rides the same pass since 2026-11-12: only the leg loading is league-parameterized;
-candidates / run_pass / grading are sport-agnostic (the join is (game_key, stat, player_norm, point)).
+NHL (SOG + saves) rides the same pass since 2026-11-12 and NBA (rebounds + threes) since 2026-11-13: only
+the leg loading is league-parameterized; candidates / run_pass / grading are sport-agnostic (the join is
+(game_key, stat, player_norm, point)).
 
 Reuses the Kalshi executor's gates / Kelly sizing / risk gate / ledger / PaperVenue unchanged by presenting a Novig
 book in Kalshi's shape:  Over == 'yes', Under == 'no'; one Kalshi-style contract == 100 Novig contracts ($1 of payout),
@@ -66,7 +67,8 @@ def novig_config(cfg):
 
 def load_novig_legs(nc: NovigClient, now: datetime, league: str = "NFL") -> dict:
     """{(game_key, stat, player_norm, strike): NovigLeg} for future games. `league` selects the catalog and
-    the mapper's tables (NFL default == the original behaviour; "NHL" maps SOG + saves only)."""
+    the mapper's tables (NFL default == the original behaviour; "NHL" maps SOG + saves only, "NBA" maps
+    rebounds + threes only)."""
     events = event_index(nc.list_events(league), league)
     out = {}
     for m in nc.list_markets(league):
