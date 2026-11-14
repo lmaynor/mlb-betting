@@ -423,7 +423,7 @@ function Inspector({ r, renderMlbExtras, renderLadderSection, onClose }: { r: Co
 
       {r.sport === 'nba' ? (
         <AriaTabs selectedKey={nbaTab} onSelectionChange={k => setNbaTab(k as NbaTab)} className="contents">
-          <AriaTabList aria-label="NBA research views" className="inline-flex gap-0.5 justify-self-start rounded-lg border border-separator-border bg-background-secondary-default p-[3px]">
+          <AriaTabList aria-label="NBA research views" className="inline-flex max-w-full overflow-x-auto no-scrollbar gap-0.5 justify-self-start rounded-lg border border-separator-border bg-background-secondary-default p-[3px]">
             {NBA_TABS.map(t => (
               <AriaTab key={t.id} id={t.id}
                 className={cx('cursor-pointer whitespace-nowrap rounded-md border px-[14px] py-1.5 text-caption-1-semibold', nbaTab === t.id ? 'border-border-button-hover bg-background-tertiary-default text-text-primary' : 'border-transparent bg-transparent text-text-secondary hover:bg-background-primary-hover')}>
@@ -507,7 +507,7 @@ function PropCard({ r, active, onSelect }: { r: CockpitRow; active: boolean; onS
 /** Recessed segmented group: active = elevated slate surface, never the brand fill (that stays reserved for +EV). */
 function Segmented<T extends string>({ value, options, onChange, label }: { value: T; options: { id: T; label: string }[]; onChange: (v: T) => void; label: string }) {
   return (
-    <div role="group" aria-label={label} className="inline-flex max-w-full gap-0.5 overflow-x-auto rounded-lg border border-separator-border bg-background-secondary-default p-[3px]">
+    <div role="group" aria-label={label} className="flex max-w-full min-w-0 gap-0.5 overflow-x-auto no-scrollbar rounded-lg border border-separator-border bg-background-secondary-default p-[3px]">
       {options.map(o => {
         const active = value === o.id
         return (
@@ -632,12 +632,12 @@ export function Cockpit({ feed, sport, updated, loading, onRefresh, renderMlbExt
 
   return (
     <div>
-      <section aria-label="Shortlist filters" className="mb-3.5 grid gap-2.5">
-        <div className="flex flex-wrap items-center gap-2.5">
+      <section aria-label="Shortlist filters" className="mb-3.5 grid gap-2.5 min-w-0">
+        <div className="flex flex-wrap items-center gap-2.5 min-w-0">
           <Segmented<string> label="Market" value={activeMarket} onChange={setMarket}
             options={[{ id: 'all', label: `All markets ${inSport.length}` }, ...markets.map(([k, n]) => ({ id: k, label: `${propStatLabel(k)} ${n}` }))]} />
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2.5 min-w-0">
           <div className="flex flex-wrap items-center gap-2.5">
             <Segmented<SortKey> label="Sort" value={sort} onChange={setSort}
               options={[{ id: 'ev', label: 'Net EV %' }, { id: 'l10', label: 'L10 hit %' }, { id: 'start', label: 'Starts soon' }]} />

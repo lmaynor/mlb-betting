@@ -955,9 +955,9 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
             <span className="edge-live-dot" /> Updated hourly <span className="edge-updated-time">{updated}</span>
           </span>
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
+        <div className="mt-4 flex flex-wrap items-center gap-3 min-w-0">
           {feed != null && <AriaTabs selectedKey={sport} onSelectionChange={k => setSport(k as CockpitSport)} className="contents">
-            <AriaTabList aria-label="Sport" className="inline-flex max-w-full gap-0.5 overflow-x-auto rounded-lg border border-separator-border bg-background-secondary-default p-[3px]">
+            <AriaTabList aria-label="Sport" className="flex max-w-full min-w-0 gap-0.5 overflow-x-auto no-scrollbar rounded-lg border border-separator-border bg-background-secondary-default p-[3px]">
             {COCKPIT_SPORTS.map(k => {
               const n = k === 'all' ? feed?.rows.length : feed?.sports?.[k]?.count
               const active = sport === k
@@ -972,7 +972,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
             })}
           </AriaTabList></AriaTabs>}
           {sport === 'mlb' && feed != null && (
-            <div role="group" aria-label="MLB view" className="inline-flex gap-0.5 rounded-lg border border-separator-border bg-background-secondary-default p-[3px]">
+            <div role="group" aria-label="MLB view" className="inline-flex max-w-full overflow-x-auto no-scrollbar gap-0.5 rounded-lg border border-separator-border bg-background-secondary-default p-[3px]">
               {([['cockpit', 'Shortlist'], ['board', 'Model board']] as [View, string][]).map(([k, label]) => {
                 const active = view === k
                 return (

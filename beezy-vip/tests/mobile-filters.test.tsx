@@ -40,7 +40,7 @@ describe('Mobile navigation and filters', () => {
     expect(screen.getByRole('button', { name: 'Open menu' })).toBeInTheDocument()
   })
 
-  it('renders mobile-native filter controls with None and Only buttons', () => {
+  it('renders mobile-native filter controls with market and book chips', () => {
     render(<FilterBar sport="nba" showResult />)
 
     // Open mobile filter sheet
@@ -58,8 +58,9 @@ describe('Mobile navigation and filters', () => {
     const noneBtn = screen.getByRole('button', { name: 'None' })
     expect(noneBtn).toBeInTheDocument()
 
-    const onlyButtons = screen.getAllByRole('button', { name: /only/i })
-    expect(onlyButtons.length).toBeGreaterThan(0)
+    expect(screen.getByText('All Markets')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'DraftKings' })).toBeInTheDocument()
+    expect(screen.queryByText('ONLY')).not.toBeInTheDocument()
 
     // Verify RESULT segmented control exists
     expect(screen.getByRole('button', { name: 'win' })).toBeInTheDocument()
@@ -70,13 +71,13 @@ describe('Mobile navigation and filters', () => {
     expect(screen.getByText(/low to high/i)).toBeInTheDocument()
   })
 
-  it('tapping ONLY on a sportsbook isolates that book', () => {
+  it('tapping a book chip isolates that book', () => {
     render(<FilterBar sport="nba" />)
     fireEvent.click(screen.getByRole('button', { name: /filters/i }))
 
-    // Click ONLY on DraftKings
-    const dkOnlyBtn = screen.getByRole('button', { name: 'Only DraftKings' })
-    fireEvent.click(dkOnlyBtn)
+    // Click DraftKings
+    const dkBtn = screen.getByRole('button', { name: 'DraftKings' })
+    fireEvent.click(dkBtn)
 
     expect(pushMock).toHaveBeenCalledWith('/picks?book=draftkings', { scroll: false })
   })
@@ -91,17 +92,17 @@ describe('Mobile navigation and filters', () => {
     expect(pushMock).toHaveBeenCalledWith('/picks?book=__none__', { scroll: false })
   })
 
-  it('tapping ONLY on a market isolates that market', () => {
+  it('tapping a market chip isolates that market', () => {
     render(<FilterBar sport="nba" />)
     fireEvent.click(screen.getByRole('button', { name: /filters/i }))
 
-    const ptsOnlyBtn = screen.getByRole('button', { name: /only pts/i })
-    fireEvent.click(ptsOnlyBtn)
+    const ptsBtn = screen.getByRole('button', { name: 'PTS', pressed: false })
+    fireEvent.click(ptsBtn)
 
     expect(pushMock).toHaveBeenCalledWith(expect.stringContaining('market=NBA_PTS'), { scroll: false })
   })
 
-  it('a market row toggles (tapping the active market clears it) while ONLY always selects just that market', () => {
+  it('tapping the active market chip clears it, and All Markets clears it too', () => {
     mockSearchParams = new URLSearchParams('market=NBA_PTS')
     render(<FilterBar sport="nba" />)
     fireEvent.click(screen.getByRole('button', { name: /filters/i }))
@@ -111,12 +112,12 @@ describe('Mobile navigation and filters', () => {
     fireEvent.click(row)
     expect(pushMock).toHaveBeenLastCalledWith('/picks', { scroll: false })
 
-    // ONLY on the same, already-active market: stays selected (never a toggle)
-    fireEvent.click(screen.getByRole('button', { name: /only pts/i }))
-    expect(pushMock).toHaveBeenLastCalledWith('/picks?market=NBA_PTS', { scroll: false })
+    // All Markets clears it too
+    fireEvent.click(screen.getByRole('button', { name: 'All Markets' }))
+    expect(pushMock).toHaveBeenLastCalledWith('/picks', { scroll: false })
   })
 
-  it('a market row on an inactive market selects it', () => {
+  it('a market chip on an inactive market selects it', () => {
     render(<FilterBar sport="nba" />)
     fireEvent.click(screen.getByRole('button', { name: /filters/i }))
     fireEvent.click(screen.getByRole('button', { name: 'PTS', pressed: false }))
