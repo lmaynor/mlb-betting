@@ -79,6 +79,18 @@ def test_seeded_claims_carry_provenance():
         assert c.get("mutation"), c["claim_id"]
 
 
+def test_source_docs_are_clean_resolvable_paths():
+    # Lint (join audit, 2026-11-13): a claim's source_doc must be a bare
+    # path that resolves to an existing file. Annotations belong in a
+    # note field (see N3-S008's source_note), never inside the path:
+    # the DEC-03 evidence packaging resolves source_doc literally and
+    # fails closed on a path that does not exist.
+    for c in _load_claims():
+        raw = c["source_doc"]
+        assert "(" not in raw and ")" not in raw, (c["claim_id"], raw)
+        assert Path(raw).expanduser().is_file(), (c["claim_id"], raw)
+
+
 # ---------------------------------------------------------------------------
 # extract_numeric_claims
 # ---------------------------------------------------------------------------

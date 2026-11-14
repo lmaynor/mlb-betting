@@ -288,9 +288,10 @@ def run_n2_eval(pacer: Optional[Pacer] = None) -> dict[str, Any]:
     # Unmatched DISRUPTIONS still count against recall (an unmatched disruption
     # is a miss). Unmatched no_change items do NOT enter the false-rate
     # denominator: they were never judged, so counting them would report a
-    # vacuous 0.0. On this fixture the 200 normals are NBC player prose with
-    # no team pair, so the deterministic matcher excludes all of them
-    # fail-closed and the false-material-change rate is not evaluable.
+    # vacuous 0.0. Since the normals v2 rebuild (join audit, 2026-11-13)
+    # every normal carries its structured team pair and true game date, so
+    # all 200 match their slate games and the false-material-change rate is
+    # a measured number; on the v1 fixture it was null by construction.
     for exc in prep.excluded:
         item_id = exc["item_id"]
         for item in items:
@@ -332,11 +333,13 @@ def run_n2_eval(pacer: Optional[Pacer] = None) -> dict[str, Any]:
         "material_change_evaluable": material_change_evaluable,
         "matched_no_change_items": no_change_count,
         "notes": (
-            "The 200 no_change normals are NBC player-availability prose with no "
-            "team pair in their game object, so the deterministic slate matcher "
-            "excludes them fail-closed (event_unconfirmed) and they are never "
-            "judged; the false-material-change rate is therefore not evaluable "
-            "on this fixture (null), not 0.0."
+            "Normals v2 (join audit, 2026-11-13): every one of the 200 "
+            "no_change normals carries its structured team pair and true "
+            "game date (game.date is the game's date; the prose publish "
+            "date is kept in prose_published_date), so the slate matcher "
+            "matches them and the false-material-change rate is measured "
+            "over the matched normals. On the v1 fixture (prose date, no "
+            "team pair) the rate was null by construction."
         ),
         "bars_passed": bars_passed,
     }

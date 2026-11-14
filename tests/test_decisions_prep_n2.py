@@ -76,6 +76,22 @@ def test_n2_normal_shape():
         assert item["game"]["date"]
 
 
+def test_n2_normal_shape_v2():
+    # v2 (join audit, 2026-11-13): every normal carries the structured
+    # team pair and the TRUE game date, like the disruptions, so the
+    # eval can match it to its slate game. A normal without a pair
+    # silently nulls the false-change rate again; fail here instead.
+    seen_ids = set()
+    for item in _normals():
+        game = item["game"]
+        assert game["away"] and game["home"]
+        date.fromisoformat(game["date"])
+        assert item["item_id"] and item["item_id"] not in seen_ids
+        seen_ids.add(item["item_id"])
+        assert item["player"]
+        date.fromisoformat(item["prose_published_date"])
+
+
 def test_n2_blurbs_deduped():
     texts = [r["blurb_text"] for r in _load(N2_ITEMS)]
     assert len(texts) == len(set(texts))

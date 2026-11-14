@@ -119,6 +119,57 @@ def test_capture_record_delta_and_correction_flag():
     assert rec3["delta"] is None and rec3["correction_detected"] is False
 
 
+def test_capture_record_unmatched_reason_field():
+    rec = cap.build_capture_record(
+        SETTLED, source=cap.CAPTURE_SOURCE_NHL_PAPER, game_id=2026020234,
+        boxscore_current=1.0, boxscore_source="master", captured_ts="2026-11-13T00:00:00+00:00")
+    assert rec["unmatched_reason"] is None
+    rec_absent = cap.build_capture_record(
+        SETTLED, source=cap.CAPTURE_SOURCE_NHL_PAPER, game_id=2026020234,
+        boxscore_current=None, boxscore_source="master",
+        captured_ts="2026-11-13T00:00:00+00:00",
+        unmatched_reason=cap.UNMATCHED_PLAYER_ABSENT)
+    assert rec_absent["unmatched_reason"] == "player_absent_from_boxscore"
+    assert rec_absent["boxscore_current"] is None
+
+
+def test_runner_unmatched_reasons(tmp_path):
+    # One matched row, one whose game does not resolve against the games
+    # master, one whose game resolves but who has no boxscore row
+    # (did-not-dress). The runner must label each residue row's reason.
+    settled_dir = tmp_path / "settled"
+    settled_dir.mkdir()
+    rows = [
+        {"game_key": "nhl:2026-11-02:COL@CHI", "player_id": 8477476,
+         "player": "Artturi Lehkonen", "stat": "goals", "actual": 0},
+        {"game_key": "nhl:2026-11-02:XXX@CHI", "player_id": 8477476,
+         "player": "Artturi Lehkonen", "stat": "goals", "actual": 0},
+        {"game_key": "nhl:2026-11-02:COL@CHI", "player_id": 9999999,
+         "player": "Dressed Never", "stat": "goals", "actual": 0},
+    ]
+    (settled_dir / "2026-11-02.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in rows))
+    games = tmp_path / "games.csv"
+    games.write_text("date,away_abbr,home_abbr,game_id\n"
+                     "2026-11-02,COL,CHI,2026020234\n")
+    skater = tmp_path / "skater.csv"
+    skater.write_text("game_id,player_id,goals,assists,points,sog\n"
+                      "2026020234,8477476,1,0,1,3\n")
+    goalie = tmp_path / "goalie.csv"
+    goalie.write_text("game_id,player_id,saves\n")
+    out = tmp_path / "capture.jsonl"
+    counts = cap.run_nhl_paper_capture(settled_dir, games, skater, goalie, out)
+    assert counts["unmatched_boxscore"] == 2
+    assert counts["unmatched_game_unresolved"] == 1
+    assert counts["unmatched_player_absent"] == 1
+    records = [json.loads(l) for l in out.read_text().splitlines() if l.strip()]
+    reasons = {r["capture_id"]: r["unmatched_reason"] for r in records}
+    assert sorted(v for v in reasons.values() if v) == [
+        "game_unresolved", "player_absent_from_boxscore"]
+    matched = [r for r in records if r["unmatched_reason"] is None]
+    assert len(matched) == 1 and matched[0]["player_id"] == 8477476
+
+
 def test_diff_captures():
     base = {"capture_id": "x", "stat": "saves", "boxscore_current": 25.0,
             "boxscore_captured_ts": "t1"}

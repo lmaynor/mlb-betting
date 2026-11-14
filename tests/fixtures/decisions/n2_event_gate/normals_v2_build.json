@@ -1,0 +1,2036 @@
+{
+ "kept_v1": 193,
+ "dropped_v1": 7,
+ "drop_reasons": [
+  [
+   "no_candidate",
+   5
+  ],
+  [
+   "ambiguous:54",
+   1
+  ],
+  [
+   "ambiguous:51",
+   1
+  ]
+ ],
+ "backfilled": 7,
+ "total_normals": 200,
+ "evidence_mix": [
+  [
+   "boxscore_slate",
+   140
+  ],
+  [
+   "weekday_headline",
+   50
+  ],
+  [
+   "injury_report",
+   10
+  ]
+ ],
+ "items": [
+  {
+   "item_id": "N2N-001",
+   "player": "Grayson Allen",
+   "prose_published_date": "2021-03-30",
+   "game_date": "2021-03-31",
+   "away": "Utah Jazz",
+   "home": "Memphis Grizzlies",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-002",
+   "player": "Paul George",
+   "prose_published_date": "2021-06-03",
+   "game_date": "2021-06-02",
+   "away": "Dallas Mavericks",
+   "home": "LA Clippers",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-003",
+   "player": "Markieff Morris",
+   "prose_published_date": "2021-11-16",
+   "game_date": "2021-11-17",
+   "away": "New Orleans Pelicans",
+   "home": "Miami Heat",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-004",
+   "player": "Cody Martin",
+   "prose_published_date": "2021-12-06",
+   "game_date": "2021-12-05",
+   "away": "Charlotte Hornets",
+   "home": "Atlanta Hawks",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-005",
+   "player": "Payton Pritchard",
+   "prose_published_date": "2021-12-25",
+   "game_date": "2021-12-25",
+   "away": "Boston Celtics",
+   "home": "Milwaukee Bucks",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-006",
+   "player": "Christian Wood",
+   "prose_published_date": "2022-01-05",
+   "game_date": "2022-01-05",
+   "away": "Houston Rockets",
+   "home": "Washington Wizards",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-007",
+   "player": "Tristan Thompson",
+   "prose_published_date": "2022-01-12",
+   "game_date": "2022-01-12",
+   "away": "Los Angeles Lakers",
+   "home": "Sacramento Kings",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-008",
+   "player": "Derrick Favors",
+   "prose_published_date": "2022-01-20",
+   "game_date": "2022-01-21",
+   "away": "Oklahoma City Thunder",
+   "home": "Charlotte Hornets",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-009",
+   "player": "Robert Covington",
+   "prose_published_date": "2022-01-26",
+   "game_date": "2022-01-26",
+   "away": "Dallas Mavericks",
+   "home": "Portland Trail Blazers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-010",
+   "player": "James Bouknight",
+   "prose_published_date": "2022-01-30",
+   "game_date": "2022-01-30",
+   "away": "LA Clippers",
+   "home": "Charlotte Hornets",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-011",
+   "player": "JaVale McGee",
+   "prose_published_date": "2022-02-08",
+   "game_date": "2022-02-07",
+   "away": "Phoenix Suns",
+   "home": "Chicago Bulls",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-012",
+   "player": "Javonte Green",
+   "prose_published_date": "2022-02-13",
+   "game_date": "2022-02-12",
+   "away": "Oklahoma City Thunder",
+   "home": "Chicago Bulls",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-013",
+   "player": "Jaden McDaniels",
+   "prose_published_date": "2022-03-05",
+   "game_date": "2022-03-04",
+   "away": "Minnesota Timberwolves",
+   "home": "Oklahoma City Thunder",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-014",
+   "player": "Jarred Vanderbilt",
+   "prose_published_date": "2022-03-13",
+   "game_date": "2022-03-14",
+   "away": "Minnesota Timberwolves",
+   "home": "San Antonio Spurs",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-015",
+   "player": "George Hill",
+   "prose_published_date": "2022-03-19",
+   "game_date": "2022-03-19",
+   "away": "Milwaukee Bucks",
+   "home": "Minnesota Timberwolves",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-016",
+   "player": "Lamar Stevens",
+   "prose_published_date": "2022-03-22",
+   "game_date": "2022-03-21",
+   "away": "Los Angeles Lakers",
+   "home": "Cleveland Cavaliers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-017",
+   "player": "Eric Gordon",
+   "prose_published_date": "2022-03-28",
+   "game_date": "2022-03-28",
+   "away": "San Antonio Spurs",
+   "home": "Houston Rockets",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-018",
+   "player": "JaVale McGee",
+   "prose_published_date": "2022-04-01",
+   "game_date": "2022-04-01",
+   "away": "Phoenix Suns",
+   "home": "Memphis Grizzlies",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-019",
+   "player": "Tyus Jones",
+   "prose_published_date": "2022-04-06",
+   "game_date": "2022-04-05",
+   "away": "Memphis Grizzlies",
+   "home": "Utah Jazz",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-020",
+   "player": "Chris Boucher",
+   "prose_published_date": "2022-04-11",
+   "game_date": "2022-04-10",
+   "away": "Toronto Raptors",
+   "home": "New York Knicks",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-021",
+   "player": "Clint Capela",
+   "prose_published_date": "2022-04-24",
+   "game_date": "2022-04-24",
+   "away": "Miami Heat",
+   "home": "Atlanta Hawks",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-022",
+   "player": "Marcus Smart",
+   "prose_published_date": "2022-05-19",
+   "game_date": "2022-05-19",
+   "away": "Boston Celtics",
+   "home": "Miami Heat",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-023",
+   "player": "Devin Booker",
+   "prose_published_date": "2022-11-02",
+   "game_date": "2022-11-01",
+   "away": "Minnesota Timberwolves",
+   "home": "Phoenix Suns",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-024",
+   "player": "Yuta Watanabe",
+   "prose_published_date": "2022-11-08",
+   "game_date": "2022-11-09",
+   "away": "New York Knicks",
+   "home": "Brooklyn Nets",
+   "evidence": "injury_report",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-025",
+   "player": "Tre Mann",
+   "prose_published_date": "2022-11-15",
+   "game_date": "2022-11-16",
+   "away": "Oklahoma City Thunder",
+   "home": "Washington Wizards",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-026",
+   "player": "Cory Joseph",
+   "prose_published_date": "2022-11-20",
+   "game_date": "2022-11-20",
+   "away": "Detroit Pistons",
+   "home": "Sacramento Kings",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-027",
+   "player": "Lamar Stevens",
+   "prose_published_date": "2022-11-26",
+   "game_date": "2022-11-27",
+   "away": "Cleveland Cavaliers",
+   "home": "Detroit Pistons",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-028",
+   "player": "Blake Griffin",
+   "prose_published_date": "2022-12-06",
+   "game_date": "2022-12-05",
+   "away": "Boston Celtics",
+   "home": "Toronto Raptors",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-029",
+   "player": "Kessler Edwards",
+   "prose_published_date": "2022-12-10",
+   "game_date": "2022-12-10",
+   "away": "Brooklyn Nets",
+   "home": "Indiana Pacers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-030",
+   "player": "Damion Lee",
+   "prose_published_date": "2022-12-20",
+   "game_date": "2022-12-19",
+   "away": "Los Angeles Lakers",
+   "home": "Phoenix Suns",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-031",
+   "player": "Chris Duarte",
+   "prose_published_date": "2022-12-30",
+   "game_date": "2022-12-29",
+   "away": "Cleveland Cavaliers",
+   "home": "Indiana Pacers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-032",
+   "player": "Gordon Hayward",
+   "prose_published_date": "2023-01-04",
+   "game_date": "2023-01-04",
+   "away": "Memphis Grizzlies",
+   "home": "Charlotte Hornets",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-033",
+   "player": "Josh Richardson",
+   "prose_published_date": "2023-01-09",
+   "game_date": "2023-01-09",
+   "away": "San Antonio Spurs",
+   "home": "Memphis Grizzlies",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-034",
+   "player": "Kyle Anderson",
+   "prose_published_date": "2023-01-14",
+   "game_date": "2023-01-13",
+   "away": "Phoenix Suns",
+   "home": "Minnesota Timberwolves",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-035",
+   "player": "Oshae Brissett",
+   "prose_published_date": "2023-01-21",
+   "game_date": "2023-01-20",
+   "away": "Indiana Pacers",
+   "home": "Denver Nuggets",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-036",
+   "player": "Shaedon Sharpe",
+   "prose_published_date": "2023-01-24",
+   "game_date": "2023-01-23",
+   "away": "San Antonio Spurs",
+   "home": "Portland Trail Blazers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-037",
+   "player": "Kevin Love",
+   "prose_published_date": "2023-01-29",
+   "game_date": "2023-01-29",
+   "away": "LA Clippers",
+   "home": "Cleveland Cavaliers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-038",
+   "player": "Orlando Robinson",
+   "prose_published_date": "2023-02-01",
+   "game_date": "2023-02-02",
+   "away": "Miami Heat",
+   "home": "New York Knicks",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-039",
+   "player": "Austin Reaves",
+   "prose_published_date": "2023-02-08",
+   "game_date": "2023-02-07",
+   "away": "Oklahoma City Thunder",
+   "home": "Los Angeles Lakers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-040",
+   "player": "Terence Davis",
+   "prose_published_date": "2023-02-12",
+   "game_date": "2023-02-11",
+   "away": "Dallas Mavericks",
+   "home": "Sacramento Kings",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-041",
+   "player": "Victor Oladipo",
+   "prose_published_date": "2023-02-25",
+   "game_date": "2023-02-24",
+   "away": "Miami Heat",
+   "home": "Milwaukee Bucks",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-042",
+   "player": "Anthony Lamb",
+   "prose_published_date": "2023-03-05",
+   "game_date": "2023-03-05",
+   "away": "Golden State Warriors",
+   "home": "Los Angeles Lakers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-043",
+   "player": "P.J. Tucker",
+   "prose_published_date": "2023-03-10",
+   "game_date": "2023-03-07",
+   "away": "Philadelphia 76ers",
+   "home": "Minnesota Timberwolves",
+   "evidence": "injury_report",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-044",
+   "player": "Andre Iguodala",
+   "prose_published_date": "2023-03-14",
+   "game_date": "2023-03-13",
+   "away": "Phoenix Suns",
+   "home": "Golden State Warriors",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-045",
+   "player": "Jalen McDaniels",
+   "prose_published_date": "2023-03-18",
+   "game_date": "2023-03-18",
+   "away": "Philadelphia 76ers",
+   "home": "Indiana Pacers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-046",
+   "player": "Jerami Grant",
+   "prose_published_date": "2023-03-26",
+   "game_date": "2023-03-26",
+   "away": "Oklahoma City Thunder",
+   "home": "Portland Trail Blazers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-047",
+   "player": "Obi Toppin",
+   "prose_published_date": "2023-04-01",
+   "game_date": "2023-03-31",
+   "away": "New York Knicks",
+   "home": "Cleveland Cavaliers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-048",
+   "player": "Jaylen Nowell",
+   "prose_published_date": "2023-04-07",
+   "game_date": "2023-04-08",
+   "away": "Minnesota Timberwolves",
+   "home": "San Antonio Spurs",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-049",
+   "player": "Jordan Poole",
+   "prose_published_date": "2023-04-17",
+   "game_date": "2023-04-17",
+   "away": "Golden State Warriors",
+   "home": "Sacramento Kings",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-050",
+   "player": "Kenneth Lofton Jr.",
+   "prose_published_date": "2023-11-02",
+   "game_date": "2023-11-01",
+   "away": "Memphis Grizzlies",
+   "home": "Utah Jazz",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-051",
+   "player": "Jaden Ivey",
+   "prose_published_date": "2023-11-07",
+   "game_date": "2023-11-08",
+   "away": "Detroit Pistons",
+   "home": "Milwaukee Bucks",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-052",
+   "player": "Isaiah Stewart",
+   "prose_published_date": "2023-11-13",
+   "game_date": "2023-11-12",
+   "away": "Detroit Pistons",
+   "home": "Chicago Bulls",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-053",
+   "player": "Killian Hayes",
+   "prose_published_date": "2023-11-19",
+   "game_date": "2023-11-19",
+   "away": "Detroit Pistons",
+   "home": "Toronto Raptors",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-054",
+   "player": "Kentavious Caldwell-Pope",
+   "prose_published_date": "2023-11-25",
+   "game_date": "2023-11-26",
+   "away": "San Antonio Spurs",
+   "home": "Denver Nuggets",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-055",
+   "player": "Zach LaVine",
+   "prose_published_date": "2023-11-30",
+   "game_date": "2023-11-30",
+   "away": "Milwaukee Bucks",
+   "home": "Chicago Bulls",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-056",
+   "player": "Caleb Martin",
+   "prose_published_date": "2023-12-07",
+   "game_date": "2023-12-06",
+   "away": "Miami Heat",
+   "home": "Toronto Raptors",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-057",
+   "player": "Trey Murphy",
+   "prose_published_date": "2023-12-22",
+   "game_date": "2023-12-21",
+   "away": "New Orleans Pelicans",
+   "home": "Cleveland Cavaliers",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-058",
+   "player": "Devonte' Graham",
+   "prose_published_date": "2023-12-31",
+   "game_date": "2023-12-31",
+   "away": "Boston Celtics",
+   "home": "San Antonio Spurs",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-059",
+   "player": "Cade Cunningham",
+   "prose_published_date": "2024-01-04",
+   "game_date": "2024-01-03",
+   "away": "Detroit Pistons",
+   "home": "Utah Jazz",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-060",
+   "player": "Bruce Brown",
+   "prose_published_date": "2024-01-07",
+   "game_date": "2024-01-08",
+   "away": "Boston Celtics",
+   "home": "Indiana Pacers",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-061",
+   "player": "Maxi Kleber",
+   "prose_published_date": "2024-01-14",
+   "game_date": "2024-01-13",
+   "away": "New Orleans Pelicans",
+   "home": "Dallas Mavericks",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-062",
+   "player": "Trae Young",
+   "prose_published_date": "2024-01-19",
+   "game_date": "2024-01-19",
+   "away": "Atlanta Hawks",
+   "home": "Miami Heat",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-063",
+   "player": "Scottie Barnes",
+   "prose_published_date": "2024-01-31",
+   "game_date": "2024-01-30",
+   "away": "Toronto Raptors",
+   "home": "Chicago Bulls",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-064",
+   "player": "Ausar Thompson",
+   "prose_published_date": "2024-02-08",
+   "game_date": "2024-02-07",
+   "away": "Detroit Pistons",
+   "home": "Sacramento Kings",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-065",
+   "player": "Bojan Bogdanovic",
+   "prose_published_date": "2024-02-14",
+   "game_date": "2024-02-14",
+   "away": "New York Knicks",
+   "home": "Orlando Magic",
+   "evidence": "injury_report",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-066",
+   "player": "Jalen Brunson",
+   "prose_published_date": "2024-02-27",
+   "game_date": "2024-02-27",
+   "away": "New Orleans Pelicans",
+   "home": "New York Knicks",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-067",
+   "player": "Trayce Jackson-Davis",
+   "prose_published_date": "2024-03-10",
+   "game_date": "2024-03-09",
+   "away": "San Antonio Spurs",
+   "home": "Golden State Warriors",
+   "evidence": "injury_report",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-068",
+   "player": "Jerami Grant",
+   "prose_published_date": "2024-03-16",
+   "game_date": "2024-03-16",
+   "away": "Portland Trail Blazers",
+   "home": "New Orleans Pelicans",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-069",
+   "player": "Markelle Fultz",
+   "prose_published_date": "2024-03-29",
+   "game_date": "2024-03-29",
+   "away": "LA Clippers",
+   "home": "Orlando Magic",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-070",
+   "player": "Cedi Osman",
+   "prose_published_date": "2024-04-03",
+   "game_date": "2024-04-02",
+   "away": "San Antonio Spurs",
+   "home": "Denver Nuggets",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-071",
+   "player": "Ayo Dosunmu",
+   "prose_published_date": "2024-04-08",
+   "game_date": "2024-04-09",
+   "away": "New York Knicks",
+   "home": "Chicago Bulls",
+   "evidence": "injury_report",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-072",
+   "player": "V\u00edt Krej\u010d\u00ed",
+   "prose_published_date": "2024-04-10",
+   "game_date": "2024-04-09",
+   "away": "Dallas Mavericks",
+   "home": "Charlotte Hornets",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-073",
+   "player": "Jalen Smith",
+   "prose_published_date": "2024-04-14",
+   "game_date": "2024-04-14",
+   "away": "Atlanta Hawks",
+   "home": "Indiana Pacers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-074",
+   "player": "OG Anunoby",
+   "prose_published_date": "2024-05-11",
+   "game_date": "2024-05-12",
+   "away": "New York Knicks",
+   "home": "Indiana Pacers",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-075",
+   "player": "Jonathan Isaac",
+   "prose_published_date": "2024-11-09",
+   "game_date": "2024-11-08",
+   "away": "New Orleans Pelicans",
+   "home": "Orlando Magic",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-076",
+   "player": "Tidjane Sala\u00fcn",
+   "prose_published_date": "2024-12-06",
+   "game_date": "2024-12-05",
+   "away": "Charlotte Hornets",
+   "home": "New York Knicks",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-077",
+   "player": "Jericho Sims",
+   "prose_published_date": "2024-12-08",
+   "game_date": "2024-12-07",
+   "away": "Detroit Pistons",
+   "home": "New York Knicks",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-078",
+   "player": "Domantas Sabonis",
+   "prose_published_date": "2024-12-19",
+   "game_date": "2024-12-19",
+   "away": "Los Angeles Lakers",
+   "home": "Sacramento Kings",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-079",
+   "player": "Keyonte George",
+   "prose_published_date": "2024-12-30",
+   "game_date": "2024-12-30",
+   "away": "Denver Nuggets",
+   "home": "Utah Jazz",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-080",
+   "player": "V\u00edt Krej\u010d\u00ed",
+   "prose_published_date": "2025-01-05",
+   "game_date": "2025-01-04",
+   "away": "Atlanta Hawks",
+   "home": "LA Clippers",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-081",
+   "player": "Fred VanVleet",
+   "prose_published_date": "2025-01-16",
+   "game_date": "2025-01-16",
+   "away": "Houston Rockets",
+   "home": "Sacramento Kings",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-082",
+   "player": "Cameron Johnson",
+   "prose_published_date": "2025-01-22",
+   "game_date": "2025-01-22",
+   "away": "Phoenix Suns",
+   "home": "Brooklyn Nets",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-083",
+   "player": "Stephon Castle",
+   "prose_published_date": "2025-01-30",
+   "game_date": "2025-01-29",
+   "away": "LA Clippers",
+   "home": "San Antonio Spurs",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-084",
+   "player": "Lonzo Ball",
+   "prose_published_date": "2025-02-08",
+   "game_date": "2025-02-08",
+   "away": "Golden State Warriors",
+   "home": "Chicago Bulls",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-085",
+   "player": "Amir Coffey",
+   "prose_published_date": "2025-02-21",
+   "game_date": "2025-02-20",
+   "away": "LA Clippers",
+   "home": "Milwaukee Bucks",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-086",
+   "player": "T.J. McConnell",
+   "prose_published_date": "2025-02-24",
+   "game_date": "2025-02-24",
+   "away": "Denver Nuggets",
+   "home": "Indiana Pacers",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-087",
+   "player": "Rudy Gobert",
+   "prose_published_date": "2025-02-27",
+   "game_date": "2025-02-27",
+   "away": "Minnesota Timberwolves",
+   "home": "Los Angeles Lakers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-088",
+   "player": "Vince Williams",
+   "prose_published_date": "2025-03-02",
+   "game_date": "2025-03-03",
+   "away": "Atlanta Hawks",
+   "home": "Memphis Grizzlies",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-089",
+   "player": "Jock Landale",
+   "prose_published_date": "2025-03-04",
+   "game_date": "2025-03-03",
+   "away": "Houston Rockets",
+   "home": "Oklahoma City Thunder",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-090",
+   "player": "Deni Avdija",
+   "prose_published_date": "2025-03-06",
+   "game_date": "2025-03-05",
+   "away": "Portland Trail Blazers",
+   "home": "Boston Celtics",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-091",
+   "player": "Kel'el Ware",
+   "prose_published_date": "2025-03-08",
+   "game_date": "2025-03-08",
+   "away": "Chicago Bulls",
+   "home": "Miami Heat",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-092",
+   "player": "Jamison Battle",
+   "prose_published_date": "2025-03-11",
+   "game_date": "2025-03-10",
+   "away": "Washington Wizards",
+   "home": "Toronto Raptors",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-093",
+   "player": "Scoot Henderson",
+   "prose_published_date": "2025-03-13",
+   "game_date": "2025-03-12",
+   "away": "New York Knicks",
+   "home": "Portland Trail Blazers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-094",
+   "player": "Jordan Clarkson",
+   "prose_published_date": "2025-03-15",
+   "game_date": "2025-03-16",
+   "away": "Utah Jazz",
+   "home": "Minnesota Timberwolves",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-095",
+   "player": "Scotty Pippen",
+   "prose_published_date": "2025-03-17",
+   "game_date": "2025-03-17",
+   "away": "Memphis Grizzlies",
+   "home": "Sacramento Kings",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-096",
+   "player": "Andrew Wiggins",
+   "prose_published_date": "2025-03-18",
+   "game_date": "2025-03-19",
+   "away": "Detroit Pistons",
+   "home": "Miami Heat",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-097",
+   "player": "Dean Wade",
+   "prose_published_date": "2025-03-20",
+   "game_date": "2025-03-19",
+   "away": "Cleveland Cavaliers",
+   "home": "Sacramento Kings",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-098",
+   "player": "DeAndre Jordan",
+   "prose_published_date": "2025-03-24",
+   "game_date": "2025-03-23",
+   "away": "Denver Nuggets",
+   "home": "Houston Rockets",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-099",
+   "player": "Jalen Hood-Schifino",
+   "prose_published_date": "2025-03-26",
+   "game_date": "2025-03-26",
+   "away": "Washington Wizards",
+   "home": "Philadelphia 76ers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-100",
+   "player": "Noah Clowney",
+   "prose_published_date": "2025-03-28",
+   "game_date": "2025-03-28",
+   "away": "LA Clippers",
+   "home": "Brooklyn Nets",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-101",
+   "player": "Jaylen Brown",
+   "prose_published_date": "2025-03-30",
+   "game_date": "2025-03-31",
+   "away": "Boston Celtics",
+   "home": "Memphis Grizzlies",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-102",
+   "player": "Walker Kessler",
+   "prose_published_date": "2025-04-01",
+   "game_date": "2025-04-02",
+   "away": "Utah Jazz",
+   "home": "Houston Rockets",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-103",
+   "player": "Nick Smith",
+   "prose_published_date": "2025-04-02",
+   "game_date": "2025-04-02",
+   "away": "Charlotte Hornets",
+   "home": "Indiana Pacers",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-104",
+   "player": "DeAndre Jordan",
+   "prose_published_date": "2025-04-03",
+   "game_date": "2025-04-02",
+   "away": "San Antonio Spurs",
+   "home": "Denver Nuggets",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-105",
+   "player": "Haywood Highsmith",
+   "prose_published_date": "2025-04-04",
+   "game_date": "2025-04-05",
+   "away": "Milwaukee Bucks",
+   "home": "Miami Heat",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-106",
+   "player": "Ben Sheppard",
+   "prose_published_date": "2025-04-05",
+   "game_date": "2025-04-06",
+   "away": "Indiana Pacers",
+   "home": "Denver Nuggets",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-107",
+   "player": "Dalano Banton",
+   "prose_published_date": "2025-04-07",
+   "game_date": "2025-04-06",
+   "away": "San Antonio Spurs",
+   "home": "Portland Trail Blazers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-108",
+   "player": "Cade Cunningham",
+   "prose_published_date": "2025-04-09",
+   "game_date": "2025-04-10",
+   "away": "New York Knicks",
+   "home": "Detroit Pistons",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-109",
+   "player": "Josh Okogie",
+   "prose_published_date": "2025-04-10",
+   "game_date": "2025-04-11",
+   "away": "Charlotte Hornets",
+   "home": "Boston Celtics",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-110",
+   "player": "Myles Turner",
+   "prose_published_date": "2025-04-11",
+   "game_date": "2025-04-11",
+   "away": "Orlando Magic",
+   "home": "Indiana Pacers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-111",
+   "player": "Bennedict Mathurin",
+   "prose_published_date": "2025-04-13",
+   "game_date": "2025-04-13",
+   "away": "Indiana Pacers",
+   "home": "Cleveland Cavaliers",
+   "evidence": "injury_report",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-112",
+   "player": "Georges Niang",
+   "prose_published_date": "2025-04-19",
+   "game_date": "2025-04-18",
+   "away": "Miami Heat",
+   "home": "Atlanta Hawks",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-113",
+   "player": "Jayson Tatum",
+   "prose_published_date": "2025-04-25",
+   "game_date": "2025-04-25",
+   "away": "Boston Celtics",
+   "home": "Orlando Magic",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-114",
+   "player": "Christian Braun",
+   "prose_published_date": "2025-04-27",
+   "game_date": "2025-04-26",
+   "away": "Denver Nuggets",
+   "home": "LA Clippers",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-115",
+   "player": "Jrue Holiday",
+   "prose_published_date": "2025-05-04",
+   "game_date": "2025-05-05",
+   "away": "New York Knicks",
+   "home": "Boston Celtics",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-116",
+   "player": "Jock Landale",
+   "prose_published_date": "2025-10-22",
+   "game_date": "2025-10-22",
+   "away": "New Orleans Pelicans",
+   "home": "Memphis Grizzlies",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-117",
+   "player": "Brandon Miller",
+   "prose_published_date": "2025-10-26",
+   "game_date": "2025-10-26",
+   "away": "Charlotte Hornets",
+   "home": "Washington Wizards",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-118",
+   "player": "Jaden McDaniels",
+   "prose_published_date": "2025-10-28",
+   "game_date": "2025-10-27",
+   "away": "Denver Nuggets",
+   "home": "Minnesota Timberwolves",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-119",
+   "player": "Jalen Green",
+   "prose_published_date": "2025-11-02",
+   "game_date": "2025-11-02",
+   "away": "San Antonio Spurs",
+   "home": "Phoenix Suns",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-120",
+   "player": "Luguentz Dort",
+   "prose_published_date": "2025-11-05",
+   "game_date": "2025-11-04",
+   "away": "Oklahoma City Thunder",
+   "home": "LA Clippers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-121",
+   "player": "Kevin Huerter",
+   "prose_published_date": "2025-11-11",
+   "game_date": "2025-11-10",
+   "away": "San Antonio Spurs",
+   "home": "Chicago Bulls",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-122",
+   "player": "Moses Moody",
+   "prose_published_date": "2025-11-17",
+   "game_date": "2025-11-16",
+   "away": "Golden State Warriors",
+   "home": "New Orleans Pelicans",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-123",
+   "player": "Naz Reid",
+   "prose_published_date": "2025-11-20",
+   "game_date": "2025-11-19",
+   "away": "Washington Wizards",
+   "home": "Minnesota Timberwolves",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-124",
+   "player": "RJ Barrett",
+   "prose_published_date": "2025-11-24",
+   "game_date": "2025-11-23",
+   "away": "Brooklyn Nets",
+   "home": "Toronto Raptors",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-125",
+   "player": "Tre Mann",
+   "prose_published_date": "2025-12-01",
+   "game_date": "2025-12-01",
+   "away": "Charlotte Hornets",
+   "home": "Brooklyn Nets",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-126",
+   "player": "Tre Mann",
+   "prose_published_date": "2025-12-02",
+   "game_date": "2025-12-03",
+   "away": "Charlotte Hornets",
+   "home": "New York Knicks",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-127",
+   "player": "Trayce Jackson-Davis",
+   "prose_published_date": "2025-12-11",
+   "game_date": "2025-12-12",
+   "away": "Minnesota Timberwolves",
+   "home": "Golden State Warriors",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-128",
+   "player": "Isaiah Joe",
+   "prose_published_date": "2025-12-13",
+   "game_date": "2025-12-13",
+   "away": "San Antonio Spurs",
+   "home": "Oklahoma City Thunder",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-129",
+   "player": "P.J. Washington",
+   "prose_published_date": "2025-12-16",
+   "game_date": "2025-12-15",
+   "away": "Dallas Mavericks",
+   "home": "Utah Jazz",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-130",
+   "player": "Brandon Clarke",
+   "prose_published_date": "2025-12-21",
+   "game_date": "2025-12-22",
+   "away": "Memphis Grizzlies",
+   "home": "Oklahoma City Thunder",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-131",
+   "player": "Steven Adams",
+   "prose_published_date": "2025-12-27",
+   "game_date": "2025-12-27",
+   "away": "Cleveland Cavaliers",
+   "home": "Houston Rockets",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-132",
+   "player": "Jonas Valan\u010di\u016bnas",
+   "prose_published_date": "2025-12-30",
+   "game_date": "2025-12-29",
+   "away": "Denver Nuggets",
+   "home": "Miami Heat",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-133",
+   "player": "Ariel Hukporti",
+   "prose_published_date": "2026-01-03",
+   "game_date": "2026-01-02",
+   "away": "Atlanta Hawks",
+   "home": "New York Knicks",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-134",
+   "player": "Trae Young",
+   "prose_published_date": "2026-01-07",
+   "game_date": "2026-01-07",
+   "away": "New Orleans Pelicans",
+   "home": "Atlanta Hawks",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-135",
+   "player": "Moritz Wagner",
+   "prose_published_date": "2026-01-11",
+   "game_date": "2026-01-11",
+   "away": "New Orleans Pelicans",
+   "home": "Orlando Magic",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-136",
+   "player": "Gradey Dick",
+   "prose_published_date": "2026-01-15",
+   "game_date": "2026-01-14",
+   "away": "Toronto Raptors",
+   "home": "Indiana Pacers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-137",
+   "player": "Lauri Markkanen",
+   "prose_published_date": "2026-01-19",
+   "game_date": "2026-01-19",
+   "away": "Utah Jazz",
+   "home": "San Antonio Spurs",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-138",
+   "player": "Ajay Mitchell",
+   "prose_published_date": "2026-01-22",
+   "game_date": "2026-01-21",
+   "away": "Oklahoma City Thunder",
+   "home": "Milwaukee Bucks",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-139",
+   "player": "Moussa Cisse",
+   "prose_published_date": "2026-01-24",
+   "game_date": "2026-01-24",
+   "away": "Los Angeles Lakers",
+   "home": "Dallas Mavericks",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-140",
+   "player": "Sam Merrill",
+   "prose_published_date": "2026-01-26",
+   "game_date": "2026-01-26",
+   "away": "Orlando Magic",
+   "home": "Cleveland Cavaliers",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-141",
+   "player": "Mouhamed Gueye",
+   "prose_published_date": "2026-01-31",
+   "game_date": "2026-01-31",
+   "away": "Atlanta Hawks",
+   "home": "Indiana Pacers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-142",
+   "player": "Gregory Jackson",
+   "prose_published_date": "2026-02-05",
+   "game_date": "2026-02-04",
+   "away": "Memphis Grizzlies",
+   "home": "Sacramento Kings",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-143",
+   "player": "Mitchell Robinson",
+   "prose_published_date": "2026-02-07",
+   "game_date": "2026-02-06",
+   "away": "New York Knicks",
+   "home": "Detroit Pistons",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-144",
+   "player": "Jalen Williams",
+   "prose_published_date": "2026-02-09",
+   "game_date": "2026-02-09",
+   "away": "Oklahoma City Thunder",
+   "home": "Los Angeles Lakers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-145",
+   "player": "Pete Nance",
+   "prose_published_date": "2026-02-10",
+   "game_date": "2026-02-11",
+   "away": "Milwaukee Bucks",
+   "home": "Orlando Magic",
+   "evidence": "injury_report",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-146",
+   "player": "Kam Jones",
+   "prose_published_date": "2026-02-20",
+   "game_date": "2026-02-20",
+   "away": "Indiana Pacers",
+   "home": "Washington Wizards",
+   "evidence": "injury_report",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-147",
+   "player": "Mitchell Robinson",
+   "prose_published_date": "2026-02-22",
+   "game_date": "2026-02-22",
+   "away": "New York Knicks",
+   "home": "Chicago Bulls",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-148",
+   "player": "Nickeil Alexander-Walker",
+   "prose_published_date": "2026-02-25",
+   "game_date": "2026-02-26",
+   "away": "Washington Wizards",
+   "home": "Atlanta Hawks",
+   "evidence": "injury_report",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-149",
+   "player": "Will Riley",
+   "prose_published_date": "2026-02-27",
+   "game_date": "2026-02-26",
+   "away": "Washington Wizards",
+   "home": "Atlanta Hawks",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-150",
+   "player": "Bryce McGowens",
+   "prose_published_date": "2026-03-01",
+   "game_date": "2026-02-28",
+   "away": "New Orleans Pelicans",
+   "home": "Utah Jazz",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-151",
+   "player": "Kobe Sanders",
+   "prose_published_date": "2026-03-03",
+   "game_date": "2026-03-02",
+   "away": "LA Clippers",
+   "home": "Golden State Warriors",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-152",
+   "player": "Isaiah Collier",
+   "prose_published_date": "2026-03-05",
+   "game_date": "2026-03-05",
+   "away": "Utah Jazz",
+   "home": "Washington Wizards",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-153",
+   "player": "Rui Hachimura",
+   "prose_published_date": "2026-03-07",
+   "game_date": "2026-03-06",
+   "away": "Indiana Pacers",
+   "home": "Los Angeles Lakers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-154",
+   "player": "Alex Caruso",
+   "prose_published_date": "2026-03-09",
+   "game_date": "2026-03-09",
+   "away": "Denver Nuggets",
+   "home": "Oklahoma City Thunder",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-155",
+   "player": "John Konchar",
+   "prose_published_date": "2026-03-13",
+   "game_date": "2026-03-13",
+   "away": "Utah Jazz",
+   "home": "Portland Trail Blazers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-156",
+   "player": "Jamal Murray",
+   "prose_published_date": "2026-03-13",
+   "game_date": "2026-03-14",
+   "away": "Denver Nuggets",
+   "home": "Los Angeles Lakers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-157",
+   "player": "Andre Drummond",
+   "prose_published_date": "2026-03-15",
+   "game_date": "2026-03-15",
+   "away": "Portland Trail Blazers",
+   "home": "Philadelphia 76ers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-158",
+   "player": "Tidjane Sala\u00fcn",
+   "prose_published_date": "2026-03-16",
+   "game_date": "2026-03-17",
+   "away": "Miami Heat",
+   "home": "Charlotte Hornets",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-159",
+   "player": "Kyle Filipowski",
+   "prose_published_date": "2026-03-18",
+   "game_date": "2026-03-18",
+   "away": "Utah Jazz",
+   "home": "Minnesota Timberwolves",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-160",
+   "player": "Justin Edwards",
+   "prose_published_date": "2026-03-20",
+   "game_date": "2026-03-19",
+   "away": "Philadelphia 76ers",
+   "home": "Sacramento Kings",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-161",
+   "player": "Kevin Porter",
+   "prose_published_date": "2026-03-22",
+   "game_date": "2026-03-21",
+   "away": "Milwaukee Bucks",
+   "home": "Phoenix Suns",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-162",
+   "player": "Norman Powell",
+   "prose_published_date": "2026-03-23",
+   "game_date": "2026-03-23",
+   "away": "San Antonio Spurs",
+   "home": "Miami Heat",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-163",
+   "player": "Jaxson Hayes",
+   "prose_published_date": "2026-03-25",
+   "game_date": "2026-03-25",
+   "away": "Los Angeles Lakers",
+   "home": "Indiana Pacers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-164",
+   "player": "Killian Hayes",
+   "prose_published_date": "2026-03-27",
+   "game_date": "2026-03-26",
+   "away": "Sacramento Kings",
+   "home": "Orlando Magic",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-165",
+   "player": "Pascal Siakam",
+   "prose_published_date": "2026-03-28",
+   "game_date": "2026-03-29",
+   "away": "Miami Heat",
+   "home": "Indiana Pacers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-166",
+   "player": "Mike Conley",
+   "prose_published_date": "2026-04-03",
+   "game_date": "2026-04-02",
+   "away": "Minnesota Timberwolves",
+   "home": "Detroit Pistons",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-167",
+   "player": "Kelly Oubre",
+   "prose_published_date": "2026-04-04",
+   "game_date": "2026-04-04",
+   "away": "Detroit Pistons",
+   "home": "Philadelphia 76ers",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-168",
+   "player": "Jaylon Tyson",
+   "prose_published_date": "2026-04-07",
+   "game_date": "2026-04-08",
+   "away": "Atlanta Hawks",
+   "home": "Cleveland Cavaliers",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-169",
+   "player": "Terance Mann",
+   "prose_published_date": "2026-04-08",
+   "game_date": "2026-04-09",
+   "away": "Indiana Pacers",
+   "home": "Brooklyn Nets",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-170",
+   "player": "De'Anthony Melton",
+   "prose_published_date": "2026-04-10",
+   "game_date": "2026-04-10",
+   "away": "Golden State Warriors",
+   "home": "Sacramento Kings",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-171",
+   "player": "Ben Saraf",
+   "prose_published_date": "2026-04-11",
+   "game_date": "2026-04-10",
+   "away": "Brooklyn Nets",
+   "home": "Milwaukee Bucks",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-172",
+   "player": "Keon Ellis",
+   "prose_published_date": "2026-04-12",
+   "game_date": "2026-04-12",
+   "away": "Washington Wizards",
+   "home": "Cleveland Cavaliers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-173",
+   "player": "Bub Carrington",
+   "prose_published_date": "2026-04-13",
+   "game_date": "2026-04-12",
+   "away": "Washington Wizards",
+   "home": "Cleveland Cavaliers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-174",
+   "player": "A.J. Lawson",
+   "prose_published_date": "2026-04-26",
+   "game_date": "2026-04-26",
+   "away": "Cleveland Cavaliers",
+   "home": "Toronto Raptors",
+   "evidence": "injury_report",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-175",
+   "player": "Carter Bryant",
+   "prose_published_date": "2026-05-05",
+   "game_date": "2026-05-06",
+   "away": "Minnesota Timberwolves",
+   "home": "San Antonio Spurs",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-176",
+   "player": "Dailyn Swain",
+   "prose_published_date": "2026-10-22",
+   "game_date": "2026-10-23",
+   "away": "Chicago Bulls",
+   "home": "Milwaukee Bucks",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-177",
+   "player": "Charles Bassey",
+   "prose_published_date": "2026-10-23",
+   "game_date": "2026-10-23",
+   "away": "Memphis Grizzlies",
+   "home": "Golden State Warriors",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-178",
+   "player": "Stephen Curry",
+   "prose_published_date": "2026-10-24",
+   "game_date": "2026-10-24",
+   "away": "Golden State Warriors",
+   "home": "Phoenix Suns",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-179",
+   "player": "Anthony Edwards",
+   "prose_published_date": "2026-10-26",
+   "game_date": "2026-10-26",
+   "away": "Minnesota Timberwolves",
+   "home": "Cleveland Cavaliers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-180",
+   "player": "Jabari Walker",
+   "prose_published_date": "2026-10-27",
+   "game_date": "2026-10-28",
+   "away": "Philadelphia 76ers",
+   "home": "Indiana Pacers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-181",
+   "player": "Tobe Awaka",
+   "prose_published_date": "2026-10-28",
+   "game_date": "2026-10-28",
+   "away": "New York Knicks",
+   "home": "Chicago Bulls",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-182",
+   "player": "Collin Sexton",
+   "prose_published_date": "2026-10-29",
+   "game_date": "2026-10-28",
+   "away": "Los Angeles Lakers",
+   "home": "LA Clippers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-183",
+   "player": "Jalen Johnson",
+   "prose_published_date": "2026-11-01",
+   "game_date": "2026-10-31",
+   "away": "Atlanta Hawks",
+   "home": "New Orleans Pelicans",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-184",
+   "player": "Aaron Nesmith",
+   "prose_published_date": "2026-11-02",
+   "game_date": "2026-11-02",
+   "away": "Atlanta Hawks",
+   "home": "Indiana Pacers",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-185",
+   "player": "Alex Sarr",
+   "prose_published_date": "2026-11-03",
+   "game_date": "2026-11-04",
+   "away": "Atlanta Hawks",
+   "home": "Washington Wizards",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-186",
+   "player": "Al Horford",
+   "prose_published_date": "2026-11-05",
+   "game_date": "2026-11-05",
+   "away": "Miami Heat",
+   "home": "Golden State Warriors",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-187",
+   "player": "Anthony Davis",
+   "prose_published_date": "2026-11-07",
+   "game_date": "2026-11-07",
+   "away": "Washington Wizards",
+   "home": "Oklahoma City Thunder",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-188",
+   "player": "Gui Santos",
+   "prose_published_date": "2026-11-09",
+   "game_date": "2026-11-09",
+   "away": "New Orleans Pelicans",
+   "home": "Golden State Warriors",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-189",
+   "player": "Isaiah Jackson",
+   "prose_published_date": "2026-11-09",
+   "game_date": "2026-11-10",
+   "away": "LA Clippers",
+   "home": "Phoenix Suns",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-190",
+   "player": "Bilal Coulibaly",
+   "prose_published_date": "2026-11-10",
+   "game_date": "2026-11-11",
+   "away": "Washington Wizards",
+   "home": "Indiana Pacers",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-191",
+   "player": "Ace Bailey",
+   "prose_published_date": "2026-11-11",
+   "game_date": "2026-11-10",
+   "away": "Miami Heat",
+   "home": "Utah Jazz",
+   "evidence": "boxscore_slate",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-192",
+   "player": "Morez Johnson",
+   "prose_published_date": "2026-11-11",
+   "game_date": "2026-11-12",
+   "away": "Dallas Mavericks",
+   "home": "Minnesota Timberwolves",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-193",
+   "player": "Luka Don\u010di\u0107",
+   "prose_published_date": "2026-11-12",
+   "game_date": "2026-11-11",
+   "away": "Los Angeles Lakers",
+   "home": "Milwaukee Bucks",
+   "evidence": "weekday_headline",
+   "backfilled": false
+  },
+  {
+   "item_id": "N2N-194",
+   "player": "Wendell Carter",
+   "prose_published_date": "2021-12-26",
+   "game_date": "2021-12-26",
+   "away": "Orlando Magic",
+   "home": "Miami Heat",
+   "evidence": "weekday_headline",
+   "backfilled": true
+  },
+  {
+   "item_id": "N2N-195",
+   "player": "Brandon Ingram",
+   "prose_published_date": "2022-02-09",
+   "game_date": "2022-02-08",
+   "away": "Houston Rockets",
+   "home": "New Orleans Pelicans",
+   "evidence": "weekday_headline",
+   "backfilled": true
+  },
+  {
+   "item_id": "N2N-196",
+   "player": "Derrick White",
+   "prose_published_date": "2022-03-28",
+   "game_date": "2022-03-28",
+   "away": "Boston Celtics",
+   "home": "Toronto Raptors",
+   "evidence": "boxscore_slate",
+   "backfilled": true
+  },
+  {
+   "item_id": "N2N-197",
+   "player": "Anthony Davis",
+   "prose_published_date": "2022-10-28",
+   "game_date": "2022-10-28",
+   "away": "Los Angeles Lakers",
+   "home": "Minnesota Timberwolves",
+   "evidence": "boxscore_slate",
+   "backfilled": true
+  },
+  {
+   "item_id": "N2N-198",
+   "player": "Georges Niang",
+   "prose_published_date": "2022-12-05",
+   "game_date": "2022-12-05",
+   "away": "Philadelphia 76ers",
+   "home": "Houston Rockets",
+   "evidence": "boxscore_slate",
+   "backfilled": true
+  },
+  {
+   "item_id": "N2N-199",
+   "player": "Collin Sexton",
+   "prose_published_date": "2023-01-14",
+   "game_date": "2023-01-13",
+   "away": "Orlando Magic",
+   "home": "Utah Jazz",
+   "evidence": "boxscore_slate",
+   "backfilled": true
+  },
+  {
+   "item_id": "N2N-200",
+   "player": "Mason Plumlee",
+   "prose_published_date": "2023-02-15",
+   "game_date": "2023-02-14",
+   "away": "Golden State Warriors",
+   "home": "LA Clippers",
+   "evidence": "boxscore_slate",
+   "backfilled": true
+  }
+ ]
+}
