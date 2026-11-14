@@ -1,9 +1,15 @@
 import { TEAM_ABBREV, teamLogoSrc } from '@/lib/tokens'
+import { anyTeamLogoUrl, type LogoSport } from '@/lib/sport-assets'
 
 /**
  * Away/home matchup token: overlapping team logos + abbreviated text.
  * Pure presentational (no hooks/handlers) so it renders in server or client
  * trees. Falls back to text-only when a logo isn't shipped for a team.
+ *
+ * Pass `sport` (the row's league) wherever the row carries one: logos then resolve through the canonical
+ * (league, abbrev) mapping in lib/sport-assets, so a Chiefs row can never wear the Royals logo. Without a
+ * sport the legacy MLB-only resolution (lib/tokens teamLogoSrc) applies, for callers whose rows are MLB by
+ * construction and carry no league.
  */
 export function Matchup({
   away,
@@ -12,6 +18,7 @@ export function Matchup({
   fontSize = '12px',
   color = 'var(--color-neutral-300)',
   showText = true,
+  sport,
 }: {
   away: string | null | undefined
   home: string | null | undefined
@@ -19,11 +26,16 @@ export function Matchup({
   fontSize?: string
   color?: string
   showText?: boolean
+  sport?: string | null
 }) {
-  const aSrc = teamLogoSrc(away)
-  const hSrc = teamLogoSrc(home)
-  const aAb = TEAM_ABBREV[away ?? ''] ?? away ?? '?'
-  const hAb = TEAM_ABBREV[home ?? ''] ?? home ?? '?'
+  const lg = sport ? (sport.toLowerCase() as LogoSport) : null
+  const resolve = (team: string | null | undefined) => (lg ? anyTeamLogoUrl(lg, team) : teamLogoSrc(team))
+  const label = (team: string | null | undefined) =>
+    lg && lg !== 'mlb' ? (team ?? '?') : (TEAM_ABBREV[team ?? ''] ?? team ?? '?')
+  const aSrc = resolve(away)
+  const hSrc = resolve(home)
+  const aAb = label(away)
+  const hAb = label(home)
 
   return (
     <span className="inline-flex items-center gap-1.5 min-w-0 whitespace-nowrap">

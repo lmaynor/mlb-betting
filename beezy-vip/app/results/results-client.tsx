@@ -218,7 +218,7 @@ function ResultBetCard({ bet, daily }: { bet: Bet; daily?: boolean }) {
       </div>
 
       <div>
-        <div className="mb-[5px]"><Matchup away={bet.away_team} home={bet.home_team} size={18} fontSize="12px" /></div>
+        <div className="mb-[5px]"><Matchup sport={bet.sport} away={bet.away_team} home={bet.home_team} size={18} fontSize="12px" /></div>
         <div className="text-headline-bold text-text-primary">{pickLabel(bet)}</div>
       </div>
 
@@ -670,7 +670,7 @@ export function ResultsClient({
                   {dailyIds.has(bet.id) && <Link href="/picks/history" className="block text-link">Daily Card</Link>}
                 </div>
                 <div className="px-3 py-2"><SystemBadge system={bet.system} /></div>
-                <div className="min-w-0 px-3 py-2"><Matchup away={bet.away_team} home={bet.home_team} size={16} fontSize="11px" /></div>
+                <div className="min-w-0 px-3 py-2"><Matchup sport={bet.sport} away={bet.away_team} home={bet.home_team} size={16} fontSize="11px" /></div>
                 <div className="mono truncate px-3 py-2 text-mini text-text-primary">{pickLabel(bet)}</div>
                 <div className="mono px-3 py-2 text-mini text-text-primary">{formatOdds(bet.odds)}</div>
                 <div className="mono px-3 py-2 text-mini text-signal">
