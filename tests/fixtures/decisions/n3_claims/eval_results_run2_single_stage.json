@@ -1,0 +1,111 @@
+{
+  "manifest_check": "not_applicable_no_manifests",
+  "total_claims": 100,
+  "blocked_count": 73,
+  "clear_count": 27,
+  "passed_all": false,
+  "packaging": {
+    "claims_with_missing_pointers": [],
+    "multi_artifact_claim_ids": [
+      "N3-C010",
+      "N3-C011",
+      "N3-C012",
+      "N3-C013",
+      "N3-C014",
+      "N3-C015",
+      "N3-C016",
+      "N3-C019",
+      "N3-C021",
+      "N3-C022",
+      "N3-C023",
+      "N3-C026",
+      "N3-C037",
+      "N3-C046",
+      "N3-X005",
+      "N3-X006",
+      "N3-X007",
+      "N3-X013",
+      "N3-X016",
+      "N3-X018",
+      "N3-U008",
+      "N3-S001",
+      "N3-S007",
+      "N3-W001",
+      "N3-W005"
+    ],
+    "external_pointers": [
+      "gs://concrete-crow-445205-m4-mlb-data/EVSweep/nfl_props/alt_ladder/",
+      "gs://concrete-crow-445205-m4-mlb-data/Novig/shadow_ledger/",
+      "https://beezy.fyi/tools"
+    ]
+  },
+  "metrics": {
+    "contradicted_recall": {
+      "value": 1.0,
+      "bar": 1.0,
+      "passed": true,
+      "blocked": 22,
+      "total": 22
+    },
+    "planted_flaw_recall": {
+      "value": 1.0,
+      "bar": 0.9,
+      "passed": true,
+      "blocked": 50,
+      "total": 50
+    },
+    "clean_false_block_rate": {
+      "value": 0.46,
+      "bar": 0.05,
+      "passed": false,
+      "blocked": 23,
+      "total": 50
+    },
+    "multi_artifact_clean_false_block": {
+      "value": 0.7857,
+      "bar": 0.05,
+      "passed": false,
+      "blocked": 11,
+      "total": 14
+    },
+    "multi_artifact_flaw_recall": {
+      "value": 1.0,
+      "bar": 1.0,
+      "passed": true,
+      "blocked": 11,
+      "total": 11
+    }
+  },
+  "per_label": {
+    "clean": {
+      "total": 50,
+      "blocked": 23,
+      "clear": 27,
+      "block_rate": 0.46
+    },
+    "contradicted": {
+      "total": 22,
+      "blocked": 22,
+      "clear": 0,
+      "block_rate": 1.0
+    },
+    "unsupported": {
+      "total": 10,
+      "blocked": 10,
+      "clear": 0,
+      "block_rate": 1.0
+    },
+    "stale": {
+      "total": 9,
+      "blocked": 9,
+      "clear": 0,
+      "block_rate": 1.0
+    },
+    "wrong_scope": {
+      "total": 9,
+      "blocked": 9,
+      "clear": 0,
+      "block_rate": 1.0
+    }
+  }
+}
