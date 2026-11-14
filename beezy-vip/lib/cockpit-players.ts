@@ -35,6 +35,8 @@ export function projectionToCockpitRow(r: SportProjectionRow): CockpitRow | null
   return {
     id: `proj|${r.sport}|${r.game_key}|${r.player_norm}|${r.stat}`,
     sport: r.sport,
+    game_key: r.game_key,
+    player_norm: r.player_norm,
     source: 'model',
     shadow: true,
     player: r.player,

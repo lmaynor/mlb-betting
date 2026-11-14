@@ -16,10 +16,11 @@ import { MobileFilterSheet } from './odds-filter-sheet'
 import { OddsResults } from './odds-results'
 import { OddsFootnote } from './odds-footnote'
 import { MobileCompareSheet } from './odds-compare-sheet'
+import { ladderInlineAllowed } from '@/lib/ladders'
 
 export function OddsClient({ initial, initialLocked, headline, fullAccess = false }: { initial: Partial<Record<SportSlug, OddsBoard>>; initialLocked: number; headline: EvHeadline | null; fullAccess?: boolean }) {
   const odds = useOddsScreen({ initial, initialLocked, fullAccess })
-  const { isMobile, meta, nRows, loading, refresh, mode, limit, setLimit, locked, allRows, columns, inspectItem, setInspectItem } = odds
+  const { isMobile, meta, nRows, loading, refresh, mode, limit, setLimit, locked, allRows, columns, inspectItem, setInspectItem, inspectLadder } = odds
 
   return (
     <div style={{ maxWidth: '1680px', margin: '0 auto', padding: isMobile ? '12px 12px 64px' : '20px 24px 64px' }}>
@@ -62,6 +63,7 @@ export function OddsClient({ initial, initialLocked, headline, fullAccess = fals
       <MobileCompareSheet
         item={inspectItem}
         columns={columns}
+        ladderGroup={ladderInlineAllowed(mode) ? inspectLadder : null}
         onClose={() => setInspectItem(null)}
       />
     </div>

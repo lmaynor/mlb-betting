@@ -1,12 +1,12 @@
 import { MobileBottomSheet } from '@/components/ui/mobile-sheet'
 import { STAT_LABEL, type SideFilter } from '@/lib/odds-screen'
-import { SortKey, HAIR, SHARP_PRESET, MIN_EV, ODDS_MIN, PAGE, MID_COST, MID_GAP, OUTLIER_GAP_OPTIONS, OUTLIER_ODDS_OPTIONS, OUTLIER_MIN_BOOKS, MODES } from './odds-constants'
+import { SortKey, HAIR, SHARP_PRESET, MIN_EV, PAGE, MID_COST, MID_GAP, OUTLIER_GAP_OPTIONS, OUTLIER_ODDS_OPTIONS, OUTLIER_MIN_BOOKS, MODES } from './odds-constants'
 import { startLabel } from './odds-format'
 import { Select, Pill, PillGroup, MobileBookChecklist } from './odds-controls'
 import { OddsScreen } from './use-odds-screen'
 
 export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
-  const { mode, stat, setStat, game, setGame, side, setSide, lines, setLines, minEv, setMinEv, setQ, method, setMethod, refs, setRefs, setShown, sort, setSort, setLimit, arbView, setArbView, exchanges, setExchanges, outlayText, setOutlayText, midCost, setMidCost, midGap, setMidGap, midPosEv, setMidPosEv, longSub, setLongSub, oddsMin, setOddsMin, useCurve, setUseCurve, outlierGap, setOutlierGap, outlierReqEv, setOutlierReqEv, outlierOddsBand, setOutlierOddsBand, outlierMinBooks, setOutlierMinBooks, outlierView, setOutlierView, myBooks, mobileFiltersOpen, setMobileFiltersOpen, bookList, defaultShown, shownSet, statOptions, games, nRows, refsNote } = odds
+  const { mode, stat, setStat, game, setGame, side, setSide, lines, setLines, minEv, setMinEv, setQ, method, setMethod, refs, setRefs, setShown, sort, setSort, setLimit, arbView, setArbView, exchanges, setExchanges, outlayText, setOutlayText, midCost, setMidCost, midGap, setMidGap, midPosEv, setMidPosEv, useCurve, setUseCurve, outlierGap, setOutlierGap, outlierReqEv, setOutlierReqEv, outlierOddsBand, setOutlierOddsBand, outlierMinBooks, setOutlierMinBooks, outlierView, setOutlierView, myBooks, mobileFiltersOpen, setMobileFiltersOpen, bookList, defaultShown, shownSet, statOptions, games, nRows, refsNote, setLadderSegment, setLadderAll } = odds
   return (
     <MobileBottomSheet
       open={mobileFiltersOpen}
@@ -36,8 +36,8 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
               setMidCost(5)
               setMidGap(0)
               setMidPosEv(false)
-              setLongSub('all')
-              setOddsMin(0)
+              setLadderSegment('curves')
+              setLadderAll(false)
               setUseCurve(true)
             }}
             className="btn btn-ghost"
@@ -192,39 +192,6 @@ export function MobileFilterSheet({ odds }: { odds: OddsScreen }) {
             </div>
           </>
         )}
-
-        {mode === 'longshots' && (
-          <>
-            <div>
-              <div className="ui-heading mb-1.5 text-micro text-text-secondary">Strategy</div>
-              <PillGroup>
-                <Pill active={longSub === 'all'} onClick={() => { setLongSub('all'); setLimit(PAGE) }}>All</Pill>
-                <Pill active={longSub === 'plus_ev_over'} onClick={() => { setLongSub('plus_ev_over'); setLimit(PAGE) }}>Buy Over</Pill>
-                <Pill active={longSub === 'fade_under'} onClick={() => { setLongSub('fade_under'); setLimit(PAGE) }}>Fade Under</Pill>
-              </PillGroup>
-            </div>
-            <div>
-              <div className="ui-heading mb-1.5 text-micro text-text-secondary">Min payout</div>
-              <PillGroup>
-                {ODDS_MIN.map(m => <Pill key={m.v} active={oddsMin === m.v} onClick={() => { setOddsMin(m.v); setLimit(PAGE) }}>{m.label}</Pill>)}
-              </PillGroup>
-            </div>
-            <div>
-              <div className="ui-heading mb-1.5 text-micro text-text-secondary">Min EV</div>
-              <PillGroup>
-                {MIN_EV.map(m => <Pill key={m.v} active={minEv === m.v} onClick={() => setMinEv(m.v)}>{m.label}</Pill>)}
-              </PillGroup>
-            </div>
-            <div>
-              <div className="ui-heading mb-1.5 text-micro text-text-secondary">Fair source</div>
-              <PillGroup>
-                <Pill active={useCurve} onClick={() => setUseCurve(true)}>Multi-Book + Curve</Pill>
-                <Pill active={!useCurve} onClick={() => setUseCurve(false)}>Exact Books Only</Pill>
-              </PillGroup>
-            </div>
-          </>
-        )}
-
 
           <div style={{ borderTop: `1px solid ${HAIR}`, paddingTop: '12px' }}>
             <div className="ui-heading mb-1.5 text-micro text-text-secondary">Prop market</div>

@@ -810,3 +810,50 @@ describe('SGP model honesty', () => {
     expect(res.slice(0, firstArtifact).every(r => !r.modelArtifact)).toBe(true)
   })
 })
+
+describe('computeOutliers dispersion gate (IA Q5c)', () => {
+  it('a row with disp 0.09 blocks trueEvPct and fairAmerican, while disp 0.04 allows trueEvPct', () => {
+    const highDispRow: BoardRow = {
+      ...row([
+        B('fanduel', 750, -1100),
+        B('draftkings', 400, -600),
+        B('betmgm', 400, -600),
+        B('caesars', 388, -550),
+        B('betrivers', 420, -650),
+      ]),
+      disp: 0.09,
+      curve_fair_over: 0.25,
+    }
+
+    const resBlocked = computeOutliers([highDispRow], {
+      refs: ['draftkings', 'betmgm', 'caesars', 'betrivers'],
+      method: 'proportional',
+      bettable: null,
+      minPeers: 3,
+      side: 'over',
+    })
+    expect(resBlocked).toHaveLength(1)
+    expect(resBlocked[0].outlierBook).toBe('fanduel')
+    expect(resBlocked[0].payoutPremiumPct).toBeGreaterThan(8)
+    expect(resBlocked[0].trueEvPct).toBeNull()
+    expect(resBlocked[0].fairAmerican).toBeNull()
+    expect(resBlocked[0].disp).toBe(0.09)
+
+    const lowDispRow: BoardRow = {
+      ...highDispRow,
+      disp: 0.04,
+    }
+    const resAllowed = computeOutliers([lowDispRow], {
+      refs: ['draftkings', 'betmgm', 'caesars', 'betrivers'],
+      method: 'proportional',
+      bettable: null,
+      minPeers: 3,
+      side: 'over',
+    })
+    expect(resAllowed).toHaveLength(1)
+    expect(resAllowed[0].outlierBook).toBe('fanduel')
+    expect(resAllowed[0].trueEvPct).not.toBeNull()
+    expect(resAllowed[0].fairAmerican).not.toBeNull()
+    expect(resAllowed[0].disp).toBe(0.04)
+  })
+})
