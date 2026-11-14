@@ -5,10 +5,10 @@ import { PlayerHeadshot } from '@/components/ui/sport-assets'
 import { type HeadshotSport } from '@/lib/sport-assets'
 import { BookLogo } from '@/components/ui/book-logo'
 import { LockGlyph } from '@/components/ui/lock-glyph'
-import { STAT_LABEL, type ArbRow, type LongshotRow, type MiddleResult, type OutlierRow, type ScreenRow, type SgpProxyRow } from '@/lib/odds-screen'
+import { STAT_LABEL, type ArbRow, type LongshotRow, type MiddleResult, type OutlierRow, type ScreenRow } from '@/lib/odds-screen'
 import { HAIR, GREEN, SKY } from './odds-constants'
-import { startLabel, signed, usd, fairText, sgpEvText } from './odds-format'
-import { SgpBadges, TierPill } from './odds-cells'
+import { startLabel, signed, usd, fairText } from './odds-format'
+import { TierPill } from './odds-cells'
 
 export function MobileEvRowCard({
   r,
@@ -340,78 +340,6 @@ export function MobileLongshotCard({
     </div>
   )
 }
-
-export function MobileSgpCard({ r }: { r: SgpProxyRow }) {
-  return (
-    <div className="mb-2.5 flex flex-col gap-2.5 rounded-xl border border-separator-border bg-background-primary-default p-3 shadow-card">
-      <div className="flex items-center gap-2.5">
-        <PlayerHeadshot id={r.headshot_id} name={r.player} sport={r.sport as HeadshotSport} size={36} />
-        <div className="min-w-0 flex-1">
-          <div className="text-[14px] font-semibold text-text-primary overflow-hidden text-ellipsis whitespace-nowrap">
-            {r.player}
-          </div>
-          <div className="flex items-center gap-1.5 flex-wrap mt-[3px]">
-            <SgpBadges r={r} />
-          </div>
-          <div className="mono text-mini text-text-secondary mt-[3px]">
-            {r.team ? `${r.team} \u00b7 ` : ''}{r.away} @ {r.home} &middot; {startLabel(r.commence)}
-          </div>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-1.5">
-        {r.legs.map((leg, idx) => (
-          <span
-            key={idx}
-            className="mono"
-            style={{ fontSize: '11px', padding: '2px 7px', borderRadius: '4px', background: 'var(--color-background-secondary-default)', border: `1px solid ${HAIR}`, color: 'var(--color-text-primary)' }}
-          >
-            {leg.label} ({formatOdds(leg.bookAm)})
-          </span>
-        ))}
-      </div>
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: 'var(--color-background-secondary-default)', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
-        <div>
-          <div className="flex items-center gap-1.5">
-            <BookLogo book={r.book} size={18} />
-            <span className="mono text-cozy font-semibold text-text-primary">
-              Modelled {formatOdds(r.estSgpAm)}
-            </span>
-          </div>
-          <div className="mono mt-0.5 text-[11px] text-text-secondary">
-            Model fair: {formatOdds(r.fairJointAm)} ({(r.fairJointProb * 100).toFixed(1)}%)
-          </div>
-        </div>
-
-        <div className="text-right">
-          <span className="mono" style={{ fontSize: '12px', fontWeight: 600, padding: '2px 7px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.04)', color: 'var(--color-neutral-300)', border: `1px solid ${HAIR}` }}>
-            {sgpEvText(r)}
-          </span>
-        </div>
-      </div>
-
-      <div className="mono text-[11px] text-text-secondary">
-        Assumed correlation &rho;={r.rhoTrue}, book &rho;={r.rhoBook}, hold {Math.round(r.holdBook * 100)}% (unvalidated; not a quoted price)
-      </div>
-
-      {r.deeplink && (
-        <div className="flex justify-end">
-          <a
-            href={r.deeplink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn btn-ghost"
-            style={{ padding: '5px 12px', fontSize: '11px', fontWeight: 600, color: 'var(--color-text-primary)', border: `1px solid ${HAIR}`, borderRadius: '4px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-          >
-            Check price on {bookDisplay(r.book).label} &rarr;
-          </a>
-        </div>
-      )}
-    </div>
-  )
-}
-
 export function OutlierCard({
   item,
   isLocked,

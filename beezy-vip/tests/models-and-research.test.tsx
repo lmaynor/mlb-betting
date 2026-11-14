@@ -4,7 +4,6 @@ import fs from 'fs'
 import path from 'path'
 import { render, screen, within } from '@testing-library/react'
 import { ProjectionModelDetail } from '../components/models/projection-model-detail'
-import { ResearchTabs } from '../components/picks/research-tabs'
 import { getModelSpec, MODEL_SPECS } from '../lib/model-specs'
 import { getSportSystemBySlug, getSystemsBySport, PICK_SYSTEMS } from '../lib/pick-systems'
 import ModelsPage from '../app/models/page'
@@ -70,14 +69,12 @@ describe('/models by sport', () => {
 })
 
 describe('Prop Research: all projections', () => {
-  it('ResearchTabs links the cockpit and the Scanner projections tab and marks the active one', () => {
-    render(<ResearchTabs active="cockpit" />)
-    expect(screen.getByRole('link', { name: 'Prop cockpit' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByRole('link', { name: 'All projections' })).toHaveAttribute('href', '/ev/projections')
+  it('ResearchTabs is deleted (IA S5): the section tabs own the Prop Research and Projections relationship', () => {
+    expect(fs.existsSync(path.join(process.cwd(), 'components/picks/research-tabs.tsx'))).toBe(false)
+    expect(read('app/edge/edge-client.tsx')).not.toContain('ResearchTabs')
   })
 
-  it('the cockpit carries the tabs, and the projections page loads every sport\'s unfiltered projection board', () => {
-    expect(read('app/edge/edge-client.tsx')).toContain('<ResearchTabs active="cockpit" />')
+  it('the projections page loads every sport\'s unfiltered projection board', () => {
     // the projections page moved to the Scanner's own tab; the old URLs redirect to it
     const page = read('app/ev/projections/page.tsx')
     expect(page).toContain("view: 'projections'")
@@ -112,7 +109,7 @@ describe('brand and copy cleanup', () => {
 
   it('the new files are ASCII', () => {
     for (const f of ['components/models/projection-model-detail.tsx', 'app/models/page.tsx', 'app/models/[slug]/[system]/page.tsx', 'app/ev/projections/page.tsx', 'app/edge/projections/page.tsx', 'components/picks/lambda-bar.tsx',
-      'components/picks/research-tabs.tsx', 'components/picks/aligned-bar.tsx', 'components/picks/games-strip.tsx', 'components/picks/day-toggle.tsx', 'lib/board-games.ts', 'lib/board-days.ts', 'lib/sport-board-data.ts', 'scripts/build-brand-kit.mjs']) {
+      'components/picks/aligned-bar.tsx', 'components/picks/games-strip.tsx', 'components/picks/day-toggle.tsx', 'lib/board-games.ts', 'lib/board-days.ts', 'lib/sport-board-data.ts', 'scripts/build-brand-kit.mjs']) {
       expect([...read(f)].filter(c => c.charCodeAt(0) > 127)).toEqual([])
     }
   })

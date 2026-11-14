@@ -59,7 +59,6 @@ export async function LiveTicker() {
                 <span className="font-semibold" style={{ color: tone }}>{t.win ? 'W' : 'L'}</span>
                 <span className="font-semibold" style={{ color: sysColor }}>{systemLabel(t.system, true)}</span>
                 <span>{t.label}</span>
-                {t.unvalidated && <span className="text-gold text-micro">UNVALIDATED</span>}
                 <span className="font-semibold" style={{ color: tone }}>{t.u >= 0 ? '+' : ''}{t.u.toFixed(2)}u</span>
                 <span className="text-separator-border py-0 px-3">|</span>
               </span>

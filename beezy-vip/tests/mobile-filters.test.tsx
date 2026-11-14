@@ -32,11 +32,12 @@ describe('Mobile navigation and filters', () => {
     mockSearchParams = new URLSearchParams()
   })
 
-  it('renames the EV bottom tab to Odds', () => {
+  it('the bottom nav is the five ruled slots: Home, Scanner, Daily Card, Results, Menu', () => {
     render(<BottomNav />)
-    expect(screen.getByText('Odds')).toBeInTheDocument()
-    const link = screen.getByText('Odds').closest('a')
-    expect(link).toHaveAttribute('href', '/ev')
+    expect(screen.getByText('Scanner')).toBeInTheDocument()
+    expect(screen.getByText('Scanner').closest('a')).toHaveAttribute('href', '/ev')
+    expect(screen.getByText('Daily Card').closest('a')).toHaveAttribute('href', '/picks')
+    expect(screen.getByRole('button', { name: 'Open menu' })).toBeInTheDocument()
   })
 
   it('renders mobile-native filter controls with None and Only buttons', () => {

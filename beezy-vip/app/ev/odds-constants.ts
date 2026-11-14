@@ -1,5 +1,4 @@
 import { type SportSlug } from '@/lib/sports'
-import { type OddsScreenMode } from '@/lib/odds-screen'
 
 export type SportFilter = 'all' | SportSlug
 export type SortKey = 'ev' | 'time' | 'player'
@@ -60,28 +59,14 @@ export const OUTLIER_MIN_BOOKS = [
 // The banker rewrites the boards every 30 minutes, so a faster poll only re-downloads identical data.
 export const POLL_MS = 3 * 60_000
 
-export const MODES: { key: OddsScreenMode; label: string }[] = [
+export const MODES: { key: BadgeKey; label: string }[] = [
   { key: 'ev', label: '+EV Scanner' },
   { key: 'outliers', label: 'Market Outliers' },
   { key: 'arb', label: 'Arbitrage' },
   { key: 'middles', label: 'Middles' },
-  { key: 'longshots', label: 'Alt & Tail Ladders' },
-  { key: 'sgp', label: 'SGP Proxies' },
+  { key: 'longshots', label: 'Alt Ladders' },
 ]
 
-export type BadgeKey = 'ev' | 'outliers' | 'arb' | 'middles' | 'longshots' | 'sgp'
-export const BADGE_KEYS: BadgeKey[] = ['ev', 'outliers', 'arb', 'middles', 'longshots', 'sgp']
+export type BadgeKey = 'ev' | 'outliers' | 'arb' | 'middles' | 'longshots'
+export const BADGE_KEYS: BadgeKey[] = ['ev', 'outliers', 'arb', 'middles', 'longshots']
 
-export const SGP_ARCHETYPE_OPTIONS = [
-  { v: 'all', label: 'All Combos' },
-  { v: 'stacks', label: 'Teammate Stacks (NHL Linemates / QB+WR / PG+Scorer)' },
-  { v: 'milestones', label: 'Milestones (10+ Reb and 10+ Ast)' },
-  { v: 'combos', label: 'Stat Combos (P+R / P+A / R+A / G+A)' },
-]
-
-export const SGP_MIN_EV_OPTIONS = [
-  { v: 0, label: 'All' },
-  { v: 2, label: '+2%+' },
-  { v: 5, label: '+5%+' },
-  { v: 10, label: '+10%+' },
-]

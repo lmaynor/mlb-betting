@@ -12,7 +12,6 @@ import {
   TabList as AriaTabList,
   Tabs as AriaTabs,
 } from 'react-aria-components'
-import { ResearchTabs } from '@/components/picks/research-tabs'
 import type { Bet, CockpitFeed, CockpitRow } from '@/lib/types'
 import type { EdgeAlert, PlayerStatus, SeasonStats } from '@/lib/betting-api'
 import { SYSTEM_COLOR, SYSTEM_PILL, systemLabel, teamAbbrev, teamLogoSrc, bookText } from '@/lib/tokens'
@@ -947,7 +946,6 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
           </span>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <ResearchTabs active="cockpit" />
           {feed != null && <AriaTabs selectedKey={sport} onSelectionChange={k => setSport(k as CockpitSport)} className="contents">
             <AriaTabList aria-label="Sport" className="inline-flex max-w-full gap-0.5 overflow-x-auto rounded-lg border border-separator-border bg-background-secondary-default p-[3px]">
             {COCKPIT_SPORTS.map(k => {

@@ -144,8 +144,7 @@ export const EV_MODES: EvMode[] = [
   { key: 'outliers', label: 'Market Outliers', stage: 'candidate', strangerQuestion: "Where does a single book's price break from the consensus of the other books?" },
   { key: 'arb', label: 'Arbitrage', stage: 'candidate', strangerQuestion: "Where do two books' prices on opposite sides lock in a return either way?" },
   { key: 'middles', label: 'Middles', stage: 'candidate', strangerQuestion: "Where do two books' lines leave a gap that both sides can win?" },
-  { key: 'longshots', label: 'Alt & Tail Ladders', stage: 'candidate', strangerQuestion: 'Where across the entire slate do alternate or tail rungs break from a 4+ book two-sided consensus (VERIFIED DISLOCATION) or offer a +8% or better one-sided payout premium?' },
-  { key: 'sgp', label: 'SGP Proxies', stage: 'candidate', strangerQuestion: 'What do same-game parlay combinations pay against their combined fair price?' },
+  { key: 'longshots', label: 'Alt Ladders', stage: 'candidate', strangerQuestion: 'Where across the entire slate do alternate or tail rungs break from a 4+ book two-sided consensus (VERIFIED DISLOCATION) or offer a +8% or better one-sided payout premium?' },
 ]
 
 /**

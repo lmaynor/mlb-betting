@@ -44,6 +44,7 @@ export function BrandTile({ size = 32, radius = 7 }: { size?: number; radius?: n
 const WORDMARK = {
   sm: { mark: 22, font: 14, gap: 8 },
   md: { mark: 28, font: 18, gap: 9 },
+  bar: { mark: 32, font: 23, gap: 10 },
   lg: { mark: 38, font: 26, gap: 12 },
 } as const
 

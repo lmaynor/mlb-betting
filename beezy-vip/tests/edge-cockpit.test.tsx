@@ -104,10 +104,10 @@ describe('prop list cards', () => {
     expect(card).toHaveTextContent('L10: 30%')                                   // 3 of 10 games stayed under 63.5
   })
 
-  it('show an em-dash style placeholder when no game log exists', () => {
+  it('shows L10: n/a when no game log exists', () => {
     const f: CockpitFeed = { ...feed, rows: [row({ recentForm: null })] }
     render(<EdgeClient picks={[]} updated="now" cockpit={f} />)
-    expect(screen.getByText('L10: --')).toBeInTheDocument()
+    expect(screen.getByText('L10: n/a')).toBeInTheDocument()
   })
 })
 

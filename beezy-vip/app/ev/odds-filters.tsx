@@ -1,8 +1,7 @@
-import { bookDisplay } from '@/lib/tokens'
 import { LeagueFilter } from '@/components/ui/league-filter'
 import { GAME_LINES_ONLY, gameLinesHref, isGameLinesOnly } from '@/lib/sports'
 import { STAT_LABEL, type SideFilter } from '@/lib/odds-screen'
-import { SportFilter, SortKey, HAIR, GREEN, SHARP_PRESET, MIN_EV, ODDS_MIN, PAGE, MID_COST, MID_GAP, OUTLIER_GAP_OPTIONS, OUTLIER_ODDS_OPTIONS, OUTLIER_MIN_BOOKS, MODES, SGP_ARCHETYPE_OPTIONS, SGP_MIN_EV_OPTIONS } from './odds-constants'
+import { SportFilter, SortKey, HAIR, GREEN, SHARP_PRESET, MIN_EV, ODDS_MIN, PAGE, MID_COST, MID_GAP, OUTLIER_GAP_OPTIONS, OUTLIER_ODDS_OPTIONS, OUTLIER_MIN_BOOKS, MODES } from './odds-constants'
 import { startLabel } from './odds-format'
 import { Field, Select, Pill, PillGroup, BookPicker } from './odds-controls'
 import { OddsScreen } from './use-odds-screen'
@@ -85,7 +84,7 @@ export function MobileFilterBar({ odds }: { odds: OddsScreen }) {
 }
 
 export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
-  const { mode, sport, setSport, sportOptions, stat, setStat, game, setGame, side, setSide, lines, setLines, minEv, setMinEv, sgpArch, setSgpArch, sgpMinEv, setSgpMinEv, sgpBook, setSgpBook, q, setQ, method, setMethod, refs, setRefs, setShown, sort, setSort, setLimit, arbView, setArbView, exchanges, setExchanges, outlayText, setOutlayText, midCost, setMidCost, midGap, setMidGap, midPosEv, setMidPosEv, longSub, setLongSub, oddsMin, setOddsMin, useCurve, setUseCurve, outlierGap, setOutlierGap, outlierReqEv, setOutlierReqEv, outlierOddsBand, setOutlierOddsBand, outlierMinBooks, setOutlierMinBooks, outlierView, setOutlierView, myBooks, switchMode, bookList, defaultShown, shownSet, columns, statOptions, games, badgeFor, refsNote } = odds
+  const { mode, sport, setSport, sportOptions, stat, setStat, game, setGame, side, setSide, lines, setLines, minEv, setMinEv, q, setQ, method, setMethod, refs, setRefs, setShown, sort, setSort, setLimit, arbView, setArbView, exchanges, setExchanges, outlayText, setOutlayText, midCost, setMidCost, midGap, setMidGap, midPosEv, setMidPosEv, longSub, setLongSub, oddsMin, setOddsMin, useCurve, setUseCurve, outlierGap, setOutlierGap, outlierReqEv, setOutlierReqEv, outlierOddsBand, setOutlierOddsBand, outlierMinBooks, setOutlierMinBooks, outlierView, setOutlierView, myBooks, switchMode, bookList, defaultShown, shownSet, columns, statOptions, games, badgeFor, refsNote } = odds
   return (
     <section className="mb-2.5 rounded-xl border border-separator-border bg-background-primary-default shadow-card" aria-label="Filters">
       <div className="py-2.5 px-3.5 flex gap-y-2.5 gap-x-4.5 flex-wrap items-center">
@@ -298,45 +297,6 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
               <PillGroup>
                 <Pill active={useCurve} onClick={() => setUseCurve(true)} title="Uses exact multi-book de-vigged fair odds when available, or interpolates from the player's main-line curve when fewer than 2 books price an alt rung">Multi-Book + Player Curve</Pill>
                 <Pill active={!useCurve} onClick={() => setUseCurve(false)} title="Requires at least 2 reference books quoting this exact alternate line">Exact Books Only</Pill>
-              </PillGroup>
-            </Field>
-          </>
-        )}
-        {mode === 'sgp' && (
-          <>
-            <Field label="Archetype">
-              <PillGroup>
-                {SGP_ARCHETYPE_OPTIONS.map(a => (
-                  <Pill key={a.v} active={sgpArch === a.v} onClick={() => { setSgpArch(a.v); setLimit(PAGE) }}>
-                    {a.label}
-                  </Pill>
-                ))}
-              </PillGroup>
-            </Field>
-            <Field label="Min EV">
-              <PillGroup>
-                {SGP_MIN_EV_OPTIONS.map(e => (
-                  <Pill key={e.v} active={sgpMinEv === e.v} onClick={() => { setSgpMinEv(e.v); setLimit(PAGE) }}>
-                    {e.label}
-                  </Pill>
-                ))}
-              </PillGroup>
-            </Field>
-            <Field label="Book" htmlFor="sgp-book">
-              <Select
-                id="sgp-book"
-                value={sgpBook}
-                onChange={v => { setSgpBook(v); setLimit(PAGE) }}
-                options={[
-                  { v: 'all', l: 'All Books' },
-                  ...columns.filter(c => !c.offshore).map(c => ({ v: c.key, l: bookDisplay(c.key).label })),
-                ]}
-              />
-            </Field>
-            <Field label="Fair source">
-              <PillGroup>
-                <Pill active={useCurve} onClick={() => setUseCurve(true)} title="Uses multi-book de-vigged fair probabilities with monotone curve fallback">Multi-Book + Curve</Pill>
-                <Pill active={!useCurve} onClick={() => setUseCurve(false)} title="Requires at least 2 reference books quoting each leg">Exact Books Only</Pill>
               </PillGroup>
             </Field>
           </>
