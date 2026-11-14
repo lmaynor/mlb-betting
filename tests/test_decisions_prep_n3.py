@@ -14,9 +14,12 @@ from pathlib import Path
 import pytest
 
 from ev.decisions_prep.n3_claim_auditor import (
+    CONFIRM_QUESTION_ID,
     QUESTION_IDS,
+    build_confirm_questions,
     build_questions,
     check_numbers,
+    confirm_gate,
     extract_numeric_claims,
     gate,
 )
@@ -201,52 +204,93 @@ def test_build_questions_accepts_plain_text_claim():
 
 
 def test_gate_passes_supported_claim():
-    answer = {"supported": 0.97, "contradicted": 0.01, "wrong_scope": 0.05, "stale": 0.05}
+    answer = {"supported": 0.97, "direct_conflict": 0.01, "missing_support": 0.05, "wrong_scope": 0.05, "stale": 0.05}
     result = gate(answer)
-    assert result["decision"] == "pass"
+    assert result["decision"] == "clear"
     assert result["blocked"] is False
+    assert result["routed"] is False
     assert result["reasons"] == []
 
 
 def test_gate_blocks_low_supported():
-    result = gate({"supported": 0.89, "contradicted": 0.0, "wrong_scope": 0.0, "stale": 0.0})
+    result = gate({"supported": 0.89, "direct_conflict": 0.0, "missing_support": 0.0, "wrong_scope": 0.0, "stale": 0.0})
     assert result["blocked"] is True
     assert any(r.startswith("supported_below_threshold") for r in result["reasons"])
 
 
-def test_gate_blocks_high_contradicted():
-    result = gate({"supported": 0.95, "contradicted": 0.06, "wrong_scope": 0.0, "stale": 0.0})
+def test_gate_routes_high_direct_conflict():
+    # P(direct_conflict) > 0.05 with all non-conflict prongs passing routes
+    # to Stage 2 instead of blocking at Stage 1.
+    result = gate({"supported": 0.95, "direct_conflict": 0.06, "missing_support": 0.0, "wrong_scope": 0.0, "stale": 0.0})
+    assert result["decision"] == "route_stage2"
+    assert result["blocked"] is False
+    assert result["routed"] is True
+    assert any(r.startswith("direct_conflict_flagged") for r in result["reasons"])
+
+
+def test_gate_blocks_high_missing_support():
+    result = gate({"supported": 0.95, "direct_conflict": 0.30, "missing_support": 0.35, "wrong_scope": 0.0, "stale": 0.0})
+    assert result["decision"] == "block"
     assert result["blocked"] is True
-    assert any(r.startswith("contradicted_above_threshold") for r in result["reasons"])
+    assert any(r.startswith("missing_support_at_threshold") for r in result["reasons"])
 
 
 def test_gate_blocks_scope_plus_stale_at_threshold():
     # Each alone is under 0.25; the ruling blocks on the SUM at >= 0.25.
-    result = gate({"supported": 0.95, "contradicted": 0.0, "wrong_scope": 0.13, "stale": 0.12})
+    result = gate({"supported": 0.95, "direct_conflict": 0.0, "missing_support": 0.0, "wrong_scope": 0.13, "stale": 0.12})
     assert result["blocked"] is True
     assert any(r.startswith("wrong_scope_plus_stale") for r in result["reasons"])
 
 
 def test_gate_boundary_values_pass():
-    # supported exactly 0.90, contradicted exactly 0.05, sum just under 0.25.
-    result = gate({"supported": 0.90, "contradicted": 0.05, "wrong_scope": 0.12, "stale": 0.12})
+    # supported exactly 0.90, direct_conflict exactly 0.05, sum just under 0.25.
+    result = gate({"supported": 0.90, "direct_conflict": 0.05, "missing_support": 0.0, "wrong_scope": 0.12, "stale": 0.12})
     assert result["blocked"] is False
+    assert result["decision"] == "clear"
 
 
 def test_gate_missing_supported_blocks_and_answer_map_shape():
     # Published response shape: answers keyed by id, each carrying a probability.
-    result = gate({"contradicted": {"probability": 0.01}})
+    result = gate({"direct_conflict": {"probability": 0.01}})
     assert result["blocked"] is True
     assert "missing_supported_probability" in result["reasons"]
     ok = gate(
         {
             "supported": {"probability": 0.99},
-            "contradicted": {"probability": 0.0},
+            "direct_conflict": {"probability": 0.0},
+            "missing_support": {"probability": 0.0},
             "wrong_scope": {"probability": 0.1},
             "stale": {"probability": 0.1},
         }
     )
     assert ok["blocked"] is False
+
+
+def test_gate_missing_direct_conflict_blocks():
+    # Fail closed: Stage 1 cannot certify a clear without the conflict head.
+    result = gate({"supported": 0.97, "missing_support": 0.0, "wrong_scope": 0.0, "stale": 0.0})
+    assert result["blocked"] is True
+    assert "missing_direct_conflict_probability" in result["reasons"]
+
+
+def test_confirm_gate_thresholds():
+    assert confirm_gate({"confirm_direct_conflict": 0.20})["blocked"] is False
+    blocked = confirm_gate({"confirm_direct_conflict": 0.21})
+    assert blocked["blocked"] is True
+    assert any(r.startswith("confirm_direct_conflict_above_threshold") for r in blocked["reasons"])
+    assert confirm_gate({})["blocked"] is True
+    assert "missing_confirm_probability" in confirm_gate({})["reasons"]
+
+
+def test_build_confirm_questions_single_question():
+    body = build_confirm_questions(
+        {"claim_id": "X1", "claim_text": "A claim.", "source_doc": "doc.md"},
+        "slice text",
+    )
+    assert set(body["questions"]) == {CONFIRM_QUESTION_ID}
+    assert body["questions"][CONFIRM_QUESTION_ID]["type"] == "noul"
+    assert "Evidence (focused confirm slice):" in body["input"]
+    assert "slice text" in body["input"]
 
 
 if __name__ == "__main__":
