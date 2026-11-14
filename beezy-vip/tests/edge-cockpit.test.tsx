@@ -104,6 +104,14 @@ describe('prop list cards', () => {
     expect(card).toHaveTextContent('L10: 30%')                                   // 3 of 10 games stayed under 63.5
   })
 
+  it('opens the inspector on the deep-linked prop (T-4 ?prop=)', () => {
+    render(<EdgeClient picks={[]} updated="now" cockpit={feed} initialSport="nfl" initialPropId="nfl|1" />)
+    // no click: the deep link alone selects the row in the inspector
+    const aside = screen.getByRole('complementary', { name: 'Prop inspector' })
+    expect(within(aside).getByRole('heading', { level: 2 })).toHaveTextContent('Test Receiver')
+    expect(aside).toHaveTextContent(/MULTI-BOOK ODDS MATRIX/)
+  })
+
   it('shows L10: n/a when no game log exists', () => {
     const f: CockpitFeed = { ...feed, rows: [row({ recentForm: null })] }
     render(<EdgeClient picks={[]} updated="now" cockpit={f} />)

@@ -522,9 +522,11 @@ function Segmented<T extends string>({ value, options, onChange, label }: { valu
 type SortKey = 'ev' | 'l10' | 'start'
 
 // -- Cockpit --------------------------------------------------------------------------------------------------------
-export function Cockpit({ feed, sport, updated, loading, onRefresh, renderMlbExtras }: {
+export function Cockpit({ feed, sport, updated, loading, onRefresh, renderMlbExtras, initialPropId = null }: {
   feed: CockpitFeed | null
   sport: CockpitSport
+  /** player-search deep link (T-4): the row to open in the inspector on arrival */
+  initialPropId?: string | null
   updated: number
   loading: boolean
   onRefresh: () => void
@@ -535,8 +537,8 @@ export function Cockpit({ feed, sport, updated, loading, onRefresh, renderMlbExt
   const [sourceFilter, setSourceFilter] = useState<'all' | 'sweep' | 'model'>('all')
   const [credibleOnly, setCredibleOnly] = useState(false)
   const [query, setQuery] = useState('')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [drawer, setDrawer] = useState(false)
+  const [selectedId, setSelectedId] = useState<string | null>(initialPropId)
+  const [drawer, setDrawer] = useState(Boolean(initialPropId))
   const [now, setNow] = useState<number>(() => Date.now())
   const detailRef = useRef<HTMLDivElement>(null)
 

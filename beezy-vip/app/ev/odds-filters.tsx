@@ -103,9 +103,13 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
           <Field label="Sport">
             <LeagueFilter value={sport} live={[...sportOptions, ...GAME_LINES_ONLY]} onChange={v => { if (isGameLinesOnly(v)) { window.location.assign(gameLinesHref(v)); return } setSport(v); setStat('all'); setGame('all'); setLimit(PAGE) }} />
           </Field>
-          <Field label="Prop" htmlFor="odds-stat">
-            <Select id="odds-stat" value={stat} onChange={v => { setStat(v); setLimit(PAGE) }}
-              options={[{ v: 'all', l: 'All props' }, ...statOptions.map(s => ({ v: s, l: STAT_LABEL[s] ?? s }))]} />
+          <Field label="Stat">
+            <PillGroup>
+              <Pill active={stat === 'all'} onClick={() => { setStat('all'); setLimit(PAGE) }}>All props</Pill>
+              {statOptions.map(s => (
+                <Pill key={s} active={stat === s} onClick={() => { setStat(s); setLimit(PAGE) }}>{STAT_LABEL[s] ?? s}</Pill>
+              ))}
+            </PillGroup>
           </Field>
           <Field label="Game" htmlFor="odds-game">
             <Select id="odds-game" value={game} onChange={v => { setGame(v); setLimit(PAGE) }}

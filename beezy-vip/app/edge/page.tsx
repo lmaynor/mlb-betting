@@ -10,6 +10,8 @@ import { withHeadshotIds } from '@/lib/cockpit-headshots'
 import { limitBets } from '@/lib/access-bets'
 import { getViewer } from '@/lib/auth'
 import { EdgeClient, type EdgePick } from './edge-client'
+import { COCKPIT_SPORTS, type CockpitSport } from './cockpit'
+import { PlayerSearch } from '@/components/search/player-search'
 import { headshotUrlByName, playerIdByName } from '@/lib/sport-assets.server'
 
 export const metadata: Metadata = {
@@ -51,7 +53,12 @@ function normName(name: string | null): string {
   return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
 }
 
-export default async function EdgePage() {
+export default async function EdgePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const sp = await searchParams
+  // player-search deep link (T-4): ?sport=<league>&prop=<cockpit row id> opens the inspector on that prop
+  const sportParam = typeof sp.sport === 'string' ? sp.sport : undefined
+  const initialSport = sportParam && (COCKPIT_SPORTS as string[]).includes(sportParam) ? (sportParam as CockpitSport) : undefined
+  const initialPropId = typeof sp.prop === 'string' && sp.prop ? sp.prop : null
   const date = siteDateKey()
   const [rawAll, slate, enrichData, alerts, cockpitAll, viewer] = await Promise.all([
     // The model board is model predictions only; pooled +EV rows (system EV) belong to the +EV Terminal.
@@ -131,5 +138,10 @@ export default async function EdgePage() {
     weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
   })
 
-  return <EdgeClient picks={picks} updated={updated} dateKey={date} cockpit={cockpit} lockedBoard={board.locked} />
+  return (
+    <>
+      <PlayerSearch />
+      <EdgeClient picks={picks} updated={updated} dateKey={date} cockpit={cockpit} lockedBoard={board.locked} initialSport={initialSport} initialPropId={initialPropId} />
+    </>
+  )
 }

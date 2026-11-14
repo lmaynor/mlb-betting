@@ -771,10 +771,11 @@ function loadSlip(dateKey: string): Slip {
   } catch { return {} }
 }
 
-export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, lockedBoard = 0 }: { picks: EdgePick[]; updated: string; dateKey?: string; cockpit?: CockpitFeed | null; lockedBoard?: number }) {
+export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, lockedBoard = 0, initialSport, initialPropId = null }: { picks: EdgePick[]; updated: string; dateKey?: string; cockpit?: CockpitFeed | null; lockedBoard?: number; initialSport?: CockpitSport; initialPropId?: string | null }) {
   // with no cockpit feed at first paint (API not reachable / not deployed yet) the page opens on the MLB model board, as before
-  const [sport, setSport] = useState<CockpitSport>(cockpit ? 'all' : 'mlb')
-  const [view, setView] = useState<View>(cockpit ? 'cockpit' : 'board')
+  // a player-search deep link (?sport=&prop=, T-4) opens the cockpit on that league with the prop selected
+  const [sport, setSport] = useState<CockpitSport>(initialSport ?? (cockpit ? 'all' : 'mlb'))
+  const [view, setView] = useState<View>(initialPropId ? 'cockpit' : cockpit ? 'cockpit' : 'board')
   const { feed, updated: feedUpdated, loading: feedLoading, refresh: refreshFeed } = useCockpitFeed(cockpit)
   const [mode, setMode] = useState<Mode>('players')
   const [matchup, setMatchup] = useState<string>('all')
@@ -981,7 +982,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
       <LockedNotice locked={(feed?.locked ?? 0) + lockedBoard} shown={1} what="prop research rows and model picks" plan="Prop research covers one league on a Single-Sport Pass, or every league on All-Access Pro." />
 
       {showCockpit ? (
-        <Cockpit feed={feed} sport={sport} updated={feedUpdated} loading={feedLoading} onRefresh={refreshFeed} renderMlbExtras={renderMlbExtras} />
+        <Cockpit feed={feed} sport={sport} updated={feedUpdated} loading={feedLoading} onRefresh={refreshFeed} renderMlbExtras={renderMlbExtras} initialPropId={initialPropId} />
       ) : (
       <>
       {/* Slate HUD: the model-board readout */}

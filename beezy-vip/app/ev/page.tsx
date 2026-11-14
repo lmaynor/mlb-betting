@@ -8,6 +8,7 @@ import { withHeadshots } from '@/lib/odds-headshots'
 import type { OddsBoard } from '@/lib/odds-screen'
 import type { SportSlug } from '@/lib/sports'
 import { OddsClient } from './odds-client'
+import { PlayerSearch } from '@/components/search/player-search'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,5 +40,10 @@ export default async function OddsPage({ searchParams }: { searchParams: Promise
   })
   // Whole-Terminal access (Pro, or anyone while the site is pre-launch / tiers are not enforced): drives the outlier book reveal.
   const fullAccess = canViewFull(viewer, 'ev_terminal', 'mlb')
-  return <OddsClient initial={cut} initialLocked={locked} headline={deep?.ev_headline ?? null} fullAccess={fullAccess} />
+  return (
+    <>
+      <PlayerSearch />
+      <OddsClient initial={cut} initialLocked={locked} headline={deep?.ev_headline ?? null} fullAccess={fullAccess} />
+    </>
+  )
 }
