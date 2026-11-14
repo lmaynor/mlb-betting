@@ -22,7 +22,7 @@ describe('PWA manifest', () => {
 
     const shortcutUrls = data.shortcuts?.map(s => s.url)
     expect(shortcutUrls).toContain('/ev')
-    expect(shortcutUrls).toContain('/cheat-sheet')
+    expect(shortcutUrls).toContain('/picks')
     expect(shortcutUrls).toContain('/edge')
     expect(shortcutUrls).toContain('/results')
 

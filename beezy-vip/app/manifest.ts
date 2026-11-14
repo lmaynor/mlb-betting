@@ -30,9 +30,9 @@ export default function manifest(): MetadataRoute.Manifest {
         description: 'Live +EV scanner, outliers, arbitrage, and middles',
       },
       {
-        name: 'Daily Card',
+        name: "Today's Card",
         short_name: 'Daily Card',
-        url: '/cheat-sheet',
+        url: '/picks',
         description: "Today's locked official confluence plays",
       },
       {

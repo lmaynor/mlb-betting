@@ -43,8 +43,8 @@ export function Footer() {
           </div>
           {/* Columns mirror lib/ia.ts sections exactly: canonical labels, section tab order, each destination once. */}
           {[
-            { title: 'Scanner', links: [['Odds Screen','/ev'],['Projections','/ev/projections'],['Game Lines','/ev/games'],['Prop Research','/edge']] },
-            { title: 'Picks',   links: [['Daily Card','/cheat-sheet'],['Top Signals','/picks'],['Graded History','/picks/history']] },
+            { title: 'Scanner', links: [['Odds Screen','/ev'],['Projections','/ev/projections'],['Game Lines','/ev/games'],['Prop Research','/edge'],['Live Candidates','/ev/candidates']] },
+            { title: 'Picks',   links: [["Today's Card",'/picks'],['Past Cards','/picks/history']] },
             { title: 'Results', links: [['Settled Bets','/results'],['Analytics','/analytics'],['Models','/models']] },
             { title: 'Sports',  links: [['MLB','/picks/mlb'],['NFL','/sports/nfl'],['NHL','/sports/nhl'],['NBA','/sports/nba']] },
             { title: 'Company', links: [['Pricing','/pricing'],['Learn','/learn'],['Contact',`mailto:${SITE_CONFIG.contactEmail}`]] },
