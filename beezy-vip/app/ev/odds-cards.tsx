@@ -132,7 +132,7 @@ export function MobileArbCard({
             border: `1px solid ${live ? 'rgba(87, 242, 135, 0.3)' : 'rgba(56, 189, 248, 0.3)'}`,
           }}
         >
-          {signed(a.netArbPct, 2)}% {live ? 'ARB' : 'HOLD'}
+          {signed(a.netArbPct, 2)}% {live ? 'Arb' : 'Hold'}
         </span>
       </div>
 
@@ -287,7 +287,7 @@ export function MobileLongshotCard({
   const actionAm = over ? m.bestOverAm : m.bestUnderAm
   const actionEv = r.bestEv
   const fairProb = over ? m.fairOverProb : m.fairUnderProb
-  const sideLabel = over ? 'OVER' : 'UNDER'
+  const sideLabel = over ? 'Over' : 'Under'
 
   return (
     <div className="mb-2.5 flex flex-col gap-2.5 rounded-xl border border-separator-border bg-background-primary-default p-3 shadow-card">

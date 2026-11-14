@@ -68,7 +68,7 @@ export function ArbTableRow({ r, columns, outlay, copied, onCopy }: {
       <td className="odds-ev">
         <div className="mono" style={{ fontSize: '13px', fontWeight: 600, color: live ? GREEN : SKY }}
           title={a.feeLeg ? `Gross ${signed(a.arbPct, 2)}%, net of Kalshi's taker fee ${signed(a.netArbPct, 2)}%` : `${signed(a.netArbPct, 2)}%, no fee on either leg`}>
-          {signed(a.netArbPct, 2)}% {live ? 'ARB' : 'HOLD'}
+          {signed(a.netArbPct, 2)}% {live ? 'Arb' : 'Hold'}
         </div>
         <div className="mono odds-sub">{a.feeLeg ? 'Net of Kalshi fee' : '\u00a0'}</div>
       </td>
@@ -202,7 +202,7 @@ export function LongshotTableRow({ r, columns }: { r: LongshotRow; columns: { ke
         <div className="mono text-compact text-neutral-300">
           {implied == null ? '--' : `${(implied * 100).toFixed(1)}%`} / <span style={{ color: truth != null && implied != null && truth > implied ? GREEN : 'var(--color-neutral-300)' }}>{truth == null ? '--' : `${(truth * 100).toFixed(1)}%`}</span>
         </div>
-        <div className="mono odds-sub">{over ? 'OVER' : 'UNDER'} IMPL / TRUE</div>
+        <div className="mono odds-sub">{over ? 'Over' : 'Under'} implied / true</div>
       </td>
       {columns.map(c => {
         const q = byBook.get(c.key)

@@ -25,6 +25,7 @@ function MobileViewBar({ active, nRows, onChange, trailing }: { active: 'cards' 
     fontFamily: 'var(--font-text), sans-serif',
     fontSize: '11px',
     fontWeight: 600,
+    minHeight: '32px',
     padding: '4px 10px',
     borderRadius: '4px',
     border: 0,

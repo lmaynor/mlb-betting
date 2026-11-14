@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic'
 export const metadata: Metadata = {
   title: 'Odds Screen',
   description:
-    'Every sportsbook and exchange price for NFL, NBA, NHL and MLB player props side by side, with fair value and EV from the reference books you choose, arbitrage and alt-line longshots.',
+    'Every sportsbook and exchange price for NFL, NBA, NHL and MLB player props side by side, with fair value and EV from the reference books you choose, arbitrage and alt ladders.',
 }
 
 const SPORTS: SportSlug[] = ['nfl', 'nhl', 'nba', 'mlb']
