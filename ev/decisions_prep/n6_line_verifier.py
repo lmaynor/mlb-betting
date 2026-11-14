@@ -17,6 +17,12 @@ Gate (per the ruling, fail closed on line-mate eligibility):
         OR P(promotion_demotion) >= 0.80
         OR trio noul (P(trio intact)) < 0.80
 
+    with the conditional class-prong exemption of Argon ruling
+    RUL-20261113-dec-gate-design Q3: the trio-noul trigger is waived for
+    a trio iff P(pp_only_change) >= 0.80 AND P(line_shuffle) < 0.20 AND
+    P(promotion_demotion) < 0.20; otherwise the trio prong stays fully
+    active and fails closed, compound blurbs included.
+
 Isolation invariant: a ``pp_only_change`` outcome NEVER suspends 5v5
 eligibility. ``P(pp_only_change)`` is never a suspension reason in
 ``gate`` -- power-play changes do not suppress even-strength line-mate
@@ -253,6 +259,11 @@ def gate(answer: Any, trio: Any) -> dict:
     isolation invariant. An answer with no usable probabilities and no
     noul is an abstention (``abstain`` True, ``suspend`` False): the
     gate invents no suspension from no evidence.
+
+    Conditional exemption (RUL-20261113-dec-gate-design Q3): the trio
+    prong is waived for this trio when the class distribution is
+    confidently power-play-only (see ``trio_prong_exempted`` below);
+    the class prongs above are never waived.
     """
     probs, noul = _extract(answer)
     reasons: list[str] = []
@@ -262,7 +273,19 @@ def gate(answer: Any, trio: Any) -> dict:
         reasons.append(f"P(line_shuffle)={p_shuffle:.2f} >= {SUSPEND_THRESHOLD:.2f}")
     if p_promo is not None and p_promo >= SUSPEND_THRESHOLD:
         reasons.append(f"P(promotion_demotion)={p_promo:.2f} >= {SUSPEND_THRESHOLD:.2f}")
-    if noul is not None and noul < TRIO_INTACT_MIN:
+    # Conditional class-prong exemption (Argon ruling RUL-20261113-dec-gate-design
+    # Q3): this trio is exempt from the trio_intact suspension trigger iff the
+    # class distribution is confidently power-play-only -- P(pp_only_change)
+    # >= 0.80 AND P(line_shuffle) < 0.20 AND P(promotion_demotion) < 0.20
+    # (missing keys in a present distribution count as 0.0; a bare choice
+    # fallback reads as P(chosen) = 1.0 via _extract). Otherwise the trio
+    # prong stays fully active and fails closed, compound blurbs included.
+    trio_prong_exempted = (
+        probs.get("pp_only_change", 0.0) >= 0.80
+        and probs.get("line_shuffle", 0.0) < 0.20
+        and probs.get("promotion_demotion", 0.0) < 0.20
+    )
+    if noul is not None and noul < TRIO_INTACT_MIN and not trio_prong_exempted:
         reasons.append(f"trio noul={noul:.2f} < {TRIO_INTACT_MIN:.2f}")
     abstain = not probs and noul is None
     if abstain:
@@ -274,4 +297,5 @@ def gate(answer: Any, trio: Any) -> dict:
         "trio_intact": noul,
         "trio": _trio_names(trio),
         "abstain": abstain,
+        "trio_prong_exempted": trio_prong_exempted and not abstain,
     }
