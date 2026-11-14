@@ -238,7 +238,7 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
   const toggle = (key: string) => setExpanded(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n })
 
   async function handleShare() {
-    const url = 'https://beezy.fyi/cheat-sheet'
+    const url = 'https://beezy.fyi/picks'
     if (typeof navigator !== 'undefined' && navigator.share) {
       try { await navigator.share({ title: 'Beezy.FYI Daily Card', url }) } catch { /* cancelled */ }
     } else {
@@ -305,12 +305,12 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
                 <LockedNotice locked={locked} what="official plays" plan="Today's full card is on a sport pass or All-Access Pro." />
               ) : (
                 <>
-                  <div className="mono text-micro text-text-secondary mb-3.5 text-center">
+                  <div className="text-compact text-text-secondary mb-3.5 text-center leading-[1.55]">
                     No official plays yet. A play posts only when it clears the gate, so some days have none.
                   </div>
                   {yesterday.length > 0 && (
                     <>
-                      <div className="mono text-micro text-text-secondary mb-1.5 text-center">YESTERDAY&apos;S PLAYS</div>
+                      <div className="ui-heading text-text-secondary mb-1.5 text-center">Yesterday&apos;s plays</div>
                       {yesterday.map(p => <YesterdayRow key={p.key} pick={p} />)}
                       {ydayWins + ydayLosses > 0 && (
                         <div className="mono text-micro text-text-secondary text-center mt-2.5">{ydayWins}-{ydayLosses} yesterday</div>
@@ -376,7 +376,6 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
         </aside>
       </div>
 
-      <Link href="/picks" className="mono cheat-sheet-picks-link mt-4 text-micro text-text-secondary no-underline">All picks &rarr;</Link>
     </div>
   )
 }

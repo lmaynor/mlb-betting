@@ -973,7 +973,7 @@ export function EdgeClient({ picks, updated, dateKey = '', cockpit = null, locke
           </AriaTabList></AriaTabs>}
           {sport === 'mlb' && feed != null && (
             <div role="group" aria-label="MLB view" className="inline-flex gap-0.5 rounded-lg border border-separator-border bg-background-secondary-default p-[3px]">
-              {([['cockpit', 'PROP COCKPIT'], ['board', 'MODEL BOARD']] as [View, string][]).map(([k, label]) => {
+              {([['cockpit', 'Shortlist'], ['board', 'Model board']] as [View, string][]).map(([k, label]) => {
                 const active = view === k
                 return (
                   <button key={k} onClick={() => setView(k)} aria-pressed={active}
@@ -1255,10 +1255,10 @@ function Styles() {
   return (
     <style>{`@layer components {
 .edge { max-width: 1120px; margin: 0 auto; padding: 28px 16px 80px; color: var(--color-text-primary);
-  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+  font-family: var(--font-text), ui-sans-serif, system-ui, -apple-system, sans-serif; }
 .edge-header { border-bottom: 1px solid var(--color-separator-border); padding-bottom: 18px; margin-bottom: 18px; }
 .edge-title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.edge-title { font-size: 20px; font-weight: 600; letter-spacing: -0.01em;
+.edge-title { font-size: 20px; font-weight: 700; letter-spacing: -0.01em;
   margin: 0; text-wrap: balance; }
 .edge-updated { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 600;
   color: var(--signal); }

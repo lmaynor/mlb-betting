@@ -485,7 +485,7 @@ function PropCard({ r, active, onSelect }: { r: CockpitRow; active: boolean; onS
         <span className="flex min-w-0 items-center gap-[7px]">
           <span className="ui-heading shrink-0 rounded-chip border px-[5px] py-px" style={{ color: accent, borderColor: `${accent}55` }}>{r.sport.toUpperCase()}</span>
           {r.flag && <span className="ui-heading shrink-0 text-signal" title="A book is hanging this line well off the market and it passed the credibility gates">Flagged</span>}
-          <span className="ui-heading shrink-0 text-text-secondary" title={r.source === 'model' ? 'A model projection row from the daily boards' : 'A market sweep row: a flagged price from the live odds sweep'}>{r.source === 'model' ? 'MODEL PROJECTION' : 'MARKET SWEEP'}</span>
+          <span className="ui-heading shrink-0 text-text-secondary" title={r.source === 'model' ? 'A model projection row from the daily boards' : 'A market sweep row: a flagged price from the live odds sweep'}>{r.source === 'model' ? 'Model projection' : 'Market sweep'}</span>
           <span className="mono min-w-0 flex-1 truncate text-mini text-text-secondary">{meta}</span>
         </span>
       </span>
@@ -632,19 +632,19 @@ export function Cockpit({ feed, sport, updated, loading, onRefresh, renderMlbExt
 
   return (
     <div>
-      <section aria-label="Cockpit filters" className="mb-3.5 grid gap-2.5">
+      <section aria-label="Shortlist filters" className="mb-3.5 grid gap-2.5">
         <div className="flex flex-wrap items-center gap-2.5">
           <Segmented<string> label="Market" value={activeMarket} onChange={setMarket}
-            options={[{ id: 'all', label: `ALL MARKETS ${inSport.length}` }, ...markets.map(([k, n]) => ({ id: k, label: `${propStatLabel(k).toUpperCase()} ${n}` }))]} />
+            options={[{ id: 'all', label: `All markets ${inSport.length}` }, ...markets.map(([k, n]) => ({ id: k, label: `${propStatLabel(k)} ${n}` }))]} />
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex flex-wrap items-center gap-2.5">
             <Segmented<SortKey> label="Sort" value={sort} onChange={setSort}
-              options={[{ id: 'ev', label: 'NET EV %' }, { id: 'l10', label: 'L10 HIT%' }, { id: 'start', label: 'STARTS SOON' }]} />
+              options={[{ id: 'ev', label: 'Net EV %' }, { id: 'l10', label: 'L10 hit %' }, { id: 'start', label: 'Starts soon' }]} />
             <Segmented<string> label="Confidence" value={credibleOnly ? 'credible' : 'all'} onChange={v => setCredibleOnly(v === 'credible')}
               options={[{ id: 'all', label: 'All players' }, { id: 'credible', label: 'Flagged only' }]} />
             <Segmented<string> label="Source" value={sourceFilter} onChange={v => setSourceFilter(v as 'all' | 'sweep' | 'model')}
-              options={[{ id: 'all', label: 'All sources' }, { id: 'sweep', label: 'Market Sweep' }, { id: 'model', label: 'Model Projection' }]} />
+              options={[{ id: 'all', label: 'All sources' }, { id: 'sweep', label: 'Market sweep' }, { id: 'model', label: 'Model projection' }]} />
           </div>
           <input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search player or team" aria-label="Search player or team"
             className="h-[34px] min-w-0 max-w-[300px] flex-[1_1_180px] rounded-lg border border-border-button-default bg-background-secondary-default px-2.5 text-body-2-regular text-text-primary outline-none placeholder:text-text-placeholder focus:border-accent-500" />
@@ -652,7 +652,7 @@ export function Cockpit({ feed, sport, updated, loading, onRefresh, renderMlbExt
       </section>
 
       <div className="mx-0.5 mb-2.5 flex flex-wrap items-baseline justify-between gap-2.5">
-        <span className="mono text-caption-1-regular text-text-secondary">{rows.length} PROPS &middot; UPDATED {ageLabel.toUpperCase()}</span>
+        <span className="mono text-caption-1-regular text-text-secondary">{rows.length} props &middot; updated {ageLabel}</span>
         <button onClick={onRefresh} disabled={loading} className="btn btn-ghost px-3 py-[5px] text-xs">{loading ? 'Refreshing...' : 'Refresh'}</button>
       </div>
       {statusLine && (

@@ -75,10 +75,10 @@ describe('sport switcher', () => {
   it('filters by market chip and by player search', () => {
     render(<EdgeClient picks={[]} updated="now" cockpit={feed} />)
     const markets = screen.getByRole('group', { name: 'Market' })
-    fireEvent.click(within(markets).getByRole('button', { name: /SHOTS ON GOAL/ }))
+    fireEvent.click(within(markets).getByRole('button', { name: /Shots on Goal/ }))
     expect(inList().getByText('Alex Ovechkin')).toBeInTheDocument()
     expect(screen.queryByText('Test Receiver')).toBeNull()
-    fireEvent.click(within(markets).getByRole('button', { name: /ALL MARKETS/ }))
+    fireEvent.click(within(markets).getByRole('button', { name: /All markets/ }))
     fireEvent.change(screen.getByLabelText('Search player or team'), { target: { value: 'slugger' } })
     expect(screen.queryByText('Test Receiver')).toBeNull()
     expect(inList().getByText('Slugger Jones')).toBeInTheDocument()
@@ -247,12 +247,12 @@ describe('without a cockpit feed', () => {
     expect(screen.getByText('No model picks scored yet today.')).toBeInTheDocument()
   })
 
-  it('keeps the model board reachable next to the cockpit for MLB', () => {
+  it('keeps the model board reachable next to the shortlist for MLB', () => {
     render(<EdgeClient picks={[]} updated="now" cockpit={feed} />)
     fireEvent.click(screen.getByRole('tab', { name: /^MLB/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'MODEL BOARD' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Model board' }))
     expect(screen.getByText('No model picks scored yet today.')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'PROP COCKPIT' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Shortlist' }))
     expect(inList().getByText('Slugger Jones')).toBeInTheDocument()
   })
 })

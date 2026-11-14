@@ -621,7 +621,7 @@ export function LadderSectionForRow({
   if (!g) return null
   return (
     <section className="mt-3">
-      <div className="ui-heading text-micro text-text-secondary mb-2">FULL LADDER</div>
+      <div className="ui-heading text-micro text-text-secondary mb-2">Full ladder</div>
       <LadderCard group={g} />
     </section>
   )

@@ -143,7 +143,7 @@ function PropTableView({ odds }: { odds: OddsScreen }) {
         <table className="odds-table w-full border-collapse">
         <thead>
           <tr>
-            <th scope="col" className="odds-prop text-left min-w-[210px]">PROP</th>
+            <th scope="col" className="odds-prop text-left min-w-[210px]">Prop</th>
             <th scope="col" className="text-left">Game</th>
             {mode === 'ev' && (
               <>
@@ -162,15 +162,15 @@ function PropTableView({ odds }: { odds: OddsScreen }) {
             {mode === 'middles' && (
               <>
                 <th scope="col" className="odds-ev" title="Width of the window between the two lines, and what a miss and a hit pay">Middle</th>
-                <th scope="col" className="odds-ev">LEGS</th>
-                <th scope="col" className="odds-ev">STAKE SPLIT ({usd(outlay).replace('.00', '')})</th>
+                <th scope="col" className="odds-ev">Legs</th>
+                <th scope="col" className="odds-ev">Stake split ({usd(outlay).replace('.00', '')})</th>
               </>
             )}
             {mode === 'arb' && (
               <>
                 <th scope="col" className="odds-ev" title="Margin on the outlay with the best over and under at two different books, net of Kalshi's fee">Arb / hold</th>
                 <th scope="col" className="odds-ev">Hedge legs</th>
-                <th scope="col" className="odds-ev">STAKE SPLIT ({usd(outlay).replace('.00', '')})</th>
+                <th scope="col" className="odds-ev">Stake split ({usd(outlay).replace('.00', '')})</th>
               </>
             )}
             {columns.map(c => {
@@ -214,7 +214,7 @@ export function OddsResults({ odds }: { odds: OddsScreen }) {
       ) : sport !== 'all' && !sportOptions.includes(sport) ? (
         <LeagueNote value={sport} live={sportOptions} onPick={v => { if (isGameLinesOnly(v)) { window.location.assign(gameLinesHref(v)); return } setSport(v); setLimit(PAGE) }} />
       ) : allRows.length === 0 ? (
-        <Empty title="No prop prices posted" />
+        <Empty title="No prop prices posted" body="Prop lines post once sportsbooks open the day's board. This screen refreshes on its own while games are listed." />
       ) : mode === 'longshots' ? (
         <LaddersView odds={odds} />
       ) : nRows === 0 ? (
