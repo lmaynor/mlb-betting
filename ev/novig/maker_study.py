@@ -2,9 +2,10 @@
 ev.novig.maker_study -- the pre-registered measurement design for the Novig paper maker
 falsification study (NOV-03), Argon ruling 2026-11-12 Q4, encoded exactly as ruled.
 
-The study is NOT running. STUDY_ARMED is False, there is no driver, no scheduler and no job:
-this module is the evaluation config + the metric math, so that when (and only when) the study
-is launched by a separate decision, every number it is judged by already exists in code, dated
+The study is ARMED (armed by Luc's launch decision 2026-11-14; the launch runner is
+ev.novig.maker_runner; real-money stays refused (the only client the runner builds is the paper
+sandbox + public read-only catalog)). This module is the evaluation config + the metric math,
+so that when the study runs, every number it is judged by already exists in code, dated
 and unchangeable without a visible diff. Bars are pre-registered: zero re-litigation.
 
 Window: 2026-11-14 .. 2026-11-28 (14 calendar days) or n = 150 venue-matched paper fills with
@@ -24,7 +25,7 @@ from __future__ import annotations
 import math
 from datetime import date
 
-STUDY_ARMED = False                 # <-- the study does not run until a separate launch decision
+STUDY_ARMED = True                  # armed by Luc's launch decision 2026-11-14; see module docstring
 
 WINDOW_START = date(2026, 11, 14)
 WINDOW_END = date(2026, 11, 28)

@@ -150,7 +150,7 @@ def test_lockout_helpers():
 
 # ---------------------------------------------------------------- study config + evaluation
 def test_study_config_is_the_ruling_verbatim():
-    assert ms.STUDY_ARMED is False                                  # ships disabled
+    assert ms.STUDY_ARMED is True                                   # armed at launch 2026-11-14
     assert (ms.WINDOW_START.isoformat(), ms.WINDOW_END.isoformat()) == ("2026-11-14", "2026-11-28")
     assert ms.TARGET_FILLS == 150 and ms.EARLY_KILL_FILLS == 50 and ms.EARLY_KILL_DAY == 7
     assert ms.PROMOTION_BARS["pickoff_drift"] == {"mean_pp_max": 1.50, "upper_ci_pp_max": 2.00}
