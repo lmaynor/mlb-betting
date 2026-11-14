@@ -1,0 +1,160 @@
+{
+ "events": [
+  {
+   "eventId": "01a1ce81-338f-78a3-b182-5044721e7b45",
+   "description": "Oklahoma City Thunder @ Los Angeles Clippers",
+   "startsTs": 1794627300000
+  },
+  {
+   "eventId": "ev-unknown",
+   "description": "Seattle SuperSonics @ Los Angeles Clippers",
+   "startsTs": 1794627300000
+  }
+ ],
+ "markets": [
+  {
+   "marketId": "01a1d7f2-2bad-78f1-abea-0b8346a01b58",
+   "eventId": "01a1ce81-338f-78a3-b182-5044721e7b45",
+   "marketType": "REBOUNDS",
+   "description": "Brook Lopez 1.5 REBOUNDS",
+   "strike": "1.5",
+   "status": "OPEN",
+   "voids": "FMV",
+   "fee": {
+    "coefficient": "0.06",
+    "makerCredit": "0.25",
+    "charged": "WHEN_LIVE"
+   },
+   "outcomes": [
+    {
+     "name": "Over 1.5",
+     "outcomeId": "01a1d7f2-2bad-78f1-abea-0b9a8f51b9fb"
+    },
+    {
+     "name": "Under 1.5",
+     "outcomeId": "01a1d7f2-2bad-78f1-abea-0ba4093f78fd"
+    }
+   ]
+  },
+  {
+   "marketId": "01a1d7a0-25d5-7ea3-954d-9a7d765325a5",
+   "eventId": "01a1ce81-338f-78a3-b182-5044721e7b45",
+   "marketType": "THREE_POINTERS_MADE",
+   "description": "Darius Garland 6.5 THREE_POINTERS_MADE",
+   "strike": "6.5",
+   "status": "OPEN",
+   "voids": "FMV",
+   "fee": {
+    "coefficient": "0.06",
+    "makerCredit": "0.25",
+    "charged": "WHEN_LIVE"
+   },
+   "outcomes": [
+    {
+     "name": "Over 6.5",
+     "outcomeId": "01a1d7a0-25d5-7ea3-954d-9a8037b3d926"
+    },
+    {
+     "name": "Under 6.5",
+     "outcomeId": "01a1d7a0-25d5-7ea3-954d-9a9876125946"
+    }
+   ]
+  },
+  {
+   "marketId": "01a1d7f2-2baa-7f82-a66b-43a68de09218",
+   "eventId": "01a1ce81-338f-78a3-b182-5044721e7b45",
+   "marketType": "POINTS",
+   "description": "Kenrich Williams 19.5 POINTS",
+   "strike": "19.5",
+   "status": "OPEN",
+   "voids": "FMV",
+   "fee": {
+    "coefficient": "0.06",
+    "makerCredit": "0.25",
+    "charged": "WHEN_LIVE"
+   },
+   "outcomes": [
+    {
+     "name": "Over 19.5",
+     "outcomeId": "01a1d7f2-2baa-7f82-a66b-43b03dc5ff54"
+    },
+    {
+     "name": "Under 19.5",
+     "outcomeId": "01a1d7f2-2baa-7f82-a66b-43cb4c345aa7"
+    }
+   ]
+  },
+  {
+   "marketId": "01a1d596-cba4-7263-a01c-66b15f85d505",
+   "eventId": "01a1ce81-338f-78a3-b182-5044721e7b45",
+   "marketType": "ASSISTS",
+   "description": "Isaiah Hartenstein 9.5 ASSISTS",
+   "strike": "9.5",
+   "status": "OPEN",
+   "voids": "FMV",
+   "fee": {
+    "coefficient": "0.06",
+    "makerCredit": "0.25",
+    "charged": "WHEN_LIVE"
+   },
+   "outcomes": [
+    {
+     "name": "Over 9.5",
+     "outcomeId": "01a1d596-cba4-7263-a01c-66c1b01af502"
+    },
+    {
+     "name": "Under 9.5",
+     "outcomeId": "01a1d596-cba4-7263-a01c-66db3a2f350d"
+    }
+   ]
+  },
+  {
+   "marketId": "01a1d7f2-2bad-78f1-abea-0bb8649ee1bc",
+   "eventId": "01a1ce81-338f-78a3-b182-5044721e7b45",
+   "marketType": "REBOUNDS_PROTECTED",
+   "description": "Brook Lopez 1.5 REBOUNDS_PROTECTED",
+   "strike": "1.5",
+   "status": "OPEN",
+   "voids": "FMV",
+   "fee": {
+    "coefficient": "0.06",
+    "makerCredit": "0.25",
+    "charged": "WHEN_LIVE"
+   },
+   "outcomes": [
+    {
+     "name": "Over 1.5",
+     "outcomeId": "01a1d7f2-2bad-78f1-abea-0bc53425e3da"
+    },
+    {
+     "name": "Under 1.5",
+     "outcomeId": "01a1d7f2-2bad-78f1-abea-0bd79c3df4aa"
+    }
+   ]
+  },
+  {
+   "marketId": "01a1d7f5-b820-7483-b516-da6a3f1f4247",
+   "eventId": "01a1ce81-338f-78a3-b182-5044721e7b45",
+   "marketType": "POINTS_REBOUNDS_ASSISTS",
+   "description": "Keaton Wagler 15.5 POINTS_REBOUNDS_ASSISTS",
+   "strike": "15.5",
+   "status": "OPEN",
+   "voids": "FMV",
+   "fee": {
+    "coefficient": "0.06",
+    "makerCredit": "0.25",
+    "charged": "WHEN_LIVE"
+   },
+   "outcomes": [
+    {
+     "name": "Over 15.5",
+     "outcomeId": "01a1d7f5-b820-7483-b516-da7383aa9b0a"
+    },
+    {
+     "name": "Under 15.5",
+     "outcomeId": "01a1d7f5-b820-7483-b516-da8f960144ba"
+    }
+   ]
+  }
+ ]
+}
