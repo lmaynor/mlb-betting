@@ -8,7 +8,8 @@ import { useMyBooks } from '@/lib/use-my-books'
 import { sportsWithRows, type SportSlug } from '@/lib/sports'
 import { PRE_LAUNCH } from '@/lib/launch'
 import { useIsMobile } from '@/components/ui/mobile-sheet'
-import { buildArbRows, buildLongshotRows, buildScreenRows, computeMiddles, computeOutliers, STAT_LABEL, type ArbRow, type BoardRow, type DevigMethod, type LongshotRow, type LongshotSubfilter, type MiddleResult, type OddsBoard, type OddsScreenMode, type ScreenRow, type SideFilter } from '@/lib/odds-screen'
+import { buildArbRows, buildScreenRows, computeMiddles, computeOutliers, STAT_LABEL, type ArbRow, type BoardRow, type DevigMethod, type LongshotRow, type LongshotSubfilter, type MiddleResult, type OddsBoard, type OddsScreenMode, type ScreenRow, type SideFilter } from '@/lib/odds-screen'
+import { groupLadderRows, selectLadderFeed, ladderGroupFor, type LadderGroup, type LadderSegment } from '@/lib/ladders'
 import { SportFilter, SortKey, LinesFilter, ArbView, OutlierView, OutlierOddsBand, SPORT_KEYS, BOOK_ORDER, PAGE, MIN_REF, LONGSHOT_MIN_REF, NEAR_ARB_PCT, MIDDLE_MIN_REF, POLL_MS, BadgeKey, BADGE_KEYS } from './odds-constants'
 import { usd } from './odds-format'
 
@@ -75,6 +76,8 @@ export function useOddsScreen({ initial, initialLocked, fullAccess }: { initial:
   const [longSub, setLongSub] = useState<LongshotSubfilter>('all')
   const [oddsMin, setOddsMin] = useState(0)
   const [useCurve, setUseCurve] = useState(true)
+  const [ladderSegment, setLadderSegment] = useState<LadderSegment>('curves')
+  const [ladderAll, setLadderAll] = useState(false)
   const [outlierGap, setOutlierGap] = useState(8)
   const [outlierReqEv, setOutlierReqEv] = useState(false)
   const [outlierOddsBand, setOutlierOddsBand] = useState<OutlierOddsBand>('all')
@@ -219,6 +222,17 @@ export function useOddsScreen({ initial, initialLocked, fullAccess }: { initial:
     return scoped.filter(r => r.player.toLowerCase().includes(needle) || r.away.toLowerCase().includes(needle) || r.home.toLowerCase().includes(needle))
   }, [scoped, deferredQ])
 
+  const nflFiltered = useMemo(() => filtered.filter(r => r.game_key.startsWith('nfl:')), [filtered])
+  const ladderGroupsAll = useMemo(() => groupLadderRows(nflFiltered, Date.now()), [nflFiltered])
+  const ladderTotal = useMemo(() => selectLadderFeed(ladderGroupsAll, ladderSegment, true).length, [ladderGroupsAll, ladderSegment])
+  const ladders = useMemo(() => selectLadderFeed(ladderGroupsAll, ladderSegment, ladderAll), [ladderGroupsAll, ladderSegment, ladderAll])
+
+  const inspectLadder = useMemo<LadderGroup | null>(() => {
+    if (!inspectItem || mode === 'longshots') return null
+    const row = inspectItem.type === 'middles' ? inspectItem.row.low : inspectItem.row.row
+    return ladderGroupFor(allRows, row.game_key, row.player_norm, row.stat, Date.now())
+  }, [inspectItem, mode, allRows])
+
   // ---- Standard +EV: one row per prop side
   const screen = useMemo(() => {
     if (mode !== 'ev') return []
@@ -262,14 +276,6 @@ export function useOddsScreen({ initial, initialLocked, fullAccess }: { initial:
     return computeMiddles(filtered, { bettable, includeExchanges: exchanges, maxCostPct: midCost, minGap: midGap, onlyPositiveEv: midPosEv, refs, method, minRef: MIDDLE_MIN_REF, useCurve })
   }, [mode, filtered, bettable, exchanges, midCost, midGap, midPosEv, refs, method, useCurve])
 
-  // ---- Alt & Longshots: one row per line, best EV (either side) first
-  const longshots = useMemo(() => {
-    if (mode !== 'longshots') return []
-    const rows = buildLongshotRows(filtered, { refs, method, bettable, minRef: LONGSHOT_MIN_REF, useCurve, sub: longSub, minEv: Math.max(minEv, 0), minOverAm: oddsMin })
-    return rows.sort((a, b) => (b.bestEv ?? -Infinity) - (a.bestEv ?? -Infinity))
-  }, [mode, filtered, refs, method, bettable, useCurve, longSub, minEv, oddsMin])
-
-
   // Mode badges. The ACTIVE mode's badge is its own row count (already computed for the table). The other modes' counts
   // are computed one engine at a time when the browser is idle, from deferred inputs, so a filter change or a mode click
   // paints the table first and never runs all six engines in one task.
@@ -295,9 +301,11 @@ export function useOddsScreen({ initial, initialLocked, fullAccess }: { initial:
           return buildArbRows(d.scoped, { bettable: d.bettable, includeExchanges: d.exchanges, minNetArbPct: 0 }).length
         case 'middles':
           return computeMiddles(d.scoped, { bettable: d.bettable, includeExchanges: d.exchanges, maxCostPct: 5, minGap: 0, onlyPositiveEv: false, refs: d.refs, method: d.method, minRef: MIDDLE_MIN_REF, useCurve: d.useCurve }).length
-        case 'longshots':
-          return buildLongshotRows(d.scoped, { refs: d.refs, method: d.method, bettable: d.bettable, minRef: LONGSHOT_MIN_REF, useCurve: d.useCurve, sub: 'all', minEv: 0, minOverAm: 0 })
-            .filter(r => r.bestEv != null && r.bestEv >= floor * 100).length
+        case 'longshots': {
+          const nflScoped = d.scoped.filter(r => r.game_key.startsWith('nfl:'))
+          const groups = groupLadderRows(nflScoped, Date.now())
+          return selectLadderFeed(groups, 'all', false).length
+        }
       }
     }
     const todo = BADGE_KEYS.filter(k => k !== mode)
@@ -321,7 +329,7 @@ export function useOddsScreen({ initial, initialLocked, fullAccess }: { initial:
     : mode === 'outliers' ? outliers.length
     : mode === 'arb' ? arbs.length
     : mode === 'middles' ? middles.length
-    : longshots.length
+    : ladders.length
   const badgeFor = (k: BadgeKey): number | null => k === mode ? nRows : (badgeVals[k] ?? null)
 
   const meta = useMemo(() => {
@@ -378,9 +386,9 @@ export function useOddsScreen({ initial, initialLocked, fullAccess }: { initial:
     : mode === 'longshots'
       ? { title: 'No longshots clear these filters', body: 'Set the strategy to All, lower the odds range or MIN EV, or turn on curve-fitted fair value. Alt rungs are quoted by few books, so many have no fair value without the curve.' }
       : { title: 'Nothing clears these filters', body: 'Set MIN EV to All to see every line, widen the devig books, or clear the prop and game filters. A +EV row needs at least three devig books pricing the line both ways.' }
-  const refsNote = mode === 'longshots' ? 'Two books behind a fair value (the curve stands in below that).' : 'Needs 3 books behind a row.'
+  const refsNote = mode === 'longshots' ? 'Needs 4 books behind a verified ladder.' : 'Needs 3 books behind a row.'
 
-  return { isMobile, meta, nRows, loading, refresh, mode, limit, setLimit, locked, allRows, columns, inspectItem, setInspectItem, stat, setStat, game, setGame, side, setSide, lines, setLines, minEv, setMinEv, setQ, method, setMethod, refs, setRefs, setShown, sort, setSort, arbView, setArbView, exchanges, setExchanges, outlayText, setOutlayText, midCost, setMidCost, midGap, setMidGap, midPosEv, setMidPosEv, longSub, setLongSub, oddsMin, setOddsMin, useCurve, setUseCurve, outlierGap, setOutlierGap, outlierReqEv, setOutlierReqEv, outlierOddsBand, setOutlierOddsBand, outlierMinBooks, setOutlierMinBooks, outlierView, setOutlierView, myBooks, mobileFiltersOpen, setMobileFiltersOpen, bookList, defaultShown, shownSet, statOptions, games, refsNote, sport, setSport, sportOptions, q, activeFilterCount, switchMode, badgeFor, copied, revealed, revealMsg, setRevealMsg, bankroll, setMobileView, handleReveal, screen, outliers, arbs, middles, longshots, outlay, copyHedge, copyMiddle, fullAccess, refWeight, refSet, mobileView, unpublished, emptyBody }
+  return { isMobile, meta, nRows, loading, refresh, mode, limit, setLimit, locked, allRows, columns, inspectItem, setInspectItem, stat, setStat, game, setGame, side, setSide, lines, setLines, minEv, setMinEv, setQ, method, setMethod, refs, setRefs, setShown, sort, setSort, arbView, setArbView, exchanges, setExchanges, outlayText, setOutlayText, midCost, setMidCost, midGap, setMidGap, midPosEv, setMidPosEv, longSub, setLongSub, oddsMin, setOddsMin, useCurve, setUseCurve, outlierGap, setOutlierGap, outlierReqEv, setOutlierReqEv, outlierOddsBand, setOutlierOddsBand, outlierMinBooks, setOutlierMinBooks, outlierView, setOutlierView, myBooks, mobileFiltersOpen, setMobileFiltersOpen, bookList, defaultShown, shownSet, statOptions, games, refsNote, sport, setSport, sportOptions, q, activeFilterCount, switchMode, badgeFor, copied, revealed, revealMsg, setRevealMsg, bankroll, setMobileView, handleReveal, screen, outliers, arbs, middles, outlay, copyHedge, copyMiddle, fullAccess, refWeight, refSet, mobileView, unpublished, emptyBody, ladderSegment, setLadderSegment, ladderAll, setLadderAll, ladders, ladderTotal, inspectLadder }
 }
 
 export type OddsScreen = ReturnType<typeof useOddsScreen>

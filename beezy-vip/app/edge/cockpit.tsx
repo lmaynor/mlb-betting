@@ -375,13 +375,14 @@ export function OddsMatrix({ r }: { r: CockpitRow }) {
 type NbaTab = 'trends' | 'shots' | 'prices'
 const NBA_TABS: { id: NbaTab; label: string }[] = [{ id: 'trends', label: 'Trends' }, { id: 'shots', label: 'Shots' }, { id: 'prices', label: 'Prices' }]
 
-function Inspector({ r, renderMlbExtras, onClose }: { r: CockpitRow; renderMlbExtras?: (r: CockpitRow) => ReactNode; onClose: () => void }) {
+function Inspector({ r, renderMlbExtras, renderLadderSection, onClose }: { r: CockpitRow; renderMlbExtras?: (r: CockpitRow) => ReactNode; renderLadderSection?: (r: CockpitRow) => ReactNode; onClose: () => void }) {
   const under = isUnder(r)
   const accent = SPORT_PILLARS[r.sport]?.accent ?? GOOD
   const fair = r.p_fair != null && r.p_fair > 0 && r.p_fair < 1 ? fairAmerican(r.p_fair) : null
   const book = bookDisplay(r.book)
   const form = r.recentForm
   const mlbExtras = r.sport === 'mlb' && renderMlbExtras ? renderMlbExtras(r) : null
+  const ladderSection = renderLadderSection ? renderLadderSection(r) : null
   const [nbaTab, setNbaTab] = useState<NbaTab>('trends')
   const logPanels = (
     <>
@@ -458,6 +459,8 @@ function Inspector({ r, renderMlbExtras, onClose }: { r: CockpitRow; renderMlbEx
           <Panel title="MULTI-BOOK ODDS MATRIX" sub={r.all_books ? `${onshoreQuotes(r.all_books).length} books` : undefined}>
             <OddsMatrix r={r} />
           </Panel>
+
+          {ladderSection}
         </>
       )}
     </div>
@@ -522,7 +525,7 @@ function Segmented<T extends string>({ value, options, onChange, label }: { valu
 type SortKey = 'ev' | 'l10' | 'start'
 
 // -- Cockpit --------------------------------------------------------------------------------------------------------
-export function Cockpit({ feed, sport, updated, loading, onRefresh, renderMlbExtras, initialPropId = null }: {
+export function Cockpit({ feed, sport, updated, loading, onRefresh, renderMlbExtras, renderLadderSection, initialPropId = null }: {
   feed: CockpitFeed | null
   sport: CockpitSport
   /** player-search deep link (T-4): the row to open in the inspector on arrival */
@@ -531,6 +534,7 @@ export function Cockpit({ feed, sport, updated, loading, onRefresh, renderMlbExt
   loading: boolean
   onRefresh: () => void
   renderMlbExtras?: (r: CockpitRow) => ReactNode
+  renderLadderSection?: (r: CockpitRow) => ReactNode
 }) {
   const [market, setMarket] = useState<string>('all')
   const [sort, setSort] = useState<SortKey>('ev')
@@ -672,7 +676,7 @@ export function Cockpit({ feed, sport, updated, loading, onRefresh, renderMlbExt
             ))}
           </div>
           <aside ref={detailRef} className={`cockpit-detail${drawer ? ' is-open' : ''}`} aria-label="Prop inspector">
-            {selected && <Inspector key={selected.id} r={selected} renderMlbExtras={renderMlbExtras} onClose={() => setDrawer(false)} />}
+            {selected && <Inspector key={selected.id} r={selected} renderMlbExtras={renderMlbExtras} renderLadderSection={renderLadderSection} onClose={() => setDrawer(false)} />}
           </aside>
         </div>
       )}

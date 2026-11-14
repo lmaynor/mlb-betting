@@ -21,7 +21,29 @@ export type SideFilter = 'both' | 'over' | 'under'
 export type OddsScreenMode = 'ev' | 'outliers' | 'arb' | 'middles' | 'longshots' | 'sgp'
 export type LongshotSubfilter = 'all' | 'plus_ev_over' | 'fade_under'
 
-export interface BoardBook { book: string; over: number | null; under: number | null }
+export interface BoardBook {
+  book: string
+  over: number | null
+  under: number | null
+  /** the book market's last_update ISO timestamp (ev/odds_board.py) */
+  ts?: string | null
+  /** this side's price is a placeholder cap (<= -5000 or >= +10000) */
+  over_cap?: boolean
+  under_cap?: boolean
+  /** the book has not moved this quote since the group's open while the main line moved */
+  stale_opener?: boolean
+}
+
+export interface LadderBestSide {
+  book: string
+  american: number
+  /** leave-one-out de-vigged consensus P(over) at this exact line, target book excluded */
+  p_cons_loo: number | null
+  /** leave-one-out dispersion (MAD of fairs); null with fewer than 2 reference books */
+  disp_loo: number | null
+  n_ref_loo: number
+}
+
 export interface BoardRow {
   key: string
   game_key: string
@@ -47,6 +69,29 @@ export interface BoardRow {
   curve_n?: number
   /** the skater's even-strength line id from nhl.data.lines, annotated at board production; absent when the skater is in no derived line */
   line_id?: string | null
+  /** cross-book dispersion at this exact line (MAD of per-book de-vigged P(over)); the outlier gate field (IA Q5c) */
+  disp?: number | null
+  /** two-sided reference books at this line, >120min laggards excluded (ev/odds_board.py) */
+  n_ref?: number
+  /** de-vigged consensus P(over) at this exact line */
+  p_cons?: number | null
+  /** reference books at this line updated within 30 min of board build */
+  n_fresh_ref?: number
+  /** median two-way overround at this line (0.045 = 4.5%) */
+  rung_vig?: number | null
+  best_over?: LadderBestSide | null
+  best_under?: LadderBestSide | null
+  /** no book quotes this line two-sided */
+  is_one_sided?: boolean
+  /** some book posts a placeholder cap price at this line */
+  is_placeholder_cap?: boolean
+  /** distinct books quoting any rung of this (game, player, stat) group */
+  grp_books_any?: number
+  /** distinct books quoting at least one two-sided rung of the group */
+  grp_books_2sided?: number
+  /** the group's modal (main) line when the board first saw the group */
+  modal_open?: number | null
+  modal_first_ts?: string | null
 }
 export interface OddsBoard {
   sport: string
@@ -253,6 +298,7 @@ export interface OutlierRow {
   trueEvPct: number | null
   fairAmerican: number | null
   fairSource: 'consensus' | 'curve' | null
+  disp?: number | null
 }
 
 export interface OutlierOptions {
@@ -359,14 +405,17 @@ export function computeOutliers(rows: BoardRow[], opts: OutlierOptions): Outlier
         nRef += 1
       }
 
+      const dispBlocked = row.disp != null && row.disp > 0.06
       let pOver: number | null = null
       let fairSource: 'consensus' | 'curve' | null = null
-      if (nRef >= minRef) {
-        pOver = sumFair / nRef
-        fairSource = 'consensus'
-      } else if (useCurve && row.curve_fair_over != null && row.curve_fair_over > 0 && row.curve_fair_over < 1) {
-        pOver = row.curve_fair_over
-        fairSource = 'curve'
+      if (!dispBlocked) {
+        if (nRef >= minRef) {
+          pOver = sumFair / nRef
+          fairSource = 'consensus'
+        } else if (useCurve && row.curve_fair_over != null && row.curve_fair_over > 0 && row.curve_fair_over < 1) {
+          pOver = row.curve_fair_over
+          fairSource = 'curve'
+        }
       }
 
       let trueEvPct: number | null = null
@@ -410,6 +459,7 @@ export function computeOutliers(rows: BoardRow[], opts: OutlierOptions): Outlier
         trueEvPct,
         fairAmerican,
         fairSource,
+        disp: row.disp ?? null,
       })
     }
   }

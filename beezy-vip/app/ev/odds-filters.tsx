@@ -1,7 +1,7 @@
 import { LeagueFilter } from '@/components/ui/league-filter'
 import { GAME_LINES_ONLY, gameLinesHref, isGameLinesOnly } from '@/lib/sports'
 import { STAT_LABEL, type SideFilter } from '@/lib/odds-screen'
-import { SportFilter, SortKey, HAIR, GREEN, SHARP_PRESET, MIN_EV, ODDS_MIN, PAGE, MID_COST, MID_GAP, OUTLIER_GAP_OPTIONS, OUTLIER_ODDS_OPTIONS, OUTLIER_MIN_BOOKS, MODES } from './odds-constants'
+import { SportFilter, SortKey, HAIR, GREEN, SHARP_PRESET, MIN_EV, PAGE, MID_COST, MID_GAP, OUTLIER_GAP_OPTIONS, OUTLIER_ODDS_OPTIONS, OUTLIER_MIN_BOOKS, MODES } from './odds-constants'
 import { startLabel } from './odds-format'
 import { Field, Select, Pill, PillGroup, BookPicker } from './odds-controls'
 import { OddsScreen } from './use-odds-screen'
@@ -84,7 +84,7 @@ export function MobileFilterBar({ odds }: { odds: OddsScreen }) {
 }
 
 export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
-  const { mode, sport, setSport, sportOptions, stat, setStat, game, setGame, side, setSide, lines, setLines, minEv, setMinEv, q, setQ, method, setMethod, refs, setRefs, setShown, sort, setSort, setLimit, arbView, setArbView, exchanges, setExchanges, outlayText, setOutlayText, midCost, setMidCost, midGap, setMidGap, midPosEv, setMidPosEv, longSub, setLongSub, oddsMin, setOddsMin, useCurve, setUseCurve, outlierGap, setOutlierGap, outlierReqEv, setOutlierReqEv, outlierOddsBand, setOutlierOddsBand, outlierMinBooks, setOutlierMinBooks, outlierView, setOutlierView, myBooks, switchMode, bookList, defaultShown, shownSet, columns, statOptions, games, badgeFor, refsNote } = odds
+  const { mode, sport, setSport, sportOptions, stat, setStat, game, setGame, side, setSide, lines, setLines, minEv, setMinEv, q, setQ, method, setMethod, refs, setRefs, setShown, sort, setSort, setLimit, arbView, setArbView, exchanges, setExchanges, outlayText, setOutlayText, midCost, setMidCost, midGap, setMidGap, midPosEv, setMidPosEv, useCurve, setUseCurve, outlierGap, setOutlierGap, outlierReqEv, setOutlierReqEv, outlierOddsBand, setOutlierOddsBand, outlierMinBooks, setOutlierMinBooks, outlierView, setOutlierView, myBooks, switchMode, bookList, defaultShown, shownSet, columns, statOptions, games, badgeFor, refsNote } = odds
   return (
     <section className="mb-2.5 rounded-xl border border-separator-border bg-background-primary-default shadow-card" aria-label="Filters">
       <div className="py-2.5 px-3.5 flex gap-y-2.5 gap-x-4.5 flex-wrap items-center">
@@ -275,33 +275,6 @@ export function DesktopFilterBar({ odds }: { odds: OddsScreen }) {
                   style={{ background: 'var(--color-background-secondary-default)', color: 'var(--color-text-primary)', border: `1px solid ${HAIR}`, borderRadius: '6px', height: '34px', padding: '0 10px', fontSize: '12px', width: '90px', fontFamily: 'var(--font-mono), monospace' }}
                 />
               </span>
-            </Field>
-          </>
-        )}
-        {mode === 'longshots' && (
-          <>
-            <Field label="Strategy">
-              <PillGroup>
-                <Pill active={longSub === 'all'} onClick={() => { setLongSub('all'); setLimit(PAGE) }} title="Every alt line and every over paying +200 or more, with both angles priced">All Tail Lines</Pill>
-                <Pill active={longSub === 'plus_ev_over'} onClick={() => { setLongSub('plus_ev_over'); setLimit(PAGE) }} title="Longshot Over/Yes price pays more than its true fair probability">Buy Over (+EV Milestone)</Pill>
-                <Pill active={longSub === 'fade_under'} onClick={() => { setLongSub('fade_under'); setLimit(PAGE) }} title="House-side play: fade an overpriced retail milestone by buying Under or Exchange NO">Lay the Longshot (Buy Under / NO)</Pill>
-              </PillGroup>
-            </Field>
-            <Field label="Min payout">
-              <PillGroup>
-                {ODDS_MIN.map(m => <Pill key={m.v} active={oddsMin === m.v} onClick={() => { setOddsMin(m.v); setLimit(PAGE) }}>{m.label}</Pill>)}
-              </PillGroup>
-            </Field>
-            <Field label="Min EV">
-              <PillGroup>
-                {MIN_EV.map(m => <Pill key={m.v} active={minEv === m.v} onClick={() => setMinEv(m.v)}>{m.label}</Pill>)}
-              </PillGroup>
-            </Field>
-            <Field label="Fair source">
-              <PillGroup>
-                <Pill active={useCurve} onClick={() => setUseCurve(true)} title="Uses exact multi-book de-vigged fair odds when available, or interpolates from the player's main-line curve when fewer than 2 books price an alt rung">Multi-Book + Player Curve</Pill>
-                <Pill active={!useCurve} onClick={() => setUseCurve(false)} title="Requires at least 2 reference books quoting this exact alternate line">Exact Books Only</Pill>
-              </PillGroup>
             </Field>
           </>
         )}

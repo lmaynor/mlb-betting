@@ -372,6 +372,8 @@ export interface CockpitRow {
   shadow:       boolean          // sweep signal: evidence only, no stake sizing or Beezy score
   player:       string | null
   player_id:    number | string | null
+  player_norm?: string | null
+  game_key?:    string | null
   /** headshot image id resolved server-side by name + team (NFL: nfl.com token; the feed's player_id is not an image id) */
   headshot_id?: number | string | null
   team:         string | null
