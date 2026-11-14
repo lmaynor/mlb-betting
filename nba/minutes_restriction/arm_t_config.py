@@ -134,6 +134,40 @@ MAX_ABSTENTION_RATE_GROUPED = 0.20
 LOGLOSS_MIN_GAIN_NATS = 0.010
 LOGLOSS_MAX_P = 0.05
 
+#: FRAME LOCK (Argon frame-provenance ruling, 2026-11-13, pre-registered
+#: BEFORE the NBC backfill merge completed, per the ruling's Q3): the
+#: graded run uses EXCLUSIVELY the rebuilt canonical case frame
+#: (case_frame.parquet, built by build_cases over the complete 13,729-file
+#: GCS report backfill). A graded run executed on any other frame is VOID
+#: under the ruling. The graded path must assert the loaded frame's
+#: SHA-256 equals this lock and refuse (exit 2) on any mismatch.
+CANONICAL_FRAME_NAME = "case_frame.parquet"
+CANONICAL_FRAME_SHA256 = "86506b8a15703de7c6cd5f04bccf9b9876db4570ca96b2a4131b33786ad2ec53"
+CANONICAL_FRAME_ROWS = 5365
+CANONICAL_FRAME_COHORT_N = 227
+
+#: AMENDED Q4.2 (Argon amendment ruling, 2026-11-13; verbatim at
+#: ~/workspace/beezy/profitability/argon-armt-q42-amendment-VERBATIM-2026-11-13.md).
+#: The original Q4.2 assertion (rebuilt Arm S predictions reproduce
+#: predictions_export.csv to < 1e-9) rested on a false premise: Arm S is a
+#: Ridge fit on the dev seasons, and the dev fit set is frame-dependent
+#: (3,172 mirror rows vs 3,151 canonical rows), so canonical-frame
+#: predictions legitimately differ from the mirror-fit export. The amended
+#: precondition asserts invariance over cohort MEMBERSHIP, ground-truth
+#: OUTCOMES and Arm S DESIGNATIONS (never over predictions), and pins the
+#: canonical re-grade itself: the rebuilt-frame Arm S re-grade (dev fit
+#: n = 3,151) is the SOLE same-case comparator for the graded verdict. The
+#: legacy export comparator (cohort MAE 4.96, primary calibration 0.045)
+#: is reported in the grade artifact for lineage only. Pins below are the
+#: canonical re-grade's values at full precision (they round to Argon's
+#: stated 4.9503 / 0.0429 / 0.0409); the graded path must reproduce them
+#: within CANONICAL_PIN_TOL.
+CANONICAL_DEV_FIT_ROWS = 3151
+CANONICAL_ARM_S_COHORT_MAE = 4.9503365644069195        # stated: 4.9503
+CANONICAL_ARM_S_PRIMARY_CALIB_MAX = 0.04293001945280883  # stated: 0.0429 (bar: <= 0.050)
+CANONICAL_ARM_S_COHORT_CALIB_MAX = 0.04086340323502713   # stated: 0.0409
+CANONICAL_PIN_TOL = 1e-6
+
 #: The graded run's corpus requirement (Q1 scope lock + Q4 contract): the
 #: NBC Sports (Rotoworld) archive, complete over the resolved player set.
 GRADED_CORPUS = "nbc"
