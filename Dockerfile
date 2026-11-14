@@ -45,6 +45,8 @@ COPY scripts/backfill_ev_history.py ./scripts/backfill_ev_history.py
 COPY scripts/kalshi_rfq_daemon.py ./scripts/kalshi_rfq_daemon.py
 # NBA designation banker (official injury reports; disabled by default -- needs --execute + MINUTES_RUN_ENABLED=1).
 COPY scripts/bank_nba_designations.py ./scripts/bank_nba_designations.py
+COPY scripts/bank_first_scorer.py ./scripts/bank_first_scorer.py
+COPY scripts/derive_first_scorer_outcomes.py ./scripts/derive_first_scorer_outcomes.py
 COPY main.py          .
 COPY tweet_drafter.py .
 # Out-of-sample accuracy of the projection engine; tweet_drafter's reply_ammo analysis quotes it (optional there).
