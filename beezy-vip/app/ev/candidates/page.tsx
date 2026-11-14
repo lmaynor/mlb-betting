@@ -22,18 +22,16 @@ export default async function LiveCandidatesPage({ searchParams }: { searchParam
   const date = siteDateKey()
   const rawParams = await searchParams
   const filters = parsePickFilters(rawParams)
-  const tierParam = rawParams.tier || 'all'
+  const typeParam = filters.type ?? 'all'
   const { candidates } = await loadTopPlayerPicks(date)
   // The ten best of what the filters leave: "NFL" is the ten best NFL picks, not the NFL rows inside the overall ten.
   const top = filterTopPicks(candidates, filters)
   const filtered = activeFilterCount(filters) > 0
 
+  // filterTopPicks has already applied ?type= (and the ?tier= shim); with no type chosen, the board
+  // defaults to the actionable cut, official plays and +EV outliers.
   const actionable = top.filter(p => isOfficialCardPlay(p) || isEvOutlier(p))
-  const displayPicks = tierParam === 'official'
-    ? top.filter(isOfficialCardPlay)
-    : tierParam === 'outliers'
-    ? top.filter(isEvOutlier)
-    : (actionable.length > 0 ? actionable : top)
+  const displayPicks = filters.type ? top : (actionable.length > 0 ? actionable : top)
 
   const showResult = displayPicks.some(p => p.result != null)
 
@@ -45,18 +43,22 @@ export default async function LiveCandidatesPage({ searchParams }: { searchParam
           <div>
             <h1 className="text-title-2-bold text-text-primary">Live Candidates</h1>
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-              <span className="mono text-caption-2-medium text-text-secondary">Tier</span>
+              <span className="mono text-caption-2-medium text-text-secondary">Signal Type</span>
               {[
                 { id: 'all', label: 'All Actionable' },
-                { id: 'official', label: 'Official Plays (Daily Card)' },
-                { id: 'outliers', label: '+EV Outliers' },
+                { id: 'official', label: 'Official Plays' },
+                { id: 'confluence', label: 'Confluence' },
+                { id: 'outlier', label: '+EV Outliers' },
               ].map(t => {
-                const active = tierParam === t.id
-                const q = new URLSearchParams({ ...rawParams, tier: t.id }).toString()
+                const active = typeParam === t.id
+                const rest = { ...rawParams }
+                delete rest.tier
+                delete rest.type
+                const q = new URLSearchParams(t.id === 'all' ? rest : { ...rest, type: t.id }).toString()
                 return (
                   <Link
                     key={t.id}
-                    href={`/ev/candidates?${q}`}
+                    href={q ? `/ev/candidates?${q}` : '/ev/candidates'}
                     className={cx(
                       'button-press-motion inline-flex min-h-11 items-center rounded-2lg border px-3 text-body-2-medium no-underline',
                       active
@@ -80,10 +82,12 @@ export default async function LiveCandidatesPage({ searchParams }: { searchParam
         </p>
 
         <p className="mb-3 max-w-[90ch] text-body-2-regular text-text-secondary">
-          {tierParam === 'official'
+          {typeParam === 'official'
             ? 'Official plays inside today\'s top ten. The full card, with no ten-row window, is Today\'s Card.'
-            : tierParam === 'outliers'
+            : typeParam === 'outlier'
             ? '+EV outliers inside today\'s top ten: one book\'s price out of line with the pack, no model agreement needed. Not official plays.'
+            : typeParam === 'confluence'
+            ? 'Confluence candidates inside today\'s top ten: the projection model and the market independently favor the same side. Not official plays.'
             : 'The ten highest-scored plays across all sports right now, cut to the actionable rows: official plays and +EV outliers. Rows leave this board when their game starts; Today\'s Card keeps its plays.'}
         </p>
 

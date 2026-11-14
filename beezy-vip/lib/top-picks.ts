@@ -9,7 +9,7 @@ import { beezyscore } from '@/lib/beezy-score'
 import { collapseBooks } from '@/lib/dedupe'
 import { betKind, type PickKind } from '@/lib/pick-systems'
 import { propStatLabel, type SportSlug } from '@/lib/sports'
-import { matchesBook, matchesSignal, matchesTier, type PickFilters, type PickSort } from '@/lib/picks-filters'
+import { matchesBand, matchesBook, matchesSignal, type PickFilters, type PickSort, type SignalType } from '@/lib/picks-filters'
 import { matchesSearch, searchHaystack } from '@/lib/team-directory'
 import { pickLabel } from '@/lib/tokens'
 import type { Bet, SportProjectionRow } from '@/lib/types'
@@ -180,6 +180,16 @@ export function selectNearMisses(candidates: TopPick[], card: TopPick[], n = 5):
     .slice(0, n)
 }
 
+/** The Signal Type population filter (Q3(b)): which slice of the candidate pipeline a board shows. */
+export function matchesType(p: TopPick, type: SignalType | undefined): boolean {
+  switch (type) {
+    case undefined: return true
+    case 'official': return isOfficialCardPlay(p)
+    case 'confluence': return !!p.confluence || p.basis === 'confluence'
+    case 'outlier': return isEvOutlier(p)
+  }
+}
+
 /** Tier 2: Live +EV Outliers (market EV >= 3% without confluence or sitting outside card cap) */
 export function isEvOutlier(p: TopPick): boolean {
   const edge = p.edge ?? 0
@@ -301,7 +311,8 @@ export function recordOf(picks: Pick<TopPick, 'odds' | 'result'>[]): Record1u {
 export function filterTopPicks(picks: TopPick[], f: PickFilters, n = TOP_N): TopPick[] {
   const kept = picks.filter(p =>
     (!f.sport || p.sport === f.sport) &&
-    matchesTier(p.score, f.tier) &&
+    matchesBand(p.score, f.band) &&
+    matchesType(p, f.type) &&
     matchesSignal({ score: p.score, hasLine: p.odds != null, confluence: false, edge: p.edge }, f.signal) &&
     matchesBook(p.book, f) &&
     matchesSearch(searchHaystack(p.sport, p.who, p.what, p.game), f.q))

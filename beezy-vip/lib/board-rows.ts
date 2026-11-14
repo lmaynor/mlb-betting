@@ -7,7 +7,7 @@ import { isOffshore as hideOff, isOffshore } from '@/lib/offshore'
 import { getSystemByStat } from '@/lib/pick-systems'
 import type { MlbProjectionRow } from '@/lib/mlb-projections'
 import { probToAmerican } from '@/lib/odds'
-import { matchesBook, matchesSignal, matchesTier, type PickFilters, type PickSort } from '@/lib/picks-filters'
+import { matchesBand, matchesBook, matchesSignal, type PickFilters, type PickSort } from '@/lib/picks-filters'
 import type { SportSlug } from '@/lib/sports'
 import { playerSlug } from '@/lib/sport-assets'
 import { matchesSearch, searchHaystack } from '@/lib/team-directory'
@@ -225,7 +225,7 @@ export function applyPickFilters(rows: BoardRow[], f: PickFilters): BoardRow[] {
     (!f.game || r.gameKey === f.game) &&
     (!f.market || r.system === f.market) &&
     matchesSignal({ score: r.score, hasLine: r.hasLine, confluence: r.confluence, edge: r.modelEdge ?? r.marketEv }, f.signal) &&
-    matchesTier(r.score, f.tier) &&
+    matchesBand(r.score, f.band) &&
     (!f.result || (f.result === 'pending' ? r.result == null : r.result === f.result)) &&
     matchesBook(r.book, f) &&
     matchesSearch(rowSearchText(r), f.q))

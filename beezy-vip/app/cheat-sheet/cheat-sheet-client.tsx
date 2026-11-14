@@ -7,7 +7,7 @@ import { LockedNotice } from '@/components/picks/locked-notice'
 import { HeadshotImg } from '@/components/ui/sport-assets'
 import { LINK_REPLY, POST_LIMIT, postLength, type Sheet } from '@/lib/cheat-sheet-post'
 import { sportHref } from '@/lib/ia'
-import { scoreTier, TIER_COLOR, TIER_LABEL } from '@/lib/beezy-score'
+import { scoreTier, TIER_COLOR } from '@/lib/beezy-score'
 import { readableNotes } from '@/lib/bet-notes'
 import { SPORT_PILLARS, SPORT_SLUGS, type SportSlug } from '@/lib/sports'
 import { SYSTEM_COLOR, bookText } from '@/lib/tokens'
@@ -229,8 +229,6 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
   const list = sport === 'all' ? players : (sportPicks[sport] ?? [])
   const shown = list
   const allExpanded = shown.length > 0 && shown.every(p => expanded.has(p.key))
-  const strong = list.filter(p => scoreTier(p.score) === 'strong').length
-  const lean = list.filter(p => scoreTier(p.score) === 'lean').length
   const best = list.reduce((m, p) => Math.max(m, (p.edge ?? 0) * 100), 0)
   const ydayWins = yesterday.filter(p => p.result === 'win').length
   const ydayLosses = yesterday.filter(p => p.result === 'loss').length
@@ -297,8 +295,6 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
           {list.length > 0 && (
             <div className="py-[7px] px-4 border-b border-b-[color:var(--color-separator-border)] flex flex-wrap gap-2.5 items-center">
               <span className="mono text-micro text-text-secondary">{list.length} {list.length === 1 ? 'PLAY' : 'PLAYS'}</span>
-              {strong > 0 && <span className="ui-heading text-micro text-signal">{strong} STRONG</span>}
-              {lean > 0 && <span className="ui-heading text-micro text-signal">{lean} LEAN</span>}
               {best > 0 && <span className="ui-heading text-micro text-signal">BEST EDGE +{best.toFixed(1)}%</span>}
             </div>
           )}
@@ -364,14 +360,14 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
           <div className="border border-separator-border bg-background-primary-default p-4 rounded-[var(--radius)]">
             <div className="ui-heading text-micro text-text-secondary mb-2.5">Score legend</div>
             {[
-              { tier: 'strong', desc: 'Score 70+: large edge, many books agree' },
-              { tier: 'lean', desc: 'Score 45-69: positive edge, moderate confidence' },
-              { tier: 'watch', desc: 'Score under 45: small edge, never enough for this card' },
+              { tier: 'strong', range: '70+', desc: 'Large edge, many books agree' },
+              { tier: 'lean', range: '45-69', desc: 'Positive edge, moderate confidence' },
+              { tier: 'watch', range: 'Under 45', desc: 'Small edge, never enough for this card' },
             ].map(row => {
               const t = row.tier as 'strong' | 'lean' | 'watch'
               return (
                 <div key={t} className="flex items-center gap-2.5 mb-2">
-                  <span className="ui-heading text-micro py-[2px] px-[6px] shrink-0" style={{ borderRadius: '4px', color: TIER_COLOR[t], border: `1px solid ${TIER_COLOR[t]}` }}>{TIER_LABEL[t]}</span>
+                  <span className="ui-heading text-micro py-[2px] px-[6px] shrink-0" style={{ borderRadius: '4px', color: TIER_COLOR[t], border: `1px solid ${TIER_COLOR[t]}` }}>Score {row.range}</span>
                   <span className="mono text-micro text-text-secondary">{row.desc}</span>
                 </div>
               )

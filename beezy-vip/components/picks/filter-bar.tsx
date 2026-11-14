@@ -62,7 +62,7 @@ export function FilterBar({ sport = 'mlb', kind, fixedMarket = false, showResult
   const bookValue = books !== '' && books === mineKey ? 'MY' : book !== 'ALL' ? book.toLowerCase() : 'ALL'
 
   const active = [!fixedMarket && market !== 'ALL', signal !== 'ALL', bookValue !== 'ALL', sportParam !== 'all', result !== 'ALL', qParam !== ''].filter(Boolean).length
-  const clear = () => push(p => { for (const k of ['market', 'signal', 'book', 'books', 'sport', 'result', 'q', 'game', 'tier']) { if (!(fixedMarket && k === 'market')) p.delete(k) } })
+  const clear = () => push(p => { for (const k of ['market', 'signal', 'book', 'books', 'sport', 'result', 'q', 'game', 'band', 'type', 'tier']) { if (!(fixedMarket && k === 'market')) p.delete(k) } })
   const isMobile = useIsMobile(768)
   const [mobileOpen, setMobileOpen] = useState(false)
 
