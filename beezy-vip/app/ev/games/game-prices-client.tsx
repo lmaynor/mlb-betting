@@ -28,7 +28,8 @@ const SORTS: { v: GameSort; l: string }[] = [{ v: 'ev', l: 'Best EV' }, { v: 'ti
 const PAGE = 120
 const OUTLAY = 100
 // The banker rewrites the boards every 30 minutes, so a faster poll only re-downloads identical data.
-const POLL_MS = 3 * 60_000
+// 5 minutes (OPS-08) still samples each snapshot ~6 times; every avoided poll is one less invocation.
+const POLL_MS = 5 * 60_000
 
 /**
  * NBA / NHL game-line PRICES for /ev/games: every book's moneyline, spread and total side by side, with the best bettable price,
@@ -58,15 +59,20 @@ export function GamePricesClient({ feeds: initial, sport }: { feeds: Record<stri
   const active = useMemo(() => sports.map(s => feeds[s]).filter((f): f is GameOddsFeed => !!f), [sports, feeds])
 
   useEffect(() => {
+    // OPS-08: skip a tick while the previous one is still fetching, so a slow upstream cannot stack polls.
+    let running = false
     const id = setInterval(async () => {
-      if (document.visibilityState !== 'visible') return
-      const next = await Promise.all(sports.map(s => apiGetGameOddsBoard(s, { limit: 3000 }).catch(() => null)))
-      setFeeds(prev => {
-        const out = { ...prev }
-        let changed = false
-        next.forEach((f, i) => { if (f && Array.isArray(f.rows) && prev[sports[i]]?.as_of !== f.as_of) { out[sports[i]] = f; changed = true } })
-        return changed ? out : prev
-      })
+      if (document.visibilityState !== 'visible' || running) return
+      running = true
+      try {
+        const next = await Promise.all(sports.map(s => apiGetGameOddsBoard(s, { limit: 3000 }).catch(() => null)))
+        setFeeds(prev => {
+          const out = { ...prev }
+          let changed = false
+          next.forEach((f, i) => { if (f && Array.isArray(f.rows) && prev[sports[i]]?.as_of !== f.as_of) { out[sports[i]] = f; changed = true } })
+          return changed ? out : prev
+        })
+      } finally { running = false }
     }, POLL_MS)
     return () => clearInterval(id)
   }, [sports])

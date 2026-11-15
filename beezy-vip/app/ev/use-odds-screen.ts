@@ -165,7 +165,12 @@ export function useOddsScreen({ initial, initialLocked, fullAccess }: { initial:
     }
   }, [fullAccess])
 
+  // OPS-08: a poll that fires while the previous refresh is still in flight would only stack a second
+  // set of route invocations on top of it; skip the tick instead.
+  const refreshing = useRef(false)
   const refresh = useCallback(async () => {
+    if (refreshing.current) return
+    refreshing.current = true
     setLoading(true)
     try {
       const nextBoards = await Promise.all(SPORT_KEYS.map(s => apiGetOddsBoard(s, { limit: 3000 }).catch(() => null)))
@@ -177,7 +182,7 @@ export function useOddsScreen({ initial, initialLocked, fullAccess }: { initial:
         setBoards(prev => SPORT_KEYS.every(k => prev[k]?.as_of === out[k]?.as_of) ? prev : out)
         setLocked(lk)
       }
-    } finally { setLoading(false) }
+    } finally { refreshing.current = false; setLoading(false) }
   }, [])
 
   useEffect(() => {

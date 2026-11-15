@@ -103,26 +103,32 @@ function rememberIds(rows: CockpitRow[], ids: Map<string, number | string>) {
   for (const r of rows) if (r.player_id != null && r.player) ids.set(`${r.sport}|${foldName(r.player)}`, r.player_id)
 }
 
-/** Holds the cockpit feed, refreshes it every minute while the tab is visible, and keeps MLB headshot ids: those are
- * resolved server-side from the roster map, so a client refresh would otherwise drop them. */
+/** Holds the cockpit feed, refreshes it every two minutes while the tab is visible, and keeps MLB headshot ids: those are
+ * resolved server-side from the roster map, so a client refresh would otherwise drop them.
+ * Two minutes (OPS-08): the feed is a sweep snapshot whose boards rewrite on a 30-minute banker cadence
+ * (the /api/ev backend loop runs every 15 minutes), so a 60s poll mostly re-validated identical data;
+ * each poll is a function invocation, and the in-flight guard keeps a slow fetch from stacking another. */
 export function useCockpitFeed(initial: CockpitFeed | null) {
   const [ids] = useState(() => new Map<string, number | string>())
   const [feed, setFeed] = useState<CockpitFeed | null>(() => { rememberIds(initial?.rows ?? [], ids); return initial })
   const [updated, setUpdated] = useState<number>(() => Date.now())
   const [loading, setLoading] = useState(false)
+  const inFlight = useRef(false)
 
   const refresh = useCallback(async () => {
+    if (inFlight.current) return
+    inFlight.current = true
     setLoading(true)
     try {
       const f = await apiGetEdgeCockpit({ limit: 60 })
       rememberIds(f.rows, ids)
       setFeed({ ...f, rows: f.rows.map(r => (r.player_id == null && r.player ? { ...r, player_id: ids.get(`${r.sport}|${foldName(r.player)}`) ?? null } : r)) })
       setUpdated(Date.now())
-    } catch { /* keep showing the last good feed */ } finally { setLoading(false) }
+    } catch { /* keep showing the last good feed */ } finally { inFlight.current = false; setLoading(false) }
   }, [ids])
 
   useEffect(() => {
-    const id = setInterval(() => { if (document.visibilityState === 'visible') refresh() }, 60_000)
+    const id = setInterval(() => { if (document.visibilityState === 'visible') refresh() }, 120_000)
     return () => clearInterval(id)
   }, [refresh])
 
