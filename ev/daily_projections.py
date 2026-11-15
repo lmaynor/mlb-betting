@@ -213,12 +213,25 @@ def load_trained(now: datetime | None = None) -> dict:
 #   pa .05, steals .05, blocks .05 and NHL blocked_shots .10, pp_points .05 are priors set at or below the components' measured c
 #   (the 2026-11-02 review's values), NHL sog .30 is the TRAINED SOG model's measured c applied as a prior. NFL has no table: the
 #   BLEND_C default applies (the one measured NFL c is rush_yds +0.25, t 2.9, from the hierarchical-engine real-line study).
+#   PRD-04 UNIFICATION 2026-11-15 (RUL-20261115-prd04-officials-scope R2, adopted): this table is now the ONE live blend
+#   table. mlb_core/risk/calibration.py's study BLEND_C (threes .28 / assists .18 / rebounds .19) is RETIRED as an input --
+#   market_blend_prob resolves its default c from THIS table. In the unified table: NBA assists = 0.00 (the .03 above was
+#   already noise in the 2025 walk-forward, and the forward audit ran -18.8%); every UNFITTED market (the priors named
+#   above: NBA ra / pr / pa / steals / blocks, NHL blocked_shots / pp_points) = 0.00. Fitted values are unchanged, in
+#   particular for every market that is official-eligible today (threes .07, rebounds .14, saves .15), so the live card
+#   is untouched. nhl sog (.30) and nhl saves (.15) stay as priors pending a board-engine fit -- see
+#   BLEND_PRIOR_PENDING_BOARD_FIT below.
 BLEND_C_BY_SPORT_STAT = {
-    "nba": {"threes": 0.07, "rebounds": 0.14, "assists": 0.03, "ra": 0.11, "pr": 0.06, "pa": 0.05, "pra": 0.06,
-            "points": 0.06, "steals": 0.05, "blocks": 0.05},
-    "nhl": {"sog": 0.30, "saves": 0.15, "blocked_shots": 0.10, "points": 0.03, "goals": 0.03, "assists": 0.06,
-            "pp_points": 0.05},
+    "nba": {"threes": 0.07, "rebounds": 0.14, "assists": 0.00, "ra": 0.00, "pr": 0.00, "pa": 0.00, "pra": 0.06,
+            "points": 0.06, "steals": 0.00, "blocks": 0.00},
+    "nhl": {"sog": 0.30, "saves": 0.15, "blocked_shots": 0.00, "points": 0.03, "goals": 0.03, "assists": 0.06,
+            "pp_points": 0.00},
 }
+# (sport, stat) entries whose weight is a PRIOR pending a fit on the serving board engine, not a measurement on it
+# (PRD-04 slice 1): sog's .30 is the trained model's measured c applied to board rows; saves' .15 is the prior kept
+# against a pooled board fit that is regime-dependent by season. The PRD-04 Tier 2 floor for these markets drops
+# 48 -> 42 once a board-engine fit confirms c >= 0.15 at t >= 2.5 (or the trained props serve; ev.prd04_officials).
+BLEND_PRIOR_PENDING_BOARD_FIT = frozenset({("nhl", "sog"), ("nhl", "saves")})
 # The same weight for NHL rows that were served from the TRAINED models (row `nhl_model == "trained_v1"`, only with NHL_TRAINED_PROPS on).
 # MEASURED on those models (docs/analysis/nhl_trained_serving_2026-11-01.md, BettingPros 2022-10..2026-10, walk-forward refits): goals +0.37
 # (t 5.8), assists +0.34 (t 6.9), points +0.175 (t 3.5); saves pooled +0.75 but +0.37 / +1.02 / +0.35 by season, so the weakest season's

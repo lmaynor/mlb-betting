@@ -106,19 +106,24 @@ def shrink_edge(edge: float, knee: float = SHRINK_KNEE, tail_slope: float = SHRI
     return eff if edge >= 0 else -eff
 
 
-# Blend weight c on (logit(p_model) - logit(p_market)), from the 2026-10-15 BettingPros walk-forward study
-# (docs/analysis/bettingpros_model_vs_market_2026-10-15.md). c is a fit on the same test rows it describes (one parameter,
-# date-clustered t in brackets) and is NOT a tradability result: NHL SOG priced at the best Under was ROI -0.08%.
-# Anything not listed (every NFL stat, every unlisted stat) gets c=0, i.e. the market itself.
-BLEND_C = {
-    ("nba", "points"): 0.07,      # t=+2.99
-    ("nba", "rebounds"): 0.19,    # t=+7.71
-    ("nba", "assists"): 0.18,     # t=+7.65
-    ("nba", "threes"): 0.28,      # t=+8.32
-    ("nba", "pra"): 0.05,         # t=+2.52
-    ("nhl", "sog"): 0.30,         # t=+4.9
-}
+# Blend weight c on (logit(p_model) - logit(p_market)). This module used to carry its own BLEND_C dict from the
+# 2026-10-15 BettingPros walk-forward study (nba points .07, rebounds .19, assists .18, threes .28, pra .05, nhl
+# sog .30). RETIRED as a live input (PRD-04 unification, 2026-11-15, RUL-20261115-prd04-officials-scope R2): two
+# disagreeing blend tables were a standing hazard -- the study table is NOT what serves. The one live table is
+# ev.daily_projections.BLEND_C_BY_SPORT_STAT (the 2026-11-10 walk-forward values, PRD-04-unified); market_blend_prob
+# resolves its default c from it via _unified_blend_c. Anything not listed there gets c=0, i.e. the market itself.
 BLEND_MAX_SHIFT = 0.08
+
+
+def _unified_blend_c(sport: str, stat: str) -> float:
+    """The default blend weight for (sport, stat) from the ONE live table, ev.daily_projections.BLEND_C_BY_SPORT_STAT.
+
+    Lazy import: ev.daily_projections imports this module (function-level), so resolving at call time avoids an
+    import cycle. Unlisted -> 0.0 (the market itself); the board's own blend_c() fallback default does NOT apply
+    here -- market_blend_prob's contract has always been unlisted -> c=0."""
+    from ev.daily_projections import BLEND_C_BY_SPORT_STAT
+    table = BLEND_C_BY_SPORT_STAT.get(str(sport).lower(), {})
+    return float(table.get(str(stat).lower(), 0.0))
 
 
 def _logit(p: float) -> float:
@@ -130,7 +135,8 @@ def _logit(p: float) -> float:
 def market_blend_prob(p_mkt: float, p_model: float, sport: str, stat: str, a: float = 0.0, b: float = 1.0,
                       c: float | None = None, max_shift: float = BLEND_MAX_SHIFT) -> float:
     """Posterior P(over): logit(p) = a + b*logit(p_mkt) + c*(logit(p_model) - logit(p_mkt)), clamped to
-    p_mkt +/- max_shift. c defaults to BLEND_C[(sport, stat)], else 0 (returns the market). Missing or non-finite model
+    p_mkt +/- max_shift. c defaults to the unified live table (ev.daily_projections.BLEND_C_BY_SPORT_STAT via
+    _unified_blend_c), else 0 (returns the market). Missing or non-finite model
     or market probability returns the market (or NaN if that is missing too) -- never a model-only price."""
     import math
     if p_mkt is None or not math.isfinite(float(p_mkt)):
@@ -138,7 +144,7 @@ def market_blend_prob(p_mkt: float, p_model: float, sport: str, stat: str, a: fl
     if p_model is None or not math.isfinite(float(p_model)):
         return float(p_mkt)
     if c is None:
-        c = BLEND_C.get((str(sport).lower(), str(stat).lower()), 0.0)
+        c = _unified_blend_c(sport, stat)
     z = a + b * _logit(p_mkt) + c * (_logit(p_model) - _logit(p_mkt))
     p = 1.0 / (1.0 + math.exp(-z))
     return min(max(p, float(p_mkt) - max_shift), float(p_mkt) + max_shift)

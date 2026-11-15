@@ -268,8 +268,9 @@ def test_loader_still_fills_new_games_the_old_ingest_wrote_without_pp_columns(mo
 def test_pp_points_is_a_live_market_with_labels_and_blend_weights():
     assert dp.PROJECT_STATS["nhl"]["pp_points"] == "negbin"
     assert dp.STAT_LABEL["pp_points"] == "PP Points" and "pp_points" in dp.ROTATION_MIN_USAGE["nhl"]
-    assert dp.BLEND_C_BY_SPORT_STAT["nhl"] == {"sog": 0.30, "saves": 0.15, "blocked_shots": 0.10, "points": 0.03,
-                                               "goals": 0.03, "assists": 0.06, "pp_points": 0.05}
+    # PRD-04 unification (2026-11-15): the unfitted priors blocked_shots / pp_points are 0.00 in the unified table
+    assert dp.BLEND_C_BY_SPORT_STAT["nhl"] == {"sog": 0.30, "saves": 0.15, "blocked_shots": 0.00, "points": 0.03,
+                                               "goals": 0.03, "assists": 0.06, "pp_points": 0.00}
     assert dp.blend_c("nhl", "sog") == 0.30 and dp.blend_c("nfl", "rec_yds") == dp.BLEND_C
 
 

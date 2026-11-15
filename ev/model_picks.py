@@ -610,6 +610,20 @@ def run(sport: str, dry_run: bool = False, post: bool = True, closing_only: bool
         else:
             picks = select(payload, now)
             out.update(status="ok", selected=len(picks), official=sum(p["tier"] == "official" for p in picks))
+            # PRD-04 shadow pass (ev.prd04_officials): computes the adopted tiered gate's verdicts alongside
+            # the live ones and logs them to the shadow record only. Behind PRD04_SHADOW; a failure here never
+            # fails the live pass, and nothing it writes touches the card, the ledger, or Discord.
+            from ev import prd04_officials as PRD04
+            if PRD04.shadow_enabled():
+                try:
+                    shadow_records = PRD04.evaluate_payload(payload, now)
+                    shadow_out = {"evaluated": len(shadow_records),
+                                  "would_be_official": sum(1 for x in shadow_records if x["would_be_official"])}
+                    if not dry_run:
+                        shadow_out["logged"] = PRD04.log_shadow(sport, shadow_records, now)
+                    out["prd04_shadow"] = shadow_out
+                except Exception:                                                                    # noqa: BLE001
+                    log.warning("model_picks: PRD-04 shadow pass failed", exc_info=True)
             if dry_run:
                 out["picks"] = picks
             else:
