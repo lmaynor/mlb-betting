@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { limitOddsBoard } from '@/lib/access-feeds'
 import { getViewer } from '@/lib/auth'
+import { jsonWithEtag } from '@/lib/etag'
 import type { OddsBoard } from '@/lib/odds-screen'
 import { withHeadshots } from '@/lib/odds-headshots'
 
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest) {
     const data = await res.json()
     if (res.ok && Array.isArray(data?.rows)) {
       const cut = limitOddsBoard(data as OddsBoard, await getViewer())
-      return NextResponse.json({ ...withHeadshots(cut.board), locked: cut.locked })
+      return jsonWithEtag(req, { ...withHeadshots(cut.board), locked: cut.locked })
     }
     return NextResponse.json(data, { status: res.ok ? 200 : res.status })
   } catch {

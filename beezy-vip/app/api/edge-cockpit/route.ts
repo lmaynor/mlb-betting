@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { limitCockpit } from '@/lib/access-feeds'
 import { getViewer } from '@/lib/auth'
+import { jsonWithEtag } from '@/lib/etag'
 import { withHeadshotIds } from '@/lib/cockpit-headshots'
 import { loadCockpit } from '@/lib/cockpit-loader'
 
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
     if (!feed) return NextResponse.json({ error: 'cockpit unavailable' }, { status: 502 })
     // Prop-research rows are paid per league (lib/access.ts); cut here so the proxy matches the page.
     const cut = limitCockpit(feed.rows, await getViewer())
-    return NextResponse.json({ ...feed, rows: withHeadshotIds(cut.rows), locked: cut.locked })
+    return jsonWithEtag(req, { ...feed, rows: withHeadshotIds(cut.rows), locked: cut.locked })
   } catch {
     return NextResponse.json({ error: 'cockpit unavailable' }, { status: 502 })
   }

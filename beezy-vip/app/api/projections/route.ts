@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { limitRows } from '@/lib/access'
 import { getViewer } from '@/lib/auth'
+import { jsonWithEtag } from '@/lib/etag'
 import { isSportSlug } from '@/lib/sports'
 
 const API_URL = process.env.BETTING_API_URL ?? ''
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
     const sport = req.nextUrl.searchParams.get('sport') ?? ''
     if (res.ok && Array.isArray(data?.rows) && isSportSlug(sport)) {
       const cut = limitRows<{ beezy_score?: number }>(data.rows, await getViewer(), 'player_board', sport, r => r.beezy_score ?? 0)
-      return NextResponse.json({ ...data, rows: cut.rows, count: cut.rows.length, locked: cut.locked })
+      return jsonWithEtag(req, { ...data, rows: cut.rows, count: cut.rows.length, locked: cut.locked })
     }
     return NextResponse.json(data, { status: res.ok ? 200 : res.status })
   } catch {

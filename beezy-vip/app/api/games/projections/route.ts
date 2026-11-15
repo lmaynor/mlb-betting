@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { limitGameLines } from '@/lib/access-feeds'
 import { getViewer } from '@/lib/auth'
+import { jsonWithEtag } from '@/lib/etag'
 import { gameQueryString, parseGameProjectionQuery, type GameProjectionsFeed } from '@/lib/game-lines'
 
 const API_URL = process.env.BETTING_API_URL ?? ''
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
     const data = await res.json()
     if (res.ok && data && Array.isArray(data.rows)) {
       const cut = limitGameLines(data as GameProjectionsFeed, await getViewer())
-      return NextResponse.json({ ...cut.feed, locked: cut.locked })
+      return jsonWithEtag(req, { ...cut.feed, locked: cut.locked })
     }
     return NextResponse.json(data, { status: res.ok ? 200 : res.status })
   } catch {

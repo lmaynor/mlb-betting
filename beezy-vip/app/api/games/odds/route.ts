@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { limitGameOdds } from '@/lib/access-feeds'
 import { getViewer } from '@/lib/auth'
+import { jsonWithEtag } from '@/lib/etag'
 import { gameOddsQueryString, parseGameOddsQuery, type GameOddsFeed } from '@/lib/game-odds'
 
 const API_URL = process.env.BETTING_API_URL ?? ''
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
     const data = await res.json()
     if (res.ok && data && Array.isArray(data.rows)) {
       const cut = limitGameOdds(data as GameOddsFeed, await getViewer())
-      return NextResponse.json({ ...cut.feed, locked: cut.locked })
+      return jsonWithEtag(req, { ...cut.feed, locked: cut.locked })
     }
     // never pass a 200 body through uncut: a payload without rows is malformed, not publishable
     if (res.ok) return NextResponse.json({ error: 'game odds unavailable' }, { status: 502 })
