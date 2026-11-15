@@ -51,29 +51,29 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
   const details = bullets.length ? bullets.slice(0, 3) : [pick.game].filter(Boolean)
 
   return (
-    <div className="bg-background-primary-default flex items-stretch min-h-[108px] overflow-hidden relative cursor-pointer"
+    <div className="bg-background-primary-default flex items-stretch min-h-[72px] overflow-hidden relative cursor-pointer"
       onClick={onToggle}
       style={{
         borderBottom: '1px solid var(--color-separator-border)',
         borderLeft: `3px solid ${tierColor}`,
       }}
     >
-      <div className="w-[96px] min-w-[96px] relative overflow-hidden flex items-center justify-center" style={{ background: `${color}18`, borderRight: `1px solid ${color}44` }}>
+      <div className="w-[64px] min-w-[64px] relative overflow-hidden flex items-center justify-center" style={{ background: `${color}18`, borderRight: `1px solid ${color}44` }}>
         {pick.headshotUrl || !isGame ? (
           <HeadshotImg
-            src={pick.headshotUrl} alt={pick.who} size={96} className="absolute inset-0 size-full"
+            src={pick.headshotUrl} alt={pick.who} size={64} className="absolute inset-0 size-full"
             style={{ objectFit: 'cover', objectPosition: 'center top' }}
           />
         ) : isGame && (pick.awayLogoUrl || pick.homeLogoUrl) ? (
-          <div className="flex flex-col items-center gap-1 z-[1]">
+          <div className="flex flex-col items-center gap-0.5 z-[1]">
             {pick.awayLogoUrl && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={pick.awayLogoUrl} alt="" width={34} height={34} style={{ objectFit: 'contain' }} />
+              <img src={pick.awayLogoUrl} alt="" width={26} height={26} style={{ objectFit: 'contain' }} />
             )}
             <span className="mono text-micro" style={{ color: `${color}99` }}>@</span>
             {pick.homeLogoUrl && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={pick.homeLogoUrl} alt="" width={34} height={34} style={{ objectFit: 'contain' }} />
+              <img src={pick.homeLogoUrl} alt="" width={26} height={26} style={{ objectFit: 'contain' }} />
             )}
           </div>
         ) : (
@@ -82,16 +82,22 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
         <span className="mono absolute top-0 left-0 z-[2] text-micro font-semibold text-text-primary bg-background-full py-[2px] px-[6px]" style={{ borderBottomRightRadius: '4px' }}>#{rank}</span>
       </div>
 
-      <div className="flex-1 py-2.5 px-3 flex flex-col justify-center min-w-0">
-        <div className="mb-1.5 flex items-center justify-between gap-2">
-          <span className="inline-flex items-center gap-1.5 min-w-0">
-            <span className="ui-heading" style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: `${color}20`, color, border: `1px solid ${color}` }}>{pillar.shortName}</span>
-          </span>
+      <div className="flex-1 py-2 px-3 flex flex-col justify-center min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="ui-heading" style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: `${color}20`, color, border: `1px solid ${color}` }}>{pillar.shortName}</span>
+          <span className="text-[16px] font-semibold text-text-primary leading-[1.15] overflow-hidden text-ellipsis whitespace-nowrap flex-1 min-w-0">{pick.who}</span>
           {edge && <span className="mono text-mini font-semibold whitespace-nowrap" style={{ color: tierColor }}>{edge}</span>}
         </div>
-        <div className="text-[16px] font-semibold text-text-primary leading-[1.15] overflow-hidden text-ellipsis whitespace-nowrap">{pick.who}</div>
         {market && <div className="text-cozy font-semibold text-neutral-300 leading-[1.25] mt-0.5">{market}</div>}
-        {meta && <div className="mono text-mini text-text-secondary mt-[3px] overflow-hidden text-ellipsis whitespace-nowrap">{meta}</div>}
+        {(Boolean(meta) || Boolean(pick.result) || Boolean(pick.started && !pick.result)) && (
+          <div className="flex items-center gap-2 mt-[3px] min-w-0">
+            {meta ? <span className="mono text-mini text-text-secondary overflow-hidden text-ellipsis whitespace-nowrap">{meta}</span> : null}
+            {!pick.result && pick.started && (
+              <span className="ui-heading text-micro py-0.5 px-[5px] rounded-chip whitespace-nowrap shrink-0" style={{ color: 'var(--color-neutral-300)', border: '1px solid var(--color-neutral-300)' }}>Started · graded at final</span>
+            )}
+            {pick.result && <ResultTag result={pick.result} />}
+          </div>
+        )}
         {expanded && (
           <div className="flex flex-col gap-[3px] mt-2">
             {details.map((b, i) => (
@@ -103,16 +109,6 @@ function PickCard({ pick, rank, expanded, onToggle }: { pick: CardPick; rank: nu
           </div>
         )}
       </div>
-
-      <div className="min-w-16 flex flex-col items-center justify-center gap-1 py-2 px-[6px]" title={`Beezy Score ${pick.score}. Not a win probability.`}
-        style={{ borderLeft: `1px solid ${color}18`, background: `${tierColor}08` }}>
-        <span className="mono text-[22px] font-semibold leading-[1]" style={{ color: tierColor }}>{pick.score}</span>
-        <span className="ui-heading text-micro py-0.5 px-[5px] rounded-chip border border-[color:#57F287] bg-[rgba(87,242,135,0.12)] text-signal whitespace-nowrap">Official play</span>
-        {!pick.result && pick.started && (
-          <span className="ui-heading text-micro py-0.5 px-[5px] rounded-chip whitespace-nowrap" style={{ color: 'var(--color-neutral-300)', border: '1px solid var(--color-neutral-300)' }}>Started · graded at final</span>
-        )}
-        {pick.result && <ResultTag result={pick.result} />}
-      </div>
     </div>
   )
 }
@@ -123,7 +119,7 @@ const RESULT_COLOR = { win: 'var(--signal)', loss: 'var(--loss)', push: 'var(--c
 /** A graded play's outcome: the card keeps a play on the list after its game, with the result in place of the clock. */
 function ResultTag({ result }: { result: NonNullable<TopPick['result']> }) {
   return (
-    <span className="ui-heading text-micro py-0.5 px-[5px] rounded-chip whitespace-nowrap"
+    <span className="ui-heading text-micro py-0.5 px-[5px] rounded-chip whitespace-nowrap shrink-0"
       style={{ color: RESULT_COLOR[result], border: `1px solid ${RESULT_COLOR[result]}` }}>{RESULT_LABEL[result]}</span>
   )
 }
@@ -205,7 +201,7 @@ const chip = (on: boolean): React.CSSProperties => ({
 
 /**
  * The shareable Daily Card: the day's official plays, every one of them. No count cap and no filler: the number of plays is whatever the
- * gate lets through, and a slate with none says so. A play keeps its place after its game with the result on it, and the record strip
+ * gate lets through, and a slate with none says so. A play keeps its place after its game with the result on it, and the record line under the plays
  * links to Past Cards, which is the same plays day by day. Plays can be narrowed to one sport; sports are never blended inside a filter.
  */
 export function CheatSheetClient({ sheets, canPost = false, sportPicks, players, locked, today, yesterday, weekRecord }: {
@@ -229,7 +225,6 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
   const list = sport === 'all' ? players : (sportPicks[sport] ?? [])
   const shown = list
   const allExpanded = shown.length > 0 && shown.every(p => expanded.has(p.key))
-  const best = list.reduce((m, p) => Math.max(m, (p.edge ?? 0) * 100), 0)
   const ydayWins = yesterday.filter(p => p.result === 'win').length
   const ydayLosses = yesterday.filter(p => p.result === 'loss').length
   const wk = weekRecord
@@ -252,37 +247,17 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
       <div className="cheat-sheet-layout">
         <div className="w-full max-w-[390px] border border-separator-border bg-background-full rounded-[var(--radius)] overflow-hidden shrink-0">
           {/* Header */}
-          <div className="bg-background-primary-default pt-4 px-4 pb-3 border-b border-b-[color:var(--color-separator-border)]">
-            <div className="flex items-start justify-between mb-2.5 gap-3">
-              <div>
-                <BrandWordmark size="lg" />
-                <div className="text-[15px] font-semibold text-text-primary leading-[1.15] mt-2">Today's Card</div>
-                <div className="mono text-micro text-text-secondary mt-[5px]">{today}</div>
-                <div className="text-[12px] text-neutral-300 leading-[1.45] mt-2">
-                  Every play that clears the gate: the model and the market agree on the side, 4+ books behind the price, a measured edge and a blended EV that survives shrinking toward the market.
-                </div>
-                <div className="text-mini text-signal bg-[rgba(87,242,135,0.08)] border border-[color:rgba(87,242,135,0.22)] rounded-chip py-1.5 px-2.5 mt-2 leading-[1.4]">
-                  <span className="mono font-semibold">{shown.length}</span> Official Play{shown.length !== 1 ? 's' : ''} today.
-                </div>
-                {wk.days > 0 && (
-                  <Link href="/picks/history" className="block no-underline mono text-micro text-neutral-300 border border-separator-border rounded-chip py-1.5 px-2.5 mt-2 leading-[1.4]">
-                    Last {wk.days} days {wk.graded > 0 ? <>
-                      <span className="text-text-primary">{wk.wins}-{wk.losses}{wk.pushes ? `-${wk.pushes}` : ''}</span>{' \u00b7 '}
-                      <span style={{ color: wk.units >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{wk.units >= 0 ? '+' : ''}{wk.units.toFixed(1)}u flat</span>
-                      {wkRoi != null && <>{' \u00b7 '}<span style={{ color: wkRoi >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{wkRoi >= 0 ? '+' : ''}{wkRoi.toFixed(0)}% ROI</span></>}
-                    </> : <span className="text-text-secondary">{wk.pending > 0 ? `${wk.pending} pending` : 'no graded plays yet'}</span>}
-                    {' '}<span className="text-link">Graded history &rarr;</span>
-                  </Link>
-                )}
-              </div>
-              <button onClick={() => setExpanded(allExpanded ? new Set() : new Set(shown.map(p => p.key)))} className="mono text-micro bg-transparent py-1 px-[7px] cursor-pointer whitespace-nowrap"
-                style={{ color: allExpanded ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', border: `1px solid ${allExpanded ? 'var(--color-border-button-active)' : 'var(--color-separator-border)'}` }}>
-                {allExpanded ? 'Collapse' : 'Expand'}
-              </button>
+          <div className="bg-background-primary-default pt-3 px-4 pb-2.5 border-b border-b-[color:var(--color-separator-border)]">
+            <div className="flex items-center justify-between gap-3">
+              <BrandWordmark size="md" />
+              <span className="mono text-micro text-text-secondary">{today}</span>
             </div>
-
+            <div className="flex items-baseline justify-between gap-3 mt-2">
+              <span className="text-[15px] font-semibold text-text-primary leading-[1.15]">Today's Card</span>
+              {list.length > 0 && <span className="mono text-micro text-text-secondary">{shown.length} {shown.length === 1 ? 'play' : 'plays'}</span>}
+            </div>
             {sports.length > 1 && (
-              <div role="group" aria-label="Sport" className="flex flex-wrap gap-1.5">
+              <div role="group" aria-label="Sport" className="flex flex-wrap gap-1.5 mt-2.5">
                 {(['all', ...sports] as SportFilter[]).map(s => (
                   <button key={s} className="mono" aria-pressed={sport === s} onClick={() => { setSport(s); setExpanded(new Set()) }} style={chip(sport === s)}>
                     {s === 'all' ? 'All' : SPORT_PILLARS[s].shortName}
@@ -291,13 +266,6 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
               </div>
             )}
           </div>
-
-          {list.length > 0 && (
-            <div className="py-[7px] px-4 border-b border-b-[color:var(--color-separator-border)] flex flex-wrap gap-2.5 items-center">
-              <span className="mono text-micro text-text-secondary">{list.length} {list.length === 1 ? 'play' : 'plays'}</span>
-              {best > 0 && <span className="ui-heading text-micro text-signal">Best edge +{best.toFixed(1)}%</span>}
-            </div>
-          )}
 
           {list.length === 0 ? (
             <div className="py-5 px-4">
@@ -327,12 +295,27 @@ export function CheatSheetClient({ sheets, canPost = false, sportPicks, players,
             </>
           )}
 
+          {wk.days > 0 && (
+            <Link href="/picks/history" className="block no-underline mono text-micro text-neutral-300 py-2 px-4 border-t border-t-[color:var(--color-separator-border)] leading-[1.4]">
+              Last {wk.days} days {wk.graded > 0 ? <>
+                <span className="text-text-primary">{wk.wins}-{wk.losses}{wk.pushes ? `-${wk.pushes}` : ''}</span>{' \u00b7 '}
+                <span style={{ color: wk.units >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{wk.units >= 0 ? '+' : ''}{wk.units.toFixed(1)}u flat</span>
+                {wkRoi != null && <>{' \u00b7 '}<span style={{ color: wkRoi >= 0 ? 'var(--signal)' : 'var(--loss)' }}>{wkRoi >= 0 ? '+' : ''}{wkRoi.toFixed(0)}% ROI</span></>}
+              </> : <span className="text-text-secondary">{wk.pending > 0 ? `${wk.pending} pending` : 'no graded plays yet'}</span>}
+              {' '}<span className="text-link">Graded history &rarr;</span>
+            </Link>
+          )}
+
           <div className="border-t border-t-[color:var(--color-separator-border)] py-[11px] px-4 flex items-center gap-2.5 bg-background-full">
             <button onClick={handleShare} className="ui-heading text-micro py-[6px] px-3 text-black border border-separator-border rounded-[var(--radius)] cursor-pointer whitespace-nowrap"
               style={{ background: 'var(--signal)' }}>
               {copied ? 'Copied' : 'Share card'}
             </button>
-            <div  className="flex-1"/>
+            <button onClick={() => setExpanded(allExpanded ? new Set() : new Set(shown.map(p => p.key)))} className="mono text-micro bg-transparent py-1 px-[7px] cursor-pointer whitespace-nowrap"
+              style={{ color: allExpanded ? 'var(--color-text-primary)' : 'var(--color-text-secondary)', border: `1px solid ${allExpanded ? 'var(--color-border-button-active)' : 'var(--color-separator-border)'}` }}>
+              {allExpanded ? 'Collapse' : 'Expand'}
+            </button>
+            <div className="flex-1"/>
             <BrandWordmark size="sm" />
           </div>
         </div>
