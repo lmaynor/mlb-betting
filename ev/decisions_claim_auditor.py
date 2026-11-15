@@ -8,13 +8,18 @@ consumption. Pairs deterministic literal-number checks against structured manife
 with deterministic evidence-chain packaging (failing closed with MISSING_ARTIFACT)
 and a single batched Decisions API call for entailment, scope, and freshness questions.
 
+TWO-STAGE per RUL-20261113-dec-03-contradiction: the Stage 1 call uses the
+split conflict heads (direct_conflict / missing_support). Only claims Stage 1
+flags (non-conflict prongs pass AND P(direct_conflict) > 0.05) go to a second
+batched Stage 2 confirm call over deterministic windowed slices
+(ev.decisions_prep.n3_confirm_slice); Stage 2 records a CONTRADICTED block
+iff P_confirm(direct_conflict) > 0.20, else clears the claim.
+
 DOCTRINE:
 - Deterministic checks run first: claims with numeric mismatches are blocked
   immediately and never sent over the wire to Decisions API.
 - Evidence packaging: claims without explicit evidence overrides are packaged with
   their full cited evidence chain; missing local artifacts block fail-closed immediately.
-- All eligible claims in a run are batched into exactly ONE Decisions API call
-  using ItemBatch.
 - Fail closed: batch abstention, missing client key, or missing supported
   probability marks remaining claims as abstained and blocked.
 - Shadow mode by default: observes and logs verdicts without applying action.
@@ -38,7 +43,15 @@ from ev.decisions_common import (
     make_record,
     route_mode,
 )
-from ev.decisions_prep.n3_claim_auditor import build_questions, check_numbers, gate
+from ev.decisions_prep.n3_claim_auditor import (
+    CONFIRM_QUESTION_ID,
+    build_confirm_questions,
+    build_questions,
+    check_numbers,
+    confirm_gate,
+    gate,
+)
+from ev.decisions_prep.n3_confirm_slice import build_confirm_slice
 from ev.decisions_prep.n3_evidence_packaging import package_evidence
 
 ROUTE_NAME: str = "n3_claim_auditor"
@@ -111,6 +124,8 @@ def audit_claims(
     results_by_index: dict[int, dict[str, Any]] = {}
     batch_candidates: list[tuple[int, Any, str, str]] = []
     packaging_by_index: dict[int, dict[str, Any]] = {}
+    packaging_full_by_index: dict[int, Optional[dict[str, Any]]] = {}
+    stage2_candidates: list[tuple[int, Any, str, dict[str, Any], str]] = []
 
     # a) Deterministic numeric check first
     for idx, claim in enumerate(claims):
@@ -151,6 +166,7 @@ def audit_claims(
                     "gate_result": None,
                     "mode": resolved_mode,
                     "applied": applied,
+                    "stage2": {"routed": False},
                 }
                 continue
 
@@ -159,8 +175,10 @@ def audit_claims(
         if evidence_texts is not None and claim_id in evidence_texts:
             ev_text = evidence_texts[claim_id]
             packaging_by_index[idx] = {"attached": [], "missing": []}
+            packaging_full_by_index[idx] = None
         else:
             packaged = package_evidence(claim, extra_roots=packaging_roots or ())
+            packaging_full_by_index[idx] = packaged
             if packaged["missing"]:
                 results_by_index[idx] = {
                     "claim_id": claim_id,
@@ -175,6 +193,7 @@ def audit_claims(
                         "attached": [a["pointer"] for a in packaged["attached"]],
                         "missing": packaged["missing"],
                     },
+                    "stage2": {"routed": False},
                 }
                 continue
             ev_text = packaged["evidence_text"]
@@ -231,6 +250,7 @@ def audit_claims(
                     "mode": resolved_mode,
                     "applied": applied,
                     "packaging": packaging_by_index.get(idx, {"attached": [], "missing": []}),
+                    "stage2": {"routed": False},
                 }
         else:
             batch_result = active_client.call(input_text, wire_questions)
@@ -247,11 +267,12 @@ def audit_claims(
                         "mode": resolved_mode,
                         "applied": applied,
                         "packaging": packaging_by_index.get(idx, {"attached": [], "missing": []}),
+                        "stage2": {"routed": False},
                     }
             else:
                 # d) Otherwise per claim
                 split_answers = batch.split(batch_result)
-                for tag, (idx, _claim, claim_id, _) in tag_to_candidate.items():
+                for tag, (idx, _claim, claim_id, ev_text) in tag_to_candidate.items():
                     raw_answer_dict = split_answers.get(tag, {})
                     supported = DecisionsClient.noul_value(raw_answer_dict.get("supported"))
 
@@ -266,6 +287,7 @@ def audit_claims(
                             "mode": resolved_mode,
                             "applied": applied,
                             "packaging": packaging_by_index.get(idx, {"attached": [], "missing": []}),
+                            "stage2": {"routed": False},
                         }
                     else:
                         gate_answer: dict[str, Any] = dict(raw_answer_dict)
@@ -273,7 +295,7 @@ def audit_claims(
                         for k in ("claim_kind", "scope_match", "evidence_freshness"):
                             if k not in gate_answer or gate_answer[k] is None:
                                 gate_answer[k] = {}
-                        for qid in ("contradicted", "wrong_scope", "stale"):
+                        for qid in ("direct_conflict", "missing_support", "wrong_scope", "stale"):
                             if qid in gate_answer and isinstance(gate_answer[qid], Mapping):
                                 if "probability" not in gate_answer[qid] and "noul" in gate_answer[qid]:
                                     m = dict(gate_answer[qid])
@@ -281,6 +303,13 @@ def audit_claims(
                                     gate_answer[qid] = m
 
                         gate_result = gate(gate_answer)
+                        if gate_result.get("decision") == "route_stage2":
+                            # Defer: the Stage 2 confirm phase below fills
+                            # this claim's result.
+                            stage2_candidates.append(
+                                (idx, _claim, claim_id, gate_result, ev_text)
+                            )
+                            continue
                         is_blocked = bool(gate_result.get("blocked", False))
                         verdict = "blocked" if is_blocked else "clear"
                         reasons = list(gate_result.get("reasons", []))
@@ -295,7 +324,98 @@ def audit_claims(
                             "mode": resolved_mode,
                             "applied": applied,
                             "packaging": packaging_by_index.get(idx, {"attached": [], "missing": []}),
+                            "stage2": {"routed": False},
                         }
+
+    # Stage 2: isolated confirm pass over Stage 1 conflict-flagged claims.
+    # Runs only when Stage 1 routed at least one claim; reaching this point
+    # with candidates implies the Stage 1 batch produced answers, so
+    # active_client is a working client.
+    if stage2_candidates:
+        def _stage2_abstained(reason: str) -> None:
+            for idx, _c, claim_id, gate_result, _ev in stage2_candidates:
+                results_by_index[idx] = {
+                    "claim_id": claim_id,
+                    "verdict": "abstained",
+                    "blocked": True,
+                    "reasons": [reason],
+                    "numeric_findings": [],
+                    "gate_result": gate_result,
+                    "mode": resolved_mode,
+                    "applied": applied,
+                    "packaging": packaging_by_index.get(idx, {"attached": [], "missing": []}),
+                    "stage2": {
+                        "routed": True,
+                        "decision": "abstained",
+                        "confirm_probability": None,
+                        "reasons": [reason],
+                        "slice_fallback_full_chain": None,
+                        "slice_windows": {},
+                    },
+                }
+
+        batch2 = ItemBatch()
+        tag_to_stage2: dict[str, tuple[int, str, dict[str, Any], Optional[dict[str, Any]]]] = {}
+        for idx, claim, claim_id, _gr, ev_text in stage2_candidates:
+            packaged = packaging_full_by_index.get(idx)
+            if packaged is not None:
+                slice_info: Optional[dict[str, Any]] = build_confirm_slice(claim, packaged)
+                slice_text = slice_info["slice_text"]
+            else:
+                slice_info = None
+                slice_text = ev_text
+            q_spec = build_confirm_questions(claim, slice_text)
+            clean_tag = str(claim_id)
+            if _KEY_RE.match(clean_tag) and len(clean_tag) <= 48:
+                tag = batch2.add(q_spec["input"], q_spec["questions"], tag=clean_tag)
+            else:
+                tag = batch2.add(q_spec["input"], q_spec["questions"])
+            tag_to_stage2[tag] = (idx, claim_id, _gr, slice_info)
+
+        input_text2, wire_questions2 = batch2.build()
+        if estimate_tokens(input_text2) > int(MAX_INPUT_TOKENS * 0.9):
+            raise ValueError(
+                f"Stage 2 joined input estimated at {estimate_tokens(input_text2)} tokens, "
+                f"exceeding 90% of MAX_INPUT_TOKENS ({int(MAX_INPUT_TOKENS * 0.9)})"
+            )
+
+        result2 = active_client.call(input_text2, wire_questions2)
+        if result2.abstained:
+            _stage2_abstained("batch_abstained")
+        else:
+            split2 = batch2.split(result2)
+            for tag, (idx, claim_id, gate_result, slice_info) in tag_to_stage2.items():
+                raw2 = split2.get(tag, {})
+                p = DecisionsClient.noul_value(raw2.get(CONFIRM_QUESTION_ID))
+                cg = confirm_gate(
+                    {CONFIRM_QUESTION_ID: {"probability": p}} if p is not None else {}
+                )
+                blocked2 = bool(cg["blocked"])
+                if p is None:
+                    verdict2 = "abstained"
+                elif blocked2:
+                    verdict2 = "contradicted"
+                else:
+                    verdict2 = "clear"
+                results_by_index[idx] = {
+                    "claim_id": claim_id,
+                    "verdict": verdict2,
+                    "blocked": blocked2,
+                    "reasons": list(cg["reasons"]) if (blocked2 or p is None) else [],
+                    "numeric_findings": [],
+                    "gate_result": gate_result,
+                    "mode": resolved_mode,
+                    "applied": applied,
+                    "packaging": packaging_by_index.get(idx, {"attached": [], "missing": []}),
+                    "stage2": {
+                        "routed": True,
+                        "decision": "block" if blocked2 else "clear",
+                        "confirm_probability": p,
+                        "reasons": list(cg["reasons"]),
+                        "slice_fallback_full_chain": (slice_info or {}).get("fallback_full_chain"),
+                        "slice_windows": (slice_info or {}).get("window_counts", {}),
+                    },
+                }
 
     # e) Collect ordered results
     ordered_results = [results_by_index[i] for i in range(len(claims))]

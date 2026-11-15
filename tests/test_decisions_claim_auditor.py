@@ -127,7 +127,8 @@ def test_clean_answers_clear() -> None:
     ]
     custom_answers = {
         "CLEAN_1_supported": {"probability": 0.98},
-        "CLEAN_1_contradicted": {"probability": 0.01},
+        "CLEAN_1_direct_conflict": {"probability": 0.01},
+        "CLEAN_1_missing_support": {"probability": 0.01},
         "CLEAN_1_wrong_scope": {"probability": 0.02},
         "CLEAN_1_stale": {"probability": 0.01},
     }
@@ -141,7 +142,8 @@ def test_clean_answers_clear() -> None:
     assert res["verdict"] == "clear"
     assert res["blocked"] is False
     assert res["reasons"] == []
-    assert res["gate_result"]["decision"] == "pass"
+    assert res["gate_result"]["decision"] == "clear"
+    assert res["stage2"]["routed"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -150,14 +152,15 @@ def test_clean_answers_clear() -> None:
 
 
 def test_gate_threshold_contradicted_blocks() -> None:
-    """P(contradicted) > 0.05 blocks the claim."""
+    """Stage 1 flags P(direct_conflict) > 0.05; Stage 2 confirm > 0.20 blocks as contradicted."""
     claims = [{"claim_id": "CONTRA_1", "claim_text": "Mutated fact.", "evidence": "Truth."}]
-    # Contradicted probability 0.20 exceeds CONTRADICTED_MAX (0.05)
     custom_answers = {
         "CONTRA_1_supported": {"probability": 0.95},
-        "CONTRA_1_contradicted": {"probability": 0.20},
+        "CONTRA_1_direct_conflict": {"probability": 0.20},
+        "CONTRA_1_missing_support": {"probability": 0.0},
         "CONTRA_1_wrong_scope": {"probability": 0.0},
         "CONTRA_1_stale": {"probability": 0.0},
+        "CONTRA_1_confirm_direct_conflict": {"probability": 0.85},
     }
     client = FakeClient(answers=custom_answers)
 
@@ -166,9 +169,36 @@ def test_gate_threshold_contradicted_blocks() -> None:
     assert output["blocked_ids"] == ["CONTRA_1"]
     assert output["clear_ids"] == []
     res = output["results"][0]
-    assert res["verdict"] == "blocked"
+    assert res["verdict"] == "contradicted"
     assert res["blocked"] is True
-    assert any("contradicted_above_threshold" in r for r in res["reasons"])
+    assert res["stage2"]["routed"] is True
+    assert res["stage2"]["confirm_probability"] == 0.85
+    assert any("confirm_direct_conflict_above_threshold" in r for r in res["reasons"])
+    # Two calls: the Stage 1 batch and the Stage 2 confirm batch.
+    assert len(client.calls) == 2
+
+
+def test_stage2_confirm_low_clears() -> None:
+    """A Stage 1 conflict flag that Stage 2 does not confirm clears."""
+    claims = [{"claim_id": "FLAG_1", "claim_text": "Collision-prone fact.", "evidence": "Truth."}]
+    custom_answers = {
+        "FLAG_1_supported": {"probability": 0.96},
+        "FLAG_1_direct_conflict": {"probability": 0.30},
+        "FLAG_1_missing_support": {"probability": 0.0},
+        "FLAG_1_wrong_scope": {"probability": 0.0},
+        "FLAG_1_stale": {"probability": 0.0},
+        "FLAG_1_confirm_direct_conflict": {"probability": 0.10},
+    }
+    client = FakeClient(answers=custom_answers)
+
+    output = audit_claims(claims, client=client)
+
+    assert output["blocked_ids"] == []
+    assert output["clear_ids"] == ["FLAG_1"]
+    res = output["results"][0]
+    assert res["verdict"] == "clear"
+    assert res["stage2"]["routed"] is True
+    assert res["stage2"]["decision"] == "clear"
 
 
 def test_gate_threshold_low_supported_blocks() -> None:
@@ -176,7 +206,8 @@ def test_gate_threshold_low_supported_blocks() -> None:
     claims = [{"claim_id": "LOW_SUPP", "claim_text": "Doubtful fact.", "evidence": "Thin."}]
     custom_answers = {
         "LOW_SUPP_supported": {"probability": 0.85},
-        "LOW_SUPP_contradicted": {"probability": 0.01},
+        "LOW_SUPP_direct_conflict": {"probability": 0.01},
+        "LOW_SUPP_missing_support": {"probability": 0.0},
         "LOW_SUPP_wrong_scope": {"probability": 0.0},
         "LOW_SUPP_stale": {"probability": 0.0},
     }
@@ -195,7 +226,8 @@ def test_gate_threshold_scope_plus_stale_blocks() -> None:
     claims = [{"claim_id": "SCOPE_STALE", "claim_text": "Outdated scope.", "evidence": "New."}]
     custom_answers = {
         "SCOPE_STALE_supported": {"probability": 0.95},
-        "SCOPE_STALE_contradicted": {"probability": 0.01},
+        "SCOPE_STALE_direct_conflict": {"probability": 0.01},
+        "SCOPE_STALE_missing_support": {"probability": 0.0},
         "SCOPE_STALE_wrong_scope": {"probability": 0.15},
         "SCOPE_STALE_stale": {"probability": 0.15},
     }
@@ -251,7 +283,8 @@ def test_missing_supported_probability_yields_abstained_verdict() -> None:
     claims = [{"claim_id": "NO_SUPP", "claim_text": "Some claim.", "evidence": "e"}]
     # Answers dictionary contains other fields but lacks 'supported'
     custom_answers = {
-        "NO_SUPP_contradicted": {"probability": 0.01},
+        "NO_SUPP_direct_conflict": {"probability": 0.01},
+        "NO_SUPP_missing_support": {"probability": 0.0},
         "NO_SUPP_wrong_scope": {"probability": 0.01},
         "NO_SUPP_stale": {"probability": 0.01},
     }

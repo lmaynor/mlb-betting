@@ -1,9 +1,55 @@
 {
   "manifest_check": "not_applicable_no_manifests",
   "total_claims": 100,
-  "blocked_count": 73,
-  "clear_count": 27,
+  "blocked_count": 67,
+  "clear_count": 33,
   "passed_all": false,
+  "design_killed": true,
+  "verdict": "KILLED",
+  "kill_rules": {
+    "recall_kill": false,
+    "false_block_kill": true,
+    "design_killed": true
+  },
+  "stage2": {
+    "routed_ids": [
+      "N3-C006",
+      "N3-C010",
+      "N3-C014",
+      "N3-C020",
+      "N3-C025",
+      "N3-C026",
+      "N3-C028",
+      "N3-C030",
+      "N3-C031",
+      "N3-C032",
+      "N3-C033",
+      "N3-C047",
+      "N3-C049",
+      "N3-C050"
+    ],
+    "routing_volume": {
+      "value": 0.14,
+      "bar": 0.25,
+      "passed": true,
+      "routed": 14,
+      "total": 100
+    },
+    "fidelity_contradicted": {
+      "value": null,
+      "bar": 1.0,
+      "passed": true,
+      "confirmed": 0,
+      "routed": 0
+    },
+    "fidelity_cleans": {
+      "value": 1.0,
+      "bar": 0.85,
+      "passed": true,
+      "cleared": 14,
+      "routed": 14
+    }
+  },
   "packaging": {
     "claims_with_missing_pointers": [],
     "multi_artifact_claim_ids": [
@@ -49,23 +95,24 @@
     },
     "planted_flaw_recall": {
       "value": 1.0,
-      "bar": 0.9,
+      "bar": 0.92,
       "passed": true,
       "blocked": 50,
       "total": 50
     },
     "clean_false_block_rate": {
-      "value": 0.46,
+      "value": 0.34,
       "bar": 0.05,
       "passed": false,
-      "blocked": 23,
+      "blocked": 17,
       "total": 50
     },
     "multi_artifact_clean_false_block": {
-      "value": 0.7857,
-      "bar": 0.05,
+      "value": 0.6429,
+      "bar": 0.071,
+      "bar_count": 1,
       "passed": false,
-      "blocked": 11,
+      "blocked": 9,
       "total": 14
     },
     "multi_artifact_flaw_recall": {
@@ -79,9 +126,9 @@
   "per_label": {
     "clean": {
       "total": 50,
-      "blocked": 23,
-      "clear": 27,
-      "block_rate": 0.46
+      "blocked": 17,
+      "clear": 33,
+      "block_rate": 0.34
     },
     "contradicted": {
       "total": 22,
