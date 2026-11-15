@@ -52,15 +52,17 @@ def test_nba_blend_constants_are_the_empirical_walk_forward_values():
     nba = DP.BLEND_C_BY_SPORT_STAT["nba"]
     assert nba["rebounds"] == 0.14
     assert nba["threes"] == 0.07
-    assert nba["assists"] == 0.03
+    # PRD-04 unification (2026-11-15) supersedes D3 for assists: the weight is 0.00 (2025 walk-forward decayed
+    # to noise; forward audit -18.8%), not the .03 D3 carried.
+    assert nba["assists"] == 0.00
     assert nba["points"] == 0.06
     assert nba["pra"] == 0.06
     # and the accessor the board actually prices with returns them
-    for stat, c in (("rebounds", 0.14), ("threes", 0.07), ("assists", 0.03), ("points", 0.06), ("pra", 0.06)):
+    for stat, c in (("rebounds", 0.14), ("threes", 0.07), ("assists", 0.00), ("points", 0.06), ("pra", 0.06)):
         assert DP.blend_c("nba", stat) == c, stat
-    # stats the direction does not name keep their constants
-    assert nba["ra"] == 0.11 and nba["pr"] == 0.06 and nba["pa"] == 0.05
-    assert nba["steals"] == 0.05 and nba["blocks"] == 0.05
+    # PRD-04 unification: every unfitted market (the old priors ra / pr / pa / steals / blocks) is 0.00
+    assert nba["ra"] == 0.00 and nba["pr"] == 0.00 and nba["pa"] == 0.00
+    assert nba["steals"] == 0.00 and nba["blocks"] == 0.00
 
 
 # ----------------------------------------------------------------------------------------------- D4 NHL
