@@ -621,7 +621,6 @@ def write_latest(result: dict, key: str | None = None) -> str:
                           result.get("sport"))
     props = {k: v for k, v in result.items() if k not in ("game_lines", "derivative_games")}      # the props reader never parses the ladders
     props_payload = json.dumps(props, default=str).encode()
-    storage.write_bytes(props_payload, key)
     games_payload = None
     games = result.get("game_lines") or []
     if default_path and games:                                          # an empty crawl keeps the previous good file
@@ -633,6 +632,7 @@ def write_latest(result: dict, key: str | None = None) -> str:
         storage.write_bytes(games_payload, GAME_LINES_KEY.format(sport=result["sport"]))
     if default_path:
         _write_history(result, props_payload, games_payload)
+    storage.write_bytes(props_payload, key)      # the latest.json pointer lands LAST, after every archive copy
     return key
 
 

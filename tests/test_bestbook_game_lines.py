@@ -153,8 +153,8 @@ def test_a_crawl_without_ladders_keeps_the_previous_game_lines_file():
     with patch("mlb_core.storage.write_bytes", side_effect=lambda b, k: written.__setitem__(k, b)):
         bbe.write_latest(result)
     # latest.json + its dated history copy (OPS-01) -- and crucially NO game_lines_latest.json overwrite
-    assert list(written) == ["Odds/bestbook_live/nba/latest.json",
-                             "Odds/bestbook_live/nba/history/2026-11-02/latest-180000.json"]
+    assert list(written) == ["Odds/bestbook_live/nba/history/2026-11-02/latest-180000.json",
+                             "Odds/bestbook_live/nba/latest.json"]
 
 
 # ---- the board unions the two sources ------------------------------------------------------------------------------------------

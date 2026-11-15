@@ -166,8 +166,8 @@ def test_read_and_write_latest():
         # latest.json + its dated history copy (OPS-01: the overwrite keeps a reconstructable trail)
         assert mock_write.call_count == 2
         keys = [c.args[1] for c in mock_write.call_args_list]
-        assert keys[0] == "Odds/bestbook_live/nfl/latest.json"
-        assert "/history/" in keys[1] and keys[1].endswith(".json")
+        assert "/history/" in keys[0] and keys[0].endswith(".json")
+        assert keys[1] == "Odds/bestbook_live/nfl/latest.json"
 
         mock_read.return_value = json.dumps(payload).encode()
         events, meta = bbe.read_latest("nfl", NOW + timedelta(minutes=10), max_age_min=60.0)
