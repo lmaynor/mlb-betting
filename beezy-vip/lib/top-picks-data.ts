@@ -19,14 +19,58 @@ import type { Bet, SportProjections } from '@/lib/types'
 /** Every live sport whose board is a projection feed (lib/sports.ts `board`): a new sport joins the Top 10 by registry entry. */
 const PROJECTION_SPORTS = LIVE_SPORTS.filter(p => p.board === 'projection').map(p => p.slug) as Exclude<SportSlug, 'mlb'>[]
 
+/** Page size matching the backend public API's maximum allowed limit per request. */
+const PAGE_SIZE = 200
+
+/** Safety bound to prevent runaway pagination loops if the API keeps returning full pages; not a data limit. */
+const MAX_PAGES = 50
+
+async function fetchPagedPicks(params: Parameters<typeof apiGetPicks>[0]): Promise<Bet[]> {
+  const accumulated: Bet[] = []
+  const seenIds = new Set<Bet['id']>()
+
+  for (let pageIdx = 0; pageIdx < MAX_PAGES; pageIdx++) {
+    const offset = pageIdx * PAGE_SIZE
+    let page: Bet[]
+    try {
+      page = (await apiGetPicks({ ...params, limit: PAGE_SIZE, offset })) ?? []
+    } catch {
+      // If the first page request throws, that query contributes []. If a later
+      // page throws, keep the rows accumulated so far and stop paging (never discard a partial day).
+      if (pageIdx === 0) {
+        return []
+      }
+      break
+    }
+
+    for (const bet of page) {
+      if (!seenIds.has(bet.id)) {
+        seenIds.add(bet.id)
+        accumulated.push(bet)
+      }
+    }
+
+    if (page.length < PAGE_SIZE) {
+      break
+    }
+  }
+
+  return accumulated
+}
+
 /**
  * One day's tracked bets the Daily Card can be built from: the MLB card plus the model's own NFL / NHL / NBA 'PROPS' picks. Two requests
  * because the API's default sport is MLB and a busy MLB day (every +EV alert is a row) must not crowd the PROPS rows out of one page.
+ *
+ * Both queries are paginated to completion. The backend API caps a single page at 200 rows, while the picks logger writes 450-730 PROPS
+ * rows per day ordered newest-first. Because official plays are logged at first sighting (often in the morning), a single 200-row page
+ * silently hid most official plays by evening (the PRD-03 fix). Paging through each query until a short page arrives ensures the fetch
+ * is complete no matter how many rows a day has.
  */
 export async function loadLedgerBets(date: string): Promise<Bet[]> {
   const [mlb, props] = await Promise.all([
-    apiGetPicks({ date, limit: 200 }).catch(() => [] as Bet[]),
-    apiGetPicks({ date, system: 'PROPS', sport: 'all', limit: 200 }).catch(() => [] as Bet[]),
+    fetchPagedPicks({ date }),
+    fetchPagedPicks({ date, system: 'PROPS', sport: 'all' }),
   ])
   return [...mlb, ...props]
 }
