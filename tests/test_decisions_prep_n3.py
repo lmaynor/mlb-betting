@@ -82,16 +82,38 @@ def test_seeded_claims_carry_provenance():
         assert c.get("mutation"), c["claim_id"]
 
 
+def _is_external_workspace_ref(raw: str) -> bool:
+    """True when a source_doc points at the beezy workspace on the dev VM
+    (~/... or /home/<user>/...) instead of into this repo. The claims cite
+    beezy evidence records that live outside the repo by design, so on any
+    other machine the citation is an external reference whose existence
+    cannot be checked there."""
+    return raw.startswith("~/") or raw.startswith("/home/")
+
+
 def test_source_docs_are_clean_resolvable_paths():
     # Lint (join audit, 2026-11-13): a claim's source_doc must be a bare
     # path that resolves to an existing file. Annotations belong in a
     # note field (see N3-S008's source_note), never inside the path:
     # the DEC-03 evidence packaging resolves source_doc literally and
     # fails closed on a path that does not exist.
+    #
+    # Existence is enforced for repo-relative paths, which must resolve
+    # inside this repo on any machine. Workspace-absolute citations are
+    # external references: they are linted for shape (bare path, names a
+    # file) but not existence, which only the dev VM could check — the
+    # packaging step still resolves them literally and fails closed when
+    # it runs there. (OPS-09: existence-checking them made this test fail
+    # on every CI runner, which has no ~/workspace/beezy, while passing
+    # locally.)
+    repo_root = Path(__file__).resolve().parents[1]
     for c in _load_claims():
         raw = c["source_doc"]
         assert "(" not in raw and ")" not in raw, (c["claim_id"], raw)
-        assert Path(raw).expanduser().is_file(), (c["claim_id"], raw)
+        if _is_external_workspace_ref(raw):
+            assert Path(raw).suffix, (c["claim_id"], raw)
+            continue
+        assert (repo_root / raw).is_file(), (c["claim_id"], raw)
 
 
 # ---------------------------------------------------------------------------
