@@ -1249,6 +1249,126 @@ def sharp_fields(cons, side: str | None, best: dict) -> dict:
     return out
 
 
+# ------------------------------------------------------------------------------------------------ PRD-04 slice 2
+# The sharp-weighted consensus and the fail-closed sharp reference (adopted Nov 15, 2026; RUL-20261115-prd04-officials-scope
+# R2 + R3). Everything here is stamped on the board row for the PRD-04 SHADOW gate (ev.prd04_officials); the live gate keeps
+# using build_consensus' unweighted median and sharp_fields above, untouched.
+PRD04_PRIMARY_RETAIL_BOOKS = frozenset({"draftkings", "fanduel", "betmgm", "caesars", "espnbet", "betrivers"})
+PRD04_SHARP_WEIGHT, PRD04_PRIMARY_WEIGHT, PRD04_SECONDARY_WEIGHT = 2.0, 1.0, 0.5
+PRD04_SHARP_MAX_HOLD = 0.065          # a sharp venue earns the 2.0 weight only on a quote whose own hold is at most this
+
+
+def _book_hold(over_am, under_am) -> float | None:
+    """A two-sided quote's hold: raw implied P(over) + raw implied P(under) - 1 (None when a side is missing)."""
+    if over_am is None or under_am is None:
+        return None
+    from mlb_core.odds.utils import american_to_implied_prob
+    return float(american_to_implied_prob(over_am) + american_to_implied_prob(under_am) - 1.0)
+
+
+def prd04_book_weight(book: str, hold: float | None) -> float:
+    """The PRD-04 consensus weight of one book's quote: sharp 2.0, primary US retail 1.0, secondary / soft 0.5,
+    DFS and offshore 0.0. A SHARP_BOOKS venue qualifies for the 2.0 weight only when THIS quote's hold is
+    <= PRD04_SHARP_MAX_HOLD; a sharp venue quoting a fatter hold falls to the secondary weight (its price is
+    still information, just not sharp-grade on this market)."""
+    b = str(book or "").strip().lower()
+    if b in DFS_BOOKS:
+        return 0.0
+    if b in SHARP_BOOKS:
+        return PRD04_SHARP_WEIGHT if (hold is not None and hold <= PRD04_SHARP_MAX_HOLD) else PRD04_SECONDARY_WEIGHT
+    if b in PRD04_PRIMARY_RETAIL_BOOKS:
+        return PRD04_PRIMARY_WEIGHT
+    if b in OFFSHORE_BOOKS:
+        return 0.0
+    return PRD04_SECONDARY_WEIGHT
+
+
+def _weighted_median(pairs) -> float | None:
+    """Weighted median of (value, weight) pairs: the value at which the sorted cumulative weight first
+    reaches half the total weight. Zero / negative weights contribute nothing."""
+    pts = sorted((float(v), float(w)) for v, w in pairs if w and float(w) > 0)
+    if not pts:
+        return None
+    half = sum(w for _, w in pts) / 2.0
+    acc = 0.0
+    for v, w in pts:
+        acc += w
+        if acc >= half:
+            return v
+    return pts[-1][0]
+
+
+def prd04_consensus_fields(cons, side: str | None, best: dict) -> dict:
+    """{p_cons_w_over, n_cons_w, p_sharp_ref_over, p_sharp_ref_book, sharp_ref_hold, n_sharp_ref} for the PRD-04
+    shadow gate, from the same PropConsensus the live gate medians.
+
+    p_cons_w_over is the sharp-weighted median of the per-book de-vigged fairs (weights: prd04_book_weight).
+    p_sharp_ref is the fail-closed check's reference fair: Pinnacle's fair when it two-sides the line, else the
+    lowest-hold Novig / ProphetX fair -- in both cases leaving out the book we would bet at (a venue cannot
+    confirm its own price, the sharp_fields convention). n_sharp_ref counts the sharp venues available after
+    that exclusion; the Kalshi fallback (ev.prd04_officials) keys off n_sharp_ref == 0 via p_sharp_ref_over
+    being None."""
+    out = {"p_cons_w_over": None, "n_cons_w": 0, "p_sharp_ref_over": None, "p_sharp_ref_book": None,
+           "sharp_ref_hold": None, "n_sharp_ref": 0}
+    if cons is None or not getattr(cons, "book_quotes", None):
+        return out
+    bet_book = (best.get(side) or (None,))[0] if side in ("over", "under") else None
+    quotes = {str(b).strip().lower(): (o, u, float(f)) for b, o, u, f in cons.book_quotes}
+    pairs = []
+    for b, (o, u, f) in quotes.items():
+        w = prd04_book_weight(b, _book_hold(o, u))
+        if w > 0:
+            pairs.append((f, w))
+    if pairs:
+        out["p_cons_w_over"] = _weighted_median(pairs)
+        out["n_cons_w"] = len(pairs)
+    cands = []
+    for b in ("pinnacle", "novig", "prophetx"):
+        if b in quotes and b != bet_book:
+            o, u, f = quotes[b]
+            cands.append((b, f, _book_hold(o, u)))
+    if cands:
+        out["n_sharp_ref"] = len(cands)
+        pinn = [c for c in cands if c[0] == "pinnacle"]
+        pick = pinn[0] if pinn else min(cands, key=lambda c: (c[2] is None, c[2] if c[2] is not None else 0.0))
+        out.update(p_sharp_ref_over=pick[1], p_sharp_ref_book=pick[0], sharp_ref_hold=pick[2])
+    return out
+
+
+def prd04_kalshi_fields(quotes, now: datetime | None = None) -> dict:
+    """The Kalshi reference fields for the round-3 p_sharp_ref fallback, from the Kalshi two-sided quote among
+    `quotes` (the main-line quotes for this player / stat): {kalshi_mid_over, kalshi_spread, kalshi_depth,
+    kalshi_age_sec, kalshi_traded_30m}. mid = the quote's de-vigged fair P(over); spread = its raw implied
+    over + under - 1 (the probability-space spread); age = seconds from the quote's last_update to `now`.
+
+    The ParlayAPI feed carries Kalshi PRICES only -- no order-book depth and no trade tape -- so kalshi_depth
+    and kalshi_traded_30m stay None here, and the fallback in ev.prd04_officials can never activate on this
+    feed (fail-closed by construction) until a depth-bearing Kalshi source is wired in."""
+    out = {"kalshi_mid_over": None, "kalshi_spread": None, "kalshi_depth": None,
+           "kalshi_age_sec": None, "kalshi_traded_30m": None}
+    now = now or datetime.now(timezone.utc)
+    for q in quotes or []:
+        if str(getattr(q, "book", "") or "").strip().lower() != "kalshi" or not getattr(q, "two_sided", False):
+            continue
+        from mlb_core.odds.utils import american_to_implied_prob, devig_two_way
+        io = american_to_implied_prob(q.over)
+        iu = american_to_implied_prob(q.under)
+        fair_over, _ = devig_two_way(io, iu, "proportional")
+        out["kalshi_mid_over"] = float(fair_over)
+        out["kalshi_spread"] = float(io + iu - 1.0)
+        ts = getattr(q, "ts", None)
+        if ts:
+            try:
+                t = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+                if t.tzinfo is None:
+                    t = t.replace(tzinfo=timezone.utc)
+                out["kalshi_age_sec"] = max(0.0, (now - t).total_seconds())
+            except ValueError:
+                pass
+        break
+    return out
+
+
 def blend_side_ev(p_blend_over: float | None, side: str | None, best: dict) -> tuple:
     """(P(side) under the blended posterior, EV of the best quote on that side at that probability); None where the blend, the
     side or a real quote on the side is missing. `blend_ev` is the market-anchored counterpart of `market_ev` (which prices the
@@ -1797,6 +1917,8 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
     gap_raw = (p_model_side - p_mkt_side) if (p_model_side is not None and p_mkt_side is not None) else None
     blend_ev_shrunk = concave_shrink_edge(blend_ev, gap_raw) if blend_ev is not None else None
     sharp = sharp_fields(cons, side, best)
+    p4c = prd04_consensus_fields(cons, side, best)          # PRD-04 slice 2 stamps (shadow gate only)
+    p4k = prd04_kalshi_fields(at_pt)
     row = {
         "sport": sport, "stat": stat, "stat_label": STAT_LABEL.get(stat, stat), "player": player, "player_norm": pn,
         "team": team, "opp": opp, "game_key": gk, "commence": None if start is None else start.isoformat(),
@@ -1808,6 +1930,13 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
         "p_over_blend": _f(p_blend_over), "p_blend_side": _f(p_blend_side), "blend_ev": _f(blend_ev),
         "gap_raw": _f(gap_raw), "blend_ev_shrunk": _f(blend_ev_shrunk),
         "p_sharp_over": _f(sharp["p_sharp_over"]), "n_sharp": sharp["n_sharp"], "sharp_agrees": sharp["sharp_agrees"],
+        "p_cons_w_over": _f(p4c["p_cons_w_over"]), "n_cons_w": p4c["n_cons_w"],
+        "p_sharp_ref_over": _f(p4c["p_sharp_ref_over"]), "p_sharp_ref_book": p4c["p_sharp_ref_book"],
+        "sharp_ref_hold": _f(p4c["sharp_ref_hold"], 5), "n_sharp_ref": p4c["n_sharp_ref"],
+        "cons_disp": _f(cons.disp if cons is not None else None, 5),
+        "kalshi_mid_over": _f(p4k["kalshi_mid_over"]), "kalshi_spread": _f(p4k["kalshi_spread"], 5),
+        "kalshi_depth": p4k["kalshi_depth"], "kalshi_age_sec": _f(p4k["kalshi_age_sec"], 1),
+        "kalshi_traded_30m": p4k["kalshi_traded_30m"],
         "p_model_side": _f(p_model_side), "p_mkt_side": _f(p_mkt_side),
         "l5_hit_rate": form["l5_rate"] if form else None, "l10_hit_rate": form["l10_rate"] if form else None,
         "szn_rate": form["szn_rate"] if form else None, "hit_basis": "over",
