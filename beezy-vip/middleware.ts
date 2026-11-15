@@ -80,10 +80,26 @@ function withBoardCdnCache(req: NextRequest, res: NextResponse): NextResponse {
   return res
 }
 
+// Bare /ev/projections gets the same brief edge cache under the same hard conditions (RUL-20261115-crawler-policy).
+// The page is force-dynamic and reads searchParams, so every parameterized variant is a fresh function invocation --
+// the surface GPTBot enumerated at ~2 req/s. robots.txt now closes the parameterized space to crawlers; this caps
+// the bare canonical URL (the only variant crawlers and link previews should fetch) at one origin render per 60s.
+// Scoped to this single pathname on purpose: the /api proxy routes stay per-viewer private (tests/api-proxy-caching
+// .test.ts) and are NOT covered here. Both headers, for the same reason as withBoardCdnCache: the force-dynamic
+// render overwrites Cache-Control with a private value, while Vercel's edge CDN obeys CDN-Cache-Control.
+function withProjectionsCdnCache(req: NextRequest, res: NextResponse): NextResponse {
+  if (req.method !== 'GET' || gatingOn() || req.nextUrl.search) return res
+  if (req.nextUrl.pathname !== '/ev/projections') return res
+  if (req.cookies.get('__session')) return res
+  res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300')
+  res.headers.set('CDN-Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300')
+  return res
+}
+
 // AUTH_DISABLED (lib/auth-mode.ts): no Clerk at all, geo-blocking still applies. Only the chosen branch is evaluated, so
 // clerkMiddleware() is never constructed when it is off.
 export default AUTH_DISABLED
-  ? (req: NextRequest) => geoRedirect(req) ?? withBoardCdnCache(req, NextResponse.next())
+  ? (req: NextRequest) => geoRedirect(req) ?? withProjectionsCdnCache(req, withBoardCdnCache(req, NextResponse.next()))
   : clerkMiddleware(async (auth, req) => {
       const geo = geoRedirect(req)
       if (geo) return geo
@@ -105,7 +121,7 @@ export default AUTH_DISABLED
         }
       }
 
-      return withBoardCdnCache(req, NextResponse.next())
+      return withProjectionsCdnCache(req, withBoardCdnCache(req, NextResponse.next()))
     })
 
 export const config = {
