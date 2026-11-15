@@ -27,6 +27,10 @@ def row(**kw):
         "n_books": 6, "model_edge": 0.05, "market_ev": 0.0865, "confluence": True, "edge_capped": False,
         "beezy_score": 72, "engine": "empirical_ewm_v2", "validated": False,
         "p_blend_side": 0.545, "blend_ev": 0.07,
+        # slice 2: the reference stamps a post-slice-2 board row carries (a passing sharp reference:
+        # gap 0.545 - 0.53 = 0.015 <= 0.025 and 0.53 * 2.05 >= 1.005 at the +105 best price)
+        "p_sharp_ref_over": 0.53, "p_sharp_ref_book": "pinnacle", "n_sharp_ref": 1,
+        "p_cons_w_over": 0.53, "cons_disp": 0.01,
     }
     r.update(kw)
     return r
@@ -86,8 +90,11 @@ def test_market_tiers():
         assert P4.market_tier(row(stat=stat)) == 3, stat
     for stat in ("goals", "assists", "points", "blocked_shots", "pp_points"):
         assert P4.market_tier(nhl_row(stat=stat)) == 3, stat
-    # trained skater rows stay Tier 3 in slice 1 (slice 3 opens the trained path); trained saves is Tier 2
-    assert P4.market_tier(nhl_row(stat="goals", nhl_model="trained_v1")) == 3
+    # slice 3 opened the trained path: trained skater rows are Tier 2 (the board engine's stay Tier 3
+    # in the loop above); trained saves is Tier 2 via TIER2_MARKETS
+    assert P4.market_tier(nhl_row(stat="goals", nhl_model="trained_v1")) == 2
+    assert P4.market_tier(nhl_row(stat="assists", nhl_model="trained_v1")) == 2
+    assert P4.market_tier(nhl_row(stat="points", nhl_model="trained_v1")) == 2
     assert P4.market_tier(saves_row(nhl_model="trained_v1")) == 2
     # every production NFL market, anytime_td included
     assert P4.market_tier(row(sport="nfl", stat="pass_yds")) == 3
@@ -158,8 +165,12 @@ def test_shadow_gate_still_requires_the_live_stack():
     assert not v["would_be_official"] and "n_books<4" in v["reasons"]
     v = P4.shadow_verdict(row(market_ev=0.12))
     assert not v["would_be_official"] and "market_ev_out_of_band" in v["reasons"]
-    v = P4.shadow_verdict(row(sharp_agrees=False, n_sharp=2))
-    assert not v["would_be_official"] and "sharp_disagrees_current_check" in v["reasons"]
+    # slice 2: the fail-closed sharp check replaced the live gate's sharp_agrees inside the shadow gate.
+    # A row with no sharp reference fails closed; a reference the blend disagrees with fails it too.
+    v = P4.shadow_verdict(row(p_sharp_ref_over=None, n_sharp_ref=0))
+    assert not v["would_be_official"] and "sharp_check_missing" in v["reasons"]
+    v = P4.shadow_verdict(row(p_sharp_ref_over=0.40))
+    assert not v["would_be_official"] and "sharp_check_fail" in v["reasons"]
 
 
 # ------------------------------------------------------------------------------------- payload + logging
