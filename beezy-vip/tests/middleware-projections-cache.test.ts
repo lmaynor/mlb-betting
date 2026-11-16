@@ -67,7 +67,7 @@ describe('projections CDN cache (middleware)', () => {
     '/ev/projections?date=2026-11-05&game=nba:2026-11-18:BOS@DEN',
     '/ev/projections/',
     '/ev',
-    '/ev/games',
+    '/ev/candidates',
   ])('does not cache %s', async (path) => {
     expect(await cacheControl(path)).not.toContain('s-maxage')
     expect(await cdnCacheControl(path)).not.toContain('s-maxage')
