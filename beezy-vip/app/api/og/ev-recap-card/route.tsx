@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 import { OgBrandBadge } from "@/lib/og-brand";
+import { OG_CACHE_HEADERS } from "@/lib/og-cache";
 import { apiGetAnalyticsDeepDive, apiGetEvFeed } from "@/lib/betting-api";
 import { formatOdds } from "@/lib/odds";
 import { propStatLabel, SPORT_PILLARS } from "@/lib/sports";
@@ -273,5 +274,5 @@ export async function GET(req: Request) {
         <span style={{ fontSize: `${vertical ? 22 : 16}px`, color: C.emerald, fontWeight: 800 }}>beezy.fyi/ev</span>
       </div>
     </div>
-  ), { width: W, height: H });
+  ), { width: W, height: H, headers: OG_CACHE_HEADERS });
 }

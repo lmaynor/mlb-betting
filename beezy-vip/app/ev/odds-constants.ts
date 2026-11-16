@@ -57,7 +57,9 @@ export const OUTLIER_MIN_BOOKS = [
 ]
 
 // The banker rewrites the boards every 30 minutes, so a faster poll only re-downloads identical data.
-export const POLL_MS = 3 * 60_000
+// 5 minutes (OPS-08): a 3-minute poll sampled each 30-minute snapshot ~10 times for ~9 identical 304s;
+// 5 minutes still samples it ~6 times, and each avoided poll is one less function invocation.
+export const POLL_MS = 5 * 60_000
 
 export const MODES: { key: BadgeKey; label: string }[] = [
   { key: 'ev', label: '+EV Scanner' },

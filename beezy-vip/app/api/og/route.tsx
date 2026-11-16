@@ -1,6 +1,7 @@
 import { ImageResponse } from 'next/og'
 import { NextRequest }   from 'next/server'
 import { OgBrandBadge } from '@/lib/og-brand'
+import { OG_CACHE_HEADERS } from '@/lib/og-cache'
 
 export const runtime = 'edge'
 
@@ -89,6 +90,7 @@ export async function GET(req: NextRequest) {
     {
       width:  1200,
       height: 630,
+      headers: OG_CACHE_HEADERS,
     }
   )
 }

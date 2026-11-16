@@ -2,6 +2,7 @@ import { ImageResponse } from "next/og";
 import { OgBrandBadge, ogTeamLogoUrl, type OgPick } from "@/lib/og-brand";
 import { headshotUrlById } from "@/lib/sport-assets";
 import { DISCORD_INVITE_LABEL } from "@/lib/links";
+import { OG_CACHE_HEADERS } from "@/lib/og-cache";
 export const runtime = "edge";
 
 const API = process.env.BETTING_API_URL!;
@@ -243,5 +244,5 @@ export async function GET() {
       </div>
 
     </div>
-  ), { width: W, height: H });
+  ), { width: W, height: H, headers: OG_CACHE_HEADERS });
 }

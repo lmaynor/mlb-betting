@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 import { OgBrandBadge } from "@/lib/og-brand";
+import { OG_CACHE_HEADERS } from "@/lib/og-cache";
 export const runtime = "edge";
 
 // Nightly settlement receipt: every graded bet for one slate, wins AND losses,
@@ -157,5 +158,5 @@ export async function GET(req: Request) {
         </div>
       </div>
     </div>
-  ), { width: W, height: H });
+  ), { width: W, height: H, headers: OG_CACHE_HEADERS });
 }
