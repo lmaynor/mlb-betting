@@ -29,6 +29,14 @@ OWNBETTOR_PAPER_ARMED=1, set only in the Cloud Run job's environment (the
 RES-11 shadow pattern): removing it, or pausing the scheduler, disarms the
 paper operation.  Without it the module exits 3 having done nothing.
 
+MAPPING (AUT-11): before the signal pass, main() loads the verified Kalshi
+player-prop table from OwnBettor/mapping/kalshi_props.json and refreshes it
+inside the firing only when it is stale (ev.ownbettor.propmap; a cached table
+with a daily refresh check -- no new job or scheduler).  The table composes
+behind the recorded table in the resolver chain; the run summary records its
+status under "mapping".  A table failure degrades to the recorded table alone,
+never to a failed firing.
+
 ISOLATION: reads AUT-01's banked ledger object only -- no contact with AUT-01's
 code, jobs, schedulers or evaluator, and none with PRD-04 or RES-11.  Writes
 only under OwnBettor/.  Stood up Nov 16, 2026 at Luc's direction ("run this
@@ -45,9 +53,11 @@ import sys
 from datetime import datetime, timezone
 
 from ev.novig.shadow_bank import make_store
+from ev.ownbettor import propmap
 from ev.ownbettor.audit import AuditLog, PLACED_STATUSES
 from ev.ownbettor.config import BettorConfig, load_config
-from ev.ownbettor.resolver import RecordedTableResolver
+from ev.ownbettor.propmap import PropTableResolver
+from ev.ownbettor.resolver import ChainedResolver, RecordedTableResolver
 from ev.ownbettor.runner import Bettor
 from ev.ownbettor.signals import signals_from_rows
 from ev.ownbettor.venues.kalshi import KalshiPaperAdapter, PublicBookSource
@@ -144,11 +154,15 @@ def _read_ledger_rows(store) -> list:
 
 
 # ------------------------------------------------------------------------- run
-def run_job(store, result_source=None, book_source=None, cfg: BettorConfig | None = None) -> dict:
+def run_job(store, result_source=None, book_source=None, cfg: BettorConfig | None = None,
+            prop_table: dict | None = None, prop_status: dict | None = None) -> dict:
     cfg = cfg or load_config()
     downloaded = _download_audit(store, cfg.audit_path)
     audit = AuditLog(cfg.audit_path, mode="dry_run")
-    resolver = RecordedTableResolver.from_file(cfg.mapping_path)
+    resolvers = [RecordedTableResolver.from_file(cfg.mapping_path)]
+    if prop_table is not None:
+        resolvers.append(PropTableResolver(prop_table))
+    resolver = resolvers[0] if len(resolvers) == 1 else ChainedResolver(resolvers)
     adapter = KalshiPaperAdapter(book_source or PublicBookSource(), cfg)
     bettor = Bettor(cfg, adapter, resolver, audit=audit)
 
@@ -190,6 +204,7 @@ def run_job(store, result_source=None, book_source=None, cfg: BettorConfig | Non
         "signals_new": n_new,
         "outcomes": outcomes,
         "settlements_booked": booked,
+        "mapping": prop_status,
         "realized_pnl_total": round(sum(float(e.get("pnl_usd") or 0.0) for e in events
                                         if e.get("event") == "settlement"), 4),
         "killed": audit.kill is not None,
@@ -209,7 +224,12 @@ def main(argv=None) -> int:
         print("refused: OWNBETTOR_LIVE_ARMED is set; the paper operation never runs "
               "under a live-armed config", file=sys.stderr)
         return 2
-    summary = run_job(make_store("gcs"), KalshiResultSource(), PublicBookSource(), cfg)
+    store = make_store("gcs")
+    # AUT-11: the verified Kalshi prop table, banked in the bucket and refreshed
+    # inside this firing only when stale (never raises; see propmap.load_or_refresh).
+    prop_table, prop_status = propmap.load_or_refresh(store)
+    summary = run_job(store, KalshiResultSource(), PublicBookSource(), cfg,
+                      prop_table=prop_table, prop_status=prop_status)
     print(json.dumps(summary, indent=1, sort_keys=True))
     return 0
 
