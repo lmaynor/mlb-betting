@@ -1,4 +1,4 @@
-export const revalidate = 60
+export const revalidate = 300
 
 import { apiGetPicks as getPicks, apiGetStats, apiGetAnalyticsDeepDive } from '@/lib/betting-api'
 import { dailyBetsFromLedger } from '@/lib/top-picks-data'

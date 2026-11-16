@@ -6,7 +6,7 @@ import { SystemBadge }                        from '@/components/ui/primitives'
 import Link                                   from 'next/link'
 import type { Metadata }                      from 'next'
 
-export const revalidate = 60
+export const revalidate = 600
 
 type Props = { params: Promise<{ slug: string }> }
 

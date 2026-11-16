@@ -4,7 +4,7 @@ import type { SystemStats } from '@/lib/types'
 import { AnalyticsClient } from './analytics-client'
 import { Suspense } from 'react'
 
-export const revalidate = 60
+export const revalidate = 300
 
 export const metadata: Metadata = {
   title: 'Analytics',
