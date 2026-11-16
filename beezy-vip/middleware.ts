@@ -80,17 +80,50 @@ function withBoardCdnCache(req: NextRequest, res: NextResponse): NextResponse {
   return res
 }
 
-// Bare /ev/projections gets the same brief edge cache under the same hard conditions (RUL-20261115-crawler-policy).
-// The page is force-dynamic and reads searchParams, so every parameterized variant is a fresh function invocation --
-// the surface GPTBot enumerated at ~2 req/s. robots.txt now closes the parameterized space to crawlers; this caps
-// the bare canonical URL (the only variant crawlers and link previews should fetch) at one origin render per 60s.
-// Scoped to this single pathname on purpose: the /api proxy routes stay per-viewer private (tests/api-proxy-caching
-// .test.ts) and are NOT covered here. Both headers, for the same reason as withBoardCdnCache: the force-dynamic
-// render overwrites Cache-Control with a private value, while Vercel's edge CDN obeys CDN-Cache-Control.
+// Canonical navigation variants of /ev/projections get the same brief edge cache under the same hard conditions
+// (RUL-20261115-crawler-policy). Following the Nov 16 Vercel usage read (route at ~78% of top-10 Fluid CPU, burn in
+// the parameterized canonical variants), caching is extended to the finite set of canonical navigation URLs the
+// site itself links and crawlers fetch: the bare URL, the five ?league= URLs, ?view=games and its four ?sport= forms.
+// Each is its own CDN cache key; while gating is off their HTML is identical for every viewer; any filtered or
+// non-canonical variant is never shared, same as before. Scoped to this single pathname on purpose: the /api proxy
+// routes stay per-viewer private (tests/api-proxy-caching.test.ts) and are NOT covered here. Both headers, for the
+// same reason as withBoardCdnCache: the force-dynamic render overwrites Cache-Control with a private value, while
+// Vercel's edge CDN obeys CDN-Cache-Control.
+const PROJECTIONS_LEAGUES = new Set(['mlb', 'nfl', 'nhl', 'nba', 'soccer'])
+const PROJECTIONS_GAMES_SPORTS = new Set(['nba', 'nhl', 'soccer', 'ncaab'])
+
+function isCanonicalProjectionsQuery(searchParams: URLSearchParams): boolean {
+  const keys = Array.from(new Set(searchParams.keys()))
+  for (const key of keys) {
+    if (searchParams.getAll(key).length !== 1) return false
+  }
+  if (keys.length === 0) return true
+  if (keys.length === 1) {
+    const key = keys[0]
+    if (key === 'league') {
+      const val = searchParams.get('league')
+      return val !== null && PROJECTIONS_LEAGUES.has(val)
+    }
+    if (key === 'view') {
+      return searchParams.get('view') === 'games'
+    }
+    return false
+  }
+  if (keys.length === 2) {
+    if (searchParams.has('view') && searchParams.has('sport')) {
+      const sport = searchParams.get('sport')
+      return searchParams.get('view') === 'games' && sport !== null && PROJECTIONS_GAMES_SPORTS.has(sport)
+    }
+    return false
+  }
+  return false
+}
+
 function withProjectionsCdnCache(req: NextRequest, res: NextResponse): NextResponse {
-  if (req.method !== 'GET' || gatingOn() || req.nextUrl.search) return res
+  if (req.method !== 'GET' || gatingOn()) return res
   if (req.nextUrl.pathname !== '/ev/projections') return res
   if (req.cookies.get('__session')) return res
+  if (!isCanonicalProjectionsQuery(req.nextUrl.searchParams)) return res
   res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300')
   res.headers.set('CDN-Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300')
   return res
