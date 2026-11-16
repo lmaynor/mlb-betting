@@ -278,6 +278,44 @@ def oddsaccum_latest_key(sport: str) -> str:
     return f"{ODDSACCUM_PREFIX}/{sport}/latest.json"
 
 
+# ---------------------------------------------------------------------------
+# Action Network props backfill (BNK-11; discovery spike BNK-10). The web
+# scoreboard markets endpoint is date-addressable with real-book rows from
+# Jan 2025 forward (consensus-only before that), so historical NBA props --
+# main boards plus one-sided milestone stacks, with the Open book (id 30) in
+# every response -- are backfillable, unlike ParlayAPI, which keeps no
+# history. Layout mirrors Odds/bettingpros_nba/ (BNK-10's recommendation):
+# raw gzipped JSON per (market, date) with the normalized parquet beside it.
+# Raw-first: the untouched response body lands BEFORE any normalized row
+# exists, so the panel stays re-derivable whatever later analysis finds.
+# See nba/odds/action_network.py and scripts/bank_action_network.py.
+ACTION_NETWORK_PREFIX = "Odds/actionnetwork_nba"
+
+
+def action_network_prefix(league: str = "nba") -> str:
+    return f"Odds/actionnetwork_{league}"
+
+
+def action_network_raw_key(market: str, date: str, league: str = "nba") -> str:
+    """date is ISO (YYYY-MM-DD); market is the slug (points, rebounds,
+    rebounds_milestone_10plus, gamelines, ...)."""
+    return f"{action_network_prefix(league)}/{market}/{date}.json.gz"
+
+
+def action_network_parquet_key(market: str, date: str, league: str = "nba") -> str:
+    return f"{action_network_prefix(league)}/{market}/{date}.parquet"
+
+
+def action_network_checkpoint_key(shard: str, league: str = "nba") -> str:
+    return f"{action_network_prefix(league)}/checkpoints/{shard}.json"
+
+
+def action_network_manifest_key(league: str) -> str:
+    """The league's verified-markets manifest (written by the league probe,
+    read by the runner): which candidate types actually return rows."""
+    return f"{action_network_prefix(league)}/verified_markets.json"
+
+
 def oddsaccum_latest_kind_key(sport: str, kind: str) -> str:
     """Per-kind pointer. latest.json is shared by props AND game_lines runs, so whichever ran last wins -- a consumer
     that wants the newest PROPS snapshot (the alerts sweep) must not read it."""
