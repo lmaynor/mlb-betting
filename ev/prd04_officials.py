@@ -24,9 +24,18 @@ Slice 1 scope (this module as shipped):
     with a week of data in hand. The shadow gate enforces the adopted PRD-04 band.
   * an odds ceiling: MAX_OFFICIAL_AMERICAN_ODDS = +500 on the bet side (the existing 10% EV caps stay absolute).
   * the rest of the live official stack, unchanged: the tracked-pick base criteria (inherited by only evaluating
-    rows ev.model_picks.qualifies does not reject), n_books >= 4, market_ev in [3%, 10%], model_edge >= 1.5%,
-    and the CURRENT sharp-agreement check (ev.model_picks.official_caps' sharp_ok; slice 2 replaces it with the
-    fail-closed p_sharp_ref check and the sharp-weighted consensus).
+    rows ev.model_picks.qualifies does not reject), n_books >= 4, market_ev in [3%, 10%], model_edge >= 1.5%.
+
+Slice 2 scope (this module as shipped):
+  * the sharp check is now the adopted FAIL-CLOSED one (sharp_check below), replacing the live gate's fail-open
+    sharp_agrees inside the shadow gate only: a play needs a sharp reference (p_sharp_ref, stamped at board
+    assembly by ev.daily_projections.prd04_consensus_fields from the sharp-weighted consensus machinery) with
+    p_blend within +2.5pp of it AND the reference itself clearing +0.5% EV at the best price. No reference ->
+    the check fails, with exactly two escapes: the round-3 Kalshi fallback (kalshi_fallback: veto only, active
+    only when every adopted liquidity condition verifiably holds) and, for the OPENER cohort (slice 4), the
+    unconfirmed-sharp bypass tagged OPENER_UNCONFIRMED_SHARP. Every shadow record carries the sharp cohort
+    fields (sharp_status / sharp_cohort / the reference and weighted-consensus values) so the shadow-week
+    validation -- sharp_agrees rows must beat sharp_missing rows by >= +0.50% CLV -- is computable from the tape.
 
 Tier 3 re-entry bar (round 2, for the record; enforced by whoever judges the shadow tape, not by this gate):
 held-out walk-forward c >= 0.10 (t >= 2.5) on the served engine against the sharp-weighted consensus, plus
@@ -71,6 +80,19 @@ TIER2_BOARD_FIT_CONFIRMED = False
 
 SHADOW_KEY_FMT = "PRD04Shadow/{day}/{sport}.json"
 
+# -- slice 2: the fail-closed sharp check -------------------------------------------------------------------------
+SHARP_REF_MAX_BLEND_GAP = 0.025       # p_blend may sit at most +2.5pp above the sharp reference fair
+SHARP_REF_MIN_PRICE_FACTOR = 1.005    # and the reference fair must still clear +0.5% EV at the best price
+OPENER_BYPASS_MIN_BOOKS = 3           # the OPENER cohort's unconfirmed-sharp bypass (slice 4 passes cohort="opener")
+OPENER_BYPASS_MAX_DISP = 0.045
+# Round 3 Kalshi fallback activation: ALL conditions must verifiably hold, and the fallback is a veto only.
+KALSHI_MAX_SPREAD = 0.04
+KALSHI_MIN_DEPTH = 500                # contracts on the thinner side of the book
+KALSHI_MAX_AGE_SEC = 900.0
+KALSHI_MID_MIN, KALSHI_MID_MAX = 0.15, 0.85
+KALSHI_VETO_GAP = 0.030               # |p_blend - kalshi mid| beyond this vetoes the play
+KALSHI_MIN_PRICE_FACTOR = 1.005       # the bet must clear +0.5% EV against the Kalshi mid at the best price
+
 
 def shadow_enabled() -> bool:
     """PRD04_SHADOW=1 turns the shadow pass on in ev.model_picks.run. Default OFF: merging this module changes
@@ -102,6 +124,96 @@ def _floor_for(tier: int) -> int | None:
     if tier == 2:
         return tier2_floor()
     return None
+
+
+def kalshi_fallback(r: dict, side: str) -> dict:
+    """The round-3 Kalshi p_sharp_ref fallback state for a board row: {active, veto, mid_side, checks}.
+
+    Active only when EVERY adopted condition verifiably holds on the row's Kalshi stamps (spread <= 0.04,
+    depth >= 500 contracts, quote age <= 900s with a trade inside the trailing 30 min, mid inside
+    [0.15, 0.85]). A condition the feed cannot evidence leaves the fallback INACTIVE -- on today's
+    ParlayAPI Kalshi quotes depth / trade stamps are always None (see ev.daily_projections.prd04_kalshi_fields),
+    so the fallback cannot activate until a depth-bearing Kalshi source is wired in. Fail-closed by
+    construction. When active it is a VETO ONLY: it never raises a candidate's EV and never enters the
+    consensus; it fails the play when p_blend disagrees with the mid by > 3.0pp or the best price does not
+    clear +0.5% EV against the mid."""
+    from ev import model_picks as MP          # lazy, see shadow_verdict
+    mid_over = MP._num(r.get("kalshi_mid_over"))
+    spread = MP._num(r.get("kalshi_spread"))
+    depth = r.get("kalshi_depth")
+    age = MP._num(r.get("kalshi_age_sec"))
+    checks = {
+        "mid_present": mid_over is not None,
+        "spread_ok": spread is not None and spread <= KALSHI_MAX_SPREAD,
+        "depth_ok": isinstance(depth, (int, float)) and not isinstance(depth, bool)
+                    and float(depth) >= KALSHI_MIN_DEPTH,
+        "age_ok": age is not None and age <= KALSHI_MAX_AGE_SEC,
+        "traded_ok": r.get("kalshi_traded_30m") is True,
+        "band_ok": mid_over is not None and KALSHI_MID_MIN <= mid_over <= KALSHI_MID_MAX,
+    }
+    out: dict[str, Any] = {"active": all(checks.values()), "veto": False, "mid_side": None, "checks": checks}
+    if not out["active"] or side not in ("over", "under"):
+        return out
+    mid_side = mid_over if side == "over" else 1.0 - mid_over
+    out["mid_side"] = mid_side
+    best = MP._best(r, side)
+    p_blend = MP._num(r.get("p_blend_side"))
+    dec_best = None
+    if best is not None:
+        from mlb_core.odds.utils import american_to_decimal
+        dec_best = american_to_decimal(best[1])
+    veto = p_blend is None or abs(p_blend - mid_side) > KALSHI_VETO_GAP
+    if dec_best is None or mid_side * dec_best < KALSHI_MIN_PRICE_FACTOR:
+        veto = True
+    out["veto"] = bool(veto)
+    return out
+
+
+def sharp_check(r: dict, cohort: str = "intraday") -> dict:
+    """The PRD-04 fail-closed sharp verdict for one board row (slice 2): {ok, status, cohort_class,
+    p_sharp_ref_side, tag, kalshi}.
+
+    With a sharp reference stamped on the row (p_sharp_ref_over): pass requires p_blend - p_sharp_ref
+    <= +2.5pp AND p_sharp_ref * dec_best >= 1.005. With NO reference the check FAILS CLOSED ('missing'),
+    with exactly two escapes: an active Kalshi fallback that does not veto ('kalshi_pass'; a veto is
+    'kalshi_veto'), and -- for cohort='opener' only -- the unconfirmed-sharp bypass at n_books >= 3 and
+    disp <= 0.045 ('opener_bypass', tagged OPENER_UNCONFIRMED_SHARP).
+
+    cohort_class is the shadow-week validation cohort (round 2: sharp_agrees rows must beat sharp_missing
+    rows by >= +0.50% CLV): 'agrees' when a reference existed and passed, 'disagrees' when one existed and
+    failed, 'missing' when none existed (the fallback / bypass rows live here)."""
+    from ev import model_picks as MP          # lazy, see shadow_verdict
+    from mlb_core.odds.utils import american_to_decimal
+    side = str(r.get("side") or "").lower()
+    p_blend = MP._num(r.get("p_blend_side"))
+    best = MP._best(r, side) if side in ("over", "under") else None
+    dec_best = american_to_decimal(best[1]) if best is not None else None
+    ref_over = MP._num(r.get("p_sharp_ref_over"))
+    out: dict[str, Any] = {"ok": False, "status": "missing", "cohort_class": "missing",
+                           "p_sharp_ref_side": None, "tag": None, "kalshi": None}
+    if ref_over is not None and side in ("over", "under"):
+        ref_side = ref_over if side == "over" else 1.0 - ref_over
+        out["p_sharp_ref_side"] = ref_side
+        ok = (p_blend is not None and dec_best is not None
+              and (p_blend - ref_side) <= SHARP_REF_MAX_BLEND_GAP
+              and ref_side * dec_best >= SHARP_REF_MIN_PRICE_FACTOR)
+        out.update(ok=bool(ok), status="pass" if ok else "fail",
+                   cohort_class="agrees" if ok else "disagrees")
+        return out
+    kf = kalshi_fallback(r, side)
+    out["kalshi"] = kf
+    if kf["active"]:
+        out.update(ok=not kf["veto"], status="kalshi_veto" if kf["veto"] else "kalshi_pass")
+        return out
+    if cohort == "opener":
+        try:
+            n_books = int(r.get("n_books") or 0)
+        except (TypeError, ValueError):
+            n_books = 0
+        disp = MP._num(r.get("cons_disp"))
+        if n_books >= OPENER_BYPASS_MIN_BOOKS and disp is not None and disp <= OPENER_BYPASS_MAX_DISP:
+            out.update(ok=True, status="opener_bypass", tag="OPENER_UNCONFIRMED_SHARP")
+    return out
 
 
 def shadow_verdict(r: dict, live_tier: str | None = None) -> dict:
@@ -137,6 +249,16 @@ def shadow_verdict(r: dict, live_tier: str | None = None) -> dict:
         "would_be_official": False, "reasons": [],
     }
     reasons: list[str] = rec["reasons"]
+    sc = sharp_check(r)
+    rec.update({
+        "sharp_status": sc["status"], "sharp_cohort": sc["cohort_class"], "sharp_tag": sc["tag"],
+        "p_sharp_ref_over": MP._num(r.get("p_sharp_ref_over")), "p_sharp_ref_side": sc["p_sharp_ref_side"],
+        "p_sharp_ref_book": r.get("p_sharp_ref_book"), "n_sharp_ref": r.get("n_sharp_ref"),
+        "p_cons_w_over": MP._num(r.get("p_cons_w_over")), "cons_disp": MP._num(r.get("cons_disp")),
+        "kalshi_mid_over": MP._num(r.get("kalshi_mid_over")), "kalshi_spread": MP._num(r.get("kalshi_spread")),
+        "kalshi_fallback_active": bool(sc["kalshi"] and sc["kalshi"]["active"]),
+        "kalshi_veto": bool(sc["kalshi"] and sc["kalshi"]["veto"]),
+    })
     if tier == 3:
         reasons.append("tier_3_blocked")
         return rec
@@ -160,8 +282,8 @@ def shadow_verdict(r: dict, live_tier: str | None = None) -> dict:
         reasons.append("blend_ev_out_of_band")
     if american is not None and american > MAX_OFFICIAL_AMERICAN_ODDS:
         reasons.append("odds_above_ceiling")
-    if not MP.official_caps(r)["sharp_ok"]:
-        reasons.append("sharp_disagrees_current_check")
+    if not sc["ok"]:
+        reasons.append(f"sharp_check_{sc['status']}")
     if (str(r.get("sport") or "").lower(), str(r.get("stat") or "").lower()) == ("nhl", "saves"):
         # Tier 2 saves: intraday first-sighting product (the shadow log's first-sighting dedupe IS the
         # first-sighting rule) with goalie confirmation required -- the saves hardening verdict, which carries
