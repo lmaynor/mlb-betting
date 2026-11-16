@@ -288,13 +288,16 @@ def sharp_check(r: dict, cohort: str = "intraday") -> dict:
     return out
 
 
-def shadow_verdict(r: dict, live_tier: str | None = None, skater_cohort_clv: float | None = None) -> dict:
+def shadow_verdict(r: dict, live_tier: str | None = None, skater_cohort_clv: float | None = None,
+                   cohort: str = "intraday") -> dict:
     """The PRD-04 verdict for one board row that the live path at least tracks.
 
     Returns the full shadow record: the tier, the floor applied, every gate input, `would_be_official`, and the
     list of failed checks in `reasons` (empty when it would be official). Pure: no I/O, no clock.
     `skater_cohort_clv` is the trained-skater shadow cohort's measured mean CLV, handed in by the judging
-    pass; it only moves the trained-skater floor (48 -> 42 at +1.00%)."""
+    pass; it only moves the trained-skater floor (48 -> 42 at +1.00%). `cohort` selects the sharp check's
+    semantics: "opener" (slice 4) enables the OPENER_UNCONFIRMED_SHARP bypass; anything else is the
+    fail-closed intraday check."""
     from ev import model_picks as MP          # lazy: model_picks imports this module lazily too
 
     tier = market_tier(r)
@@ -330,7 +333,7 @@ def shadow_verdict(r: dict, live_tier: str | None = None, skater_cohort_clv: flo
         "blend_c_prd04": c_p4 if c_p4 is not None else blend_c,
         "trained_path": skater, "lineup_status": r.get("lineup_status"),
     })
-    sc = sharp_check({**r, "p_blend_side": p_blend_p4} if skater else r)
+    sc = sharp_check({**r, "p_blend_side": p_blend_p4} if skater else r, cohort=cohort)
     rec.update({
         "sharp_status": sc["status"], "sharp_cohort": sc["cohort_class"], "sharp_tag": sc["tag"],
         "p_sharp_ref_over": MP._num(r.get("p_sharp_ref_over")), "p_sharp_ref_side": sc["p_sharp_ref_side"],

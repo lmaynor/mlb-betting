@@ -1369,6 +1369,51 @@ def prd04_kalshi_fields(quotes, now: datetime | None = None) -> dict:
     return out
 
 
+PRD04_CONTROL_MIN_EV = 0.030     # the c = 0 line-shopping control flags at >= +3.0% vs leave-self-out consensus
+
+
+def prd04_control_fields(cons) -> dict:
+    """The PRD-04 slice-4 c = 0 line-shopping control for one (player, stat) market, from the same
+    PropConsensus the gate medians: {control_book, control_side, control_american, control_ev,
+    control_fair_side, control_n_books} or all-None when no book qualifies.
+
+    The control is the market-only attribution baseline for the opener experiment (round 2): for every
+    non-DFS, non-offshore book quote, price its side against the LEAVE-SELF-OUT consensus (the median
+    de-vigged fair of the OTHER quoted books, the ev.props.scan_book_outliers pattern) and keep the single
+    best flag at EV >= +3.0%. No model anywhere in it -- that is the point. Stamped at board assembly
+    because per-book quotes do not survive onto the row; ev.prd04_openers locks control rows off these
+    stamps on the same slates as the cohort locks."""
+    out = {"control_book": None, "control_side": None, "control_american": None, "control_ev": None,
+           "control_fair_side": None, "control_n_books": None}
+    if cons is None or not getattr(cons, "book_quotes", None):
+        return out
+    quotes = {str(b).strip().lower(): (o, u, float(f)) for b, o, u, f in cons.book_quotes}
+    fairs = {b: f for b, (_, _, f) in quotes.items() if b not in DFS_BOOKS}
+    if len(fairs) < 3:
+        return out
+    from mlb_core.odds.utils import american_to_decimal
+    best = None
+    for b, (o, u, _f_b) in quotes.items():
+        if b in DFS_BOOKS or b in OFFSHORE_BOOKS:
+            continue
+        others = sorted(f for b2, f in fairs.items() if b2 != b)
+        if len(others) < 2:
+            continue
+        mid = len(others) // 2
+        loo_over = others[mid] if len(others) % 2 else (others[mid - 1] + others[mid]) / 2.0
+        for side, price, p_fair in (("over", o, loo_over), ("under", u, 1.0 - loo_over)):
+            if price is None:
+                continue
+            ev = p_fair * american_to_decimal(price) - 1.0
+            if ev >= PRD04_CONTROL_MIN_EV and (best is None or ev > best[0]):
+                best = (ev, b, side, price, p_fair, len(others))
+    if best is not None:
+        ev, b, side, price, p_fair, n = best
+        out.update(control_book=b, control_side=side, control_american=price, control_ev=ev,
+                   control_fair_side=p_fair, control_n_books=n)
+    return out
+
+
 def blend_side_ev(p_blend_over: float | None, side: str | None, best: dict) -> tuple:
     """(P(side) under the blended posterior, EV of the best quote on that side at that probability); None where the blend, the
     side or a real quote on the side is missing. `blend_ev` is the market-anchored counterpart of `market_ev` (which prices the
@@ -1919,6 +1964,7 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
     sharp = sharp_fields(cons, side, best)
     p4c = prd04_consensus_fields(cons, side, best)          # PRD-04 slice 2 stamps (shadow gate only)
     p4k = prd04_kalshi_fields(at_pt)
+    p4ctl = prd04_control_fields(cons)                      # PRD-04 slice 4 stamp (c = 0 control, shadow only)
     row = {
         "sport": sport, "stat": stat, "stat_label": STAT_LABEL.get(stat, stat), "player": player, "player_norm": pn,
         "team": team, "opp": opp, "game_key": gk, "commence": None if start is None else start.isoformat(),
@@ -1937,6 +1983,9 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
         "kalshi_mid_over": _f(p4k["kalshi_mid_over"]), "kalshi_spread": _f(p4k["kalshi_spread"], 5),
         "kalshi_depth": p4k["kalshi_depth"], "kalshi_age_sec": _f(p4k["kalshi_age_sec"], 1),
         "kalshi_traded_30m": p4k["kalshi_traded_30m"],
+        "control_book": p4ctl["control_book"], "control_side": p4ctl["control_side"],
+        "control_american": p4ctl["control_american"], "control_ev": _f(p4ctl["control_ev"]),
+        "control_fair_side": _f(p4ctl["control_fair_side"]), "control_n_books": p4ctl["control_n_books"],
         "p_model_side": _f(p_model_side), "p_mkt_side": _f(p_mkt_side),
         "l5_hit_rate": form["l5_rate"] if form else None, "l10_hit_rate": form["l10_rate"] if form else None,
         "szn_rate": form["szn_rate"] if form else None, "hit_basis": "over",
