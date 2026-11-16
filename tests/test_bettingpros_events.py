@@ -1,5 +1,7 @@
 """ev.bettingpros_events: live BettingPros crawl -> ParlayAPI-shaped events (offline; recorded-shape fixtures, no network)."""
 import json
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -251,6 +253,96 @@ def test_crawl_event_listing_failure_raises_so_nothing_is_published(monkeypatch)
         be.crawl_sport("mlb", now=NOW)
 
 
+def test_spacing_limiter_spacing():
+    interval = 0.05
+    n = 5
+    lim = be._SpacingLimiter(interval)
+    t0 = time.monotonic()
+    threads = [threading.Thread(target=lim.acquire) for _ in range(n)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    elapsed = time.monotonic() - t0
+    assert elapsed >= (n - 1) * interval * 0.90
+
+    # Sequential spacing
+    lim_seq = be._SpacingLimiter(0.04)
+    t0 = time.monotonic()
+    for _ in range(4):
+        lim_seq.acquire()
+    assert time.monotonic() - t0 >= 3 * 0.04 * 0.90
+
+    # Non-positive interval does not block
+    be._SpacingLimiter(0).acquire()
+
+
+def test_crawl_parallel_matches_expected_content(monkeypatch):
+    d0 = NOW.astimezone(be._ET).date()
+    ds = lambda n: (d0 + timedelta(days=n)).isoformat()  # noqa: E731
+    events = {
+        ds(0): _ev("IND", "TEN", 3, eid=1),
+        ds(2): _ev("KC", "BUF", 50, eid=2),
+    }
+    offers = {
+        "rec_yds": [
+            _offer("Tyler Warren", {12: [_line(-110)], 60: [_line(-105)]}, {12: [_line(-110)], 60: [_line(-110)]}, 1),
+            _offer("Xavier Worthy", {12: [_line(-115, 55.5)]}, {12: [_line(-105, 55.5)]}, 2, team="KC"),
+        ],
+        "rush_yds": [
+            _offer("Jonathan Taylor", {12: [_line(-110, 75.5)]}, {12: [_line(-110, 75.5)]}, 1, team="IND"),
+        ],
+        "receptions": [],
+    }
+    monkeypatch.setenv("BP_WORKERS", "4")
+    fake = _FakeBP(monkeypatch, events, offers)
+    res = be.crawl_sport("nfl", now=NOW, days=2, delay=0)
+
+    # Parallel output content matches expected values pinned in serial tests
+    assert [e["bp_event_id"] for e in res["events"]] == [1, 2]
+    assert res["counts"]["events_priced"] == 2
+    assert res["counts"]["events_upcoming"] == 2
+    assert res["counts"]["quotes"] == 4
+    assert res["per_market"]["rec_yds"]["rows"] == 6
+    assert res["per_market"]["rec_yds"]["offers"] == 2
+    assert res["per_market"]["rec_yds"]["requests"] == 1
+    assert res["per_market"]["rush_yds"]["rows"] == 2
+    assert res["per_market"]["rush_yds"]["offers"] == 1
+    assert res["per_market"]["rush_yds"]["requests"] == 1
+    assert res["per_market"]["receptions"]["rows"] == 0
+    assert res["per_market"]["receptions"]["offers"] == 0
+    assert res["per_market"]["receptions"]["requests"] == 1
+    assert res["requests"] == 3
+    assert res["errors"] == []
+    assert res["newest_quote_update"] == "2026-10-17 14:55:00"
+    assert be.publishable(res) == (True, "priced")
+    assert list(res["per_market"].keys()) == ["rec_yds", "rush_yds", "receptions"]
+
+
+def test_crawl_error_isolation_keeps_other_market_rows(monkeypatch):
+    d0 = NOW.astimezone(be._ET).date().isoformat()
+    events = {d0: _ev("IND", "TEN", 3, eid=1)}
+    offers = {
+        "rec_yds": [_offer("Tyler Warren", {12: [_line(-110)]}, {12: [_line(-110)]}, 1)],
+        "rush_yds": [_offer("Jonathan Taylor", {12: [_line(-110, 75.5)]}, {12: [_line(-110, 75.5)]}, 1)],
+        "pass_yds": [_offer("Anthony Richardson", {12: [_line(-110, 205.5)]}, {12: [_line(-110, 205.5)]}, 1)],
+    }
+    fake = _FakeBP(monkeypatch, events, offers, fail_label="rush_yds")
+    monkeypatch.setenv("BP_WORKERS", "3")
+    res = be.crawl_sport("nfl", now=NOW, days=0, delay=0)
+
+    # One market's fetch raising still records the error and the other markets' rows are all present
+    assert len(res["errors"]) == 1
+    assert res["errors"][0]["market"] == "rush_yds"
+    assert res["per_market"]["rush_yds"] == {"offers": 0, "rows": 0, "requests": 0, "error": True}
+    assert res["per_market"]["rec_yds"]["rows"] == 2 and not res["per_market"]["rec_yds"].get("error")
+    assert res["per_market"]["pass_yds"]["rows"] == 2 and not res["per_market"]["pass_yds"].get("error")
+    assert len(res["events"]) == 1
+    market_keys = {m["key"] for b in res["events"][0]["bookmakers"] for m in b["markets"]}
+    assert market_keys == {"player_pass_yds", "player_reception_yds"}
+    assert be.publishable(res) == (True, "priced")
+
+
 def test_publishable_rules():
     base = {"counts": {"events_priced": 0, "events_upcoming": 0}, "errors": [], "markets_requested": 5}
     assert be.publishable(base) == (True, "no upcoming games")                           # offseason: truthfully empty
@@ -324,3 +416,19 @@ def test_runner_outage_keeps_the_last_good_file_and_exits_nonzero(monkeypatch, m
     monkeypatch.setattr(be, "crawl_sport", lambda sport, **k: (_ for _ in ()).throw(RuntimeError("down")))
     assert runner.main(["--sport", "nba"]) == 1
     assert mem_storage["Odds/bettingpros_live/nba/latest.json"] == b'{"keep": true}'
+
+
+def test_runner_default_startup_jitter(monkeypatch):
+    from mlb.runners import bettingpros_live_props as runner
+    slept = []
+    monkeypatch.setattr(runner.time, "sleep", lambda s: slept.append(s))
+    monkeypatch.setattr(be, "crawl_sport", lambda sport, **k: {
+        "sport": "nba", "fetched_at": NOW.isoformat(), "events": [{"id": "bp1"}], "window": {}, "per_market": {},
+        "counts": {"events_priced": 1, "events_upcoming": 1, "quotes": 3, "books": ["draftkings"]}, "errors": [],
+        "markets_requested": 1, "requests": 1, "seconds": 1.0, "newest_quote_update": None,
+    })
+    monkeypatch.delenv("SKIP_STARTUP_JITTER", raising=False)
+    monkeypatch.delenv("BP_STARTUP_JITTER", raising=False)
+    runner.run("nba", out=None)
+    assert len(slept) == 1
+    assert 0.0 <= slept[0] <= 5.0
