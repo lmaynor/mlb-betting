@@ -129,10 +129,64 @@ function withProjectionsCdnCache(req: NextRequest, res: NextResponse): NextRespo
   return res
 }
 
+// Canonical navigation variants of /ev/games get the same brief edge cache under the same hard conditions
+// (RUL-20261115-crawler-policy; OPS-17 follow-on to the OPS-16 projections fix, at Luc's direction to cache
+// wherever it has no user impact). The page is force-dynamic and re-renders the whole board on every hit --
+// the board view ships all three two-way sports' odds boards plus projections in the initial render -- while
+// its upstream feed downloads already sit behind the 60-second data cache in lib/betting-api.ts. The finite
+// set of addresses the site itself generates is defined by gamesHref() in app/ev/games/games-nav.tsx and
+// gameLinesHref() in lib/sports.ts: the bare URL (board, all sports), the four ?sport= board forms, ?view=table,
+// and its four ?view=table&sport= forms. Each is its own CDN cache key; while gating is off their HTML is
+// identical for every viewer (lib/access.ts canViewFull short-circuits to true when gating is off, so
+// limitGameOdds returns the full feed for everyone). Never shared: the ?game= deep links and ?view=analysis
+// card links (an unbounded per-game key space), the retired ?view=prices alias and ?view=board (the site's
+// links never emit them; the board is the param-free default), and any filtered, repeated, or extra-parameter
+// variant -- all behave exactly as today. Both headers, for the same reason as the other two rules: the
+// force-dynamic render overwrites Cache-Control with a private value, while Vercel's edge CDN obeys
+// CDN-Cache-Control. The /api/games proxy routes stay per-viewer private and are NOT covered here.
+const GAMES_SPORTS = new Set(['nba', 'nhl', 'ncaab', 'soccer'])
+
+function isCanonicalGamesQuery(searchParams: URLSearchParams): boolean {
+  const keys = Array.from(new Set(searchParams.keys()))
+  for (const key of keys) {
+    if (searchParams.getAll(key).length !== 1) return false
+  }
+  if (keys.length === 0) return true
+  if (keys.length === 1) {
+    const key = keys[0]
+    if (key === 'sport') {
+      const val = searchParams.get('sport')
+      return val !== null && GAMES_SPORTS.has(val)
+    }
+    if (key === 'view') {
+      return searchParams.get('view') === 'table'
+    }
+    return false
+  }
+  if (keys.length === 2) {
+    if (searchParams.has('view') && searchParams.has('sport')) {
+      const sport = searchParams.get('sport')
+      return searchParams.get('view') === 'table' && sport !== null && GAMES_SPORTS.has(sport)
+    }
+    return false
+  }
+  return false
+}
+
+function withGamesCdnCache(req: NextRequest, res: NextResponse): NextResponse {
+  if (req.method !== 'GET' || gatingOn()) return res
+  if (req.nextUrl.pathname !== '/ev/games') return res
+  if (req.cookies.get('__session')) return res
+  if (!isCanonicalGamesQuery(req.nextUrl.searchParams)) return res
+  res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300')
+  res.headers.set('CDN-Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300')
+  return res
+}
+
 // AUTH_DISABLED (lib/auth-mode.ts): no Clerk at all, geo-blocking still applies. Only the chosen branch is evaluated, so
 // clerkMiddleware() is never constructed when it is off.
 export default AUTH_DISABLED
-  ? (req: NextRequest) => geoRedirect(req) ?? withProjectionsCdnCache(req, withBoardCdnCache(req, NextResponse.next()))
+  ? (req: NextRequest) => geoRedirect(req) ?? withGamesCdnCache(req, withProjectionsCdnCache(req, withBoardCdnCache(req, NextResponse.next())))
   : clerkMiddleware(async (auth, req) => {
       const geo = geoRedirect(req)
       if (geo) return geo
@@ -154,7 +208,7 @@ export default AUTH_DISABLED
         }
       }
 
-      return withProjectionsCdnCache(req, withBoardCdnCache(req, NextResponse.next()))
+      return withGamesCdnCache(req, withProjectionsCdnCache(req, withBoardCdnCache(req, NextResponse.next())))
     })
 
 export const config = {
