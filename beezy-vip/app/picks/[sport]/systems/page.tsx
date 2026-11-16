@@ -1,4 +1,4 @@
-export const revalidate = 60
+export const revalidate = 600
 
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'

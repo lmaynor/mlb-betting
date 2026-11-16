@@ -31,7 +31,7 @@ import type { Metadata } from 'next'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = { title: "Today's Picks — Dashboard" }
-export const revalidate = 60
+export const revalidate = 300
 
 // Default bankroll — will be replaced by user setting in Session 10
 const DEFAULT_BANKROLL = 1000

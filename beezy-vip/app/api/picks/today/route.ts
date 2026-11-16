@@ -4,7 +4,7 @@ import { getViewer } from '@/lib/auth'
 import { apiGetTodayPicks } from '@/lib/betting-api'
 import { siteDateKey } from '@/lib/dates'
 
-export const revalidate = 60
+export const revalidate = 300
 
 export async function GET() {
   try {
