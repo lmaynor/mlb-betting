@@ -10,8 +10,9 @@ MLB game markets; its docstring parks player props as v2 on thin depth), so v1 s
   * RecordedTableResolver: a JSON table built offline from verified market data,
     keyed by signal_id, falling back to a league|event|stat|line|side composite key.
 
-An unresolved signal is an audited REJ_UNMAPPED, never an approximated order.  Building
-the verified live prop-mapping table is switch-on work (see the AUT-09 memo).
+An unresolved signal is an audited REJ_UNMAPPED, never an approximated order.  The
+verified Kalshi player-prop table (AUT-11) lives in ev.ownbettor.propmap and is
+composed behind this seam via ChainedResolver in the paper job.
 """
 
 from __future__ import annotations
@@ -38,6 +39,22 @@ class TickerResolver(Protocol):
 
 def composite_key(signal: Signal) -> str:
     return f"{signal.league}|{signal.event_id}|{signal.stat}|{signal.line}|{signal.side}"
+
+
+class ChainedResolver:
+    """First-hit composition of resolvers (e.g. the recorded table, then the
+    verified Kalshi prop table).  A resolver that returns None passes the
+    signal on; all-None is an unmapped skip, exactly as a single table."""
+
+    def __init__(self, resolvers: list):
+        self.resolvers = list(resolvers)
+
+    def resolve(self, signal: Signal) -> ResolvedMarket | None:
+        for r in self.resolvers:
+            hit = r.resolve(signal)
+            if hit is not None:
+                return hit
+        return None
 
 
 class RecordedTableResolver:
