@@ -624,6 +624,14 @@ def run(sport: str, dry_run: bool = False, post: bool = True, closing_only: bool
                     out["prd04_shadow"] = shadow_out
                 except Exception:                                                                    # noqa: BLE001
                     log.warning("model_picks: PRD-04 shadow pass failed", exc_info=True)
+                # PRD-04 slice 4: the opener cohort pass rides this hourly baseline so its first-sighting
+                # state stays warm; the 10-minute in-window cadence runs on the dedicated shadow runner
+                # (ev.prd04_openers, deploy/setup_prd04_opener_shadow.sh). Shadow tapes only, same flag.
+                try:
+                    from ev import prd04_openers as PRD04O
+                    out["prd04_openers"] = PRD04O.run_opener_pass(sport, payload, now, dry_run=dry_run)
+                except Exception:                                                                    # noqa: BLE001
+                    log.warning("model_picks: PRD-04 opener pass failed", exc_info=True)
             if dry_run:
                 out["picks"] = picks
             else:
