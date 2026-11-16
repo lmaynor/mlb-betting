@@ -260,3 +260,127 @@ def test_dual_bar_regime_filter_and_volume():
     assert res["filled_pre_regime_excluded"] == 1
     assert res["groups"]["ALL"]["n_signals"] == 0
     assert res["groups"]["ALL"]["volume_bar"]["pass"] is False
+
+
+# ------------------------------------------- amended spec (RUL-20261116-autopilot-clv-drift)
+def _p0_row(day, system, sig, *, status="FILLED", t0_prob=0.55, drift_pp=-0.30,
+            cons_net=2.60, sb_net=1.00, entry_disloc=5.00, ts=None, disp=0.010,
+            n_books=5, med_age=8.0, nov_age=2.0, mins=300.0, close_prob="auto"):
+    row = {"status": status, "system": system, "game_day": day, "signal_id": sig,
+           "event_id": "ev1", "player_norm": "some player", "stat": "sog", "side": "yes",
+           "line": 2.5, "commence": "2026-11-24T00:30:00+00:00",
+           "quote_observed_at": ts or f"{day}T17:00:00+00:00",
+           "gates_snapshot": {"consensus_fair_prob": t0_prob, "target_quote_age_min": nov_age,
+                              "n_books": n_books, "median_book_age_min": med_age,
+                              "mins_to_start": mins, "disp_mad": disp},
+           "closing_fair_prob": (t0_prob + drift_pp / 100.0) if close_prob == "auto" else close_prob,
+           "consensus_confirm_clv_net_pct": cons_net, "consensus_confirm_clv_pct": cons_net + 0.37,
+           "same_book_clv_net_pct": sb_net, "same_book_clv_pct": sb_net + 0.37,
+           "consensus_drift_pp": drift_pp, "entry_dislocation_pct": entry_disloc,
+           "moved_quote": False, "novig_t15_prob": 0.55}
+    return row
+
+
+def _p0_window(days, *, threes_drift=-1.20):
+    """8-day-style window: SOG passes everything, REB passes, THREES fails slice drift."""
+    spec = {"NHL_SOG": (8, 2.60, 1.00, -0.30), "NBA_THREES": (6, 2.40, 0.90, threes_drift),
+            "NBA_REB": (6, 2.20, 1.10, -0.40)}
+    rows = []
+    for di, day in enumerate(days):
+        jit = 0.05 * (di % 3)
+        for system, (per_day, cn, sb, dr) in spec.items():
+            for k in range(per_day):
+                rows.append(_p0_row(day, system, f"{system}-{day}-{k}",
+                                    cons_net=cn + jit, sb_net=sb + jit, drift_pp=dr))
+            for k in range(2):      # unfilled gate-pass sightings of other intents
+                rows.append(_p0_row(day, system, f"{system}-gate-{day}-{k}", status="REJ_EV_LOW",
+                                    drift_pp=0.10))
+    return rows
+
+
+def test_phase0_amended_pass_with_slice_holdout():
+    days = [f"2026-11-{d}" for d in range(16, 24)]           # 8 game days, 160 fills
+    res = ev_eval.evaluate_phase0(_p0_window(days), ShadowConfig())
+    allg = res["groups"]["ALL"]
+    assert allg["verdict"] == "PASS"
+    assert all(v["pass"] for v in allg["bars"].values())
+    assert res["gate_pass_total"] == 160 + 48                # fills + unfilled gate sightings
+    assert res["groups"]["NHL_SOG"]["graduation"] == "GRADUATED"
+    assert res["groups"]["NBA_REB"]["graduation"] == "GRADUATED"
+    threes = res["groups"]["NBA_THREES"]
+    assert threes["verdict"] == "FAIL" and threes["graduation"] == "HOLDOUT"
+    assert any("bar5" in r for r in threes["reasons"])
+    assert allg["fill_selection_diagnostic_pp"] is not None
+    assert allg["criterion7_moved_quote"]["pass"] is None    # no bar invented for criterion 7
+
+
+def test_phase0_amended_span_bar_fails_on_three_days():
+    days = ["2026-11-16", "2026-11-17", "2026-11-18"]        # n clears, span does not
+    rows = []
+    for day in days:
+        for system in ("NHL_SOG", "NBA_THREES", "NBA_REB"):
+            for k in range(18):
+                rows.append(_p0_row(day, system, f"{system}-{day}-{k}", drift_pp=-0.30))
+    res = ev_eval.evaluate_phase0(rows, ShadowConfig())
+    assert res["groups"]["ALL"]["verdict"] == "FAIL"
+    assert any("bar1" in r for r in res["groups"]["ALL"]["reasons"])
+
+
+def test_phase0_bar4_fails_closed_without_gate_closes():
+    days = [f"2026-11-{d}" for d in range(16, 24)]
+    rows = _p0_window(days)
+    for r in rows:
+        if r["status"] != "FILLED":
+            r["closing_fair_prob"] = None                   # the live ledger's actual shape
+    res = ev_eval.evaluate_phase0(rows, ShadowConfig())
+    assert res["gate_pass_with_close"] == 160                # only the fills carry closes
+    assert res["groups"]["ALL"]["bars"]["bar4_all_intent_drift"]["pass"] is False
+
+
+def test_gate_pass_population_rules():
+    t1, t2 = TS.isoformat(), (TS + timedelta(minutes=30)).isoformat()
+    rows = [
+        # A: first sighting stale, second clears -> t0 is the second sighting
+        _p0_row("2026-11-14", "NHL_SOG", "A", status="SKIPPED_STALE", ts=t1, nov_age=9.0),
+        _p0_row("2026-11-14", "NHL_SOG", "A", status="REJ_EV_LOW", ts=t2),
+        # B: 5-book dispersion 0.055 clears the >= 5-book tier (0.060) though the coded funnel rejects it
+        _p0_row("2026-11-14", "NHL_SOG", "B", status="REJ_CONS_WIDE", ts=t1, disp=0.055, n_books=5),
+        # C: 4-book dispersion 0.055 exceeds the 4-book tier (0.045) -> excluded
+        _p0_row("2026-11-14", "NHL_SOG", "C", status="REJ_CONS_WIDE", ts=t1, disp=0.055, n_books=4),
+        # D: median age 12m inside T-60m clears the late tier (15m)
+        _p0_row("2026-11-14", "NHL_SOG", "D", status="REJ_EV_LOW", ts=t1, med_age=12.0, mins=30.0),
+        # E: median age 30m intraday exceeds the 25m tier -> excluded
+        _p0_row("2026-11-14", "NHL_SOG", "E", status="REJ_EV_LOW", ts=t1, med_age=30.0, mins=300.0),
+        # F: a FILLED row is a population member by construction
+        _p0_row("2026-11-14", "NHL_SOG", "F", status="FILLED", ts=t1),
+    ]
+    pop = ev_eval.gate_pass_population(rows, ShadowConfig())
+    by_sig = {r["signal_id"]: r for r in pop}
+    assert set(by_sig) == {"A", "B", "D", "F"}
+    assert by_sig["A"]["quote_observed_at"] == t2
+    assert by_sig["B"]["gate_drift_pp"] == pytest.approx(-0.30, abs=1e-3)
+
+
+def test_attach_consensus_closes_gate_rows():
+    gate_row = _filled_row(status="REJ_EV_LOW")
+    gate_row["gates_snapshot"] = {"consensus_fair_prob": 0.55, "consensus_age_bucket": "0-15m"}
+    series = [rec(), _close_rec(START - timedelta(minutes=12), 0.59, _prob(-110))]
+    out = closes_mod.attach_consensus_closes([gate_row], series, ShadowConfig())
+    assert out[0]["gate_close_state"] == "ok"
+    assert out[0]["closing_fair_prob"] == pytest.approx(0.59, abs=1e-6)
+    moved = closes_mod.attach_consensus_closes(
+        [gate_row], [rec(), _close_rec(START - timedelta(minutes=12), 0.59, 0.55, line=3.5)],
+        ShadowConfig())
+    assert moved[0]["gate_close_state"] == "line_moved" and moved[0]["closing_fair_prob"] is None
+    thin_rec = st.CandidateRecord(ts=START - timedelta(minutes=12), sport="nhl", stat="sog",
+                                  system="NHL_SOG", event_id="ev1", matchup="A @ B", commence=START,
+                                  player="Some Player", player_norm="some player", line=2.5,
+                                  p_cons=0.59, disp=0.005, fair_range=0.02, n_books=3,
+                                  book_ages_min=[5.0], ages_known=True, nov_over=0.55,
+                                  nov_under=None, nov_age_min=1.0)
+    thin = closes_mod.attach_consensus_closes([gate_row], [rec(), thin_rec], ShadowConfig())
+    assert thin[0]["gate_close_state"] == "close_thin_books" and thin[0]["closing_fair_prob"] is None
+    filled = _filled_row()
+    filled["closing_fair_prob"] = 0.59
+    kept = closes_mod.attach_consensus_closes([filled], series, ShadowConfig())
+    assert kept[0]["gate_close_state"] == "attached" and kept[0]["closing_fair_prob"] == 0.59
