@@ -243,3 +243,27 @@ def test_resolve_markets():
     # the verified manifest narrows the candidate table
     narrowed = mod.resolve_markets("nhl", "all", manifest_markets=["saves", "gamelines"])
     assert narrowed == ["gamelines", "saves"]
+
+
+def test_resolve_window_daily_mode():
+    from datetime import date
+    mod = _load_script()
+    # lookback 7 ending yesterday (ET): today 2026-11-16 -> 20261109..20261115
+    assert mod.resolve_window("", "", 7, today_et=date(2026, 11, 16)) == ("20261109", "20261115")
+    # lookback 1 = yesterday only
+    assert mod.resolve_window("", "", 1, today_et=date(2026, 11, 16)) == ("20261115", "20261115")
+    # month boundary: today 2026-03-02, lookback 7 -> 20260223..20260301
+    assert mod.resolve_window("", "", 7, today_et=date(2026, 3, 2)) == ("20260223", "20260301")
+    # explicit window always wins over lookback
+    assert mod.resolve_window("20260219", "20260219", 7,
+                              today_et=date(2026, 11, 16)) == ("20260219", "20260219")
+    # neither given -> empty (caller errors out)
+    assert mod.resolve_window("", "", 0, today_et=date(2026, 11, 16)) == ("", "")
+
+
+def test_runner_plan_mode_daily_window(capsys):
+    mod = _load_script()
+    rc = mod.main(["--shard", "daily", "--league", "nba", "--lookback-days", "7"], environ={})
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "PLAN ONLY" in out and '"dates": 7' in out

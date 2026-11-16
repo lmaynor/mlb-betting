@@ -33,6 +33,15 @@ Usage (plan only -- safe anywhere):
 Execute:
     ACTION_NETWORK_BANK_ENABLED=1 python3 scripts/bank_action_network.py \
         --execute --shard proving --start 20261109 --end 20261116
+
+Daily mode (BNK-11 forward banking): with --lookback-days N and no
+--start/--end, the window resolves at run time: end = yesterday in
+America/New_York (AN slate dates are ET dates; by the 06:00 CT scheduled
+run the prior ET day's boards are final), start = end - (N-1) days.
+Banked partitions are skipped, so each daily run banks the new date plus
+any date in the lookback window a previous run missed or failed --
+a failed day self-heals on the next run. Explicit --start/--end always
+win over --lookback-days (one-off catch-up / verification runs).
 """
 from __future__ import annotations
 
@@ -45,6 +54,7 @@ import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))   # runnable as `python scripts/...`
 
@@ -75,6 +85,26 @@ def date_range(start: str, end: str):
     while d <= last:
         yield d
         d += timedelta(days=1)
+
+
+ET_ZONE = ZoneInfo("America/New_York")
+
+
+def resolve_window(start: str, end: str, lookback_days: int, today_et=None):
+    """Resolve the run window to (start, end) as YYYYMMDD strings.
+
+    Explicit start+end win. Otherwise, with lookback_days > 0 (daily
+    mode): end = yesterday in America/New_York, start = end -
+    (lookback_days - 1) days. today_et is injectable for tests.
+    Returns (start, end) possibly with empty strings when neither an
+    explicit window nor a lookback was given (caller validates)."""
+    if start and end:
+        return start, end
+    if lookback_days and lookback_days > 0:
+        last = (today_et or datetime.now(ET_ZONE).date()) - timedelta(days=1)
+        first = last - timedelta(days=lookback_days - 1)
+        return first.strftime("%Y%m%d"), last.strftime("%Y%m%d")
+    return start, end
 
 
 def resolve_markets(league: str, spec: str, manifest_markets=None) -> list:
@@ -357,6 +387,10 @@ def main(argv=None, environ=None) -> int:
     ap.add_argument("--site", default=os.environ.get("AN_SITE", "local"))
     ap.add_argument("--start", default=os.environ.get("AN_START", ""))
     ap.add_argument("--end", default=os.environ.get("AN_END", ""))
+    ap.add_argument("--lookback-days", type=int,
+                    default=int(os.environ.get("AN_LOOKBACK_DAYS", "0") or 0),
+                    help="daily mode: when --start/--end are absent, run the "
+                         "N-day window ending yesterday (America/New_York)")
     ap.add_argument("--markets", default=os.environ.get("AN_MARKETS", "all"))
     ap.add_argument("--time-budget-s", type=int,
                     default=int(os.environ.get("AN_TIME_BUDGET_S", "0") or 0))
@@ -370,8 +404,10 @@ def main(argv=None, environ=None) -> int:
     if a.league not in LEAGUE_MARKET_TYPES:
         print(f"ERROR: unknown league {a.league!r} (known: {sorted(LEAGUE_MARKET_TYPES)})")
         return 2
+    a.start, a.end = resolve_window(a.start, a.end, a.lookback_days)
     if not a.shard or not a.start or not a.end:
-        print("ERROR: --shard, --start and --end are required (or AN_SHARD/AN_START/AN_END).")
+        print("ERROR: --shard and a window are required: --start+--end "
+              "(or AN_START/AN_END), or --lookback-days N (or AN_LOOKBACK_DAYS).")
         return 2
     plan = build_plan(a)
     print(json.dumps(plan, indent=1))
