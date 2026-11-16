@@ -37,6 +37,15 @@ Slice 2 scope (this module as shipped):
     fields (sharp_status / sharp_cohort / the reference and weighted-consensus values) so the shadow-week
     validation -- sharp_agrees rows must beat sharp_missing rows by >= +0.50% CLV -- is computable from the tape.
 
+Slice 3 scope (this module as shipped):
+  * the NHL trained skater path (round 3): goals / assists / points rows priced by the TRAINED engine
+    (nhl_model == "trained_v1") are Tier 2 at floor 48 -- the board engine's skater rows stay Tier 3, the
+    engine invariant is absolute. The path reprices the blend with the round-3 weights (goals .10 /
+    assists .12 / points .12) in place of the board's BLEND_C_TRAINED, requires blend_ev and market_ev
+    inside [3%, 10%], caps skater odds at +250, and hard-blocks uncertain lineup status. The floor drops
+    to 42 when the trained-skater shadow cohort's mean CLV reaches +1.00% (trained_skater_floor; the
+    judging pass hands the measured value in as skater_cohort_clv).
+
 Tier 3 re-entry bar (round 2, for the record; enforced by whoever judges the shadow tape, not by this gate):
 held-out walk-forward c >= 0.10 (t >= 2.5) on the served engine against the sharp-weighted consensus, plus
 n >= 100 shadow plays with mean CLV >= +1.00% and ROI CI not excluding 0 from below. Fallback guardrail (round 1):
@@ -108,20 +117,83 @@ def tier2_floor() -> int:
 
 
 def market_tier(r: dict) -> int:
-    """The PRD-04 tier of a board row's (sport, stat): 1, 2, or 3 (blocked). Engine does not matter in slice 1:
-    trained skater rows are Tier 3 until slice 3 opens the trained path; nhl saves is Tier 2 on either engine."""
+    """The PRD-04 tier of a board row's (sport, stat): 1, 2, or 3 (blocked). Slice 3 opens the trained
+    skater path: an NHL goals / assists / points row priced by trained_v1 is Tier 2; the same market on
+    the board engine stays Tier 3 (see is_trained_skater)."""
     key = (str(r.get("sport") or "").lower(), str(r.get("stat") or "").lower())
     if key in TIER1_MARKETS:
         return 1
     if key in TIER2_MARKETS:
         return 2
+    if is_trained_skater(r):
+        return 2
     return 3
 
 
-def _floor_for(tier: int) -> int | None:
+# -- slice 3: the NHL trained skater path ---------------------------------------------------------------------------
+TRAINED_SKATER_MARKETS = frozenset({("nhl", "goals"), ("nhl", "assists"), ("nhl", "points")})
+TRAINED_SKATER_WEIGHTS = {"goals": 0.10, "assists": 0.12, "points": 0.12}   # round 3, replacing BLEND_C_TRAINED here
+TRAINED_SKATER_FLOOR = 48
+TRAINED_SKATER_FLOOR_CLV = 42
+TRAINED_SKATER_CLV_BAR = 0.01           # the cohort's 7-day mean CLV at +1.00% earns the 42 floor
+TRAINED_SKATER_MIN_EV = 0.030           # blend_ev AND market_ev inside [3%, 10%] on this path
+TRAINED_SKATER_MAX_AMERICAN = 250       # the skater odds ceiling, tighter than the global +500
+SKATER_LINEUP_BLOCKS = frozenset({"OUT", "IR", "DTD"})   # unconfirmed status blocks: no shadow official on a maybe
+
+
+def is_trained_skater(r: dict) -> bool:
+    """True for an NHL goals / assists / points row priced by the trained engine (nhl_model == 'trained_v1').
+    The engine invariant: a board-engine (empirical_ewm_v2) skater row NEVER enters the trained path."""
+    return (str(r.get("sport") or "").lower(), str(r.get("stat") or "").lower()) in TRAINED_SKATER_MARKETS \
+        and r.get("nhl_model") == "trained_v1"
+
+
+def trained_skater_floor(cohort_mean_clv: float | None = None) -> int:
+    """48, dropping to 42 once the trained-skater shadow cohort's mean CLV reaches +1.00% (round 3). The
+    judging pass measures the cohort from the shadow tape and hands the value in; None keeps 48."""
+    if cohort_mean_clv is not None and cohort_mean_clv >= TRAINED_SKATER_CLV_BAR:
+        return TRAINED_SKATER_FLOOR_CLV
+    return TRAINED_SKATER_FLOOR
+
+
+def _logit(p: float) -> float:
+    import math
+    p = min(max(float(p), 0.01), 0.99)
+    return math.log(p / (1.0 - p))
+
+
+def prd04_blend(r: dict) -> tuple:
+    """(p_blend_side, blend_ev, blend_c) under the PRD-04 configuration for one row.
+
+    Every row except trained skaters keeps the board's stamped blend. A trained skater row is repriced with
+    the round-3 weight in the SAME c-only logit blend the board runs (ev.daily_projections.blend_p_over
+    with (a, b) = (0, 1)): sigmoid(logit(p_mkt) + c * (logit(p_model) - logit(p_mkt))) off the row's stamped
+    side probabilities, and blend_ev at the row's best price on its side. (If a pre-blend isotonic
+    calibrator is ever registered for these stats -- none is today -- the board's own blend would differ
+    by that calibration step; the shadow record carries both blends so the difference stays visible.)"""
+    from ev import model_picks as MP          # lazy, see shadow_verdict
+    side = str(r.get("side") or "").lower()
+    if not is_trained_skater(r):
+        return MP._num(r.get("p_blend_side")), MP._num(r.get("blend_ev")), None
+    import math
+    c = TRAINED_SKATER_WEIGHTS[str(r.get("stat") or "").lower()]
+    p_model = MP._num(r.get("p_model_side"))
+    p_mkt = MP._num(r.get("p_mkt_side"))
+    best = MP._best(r, side) if side in ("over", "under") else None
+    if p_model is None or p_mkt is None or best is None:
+        return None, None, c
+    z = _logit(p_mkt) + c * (_logit(p_model) - _logit(p_mkt))
+    p_blend = 1.0 / (1.0 + math.exp(-z))
+    from mlb_core.odds.utils import american_to_decimal
+    return p_blend, p_blend * american_to_decimal(best[1]) - 1.0, c
+
+
+def _floor_for(tier: int, r: dict | None = None, skater_cohort_clv: float | None = None) -> int | None:
     if tier == 1:
         return TIER1_FLOOR
     if tier == 2:
+        if r is not None and is_trained_skater(r):
+            return trained_skater_floor(skater_cohort_clv)
         return tier2_floor()
     return None
 
@@ -216,15 +288,18 @@ def sharp_check(r: dict, cohort: str = "intraday") -> dict:
     return out
 
 
-def shadow_verdict(r: dict, live_tier: str | None = None) -> dict:
+def shadow_verdict(r: dict, live_tier: str | None = None, skater_cohort_clv: float | None = None) -> dict:
     """The PRD-04 verdict for one board row that the live path at least tracks.
 
     Returns the full shadow record: the tier, the floor applied, every gate input, `would_be_official`, and the
-    list of failed checks in `reasons` (empty when it would be official). Pure: no I/O, no clock."""
+    list of failed checks in `reasons` (empty when it would be official). Pure: no I/O, no clock.
+    `skater_cohort_clv` is the trained-skater shadow cohort's measured mean CLV, handed in by the judging
+    pass; it only moves the trained-skater floor (48 -> 42 at +1.00%)."""
     from ev import model_picks as MP          # lazy: model_picks imports this module lazily too
 
     tier = market_tier(r)
-    floor = _floor_for(tier)
+    floor = _floor_for(tier, r, skater_cohort_clv)
+    skater = is_trained_skater(r)
     side = str(r.get("side") or "").lower()
     best = MP._best(r, side) if side in ("over", "under") else None
     book, american = best if best else (None, None)
@@ -249,7 +324,13 @@ def shadow_verdict(r: dict, live_tier: str | None = None) -> dict:
         "would_be_official": False, "reasons": [],
     }
     reasons: list[str] = rec["reasons"]
-    sc = sharp_check(r)
+    p_blend_p4, blend_ev_p4, c_p4 = prd04_blend(r)
+    rec.update({
+        "p_blend_side_prd04": p_blend_p4, "blend_ev_prd04": blend_ev_p4,
+        "blend_c_prd04": c_p4 if c_p4 is not None else blend_c,
+        "trained_path": skater, "lineup_status": r.get("lineup_status"),
+    })
+    sc = sharp_check({**r, "p_blend_side": p_blend_p4} if skater else r)
     rec.update({
         "sharp_status": sc["status"], "sharp_cohort": sc["cohort_class"], "sharp_tag": sc["tag"],
         "p_sharp_ref_over": MP._num(r.get("p_sharp_ref_over")), "p_sharp_ref_side": sc["p_sharp_ref_side"],
@@ -278,7 +359,8 @@ def shadow_verdict(r: dict, live_tier: str | None = None) -> dict:
         reasons.append("model_edge_below_min")
     if floor is not None and rec["score"] < floor:
         reasons.append(f"score_below_floor_{floor}")
-    if blend_ev is None or not (MIN_BLEND_EV <= blend_ev <= MAX_BLEND_EV):
+    band_lo = TRAINED_SKATER_MIN_EV if skater else MIN_BLEND_EV
+    if blend_ev_p4 is None or not (band_lo <= blend_ev_p4 <= MAX_BLEND_EV):
         reasons.append("blend_ev_out_of_band")
     if american is not None and american > MAX_OFFICIAL_AMERICAN_ODDS:
         reasons.append("odds_above_ceiling")
@@ -294,11 +376,22 @@ def shadow_verdict(r: dict, live_tier: str | None = None) -> dict:
             reasons.append("saves_hardening_gate")
         if "saves_starter_dual_confirmed" in r and r.get("saves_starter_dual_confirmed") is not True:
             reasons.append("goalie_not_confirmed")
+    if skater:
+        # Round 3 trained-path extras: the tighter +250 skater ceiling and the lineup hard-block --
+        # an uncertain status (a maybe-scratched skater) never produces a shadow official.
+        if american is not None and american > TRAINED_SKATER_MAX_AMERICAN:
+            reasons.append("skater_odds_above_ceiling")
+        if r.get("status_uncertain") is True:
+            reasons.append("status_uncertain")
+        ls = str(r.get("lineup_status") or "").upper()
+        if ls in SKATER_LINEUP_BLOCKS:
+            reasons.append(f"lineup_block_{ls.lower()}")
     rec["would_be_official"] = not reasons
     return rec
 
 
-def evaluate_payload(payload: dict, now: datetime | None = None) -> list[dict]:
+def evaluate_payload(payload: dict, now: datetime | None = None,
+                     skater_cohort_clv: float | None = None) -> list[dict]:
     """Shadow records for every row on a board payload that the live path at least tracks (qualifies() not
     None). Rows the live path ignores entirely are not shadow business -- the tracked tier is the funnel the
     PRD-04 gate re-judges."""
@@ -308,7 +401,7 @@ def evaluate_payload(payload: dict, now: datetime | None = None) -> list[dict]:
         live_tier = MP.qualifies(r, now)
         if live_tier is None:
             continue
-        out.append(shadow_verdict(r, live_tier=live_tier))
+        out.append(shadow_verdict(r, live_tier=live_tier, skater_cohort_clv=skater_cohort_clv))
     return out
 
 
