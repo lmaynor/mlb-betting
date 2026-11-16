@@ -47,6 +47,7 @@ COPY scripts/kalshi_rfq_daemon.py ./scripts/kalshi_rfq_daemon.py
 COPY scripts/bank_nba_designations.py ./scripts/bank_nba_designations.py
 COPY scripts/bank_first_scorer.py ./scripts/bank_first_scorer.py
 COPY scripts/derive_first_scorer_outcomes.py ./scripts/derive_first_scorer_outcomes.py
+COPY scripts/bank_action_network.py ./scripts/bank_action_network.py
 COPY main.py          .
 COPY tweet_drafter.py .
 # Out-of-sample accuracy of the projection engine; tweet_drafter's reply_ammo analysis quotes it (optional there).
