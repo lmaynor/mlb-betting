@@ -125,6 +125,11 @@ for row in "${SCHEDULES[@]}"; do
   JOB="odds-bank-${TAG}-${KIND_TAG}"
   if [[ "$JOBS_DONE" != *" $JOB "* ]]; then
     ARGS="-m,nba.odds.accumulator,--sport,${SPORT},--kind,${KIND},--max-credits,600"
+    # NBA props banks an explicit market list (5 core + 4 alternate ladders, LAD-04). It must match the
+    # live odds-bank-nba-props job exactly, or a redeploy silently drops the alternate markets.
+    if [ "${SPORT}" = "basketball_nba" ] && [ "${KIND}" = "props" ]; then
+      ARGS="${ARGS},--markets,player_points,player_rebounds,player_assists,player_threes,player_points_rebounds_assists,player_points_alternate,player_rebounds_alternate,player_assists_alternate,player_threes_alternate"
+    fi
     FLAGS=(--image="$IMAGE" --region="$REGION" --service-account="$SA_EMAIL"
            --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest,PARLAY_API_KEY=parlay-api-key:latest"
            --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION},ODDS_BANK_BUDGET_BASKETBALL_NBA=${BUDGET_NBA},ODDS_BANK_BUDGET_ICEHOCKEY_NHL=${BUDGET_NHL},ODDS_BANK_BUDGET_SOCCER_EPL=${BUDGET_SOCCER_EPL},ODDS_BANK_BUDGET_SOCCER_UEFA_CHAMPS_LEAGUE=${BUDGET_SOCCER_UCL},PARLAY_RESERVE_FLOOR=${RESERVE_FLOOR}"
