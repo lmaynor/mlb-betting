@@ -48,6 +48,9 @@ COPY scripts/bank_nba_designations.py ./scripts/bank_nba_designations.py
 COPY scripts/bank_first_scorer.py ./scripts/bank_first_scorer.py
 COPY scripts/derive_first_scorer_outcomes.py ./scripts/derive_first_scorer_outcomes.py
 COPY scripts/bank_action_network.py ./scripts/bank_action_network.py
+# RES-11 Stage 2 shadow (Cloud Run Job res11-shadow, deploy/setup_res11_shadow.sh):
+# ev/res11_shadow.py imports the Stage 1 engine from this driver at runtime.
+COPY scripts/run_res11_stage1.py ./scripts/run_res11_stage1.py
 COPY main.py          .
 COPY tweet_drafter.py .
 # Out-of-sample accuracy of the projection engine; tweet_drafter's reply_ammo analysis quotes it (optional there).
