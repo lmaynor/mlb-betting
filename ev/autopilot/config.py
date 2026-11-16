@@ -12,6 +12,15 @@ Every gate constant is from the two rulings, not a local invention:
       T-60m), target quote <= 5m old at firing (hard reject), thin-anchor guardrail
       (exactly-4-book signals need max-min dispersion <= 5.0pp), the 0.37% fill-cost
       drag in the net CLV definitions, and the venue move-rate split (sticky < 60%).
+  RUL-20261116-autopilot-clv-drift -- AMENDS the Phase 0 pass spec for the live
+      window: the >= 0.00pp filled-drift floor is replaced by a two-population
+      Drift & Dislocation-Retention bar (all-intent drift >= -0.50pp on the
+      ALL_GATE_PASS population, filled drift >= -1.00pp, gross retention >= 0.50),
+      a volume span (n >= 150 across >= 7 game days, per-slice admission n >= 40),
+      and the Active-Exchange venue cutoff raised from 60% to >= 80% Closing Quote
+      Move Rate (closing two-way hold <= 4.5% retained).  The amended constants
+      live below; bar_drift_pp_min / sticky_move_rate_max remain only as the
+      superseded backtest-window form used by evaluate.evaluate_window.
 
 The 0.37% fill-cost drag is an Argon-supplied constant from the CLV ruling.  It is NOT
 derivable from the banked record (NOV-01 models Novig pre-game fees as 0), so the bar
@@ -88,8 +97,20 @@ class ShadowConfig:
     bar_consensus_ci_lo_gt: float = 0.50
     bar_same_book_clv_pct: float = 0.50
     bar_same_book_ci_lo_ge: float = 0.00
-    bar_drift_pp_min: float = 0.00
+    bar_drift_pp_min: float = 0.00         # SUPERSEDED for the live window by RUL-20261116 (see below)
     ci_level: float = 0.95
+
+    # --- Phase 0 bars, amended (RUL-20261116-autopilot-clv-drift, Q1/Q2/Q4) ---
+    bar_volume_days_min: int = 7           # Bar 1 span: FILLED across >= 7 distinct game days
+    bar_slice_admission_n: int = 40        # per-slice admission for graduation / holdout
+    bar_slice_consensus_ci_lo_gt: float = 0.00   # Bar 2 per-slice CI floor (pooled floor stays +0.50)
+    bar_all_intent_drift_pp_min: float = -0.50   # Bar 4: ALL_GATE_PASS drift from t0
+    bar_filled_drift_pp_min: float = -1.00       # Bar 5: FILLED drift from t0
+    bar_retention_min: float = 0.50              # Bar 6: gross dislocation retention at T-15m close
+    active_move_rate_min: float = 0.80           # Q2: Active-Exchange cutoff (amends sticky_move_rate_max)
+    active_hold_max: float = 0.045               # Q2: closing two-way hold <= 4.5% (retained; unmeasured in Phase 0)
+    gate_pass_disp_max_4: float = 0.045          # ALL_GATE_PASS dispersion tier, exactly 4 books
+    gate_pass_disp_max_5p: float = 0.060         # ALL_GATE_PASS dispersion tier, >= 5 books
 
     def market_enabled(self, stat: str) -> bool:
         if stat == "saves":

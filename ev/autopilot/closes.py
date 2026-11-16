@@ -24,6 +24,11 @@ the bars and the record's form is kept for reconciliation.
 Honest degradation: where a close is not banked (no later snapshot, line moved, Novig
 unquoted, no post-entry T-15m snapshot), the affected CLV fields stay None and the
 close_state / t15_state says why.  Nothing is fabricated.
+
+attach_consensus_closes (below) is the evaluator-side companion: it attaches the same
+closing consensus to non-FILLED rows so the RUL-20261116 ALL_GATE_PASS drift bar can be
+scored.  attach_closes itself -- and therefore the live shadow job's derivation -- is
+unchanged.
 """
 
 from __future__ import annotations
@@ -117,4 +122,53 @@ def attach_closes(rows: list, records: list, cfg: ShadowConfig | None = None) ->
         r2["same_book_clv_pct"] = round(sb, 4)
         r2["same_book_clv_net_pct"] = round(sb - drag_pp, 4)
         r2["moved_quote"] = abs(nov_t15 - fill) >= cfg.moved_tick
+    return out
+
+
+def attach_consensus_closes(rows: list, records: list, cfg: ShadowConfig | None = None) -> list:
+    """Attach the closing consensus to the rows attach_closes leaves bare (every
+    non-FILLED row), so the amended evaluator's ALL_GATE_PASS drift bar
+    (RUL-20261116-autopilot-clv-drift, Bar 4) is computable at scoring time.
+
+    Same close definition as attach_closes -- the leave-Novig-out consensus fair in
+    the LAST snapshot for the same event before commence, at the same modal line --
+    plus the ruling's live-window condition of >= 4 reference books at close.
+    FILLED rows keep the closing_fair_prob attach_closes computed (identical
+    definition); this function fills only rows whose closing_fair_prob is None and
+    stamps gate_close_state on every row: ok / no_later_snapshot / line_moved /
+    close_thin_books / attached (already carried a close).  Honest degradation
+    mirrors attach_closes: an unusable close stays None, never imputed.
+
+    This is an evaluator-side derivation over the banked snapshot series (the same
+    series the shadow job derives its ledger from); the live job does not call it.
+    """
+    cfg = cfg or ShadowConfig()
+    series: dict = {}
+    for r in records:
+        series.setdefault((r.event_id, r.player_norm, r.stat), []).append(r)
+    for v in series.values():
+        v.sort(key=lambda r: r.ts)
+    out = []
+    for row in rows:
+        r2 = dict(row)
+        out.append(r2)
+        if r2.get("closing_fair_prob") is not None:
+            r2["gate_close_state"] = "attached"
+            continue
+        entry_ts = _utc(row["quote_observed_at"])
+        commence = _utc(row["commence"])
+        recs = series.get((row["event_id"], row["player_norm"], row["stat"]), [])
+        laters = [x for x in recs if entry_ts < x.ts < commence]
+        if not laters:
+            r2["gate_close_state"] = "no_later_snapshot"
+            continue
+        close = laters[-1]
+        if close.line != row["line"]:
+            r2["gate_close_state"] = "line_moved"
+            continue
+        if close.n_books < cfg.n_books_min:
+            r2["gate_close_state"] = "close_thin_books"
+            continue
+        r2["gate_close_state"] = "ok"
+        r2["closing_fair_prob"] = round(_side_prob(close.p_cons, row["side"]), 6)
     return out
