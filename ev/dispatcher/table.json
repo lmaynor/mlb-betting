@@ -1,0 +1,377 @@
+{
+ "generated_from": "Live Cloud Scheduler state, project concrete-crow-445205-m4, us-central1, read Nov 16, 2026 AFTER the OPS-15 Tranche 1 merge landed (fleet 141 -> 108 definitions).",
+ "rule": "Absorb ENABLED definitions firing at most twice a day on a 28-day average whose target is a Cloud Run job with no per-definition override body. Exclusions and wave splits carry their reasons inline.",
+ "grid_minutes_utc": [
+  0,
+  6,
+  10,
+  15,
+  20,
+  30,
+  35,
+  36,
+  40,
+  45,
+  50
+ ],
+ "entries": [
+  {
+   "scheduler": "autopilot-shadow-daily",
+   "job": "autopilot-shadow",
+   "cron": "30 6 * * *",
+   "timezone": "America/Chicago",
+   "wave": "2-Dec1",
+   "wave_note": "wave 2: after the Dec 1 AUT-01 scoring (AUT-01 capture set fence)"
+  },
+  {
+   "scheduler": "closing-panel-daily",
+   "job": "closing-panel",
+   "cron": "0 6 * * *",
+   "timezone": "America/Chicago",
+   "wave": "2-Dec1",
+   "wave_note": "wave 2: after the Dec 1 AUT-01 scoring (AUT-01 capture set fence)"
+  },
+  {
+   "scheduler": "decisions-n5-capture",
+   "job": "decisions-n5-capture",
+   "cron": "45 7 * * *",
+   "timezone": "Etc/UTC",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  },
+  {
+   "scheduler": "decisions-n6-capture",
+   "job": "decisions-n6-capture",
+   "cron": "30 13 * * *",
+   "timezone": "Etc/UTC",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  },
+  {
+   "scheduler": "first-scorer-outcomes-nba",
+   "job": "first-scorer-outcomes-nba",
+   "cron": "30 14 * * *",
+   "timezone": "Etc/UTC",
+   "wave": "2-Dec15",
+   "wave_note": "wave 2: after the Dec 15 NBA gate (memo B.3 fence split)"
+  },
+  {
+   "scheduler": "first-scorer-outcomes-nfl",
+   "job": "first-scorer-outcomes-nfl",
+   "cron": "30 14 * * *",
+   "timezone": "Etc/UTC",
+   "wave": "2-Dec15",
+   "wave_note": "wave 2: after the Dec 15 NBA gate (memo B.3 fence split)"
+  },
+  {
+   "scheduler": "mlb-tweet-picks-schedule",
+   "job": "mlb-tweet-picks",
+   "cron": "0 17 * * *",
+   "timezone": "Etc/UTC",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  },
+  {
+   "scheduler": "mlb-tweet-recap-schedule",
+   "job": "mlb-tweet-recap",
+   "cron": "0 10 * * *",
+   "timezone": "Etc/UTC",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  },
+  {
+   "scheduler": "mlb-tweet-reply-ammo-schedule",
+   "job": "mlb-tweet-reply-ammo",
+   "cron": "45 22 * * *",
+   "timezone": "Etc/UTC",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  },
+  {
+   "scheduler": "nba-espn-players-1",
+   "job": "nba-espn-players",
+   "cron": "0 11 * * *",
+   "timezone": "Etc/UTC",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  },
+  {
+   "scheduler": "nba-hoopr-refresh",
+   "job": "nba-hoopr-refresh",
+   "cron": "45 13 * * *",
+   "timezone": "Etc/UTC",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  },
+  {
+   "scheduler": "nba-refresh-data",
+   "job": "nba-refresh-data",
+   "cron": "0 13 * * *",
+   "timezone": "Etc/UTC",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  },
+  {
+   "scheduler": "nfl-refresh-data",
+   "job": "nfl-refresh-data",
+   "cron": "30 13 * * *",
+   "timezone": "Etc/UTC",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  },
+  {
+   "scheduler": "nhl-early-market-report",
+   "job": "nhl-early-market-report",
+   "cron": "15 13 * * *",
+   "timezone": "Etc/UTC",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  },
+  {
+   "scheduler": "nhl-early-market-settle",
+   "job": "nhl-early-market-settle",
+   "cron": "0 13 * * *",
+   "timezone": "Etc/UTC",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  },
+  {
+   "scheduler": "nhl-lines-build",
+   "job": "nhl-lines-build",
+   "cron": "30 13 * * *",
+   "timezone": "Etc/UTC",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  },
+  {
+   "scheduler": "nhl-paper-settle-sched1",
+   "job": "nhl-paper-settle",
+   "cron": "30 7 * * *",
+   "timezone": "America/Chicago",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  },
+  {
+   "scheduler": "nhl-refresh-data",
+   "job": "nhl-refresh-data",
+   "cron": "30 12 * * *",
+   "timezone": "Etc/UTC",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  },
+  {
+   "scheduler": "nhl-shiftcharts-bank",
+   "job": "nhl-shiftcharts-bank",
+   "cron": "0 13 * * *",
+   "timezone": "Etc/UTC",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  },
+  {
+   "scheduler": "nhl-trained-score-sched1",
+   "job": "nhl-trained-score",
+   "cron": "30 9,13 * * *",
+   "timezone": "America/Chicago",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  },
+  {
+   "scheduler": "nhl-trained-score-sched2",
+   "job": "nhl-trained-score",
+   "cron": "0 17 * * *",
+   "timezone": "America/Chicago",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  },
+  {
+   "scheduler": "nhl-trained-train-sched1",
+   "job": "nhl-trained-train",
+   "cron": "0 8 * * 0",
+   "timezone": "America/Chicago",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  },
+  {
+   "scheduler": "novig-paper-executor-sweep-sun-am",
+   "job": "novig-paper-executor",
+   "cron": "10,40 6-11 * * 0",
+   "timezone": "America/Chicago",
+   "wave": "2-Dec1",
+   "wave_note": "wave 2: after the Dec 1 AUT-01 scoring (AUT-01 capture set fence)"
+  },
+  {
+   "scheduler": "novig-paper-executor-sweep-sun-rest",
+   "job": "novig-paper-executor",
+   "cron": "10 0,2,4,12-20,22 * * 0",
+   "timezone": "America/Chicago",
+   "wave": "2-Dec1",
+   "wave_note": "wave 2: after the Dec 1 AUT-01 scoring (AUT-01 capture set fence)"
+  },
+  {
+   "scheduler": "novig-shadow-nfl-fri-sat",
+   "job": "novig-shadow-nfl",
+   "cron": "6 10-20/2 * * 5,6",
+   "timezone": "America/Chicago",
+   "wave": "2-Nov24",
+   "wave_note": "wave 2: after the Nov 24 reads (PRD-04 day-8 / NFL holdout fences)"
+  },
+  {
+   "scheduler": "novig-shadow-nfl-mon",
+   "job": "novig-shadow-nfl",
+   "cron": "6 12-18/2 * * 1",
+   "timezone": "America/Chicago",
+   "wave": "2-Nov24",
+   "wave_note": "wave 2: after the Nov 24 reads (PRD-04 day-8 / NFL holdout fences)"
+  },
+  {
+   "scheduler": "novig-shadow-nfl-sun-am",
+   "job": "novig-shadow-nfl",
+   "cron": "6,36 6-11 * * 0",
+   "timezone": "America/Chicago",
+   "wave": "2-Nov24",
+   "wave_note": "wave 2: after the Nov 24 reads (PRD-04 day-8 / NFL holdout fences)"
+  },
+  {
+   "scheduler": "novig-shadow-nfl-sun-rest",
+   "job": "novig-shadow-nfl",
+   "cron": "6 12-20 * * 0",
+   "timezone": "America/Chicago",
+   "wave": "2-Nov24",
+   "wave_note": "wave 2: after the Nov 24 reads (PRD-04 day-8 / NFL holdout fences)"
+  },
+  {
+   "scheduler": "novig-shadow-nfl-thu",
+   "job": "novig-shadow-nfl",
+   "cron": "6 12-18/2 * * 4",
+   "timezone": "America/Chicago",
+   "wave": "2-Nov24",
+   "wave_note": "wave 2: after the Nov 24 reads (PRD-04 day-8 / NFL holdout fences)"
+  },
+  {
+   "scheduler": "odds-bank-epl-game-lines-0100",
+   "job": "odds-bank-epl-game-lines",
+   "cron": "0 1 * * *",
+   "timezone": "Etc/UTC",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  },
+  {
+   "scheduler": "odds-bank-nba-game-lines-0100",
+   "job": "odds-bank-nba-game-lines",
+   "cron": "0 1 * * *",
+   "timezone": "Etc/UTC",
+   "wave": "2-Dec15",
+   "wave_note": "wave 2: after the Dec 15 NBA gate (memo B.3 fence split)"
+  },
+  {
+   "scheduler": "odds-bank-nba-props-0500",
+   "job": "odds-bank-nba-props",
+   "cron": "0 5 * * *",
+   "timezone": "Etc/UTC",
+   "wave": "2-Dec15",
+   "wave_note": "wave 2: after the Dec 15 NBA gate (memo B.3 fence split)"
+  },
+  {
+   "scheduler": "odds-bank-nhl-game-lines-0100",
+   "job": "odds-bank-nhl-game-lines",
+   "cron": "0 1 * * *",
+   "timezone": "Etc/UTC",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  },
+  {
+   "scheduler": "odds-bank-nhl-props-0500",
+   "job": "odds-bank-nhl-props",
+   "cron": "0 5 * * *",
+   "timezone": "Etc/UTC",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  },
+  {
+   "scheduler": "odds-bank-ucl-game-lines-0100",
+   "job": "odds-bank-ucl-game-lines",
+   "cron": "0 1 * * *",
+   "timezone": "Etc/UTC",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  },
+  {
+   "scheduler": "prd04-opener-shadow-burst-morning-close",
+   "job": "prd04-opener-shadow",
+   "cron": "0 13 * * *",
+   "timezone": "America/Chicago",
+   "wave": "2-Nov24",
+   "wave_note": "wave 2: after the Nov 24 reads (PRD-04 day-8 / NFL holdout fences)"
+  },
+  {
+   "scheduler": "prd04-opener-shadow-burst-nfl-sun",
+   "job": "prd04-opener-shadow",
+   "cron": "*/10 7,8 * * 0",
+   "timezone": "America/Chicago",
+   "wave": "2-Nov24",
+   "wave_note": "wave 2: after the Nov 24 reads (PRD-04 day-8 / NFL holdout fences)"
+  },
+  {
+   "scheduler": "prd04-opener-shadow-burst-nfl-wed-close",
+   "job": "prd04-opener-shadow",
+   "cron": "0 16 * * 3",
+   "timezone": "America/Chicago",
+   "wave": "2-Nov24",
+   "wave_note": "wave 2: after the Nov 24 reads (PRD-04 day-8 / NFL holdout fences)"
+  },
+  {
+   "scheduler": "props-alerts-nba-1",
+   "job": "props-alerts-nba",
+   "cron": "35 17,22 * * *",
+   "timezone": "Etc/UTC",
+   "wave": "2-Dec15",
+   "wave_note": "wave 2: after the Dec 15 NBA gate (memo B.3 fence split)"
+  },
+  {
+   "scheduler": "props-alerts-nhl-1",
+   "job": "props-alerts-nhl",
+   "cron": "35 17,22 * * *",
+   "timezone": "Etc/UTC",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  },
+  {
+   "scheduler": "props-grade-nba-1",
+   "job": "props-grade-nba",
+   "cron": "40 12 * * *",
+   "timezone": "Etc/UTC",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  },
+  {
+   "scheduler": "props-grade-nhl-1",
+   "job": "props-grade-nhl",
+   "cron": "30 12 * * *",
+   "timezone": "Etc/UTC",
+   "wave": 1,
+   "wave_note": "wave 1: cut over with the dispatcher launch"
+  }
+ ],
+ "excluded": [
+  {
+   "scheduler": "an-daily-* (14 definitions)",
+   "reason": "GitHub Actions lane (memo B.2) owns this family; absorbing them here would double-count the $1.40/mo rent saving."
+  },
+  {
+   "scheduler": "mlb-settle",
+   "reason": "HTTP target is the site service /settle URL, not a Cloud Run job; the dispatcher runs jobs via the Run API."
+  },
+  {
+   "scheduler": "ev-nfl-props-sweep-sun-am",
+   "reason": "Within-hour live sweep on game day (memo B.3: minute-precision work keeps its own definition)."
+  },
+  {
+   "scheduler": "ev-nfl-props-sweep-sun-rest",
+   "reason": "Within-hour live sweep on game day (memo B.3: minute-precision work keeps its own definition)."
+  },
+  {
+   "scheduler": "bp-live-nfl-sun-am",
+   "reason": "Within-hour seasonal live sweep (memo B.3: minute-precision work keeps its own definition)."
+  }
+ ]
+}
