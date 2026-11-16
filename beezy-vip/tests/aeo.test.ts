@@ -33,27 +33,39 @@ const robots = parseRobots(readFileSync(join(__dirname, '../public/robots.txt'),
 const groupFor = (ua: string) => robots.find(g => g.agents.includes(ua.toLowerCase()))
 
 describe('robots.txt', () => {
-  const AI_BOTS = ['meta-webindexer', 'Meta-ExternalAgent', 'OAI-SearchBot', 'ChatGPT-User', 'PerplexityBot', 'Claude-SearchBot', 'Claude-User', 'ClaudeBot']
+  // RUL-20261115-crawler-policy: training and bulk crawlers are disallowed site-wide; search and retrieval
+  // crawlers get canonical pages only, with every query-string URL disallowed (the parameterized
+  // /ev/projections space is closed). Unnamed search / user-fetch agents fall under the * group.
+  const TRAINING_BOTS = ['GPTBot', 'Applebot-Extended', 'CCBot', 'Bytespider', 'ClaudeBot', 'Google-Extended', 'Meta-ExternalAgent', 'Amazonbot']
+  const CANONICAL_DISALLOW = ['/*?*', '/api/', '/dashboard', '/login', '/signup', '/admin', '/blocked']
 
-  it.each(AI_BOTS)('%s has a group that allows the site', ua => {
+  it.each(TRAINING_BOTS)('%s is disallowed site-wide', ua => {
+    const g = groupFor(ua)
+    expect(g).toBeDefined()
+    expect(g!.disallow).toContain('/')
+    expect(g!.allow).not.toContain('/')
+  })
+
+  it.each(['OAI-SearchBot', 'Applebot', '*'])('%s gets canonical pages only', ua => {
     const g = groupFor(ua)
     expect(g).toBeDefined()
     expect(g!.allow).toContain('/')
+    expect([...g!.disallow].sort()).toEqual([...CANONICAL_DISALLOW].sort())
   })
 
-  it.each(AI_BOTS)('%s keeps every private path disallowed', ua => {
-    const g = groupFor(ua)!
-    const star = groupFor('*')!
-    expect(g.disallow.length).toBeGreaterThan(0)
-    expect([...g.disallow].sort()).toEqual([...star.disallow].sort())
-    for (const p of ['/api', '/dashboard', '/login', '/signup']) {
-      expect(g.disallow).toContain(p)
+  it('unnamed search and user-fetch agents fall under the * group', () => {
+    for (const ua of ['ChatGPT-User', 'PerplexityBot', 'Perplexity-User', 'Claude-SearchBot', 'Claude-User', 'meta-webindexer']) {
+      expect(groupFor(ua)).toBeUndefined()
     }
+    const star = groupFor('*')!
+    for (const p of CANONICAL_DISALLOW) expect(star.disallow).toContain(p)
   })
 
-  it('still serves the OG cards and points at the sitemap', () => {
+  it('still serves the OG cards, sets a crawl delay, and points at the sitemap', () => {
+    const txt = readFileSync(join(__dirname, '../public/robots.txt'), 'utf8')
     expect(groupFor('*')!.allow).toContain('/api/og')
-    expect(readFileSync(join(__dirname, '../public/robots.txt'), 'utf8')).toContain('Sitemap: https://beezy.fyi/sitemap.xml')
+    expect(txt).toContain('Crawl-delay: 10')
+    expect(txt).toContain('Sitemap: https://beezy.fyi/sitemap.xml')
   })
 })
 

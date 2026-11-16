@@ -1,30 +1,71 @@
-# AI answer-engine, search and citation crawlers: welcome. The Disallow list below is deliberately the SAME as the
-# default group's. A crawler obeys only its most specific group, so a bot-only "Allow: /" group would silently drop
-# every Disallow. Keep this group and the "*" group identical (tests/aeo.test.ts enforces it).
-User-agent: meta-webindexer
-User-agent: Meta-ExternalAgent
-User-agent: OAI-SearchBot
-User-agent: ChatGPT-User
+# Crawler policy per RUL-20261115-crawler-policy (Nov 15, 2026), replacing the previous welcome-all posture.
+# Training and bulk crawlers are disallowed site-wide. Search and retrieval crawlers may fetch canonical
+# pages only: every query-string URL is disallowed, which closes the parameterized /ev/projections space
+# that GPTBot was enumerating at ~2 req/s against the Vercel Hobby invocation cap. This file is advisory;
+# the enforcement backstop is the Vercel Firewall (configured separately). tests/aeo.test.ts pins this shape.
+#
+# One deliberate carry-over from the previous file, not in Argon's verbatim text: each canonical group
+# keeps "Allow: /api/og" ahead of the /api/ disallow, because the og:image URLs live under /api/og and
+# social cards must stay fetchable (longest match wins, so the carve-out survives the prefix disallow).
+
+# Training & bulk scrapers: site-wide disallow
 User-agent: GPTBot
-User-agent: PerplexityBot
-User-agent: Perplexity-User
-User-agent: Claude-SearchBot
-User-agent: Claude-User
-User-agent: ClaudeBot
-User-agent: Claude-Web
-User-agent: Google-Extended
+Disallow: /
+
 User-agent: Applebot-Extended
+Disallow: /
+
 User-agent: CCBot
-User-agent: *
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: Meta-ExternalAgent
+Disallow: /
+
+User-agent: Amazonbot
+Disallow: /
+
+# Search & retrieval crawlers: canonical pages only, zero parameterized/RSC URLs
+User-agent: OAI-SearchBot
 Allow: /
-
-# Social cards must stay fetchable: the og:image URLs live under /api/og.
 Allow: /api/og
-Disallow: /api
-
-# Auth + private
+Disallow: /*?*
+Disallow: /api/
 Disallow: /dashboard
 Disallow: /login
 Disallow: /signup
+Disallow: /admin
+Disallow: /blocked
+
+User-agent: Applebot
+Allow: /
+Allow: /api/og
+Disallow: /*?*
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /login
+Disallow: /signup
+Disallow: /admin
+Disallow: /blocked
+
+User-agent: *
+Allow: /
+Allow: /api/og
+Disallow: /*?*
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /login
+Disallow: /signup
+Disallow: /admin
+Disallow: /blocked
+Crawl-delay: 10
 
 Sitemap: https://beezy.fyi/sitemap.xml
