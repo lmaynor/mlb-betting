@@ -90,8 +90,11 @@ def test_market_tiers():
         assert P4.market_tier(row(stat=stat)) == 3, stat
     for stat in ("goals", "assists", "points", "blocked_shots", "pp_points"):
         assert P4.market_tier(nhl_row(stat=stat)) == 3, stat
-    # trained skater rows stay Tier 3 in slice 1 (slice 3 opens the trained path); trained saves is Tier 2
-    assert P4.market_tier(nhl_row(stat="goals", nhl_model="trained_v1")) == 3
+    # slice 3 opened the trained path: trained skater rows are Tier 2 (the board engine's stay Tier 3
+    # in the loop above); trained saves is Tier 2 via TIER2_MARKETS
+    assert P4.market_tier(nhl_row(stat="goals", nhl_model="trained_v1")) == 2
+    assert P4.market_tier(nhl_row(stat="assists", nhl_model="trained_v1")) == 2
+    assert P4.market_tier(nhl_row(stat="points", nhl_model="trained_v1")) == 2
     assert P4.market_tier(saves_row(nhl_model="trained_v1")) == 2
     # every production NFL market, anytime_td included
     assert P4.market_tier(row(sport="nfl", stat="pass_yds")) == 3
