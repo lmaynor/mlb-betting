@@ -1,0 +1,141 @@
+# Replaces the 14 an-daily Cloud Run jobs + schedulers (OPS-15).
+# Runs the Action Network daily banking script once per league per day on GitHub Actions.
+#
+# - Auth: Keyless via Workload Identity Federation (WIF) restricted to this repo.
+# - Self-healing: Banking is lookback-based (default 7 days) and idempotent, so Actions
+#   cron jitter or a dropped run self-heals on the next run.
+# - Stagger: UTC crons match the 06:00-06:52 CT stagger during CST (UTC-6) and land
+#   one hour later CT (07:00-07:52 CT) in CDT (UTC-5), which is acceptable as prior-day
+#   boards are already final.
+
+name: AN daily banking
+
+on:
+  schedule:
+    # 14 daily cron entries (UTC). Matches 06:00-06:52 CT in CST; lands one hour later CT in CDT.
+    - cron: '0 12 * * *'   # nba
+    - cron: '4 12 * * *'   # nhl
+    - cron: '8 12 * * *'   # nfl
+    - cron: '12 12 * * *'  # ncaab
+    - cron: '16 12 * * *'  # ncaaf
+    - cron: '20 12 * * *'  # mlb
+    - cron: '24 12 * * *'  # wnba
+    - cron: '28 12 * * *'  # epl
+    - cron: '32 12 * * *'  # mls
+    - cron: '36 12 * * *'  # laliga
+    - cron: '40 12 * * *'  # bundesliga
+    - cron: '44 12 * * *'  # seriea
+    - cron: '48 12 * * *'  # ligue1
+    - cron: '52 12 * * *'  # ncaaw
+  workflow_dispatch:
+    inputs:
+      league:
+        description: 'League to bank'
+        type: choice
+        required: true
+        options:
+          - nba
+          - nhl
+          - nfl
+          - ncaab
+          - ncaaf
+          - mlb
+          - wnba
+          - epl
+          - mls
+          - laliga
+          - bundesliga
+          - seriea
+          - ligue1
+          - ncaaw
+      start:
+        description: 'Explicit window start YYYYMMDD; overrides lookback'
+        type: string
+        required: false
+      end:
+        description: 'Explicit window end YYYYMMDD; overrides lookback'
+        type: string
+        required: false
+      bucket:
+        description: 'Bucket override for proof runs'
+        type: string
+        required: false
+      shard:
+        description: 'Shard override for proof runs'
+        type: string
+        required: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: an-daily-${{ inputs.league || github.event.schedule }}
+  cancel-in-progress: false
+
+jobs:
+  bank:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Resolve league
+        id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_LEAGUE: ${{ inputs.league }}
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            league="$INPUT_LEAGUE"
+          else
+            case "$SCHEDULE" in
+              "0 12 * * *")  league="nba" ;;
+              "4 12 * * *")  league="nhl" ;;
+              "8 12 * * *")  league="nfl" ;;
+              "12 12 * * *") league="ncaab" ;;
+              "16 12 * * *") league="ncaaf" ;;
+              "20 12 * * *") league="mlb" ;;
+              "24 12 * * *") league="wnba" ;;
+              "28 12 * * *") league="epl" ;;
+              "32 12 * * *") league="mls" ;;
+              "36 12 * * *") league="laliga" ;;
+              "40 12 * * *") league="bundesliga" ;;
+              "44 12 * * *") league="seriea" ;;
+              "48 12 * * *") league="ligue1" ;;
+              "52 12 * * *") league="ncaaw" ;;
+              *)
+                echo "Error: unrecognized schedule '$SCHEDULE'" >&2
+                exit 1
+                ;;
+            esac
+          fi
+          echo "league=$league" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - run: pip install -e .
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: "projects/628109313129/locations/global/workloadIdentityPools/github-actions/providers/github"
+          service_account: "mlb-betting-sa@concrete-crow-445205-m4.iam.gserviceaccount.com"
+
+      - name: Bank one league
+        run: python scripts/bank_action_network.py --execute
+        env:
+          ACTION_NETWORK_BANK_ENABLED: "1"
+          AN_LEAGUE: ${{ steps.resolve.outputs.league }}
+          AN_SHARD: ${{ inputs.shard || 'daily' }}
+          AN_SITE: github
+          AN_LOOKBACK_DAYS: "7"
+          AN_TIME_BUDGET_S: "3300"
+          AN_START: ${{ inputs.start }}
+          AN_END: ${{ inputs.end }}
+          MLB_GCS_BUCKET: ${{ inputs.bucket || 'concrete-crow-445205-m4-mlb-data' }}
+          GOOGLE_CLOUD_PROJECT: concrete-crow-445205-m4
+          GCP_PROJECT: concrete-crow-445205-m4
+          GCP_REGION: us-central1
