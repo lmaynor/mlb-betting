@@ -106,3 +106,83 @@ def test_extract_day_overwrites_day_file_and_sets_holds(monkeypatch):
     assert held == ["EVSweep/nfl_props/raw/2026-11-12/evt-novig_200120.json"]
     assert written["day"] == "2026-11-12" and len(written["rows"]) == 6
     assert {r["quote_ts"] for r in written["rows"]} == {"2026-11-12T20:01:20+00:00"}
+
+
+# ---------------------------------------------------------------- incremental skip (OPS-13)
+from collections import namedtuple
+
+_Blob = namedtuple("_Blob", "name generation size crc32c")
+
+
+def _blobs(*specs):
+    return [_Blob(n, g, s, c) for n, g, s, c in specs]
+
+
+def test_fingerprint_stable_and_content_sensitive():
+    a = _blobs(("d/x_1.json", 1, 100, "crc1"), ("d/y_2.json", 3, 200, "crc2"))
+    b = _blobs(("d/x_1.json", 1, 100, "crc1"), ("d/y_2.json", 3, 200, "crc2"))
+    assert sink.fingerprint_blobs(a) == sink.fingerprint_blobs(b)
+    overwritten = _blobs(("d/x_1.json", 2, 100, "crc1"), ("d/y_2.json", 3, 200, "crc2"))
+    assert sink.fingerprint_blobs(a) != sink.fingerprint_blobs(overwritten)   # generation bump
+    grown = a + _blobs(("d/z_3.json", 1, 50, "crc3"))
+    assert sink.fingerprint_blobs(a) != sink.fingerprint_blobs(grown)         # new payload
+
+
+def _prime_skip(monkeypatch, blobs, holds_set=1, raw_files=1, sink_present=True):
+    calls = {"extract": 0}
+    monkeypatch.setattr(sink, "list_raw_blobs", lambda day: blobs)
+    monkeypatch.setattr(sink, "object_exists", lambda key: sink_present)
+
+    def fake_extract(day, holds=True):
+        calls["extract"] += 1
+        return {"day": day, "raw_files": raw_files, "rows": 6, "holds_set": holds_set,
+                "sink": f"sink/{day}", "books": [], "stats": []}
+    monkeypatch.setattr(sink, "extract_day", fake_extract)
+    return calls
+
+
+def test_unchanged_day_is_skipped_after_first_extract(monkeypatch):
+    blobs = _blobs(("d/x_1.json", 1, 100, "crc1"))
+    calls = _prime_skip(monkeypatch, blobs)
+    state = {}
+    first = sink.extract_day_if_changed("2026-11-12", state)
+    assert not first["skipped"] and calls["extract"] == 1 and state["2026-11-12"]
+    second = sink.extract_day_if_changed("2026-11-12", state)
+    assert second["skipped"] and calls["extract"] == 1, "unchanged inputs must not re-extract"
+
+
+def test_changed_day_reextracts(monkeypatch):
+    blobs = _blobs(("d/x_1.json", 1, 100, "crc1"))
+    calls = _prime_skip(monkeypatch, blobs)
+    state = {}
+    sink.extract_day_if_changed("2026-11-12", state)
+    monkeypatch.setattr(sink, "list_raw_blobs",
+                        lambda day: _blobs(("d/x_1.json", 1, 100, "crc1"), ("d/y_2.json", 1, 90, "crc9")))
+    again = sink.extract_day_if_changed("2026-11-12", state)
+    assert not again["skipped"] and calls["extract"] == 2
+
+
+def test_missing_sink_reextracts_even_when_fingerprint_matches(monkeypatch):
+    blobs = _blobs(("d/x_1.json", 1, 100, "crc1"))
+    calls = _prime_skip(monkeypatch, blobs, sink_present=False)
+    state = {"2026-11-12": sink.fingerprint_blobs(blobs)}
+    out = sink.extract_day_if_changed("2026-11-12", state)
+    assert not out["skipped"] and calls["extract"] == 1
+
+
+def test_incomplete_holds_are_not_sealed(monkeypatch):
+    blobs = _blobs(("d/x_1.json", 1, 100, "crc1"), ("d/y_2.json", 1, 90, "crc9"))
+    calls = _prime_skip(monkeypatch, blobs, holds_set=1, raw_files=2)
+    state = {}
+    sink.extract_day_if_changed("2026-11-12", state)
+    assert "2026-11-12" not in state, "a day with a failed hold must be retried, not sealed"
+    sink.extract_day_if_changed("2026-11-12", state)
+    assert calls["extract"] == 2
+
+
+def test_force_reextracts_unchanged_day(monkeypatch):
+    blobs = _blobs(("d/x_1.json", 1, 100, "crc1"))
+    calls = _prime_skip(monkeypatch, blobs)
+    state = {"2026-11-12": sink.fingerprint_blobs(blobs)}
+    out = sink.extract_day_if_changed("2026-11-12", state, force=True)
+    assert not out["skipped"] and calls["extract"] == 1

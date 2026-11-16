@@ -28,15 +28,25 @@ event-based hold on every raw payload it processes, so the source payloads canno
 logged and counted, never fatal.
 
 Run (Cloud Run job ev-alt-ladder-extract, every 15 min):
-  python -m ev.alt_ladder_sink                 # re-extract the trailing 3 ET days (idempotent)
+  python -m ev.alt_ladder_sink                 # extract the trailing 3 ET days (idempotent)
   python -m ev.alt_ladder_sink --backfill      # every banked raw day, 2026-10-04 onward
 Re-extraction OVERWRITES the day file, so a re-run is a repair, not a duplicate.
+
+INCREMENTAL SKIP (OPS-13, 2026-11-16): extraction is a deterministic pure function of the day's
+raw payloads (gzip mtime=0, sorted rows and keys), and a closed ET day's raw directory never
+changes -- new payloads land under the day they were fetched. Each run therefore fingerprints
+every day (name + generation + size + crc32c of every raw object, from the one listing) and
+skips a day whose fingerprint matches the recorded one AND whose sink file still exists: the
+sink bytes already in the bucket are exactly what re-extraction would write. A day is only
+recorded as fingerprinted once its holds are complete, so a day with a failed hold is retried
+next run instead of being sealed. --backfill forces extraction of every day regardless.
 """
 
 from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import io
 import json
 import logging
@@ -138,6 +148,44 @@ def list_raw_objects(day: str) -> list[str]:
     return sorted(b.name for b in bucket.list_blobs(prefix=f"{RAW_PREFIX}/{day}/"))
 
 
+def list_raw_blobs(day: str) -> list:
+    bucket = _client().bucket(_bucket_name())
+    return sorted(bucket.list_blobs(prefix=f"{RAW_PREFIX}/{day}/"), key=lambda b: b.name)
+
+
+def fingerprint_blobs(blobs) -> str:
+    """Content fingerprint of one day's raw directory from the listing metadata alone.
+    Generation + crc32c change on any overwrite, so an unchanged fingerprint means the
+    payload bytes are unchanged -- and extraction, being deterministic, would rewrite
+    byte-identical sink output."""
+    h = hashlib.sha256()
+    for b in blobs:
+        h.update(f"{b.name}\x00{b.generation}\x00{b.size}\x00{b.crc32c}\n".encode())
+    return h.hexdigest()
+
+
+STATE_KEY = f"{SINK_PREFIX}/_fingerprints.json"
+
+
+def read_fingerprints() -> dict:
+    try:
+        return json.loads(read_object(STATE_KEY))
+    except Exception:                                      # noqa: BLE001
+        return {}
+
+
+def write_fingerprints(state: dict) -> None:
+    from mlb_core.storage import write_bytes
+    write_bytes(json.dumps(state, sort_keys=True).encode(), STATE_KEY)
+
+
+def object_exists(key: str) -> bool:
+    try:
+        return _client().bucket(_bucket_name()).blob(key).exists()
+    except Exception:                                      # noqa: BLE001
+        return False
+
+
 def list_raw_days() -> list[str]:
     bucket = _client().bucket(_bucket_name())
     pages = bucket.list_blobs(prefix=f"{RAW_PREFIX}/", delimiter="/")
@@ -197,6 +245,22 @@ def extract_day(day: str, holds: bool = True) -> dict:
     return stats
 
 
+def extract_day_if_changed(day: str, state: dict, holds: bool = True, force: bool = False) -> dict:
+    """Skip a day whose raw directory is unchanged since its sink was written (see the module
+    docstring: unchanged inputs make re-extraction byte-identical, so skipping changes no
+    output). `state` is the fingerprint dict, mutated in place when a day is sealed; the day
+    is sealed only once its holds are complete, so a hold failure is retried next run."""
+    fp = fingerprint_blobs(list_raw_blobs(day))
+    if not force and state.get(day) == fp and object_exists(f"{SINK_PREFIX}/{day}.jsonl.gz"):
+        log.info("ALT_LADDER_SKIP %s", json.dumps({"day": day, "fingerprint": fp[:12]}))
+        return {"day": day, "skipped": True, "raw_files": 0, "rows": 0, "holds_set": 0}
+    stats = extract_day(day, holds=holds)
+    stats["skipped"] = False
+    if not holds or stats["holds_set"] == stats["raw_files"]:
+        state[day] = fp
+    return stats
+
+
 def trailing_days(n: int, now: datetime | None = None) -> list[str]:
     today = (now or datetime.now(timezone.utc)).astimezone(_ET).date()
     return [(today - timedelta(days=i)).isoformat() for i in range(n - 1, -1, -1)]
@@ -211,12 +275,17 @@ def main(argv=None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     days = list_raw_days() if a.backfill else trailing_days(a.days)
     log.info("alt-ladder extraction: %d day(s) %s..%s", len(days), days[0] if days else "-", days[-1] if days else "-")
-    total = {"days": 0, "raw_files": 0, "rows": 0, "holds_set": 0}
+    state = read_fingerprints()
+    state_before = dict(state)
+    total = {"days": 0, "skipped": 0, "raw_files": 0, "rows": 0, "holds_set": 0}
     for day in days:
-        s = extract_day(day, holds=not a.no_holds)
+        s = extract_day_if_changed(day, state, holds=not a.no_holds, force=a.backfill)
         total["days"] += 1
+        total["skipped"] += 1 if s.get("skipped") else 0
         for k in ("raw_files", "rows", "holds_set"):
             total[k] += s[k]
+    if state != state_before:
+        write_fingerprints(state)
     log.info("ALT_LADDER_DONE %s", json.dumps(total))
     return 0
 
