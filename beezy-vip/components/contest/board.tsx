@@ -6,6 +6,7 @@
  */
 import { Fragment } from 'react'
 import { fmtLineSigned, fmtPrice } from '@/lib/contest/odds'
+import { periodFirst } from '@/lib/contest/state'
 import { gameClosed, makePick, samePick } from '@/lib/contest/slip'
 import type { BoardGame, ContestRules, Market, Pick, Side } from '@/lib/contest/types'
 import { ContestTeamLogo } from './team-logo'
@@ -61,9 +62,10 @@ function StateLine({ g, closed, reason }: { g: BoardGame; closed: boolean; reaso
   const base: React.CSSProperties = { fontSize: 11, marginTop: 4, lineHeight: 1.4 }
   if (g.status === 'live') {
     return (
+      // "3rd Quarter 8:42 . 2nd & 7 at LSU 35": the period and clock lead (primary text), the situation follows (secondary); no "Live" label, the score and clock already say so
       <div className="mono" style={{ ...base, color: '#9ca3af' }}>
-        <span style={{ color: 'var(--signal)' }}>Live</span>
-        {st ? ` \u00b7 ${st.detail}${st.downDistance ? ` \u00b7 ${st.downDistance}` : ''}${st.redZone ? ' \u00b7 Red zone' : ''}` : ' \u00b7 In play'}
+        <span style={{ color: '#f3f4f6' }}>{st ? periodFirst(st.detail) : 'In play'}</span>
+        {st?.downDistance ? ` \u00b7 ${st.downDistance}` : ''}{st?.redZone ? ' \u00b7 Red zone' : ''}
       </div>
     )
   }

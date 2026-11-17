@@ -1,5 +1,6 @@
 /** lib/contest: the TypeScript mirror of the Python engine (contest/). Golden numbers are the same ones tests/test_contest_engine.py pins. */
 import { contestEnabled } from '@/lib/contest/flag'
+import { periodFirst } from '@/lib/contest/state'
 import { SAMPLE_RULES } from '@/lib/contest/fixture'
 import { americanToDecimal, fmtLineSigned, fmtMoney, fmtPrice, parlayDecimal, parseDollars, payoutCents } from '@/lib/contest/odds'
 import {
@@ -123,5 +124,16 @@ describe('kill switch', () => {
   it('is off unless explicitly on; 0, false, off, no and empty all mean off', () => {
     for (const v of [undefined, '', '0', 'false', 'FALSE', 'off', 'Off', 'no', ' no ']) expect(contestEnabled({ CONTEST_ENABLED: v })).toBe(false)
     for (const v of ['1', 'true', 'on', 'yes']) expect(contestEnabled({ CONTEST_ENABLED: v })).toBe(true)
+  })
+})
+
+describe('periodFirst', () => {
+  it('puts the period before the clock and leaves clockless statuses alone', () => {
+    expect(periodFirst('8:42 - 3rd Quarter')).toBe('3rd Quarter 8:42')
+    expect(periodFirst('6:40 - 2nd Half')).toBe('2nd Half 6:40')
+    expect(periodFirst('10:00 - 1st OT')).toBe('1st OT 10:00')
+    expect(periodFirst('0:41.3 - 4th Quarter')).toBe('4th Quarter 0:41.3')
+    for (const t of ['Halftime', 'End of 1st Quarter', 'Final', 'Final/OT', 'In Progress']) expect(periodFirst(t)).toBe(t)
+    expect(periodFirst('  8:42 - 3rd Quarter ')).toBe('3rd Quarter 8:42')
   })
 })

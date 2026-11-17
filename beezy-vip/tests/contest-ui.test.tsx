@@ -321,9 +321,9 @@ describe('Bankroll Challenge page', () => {
     const live = container.querySelector('tr[data-game="12"]') as HTMLElement
     expect(within(live).getByLabelText('LSU score')).toHaveTextContent('17')
     expect(within(live).getByLabelText('Texas score')).toHaveTextContent('20')
-    expect(live).toHaveTextContent('Live')
-    expect(live).toHaveTextContent('8:42 - 3rd Quarter')
-    expect(live).toHaveTextContent('2nd & 7 at LSU 35')
+    expect(live).toHaveTextContent('3rd Quarter 8:42 \u00b7 2nd & 7 at LSU 35')                   // period and clock first, then the situation
+    expect(live).not.toHaveTextContent('Live')                                                     // implied by the score and the clock
+    expect(live).not.toHaveTextContent('8:42 - 3rd Quarter')
     expect(within(live).getByLabelText('Texas has the ball')).toBeInTheDocument()
     expect(within(live).queryByLabelText('LSU has the ball')).not.toBeInTheDocument()
     expect(live).not.toHaveTextContent('In play')
