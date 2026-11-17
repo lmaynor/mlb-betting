@@ -1,0 +1,11 @@
+/* Bankroll Challenge: hover is a background or border colour change only (120ms), never a transform (no-slop rule 6). */
+.contest-odds { transition: background-color 120ms ease, border-color 120ms ease; }
+.contest-odds:not(:disabled):hover { background-color: #1b1f2b !important; border-color: #4b5469 !important; }
+.contest-odds[aria-pressed="true"]:hover { background-color: var(--win-wash) !important; border-color: var(--signal) !important; }
+.contest-row { transition: background-color 120ms ease; }
+.contest-row:hover { background-color: #14171f; }
+.contest-chip { transition: border-color 120ms ease, background-color 120ms ease; }
+.contest-chip:hover { border-color: #4b5469; }
+.contest-tab { transition: color 120ms ease, background-color 120ms ease; }
+.contest-tab:hover { color: #f3f4f6; }
+.contest-odds:focus-visible, .contest-chip:focus-visible, .contest-tab:focus-visible { outline: 2px solid var(--link); outline-offset: 1px; }
