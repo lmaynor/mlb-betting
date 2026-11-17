@@ -13,6 +13,7 @@ const TD: React.CSSProperties = { fontSize: 13, color: '#f3f4f6', padding: '7px 
 const WRAP: React.CSSProperties = { background: '#11131a', border: '1px solid #1e2230', borderRadius: 8, overflow: 'auto', marginBottom: 14 }
 const FIELD: React.CSSProperties = { height: 44, padding: '0 10px', fontSize: 16, borderRadius: 6, background: '#1b1f2b', border: '1px solid #2e3446', color: '#f3f4f6', minWidth: 0 }
 const BTN: React.CSSProperties = { minHeight: 44, minWidth: 44, padding: '0 12px', fontSize: 12, fontWeight: 600, borderRadius: 6, border: '1px solid #2e3446', background: '#171a24', color: '#f3f4f6' }
+const SWITCH_LABEL: Record<string, string> = { halftime_enabled: 'Halftime window', cashout_enabled: 'Cash out', alt_lines_enabled: 'Alt lines', sgp_enabled: 'Same-game parlays', blackjack_enabled: 'Blackjack lifeline' }
 const dt = (iso: string) => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' })
 
 export function AdminConsole({ slug, initial }: { slug: string; initial: AdminState }) {
@@ -23,6 +24,9 @@ export function AdminConsole({ slug, initial }: { slug: string; initial: AdminSt
   const [adjust, setAdjust] = useState<Record<number, { amt: string; note: string }>>({})
   const [scores, setScores] = useState<Record<number, { h: string; a: string }>>({})
   const [invite, setInvite] = useState({ code: '', uses: '10' })
+  const [allGames, setAllGames] = useState(false)
+  // a real slate has dozens of games: show the first 20 (they are in kickoff order) until the organiser asks for the rest
+  const games = allGames ? s.games : s.games.slice(0, 20)
 
   const act = async (op: string, body: unknown, done: string) => {
     setBusy(true)
@@ -50,6 +54,21 @@ export function AdminConsole({ slug, initial }: { slug: string; initial: AdminSt
         </div>
       </div>
       <p role="status" className="mono" style={{ fontSize: 12, color: '#facc15', margin: '0 0 10px', minHeight: 16 }}>{msg}</p>
+
+      <div style={WRAP}>
+        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }} aria-label="Switches">
+          <thead><tr><th style={TH}>Feature</th><th style={TH}>State</th><th style={TH} /></tr></thead>
+          <tbody>
+            {Object.entries(s.switches).map(([k, on]) => (
+              <tr key={k} className="contest-row">
+                <td style={TD}>{SWITCH_LABEL[k] ?? k}</td>
+                <td className="mono" style={{ ...TD, fontSize: 12, color: on ? '#57f287' : '#7d8596' }}>{on ? 'ON' : 'OFF'}</td>
+                <td style={TD}><button type="button" disabled={busy} style={BTN} onClick={() => act('rules', { [k]: !on }, `${SWITCH_LABEL[k] ?? k} turned ${on ? 'off' : 'on'}.`)}>{on ? 'Turn off' : 'Turn on'}</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <div style={WRAP}>
         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }} aria-label="Entries">
@@ -85,7 +104,7 @@ export function AdminConsole({ slug, initial }: { slug: string; initial: AdminSt
         <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }} aria-label="Games">
           <thead><tr><th style={TH}>Game</th><th style={TH}>Kickoff</th><th style={TH}>Status</th><th style={TH}>Settle by hand (home, away)</th><th style={TH}>Void</th></tr></thead>
           <tbody>
-            {s.games.map(g => (
+            {games.map(g => (
               <tr key={g.id} className="contest-row">
                 <td style={TD}>{g.away} at {g.home}</td>
                 <td className="mono" style={{ ...TD, fontSize: 12 }}>{dt(g.commence)}</td>
@@ -101,6 +120,7 @@ export function AdminConsole({ slug, initial }: { slug: string; initial: AdminSt
               </tr>
             ))}
             {s.games.length === 0 && <tr><td colSpan={5} style={{ ...TD, color: '#7d8596' }}>No games yet. Run a refresh.</td></tr>}
+            {s.games.length > 20 && <tr><td colSpan={5} style={TD}><button type="button" style={BTN} onClick={() => setAllGames(v => !v)}>{allGames ? 'Show the first 20' : `Show all ${s.games.length} games`}</button></td></tr>}
           </tbody>
         </table>
       </div>

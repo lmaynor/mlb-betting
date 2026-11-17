@@ -136,8 +136,11 @@ def register_contest_api(app, get_engine, auth_required, scheduler_auth_required
         if not slug:
             return jsonify({"error": {"code": "BAD_REQUEST", "message": "slug is required"}}), 400
         try:
-            res = refresh_mod.refresh(engine(), slug, datetime.now(timezone.utc), include=body.get("include") or None,
-                                      days_back=int(body.get("days_back", 2)), days_ahead=int(body.get("days_ahead", 14)))
+            if body.get("halftime"):
+                res = refresh_mod.halftime_refresh(engine(), slug, datetime.now(timezone.utc), include=body.get("include") or None)
+            else:
+                res = refresh_mod.refresh(engine(), slug, datetime.now(timezone.utc), include=body.get("include") or None,
+                                          days_back=int(body.get("days_back", 2)), days_ahead=int(body.get("days_ahead", 14)))
         except ValueError as e:
             return jsonify({"error": {"code": "NO_CONTEST", "message": str(e)}}), 404
         except Exception:                                          # noqa: BLE001

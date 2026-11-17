@@ -45,6 +45,8 @@ export interface BoardGame {
   spread: { line: number; away: number; home: number } | null
   total: { line: number; over: number; under: number } | null
   ml: { away: number; home: number } | null
+  /** The halftime window is open: straights only, at Kalshi-derived prices, until the window closes (contest/halftime.py). */
+  halftime?: { open: boolean }
   state?: GameState
 }
 
@@ -78,6 +80,9 @@ export interface ContestRules {
   blackjackMinChipCents: number
   cashoutEnabled: boolean
   /** Alt lines: any half-point number within `altMaxPoints` of the main line, priced by the contest from the main price (lib/contest/margin.ts). UNVALIDATED. */
+  /** The halftime window: straights on a started game at the break, at most `halftimeMaxStakeBp` of the balance. OFF by default. */
+  halftimeEnabled: boolean
+  halftimeMaxStakeBp: number
   altLinesEnabled: boolean
   /** Same-game parlays: a spread or moneyline with the total, priced with a correlation (lib/contest/sgp.ts). UNVALIDATED. */
   sgpEnabled: boolean

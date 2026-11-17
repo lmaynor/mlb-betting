@@ -105,3 +105,15 @@ def test_the_routes_need_the_organiser_header(tmp_path, monkeypatch):
     assert c.post(f"/api/contest/{SLUG}/admin/invite", json={"code": "ABC"}, headers=base).status_code == 403
     r = c.post(f"/api/contest/{SLUG}/admin/invite", json={"code": "ABC", "maxUses": 2}, headers={**base, "X-Contest-Admin": "1"})
     assert r.status_code == 200 and r.json["invites"][0]["code"] == "ABC" and r.json["log"][0]["actor"] == "boss"
+
+
+def test_feature_switches_show_in_the_state_and_flip_with_a_log_entry(w):
+    engine, _ = w
+    assert service.admin_state(engine, SLUG)["switches"]["halftime_enabled"] is False
+    s = service.admin_action(engine, SLUG, "boss", "rules", {"halftime_enabled": True, "cashout_enabled": False}, NOW)
+    assert s["switches"]["halftime_enabled"] is True and s["switches"]["cashout_enabled"] is False
+    assert s["log"][0]["action"] == "rules"
+    with pytest.raises(RequestError):
+        service.admin_action(engine, SLUG, "boss", "rules", {"start_bankroll_cents": 1}, NOW)             # numbers are never edited here
+    with pytest.raises(RequestError):
+        service.admin_action(engine, SLUG, "boss", "rules", {"halftime_enabled": "yes"}, NOW)

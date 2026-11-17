@@ -105,6 +105,7 @@ def parse_event(ev: dict) -> dict | None:
         "home": _team(side["home"]), "away": _team(side["away"]),
         "odds": parse_odds(comp) if status == "scheduled" else None,
         "neutral": bool(comp.get("neutralSite")),
+        "halftime": stype.get("name") == "STATUS_HALFTIME",
     }
     hs, as_ = _num(side["home"].get("score")), _num(side["away"].get("score"))
     if status in ("live", "final") and hs is not None and as_ is not None:

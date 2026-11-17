@@ -6,7 +6,7 @@ import os
 import sqlalchemy as sa
 from sqlalchemy import text
 
-TABLES = ("contest_ledger", "contest_blackjack", "contest_quote", "contest_leg", "contest_bet", "contest_game", "contest_entry", "contest_invite", "contest")
+TABLES = ("contest_halftime", "contest_notice", "contest_admin_log", "contest_ledger", "contest_blackjack", "contest_quote", "contest_leg", "contest_bet", "contest_game", "contest_entry", "contest_invite", "contest")
 
 
 def make_engine(tmp_path, name="contest.db"):

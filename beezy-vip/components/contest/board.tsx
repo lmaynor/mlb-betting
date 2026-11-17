@@ -62,6 +62,7 @@ function Team({ g, side }: { g: BoardGame; side: 'away' | 'home' }) {
 function StateLine({ g, closed, reason }: { g: BoardGame; closed: boolean; reason: string }) {
   const st = g.state
   const base: React.CSSProperties = { fontSize: 11, marginTop: 4, lineHeight: 1.4 }
+  if (g.halftime?.open) return <div className="mono" style={{ ...base, color: 'var(--signal)' }}>Halftime betting open. Straights only.</div>
   if (g.status === 'live') {
     return (
       // "3rd Quarter 8:42 . 2nd & 7 at LSU 35": the period and clock lead (primary text), the situation follows (secondary); no "Live" label, the score and clock already say so

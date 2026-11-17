@@ -60,6 +60,7 @@ class Quote:
 class GameInfo:
     commence_time: datetime          # aware UTC; the DB value, never the client's
     status: str                      # scheduled | final | void
+    halftime_open: bool = False      # the halftime window (contest/halftime.py) is open on this game
 
 
 def adjusted_line(leg: Leg) -> float | None:
@@ -133,16 +134,20 @@ def validate_slip(slip: Slip, rules: ContestRules, balance_cents: int, open_risk
         g = games.get(leg.game_id)
         if g is None:
             raise SlipError("NO_GAME", f"game {leg.game_id} is not in this contest")
-        if g.status != "scheduled" or now >= g.commence_time - close_before:
+        # the halftime window reopens a started game for STRAIGHTS only, at a tighter stake cap and quote age
+        window = rules.halftime_enabled and g.halftime_open and g.status == "scheduled" and now >= g.commence_time - close_before
+        if g.status != "scheduled" or (now >= g.commence_time - close_before and not (window and slip.kind == "straight")):
             raise SlipError("GAME_CLOSED", f"betting on game {leg.game_id} is closed")
+        if window and slip.stake_cents > rules.min_stake_cents and slip.stake_cents * 10_000 > balance_cents * rules.halftime_max_stake_bp:
+            raise SlipError("STAKE_MAX", f"a halftime bet is at most {rules.halftime_max_stake_bp / 100:g}% of balance")
         if board is None:
             continue
         q = board.get((leg.game_id, leg.market, leg.side))
         if q is None:
             raise SlipError("NO_QUOTE", f"no current price for game {leg.game_id} {leg.market} {leg.side}")
-        if (now - q.fetched_at).total_seconds() > rules.quote_max_age_s:
+        if (now - q.fetched_at).total_seconds() > (rules.halftime_quote_max_age_s if window else rules.quote_max_age_s):
             raise SlipError("QUOTE_STALE", "price is too old; refresh the board")
-        if leg.line != q.line and leg.market in ("spread", "total") and slip.kind not in ("teaser", "sgp"):
+        if leg.line != q.line and leg.market in ("spread", "total") and slip.kind not in ("teaser", "sgp") and not window:
             # an ALT LINE: the contest prices it from the main quote (contest/altlines.py), so the price must be exactly that
             opp = board.get((leg.game_id, leg.market, OPPOSITE[leg.side]))
             if opp is None:                              # one-sided board: nothing to price an alt from, so it is the old behaviour

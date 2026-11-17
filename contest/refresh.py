@@ -65,3 +65,29 @@ def refresh(engine, slug: str, now: datetime, include: str | None = None, days_b
     res = sync_events(engine, c["id"], events, now, include=(lambda e: bool(rx.search(e["round"]))) if rx else (lambda e: True))
     res["fetched"] = len(events)
     return res
+
+
+def halftime_refresh(engine, slug: str, now: datetime, include: str | None = None, http: Callable = http_json) -> dict:
+    """The once-a-minute pass while games are on: re-read today's scoreboard (state, finals), and for any game at halftime fetch Kalshi,
+    write its quotes and move its window (contest/halftime.py). Does nothing about halftime unless the contest's rule AND the
+    CONTEST_HALFTIME_ENABLED environment switch are both on. Kalshi is only requested while some game is at halftime."""
+    import os
+    from contest import halftime
+    c = store.contest_by_slug(engine, slug)
+    if c is None:
+        raise ValueError(f"no contest {slug!r}")
+    sport = c["rules"].sport
+    events = fetch_events(sport, now - timedelta(days=1), now, http)
+    rx = re.compile(include, re.I) if include else None
+    events = [e for e in events if not rx or rx.search(e["round"])]
+    res = sync_events(engine, c["id"], events, now)
+    res["fetched"] = len(events)
+    on = (os.environ.get("CONTEST_HALFTIME_ENABLED") or "").strip().lower() not in ("", "0", "false", "off", "no")
+    if on and c["rules"].halftime_enabled and sport in halftime.SERIES:
+        at_half = [e for e in events if e.get("halftime")]
+        try:
+            kalshi = halftime.fetch_kalshi(sport, http) if at_half else None
+        except Exception:                                          # noqa: BLE001 - no Kalshi means no fresh quote, so a window closes by itself
+            kalshi = None
+        res["halftime"] = {str(k): v for k, v in halftime.halftime_pass(engine, c["id"], events, kalshi, now).items()}
+    return res

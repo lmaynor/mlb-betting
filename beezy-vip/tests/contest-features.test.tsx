@@ -101,3 +101,30 @@ describe('bankroll chart', () => {
     expect(screen.queryByRole('region', { name: 'Bankroll history' })).not.toBeInTheDocument()
   })
 })
+
+describe('halftime window', () => {
+  const open = () => { const f = sampleFeed(NOW); return { ...f, rules: { ...f.rules, halftimeEnabled: true }, games: f.games.map(g => g.id === 12 ? { ...g, halftime: { open: true } } : g) } }
+  it('opens prices on a started game at the break and says straights only', () => {
+    render(<ContestClient feed={open()} />)
+    expect(screen.getAllByText('Halftime betting open. Straights only.')).toHaveLength(1)
+    const row = document.querySelector('tr[data-game="12"]') as HTMLElement
+    const buttons = within(row).getAllByRole('button')
+    expect(buttons.every(b => !(b as HTMLButtonElement).disabled)).toBe(true)
+  })
+  it('refuses a parlay at the break and a stake over 10 percent', () => {
+    render(<ContestClient feed={open()} />)
+    const row = document.querySelector('tr[data-game="12"]') as HTMLElement
+    fireEvent.click(within(row).getAllByRole('button')[0])
+    fireEvent.change(screen.getByLabelText(/^Stake/), { target: { value: '600' } })               // 10% of 5,081.82 is 508.18
+    expect(screen.getByRole('region', { name: 'Bet Slip' })).toHaveTextContent('A halftime bet is at most 10% of your bankroll')
+    fireEvent.change(screen.getByLabelText(/^Stake/), { target: { value: '100' } })
+    fireEvent.click(screen.getByRole('tab', { name: 'Parlay' }))
+    expect(screen.getByRole('region', { name: 'Bet Slip' })).toHaveTextContent('Halftime bets are straights only')
+  })
+  it('stays closed when the rule is off, whatever the game says', () => {
+    const f = open()
+    render(<ContestClient feed={{ ...f, rules: { ...f.rules, halftimeEnabled: false } }} />)
+    const row = document.querySelector('tr[data-game="12"]') as HTMLElement
+    expect(within(row).getAllByRole('button').every(b => (b as HTMLButtonElement).disabled)).toBe(true)
+  })
+})

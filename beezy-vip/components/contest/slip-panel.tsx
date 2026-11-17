@@ -66,7 +66,7 @@ export function SlipPanel({ slip, games, rules, balanceCents, receipt, onDoneRec
   const byId = new Map(games.map(g => [g.id, g]))
   const stake = parseDollars(raw)
   const n = slip.picks.length
-  const issue = stake == null ? (n === 0 ? 'Add a pick' : 'Enter a stake') : slipIssue(slip, stake, balanceCents, rules, byId.get(slip.picks[0]?.gameId))
+  const issue = stake == null ? (n === 0 ? 'Add a pick' : 'Enter a stake') : slipIssue(slip, stake, balanceCents, rules, byId.get(slip.picks[0]?.gameId), new Set(games.filter(g => g.halftime?.open).map(g => g.id)))
   const sizeOptions = Array.from({ length: Math.max(0, Math.min(n, rules.roundRobinMaxPicks) - 1) }, (_, i) => i + 2)
   const breakdown = robinBreakdown(n, slip.robinSizes)
   const quick = slip.kind === 'round_robin' ? QUICK_ROBIN : QUICK
@@ -110,7 +110,7 @@ export function SlipPanel({ slip, games, rules, balanceCents, receipt, onDoneRec
           {slip.picks.map(p => {
             const g = byId.get(p.gameId)
             const d = describe(p, g, slip.kind === 'teaser' ? slip.teaserPoints : 0)
-            const canAlt = !!g && rules.altLinesEnabled && slip.kind !== 'teaser' && slip.kind !== 'sgp' && (p.market === 'spread' || p.market === 'total')
+            const canAlt = !!g && !g.halftime?.open && rules.altLinesEnabled && slip.kind !== 'teaser' && slip.kind !== 'sgp' && (p.market === 'spread' || p.market === 'total')
             return (
               <li key={`${p.gameId}-${p.market}-${p.side}`} style={{ padding: '9px 12px', borderBottom: '1px solid #151822' }}>
                <div className="flex items-center justify-between gap-2">

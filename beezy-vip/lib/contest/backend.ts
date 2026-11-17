@@ -43,6 +43,8 @@ export const postAdmin = (slug: string, op: string, userId: string, body: unknow
 export interface AdminState {
   name: string
   status: 'open' | 'closed'
+  /** On / off switches in the contest's rules (contest/store.py RULE_SWITCHES). */
+  switches: Record<string, boolean>
   entries: { entry_id: number; user_id: string; display_name: string; balance_cents: number; status: string; name_changes: number; joined_at: string }[]
   invites: { code: string; max_uses: number; uses: number }[]
   games: { id: number; away: string; home: string; commence: string; status: string; homeScore: number | null; awayScore: number | null }[]

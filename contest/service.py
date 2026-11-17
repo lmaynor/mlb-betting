@@ -17,7 +17,7 @@ from typing import Any
 
 import sqlalchemy.exc as sa_exc
 
-from contest import store
+from contest import halftime, store
 from contest.cashout import CashoutRefused
 from contest.names import MAX_RENAMES
 from contest.rules import ContestRules
@@ -73,6 +73,7 @@ def rules_json(r: ContestRules) -> dict:
         "blackjackEnabled": r.blackjack_enabled, "blackjackThresholdCents": r.blackjack_threshold_cents, "blackjackMinChipCents": r.blackjack_min_chip_cents,
         "cashoutEnabled": r.cashout_enabled, "cashoutMarginBp": r.cashout_margin_bp,
         "cashoutSigma": {"spread": r.cashout_sigma("spread"), "total": r.cashout_sigma("total")},
+        "halftimeEnabled": r.halftime_enabled, "halftimeMaxStakeBp": r.halftime_max_stake_bp,
         "altLinesEnabled": r.alt_lines_enabled, "altMarginBp": r.alt_margin_bp, "altMaxPoints": r.alt_max_points,
         "keyWeights": {str(k): v for k, v in r.key_weights().items()},
         "sgpEnabled": r.sgp_enabled, "sgpMarginBp": r.sgp_margin_bp, "sgpRhoBp": round(r.sgp_rho("spread") * 10_000), "sgpRhoMlBp": round(r.sgp_rho("ml") * 10_000),
@@ -90,6 +91,7 @@ def _game_status(g: dict, now: datetime) -> str:
 
 def games_json(engine, contest_id: int, now: datetime) -> list[dict]:
     board = store.load_board(engine, contest_id)
+    window = halftime.open_games(engine, contest_id)
     out = []
     for g in store.games_of(engine, contest_id):
         teams = json.loads(g["teams_json"]) if g["teams_json"] else {}
@@ -104,6 +106,8 @@ def games_json(engine, contest_id: int, now: datetime) -> list[dict]:
                "spread": {"line": sh.line, "away": sa_.price, "home": sh.price} if sh and sa_ else None,
                "total": {"line": to.line, "over": to.price, "under": tu.price} if to and tu else None,
                "ml": {"away": ma.price, "home": mh.price} if mh and ma else None}
+        if g["id"] in window:
+            row["halftime"] = {"open": True}
         st = json.loads(g["state_json"]) if g["state_json"] else None
         if st and row["status"] in ("live", "final"):
             row["state"] = {"homeScore": st.get("home_score", g["home_score"] or 0), "awayScore": st.get("away_score", g["away_score"] or 0),
@@ -175,14 +179,16 @@ def place(engine, slug: str, user_id: str, body: dict, now: datetime) -> dict:
     except (KeyError, TypeError, ValueError) as e:
         raise RequestError(400, "BAD_REQUEST", "stakeCents is required") from e
     board = store.load_board(engine, c["id"])
+    # a straight on a game whose halftime window is open is a halftime bet: it stays hidden from other players until the window closes
+    phase = "halftime" if c["rules"].halftime_enabled and legs and kind == "straight" and all(l.game_id in halftime.open_games(engine, c["id"]) for l in legs) else "pregame"
     if kind == "round_robin":
         _wrap(store.place_round_robin, engine, c["id"], user_id, legs, [int(k) for k in body.get("robinSizes") or []], stake, key, now, board)
     elif kind == "straight" and len(legs) > 1:        # several straights on one slip: all or nothing is NOT promised, each is its own bet under key#n
         for n, leg in enumerate(legs):
-            _wrap(store.place_bet, engine, c["id"], user_id, Slip("straight", (leg,), stake, f"{key}#{n}"), now, board)
+            _wrap(store.place_bet, engine, c["id"], user_id, Slip("straight", (leg,), stake, f"{key}#{n}"), now, board, phase)
     else:
         ticket = body.get("ticketPrice")
-        _wrap(store.place_bet, engine, c["id"], user_id, Slip(kind, tuple(legs), stake, key, int(ticket) if ticket is not None else None), now, board)
+        _wrap(store.place_bet, engine, c["id"], user_id, Slip(kind, tuple(legs), stake, key, int(ticket) if ticket is not None else None), now, board, phase)
     return feed(engine, slug, user_id, now)
 
 
@@ -216,7 +222,7 @@ def cash_out(engine, slug: str, user_id: str, body: dict, now: datetime) -> dict
 def _admin_state(engine, slug: str) -> dict:
     c = contest_or_404(engine, slug)
     cid = c["id"]
-    return {"name": c["name"], "status": c["status"], "entries": store.entries_of(engine, cid), "invites": store.invites_of(engine, cid),
+    return {"name": c["name"], "status": c["status"], "switches": {k: bool(getattr(c["rules"], k)) for k in store.RULE_SWITCHES}, "entries": store.entries_of(engine, cid), "invites": store.invites_of(engine, cid),
             "games": [{"id": g["id"], "away": g["away_team"], "home": g["home_team"], "commence": g["commence_time"], "status": g["status"],
                        "homeScore": g["home_score"], "awayScore": g["away_score"]} for g in store.games_of(engine, cid)],
             "ledgerMismatches": store.reconcile(engine, cid), "log": store.admin_log(engine, cid, 50)}
@@ -249,6 +255,10 @@ def admin_action(engine, slug: str, actor: str, op: str, body: dict, now: dateti
                 raise RequestError(400, "BAD_REQUEST", "an invite needs a code")
             store.create_invite(engine, cid, code, int(body.get("maxUses", 1)), now)
             detail = {"code": code, "max_uses": int(body.get("maxUses", 1))}
+        elif op == "rules":
+            sw = {k: v for k, v in body.items() if k != "note"}
+            _wrap(store.set_rule_switches, engine, cid, sw)
+            detail = {"switches": sw}
         elif op == "status":
             _wrap(store.set_status, engine, cid, str(body["status"]))
             detail = {"status": str(body["status"])}

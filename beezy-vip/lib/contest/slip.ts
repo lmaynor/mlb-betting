@@ -79,13 +79,14 @@ export interface SlipState { kind: BetKind; picks: Pick[]; teaserPoints: number;
 export interface Closed { closed: boolean; reason: string }
 /** Betting closes `closeBufferMin` before kickoff and never opens on a started game. `now` is the server render time, ticked on the client. */
 export function gameClosed(g: BoardGame, now: number, rules: ContestRules): Closed {
+  if (rules.halftimeEnabled && g.halftime?.open && g.status !== 'final' && g.status !== 'void') return { closed: false, reason: '' }       // the break: straights only (slipIssue)
   if (g.status !== 'scheduled') return { closed: true, reason: g.status === 'live' ? 'In play' : g.status === 'void' ? 'Postponed' : 'Final' }
   if (now >= Date.parse(g.commence) - rules.closeBufferMin * 60_000) return { closed: true, reason: 'Betting closed' }
   return { closed: false, reason: '' }
 }
 
 /** First reason this slip cannot be placed, or null. `stake` is cents (per bet; per parlay for a round robin). Mirrors validate_slip. */
-export function slipIssue(s: SlipState, stake: number, balance: number, rules: ContestRules, game?: BoardGame): string | null {
+export function slipIssue(s: SlipState, stake: number, balance: number, rules: ContestRules, game?: BoardGame, halftimeGames: ReadonlySet<number> = new Set()): string | null {
   const n = s.picks.length
   const games = new Set(s.picks.map(p => p.gameId))
   if (n === 0) return 'Add a pick'
@@ -97,6 +98,11 @@ export function slipIssue(s: SlipState, stake: number, balance: number, rules: C
     if (risk > balance) return parlays > 1 ? `${of} is more than your bankroll` : 'Not enough bankroll'
     if (risk > min && risk * 10_000 > balance * rules.maxStakeBp) return parlays > 1 ? `${of} is over ${cap}` : `Maximum is ${cap}`
     return null
+  }
+  const atTheBreak = s.picks.filter(p => halftimeGames.has(p.gameId))
+  if (atTheBreak.length > 0) {
+    if (s.kind !== 'straight') return 'Halftime bets are straights only'
+    if (stake > rules.minStakeCents && stake * 10_000 > balance * rules.halftimeMaxStakeBp) return `A halftime bet is at most ${rules.halftimeMaxStakeBp / 100}% of your bankroll`
   }
   if (s.kind === 'straight') return perBet(stake * n)
   if (s.kind === 'sgp') {

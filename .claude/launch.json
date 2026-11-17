@@ -36,7 +36,7 @@
       "runtimeExecutable": "sh",
       "runtimeArgs": [
         "-c",
-        "cd beezy-vip && AUTH_DISABLED=1 CONTEST_ENABLED=1 CONTEST_SLUG=t CONTEST_DEV_USER=dev1 BETTING_API_URL=http://127.0.0.1:5055 BETTING_API_KEY=local-dev-key npm run dev"
+        "cd beezy-vip && AUTH_DISABLED=1 CONTEST_ENABLED=1 CONTEST_SLUG=t CONTEST_DEV_USER=dev1 CONTEST_DEV_ADMIN=1 BETTING_API_URL=http://127.0.0.1:5055 BETTING_API_KEY=local-dev-key npm run dev"
       ],
       "port": 3000,
       "autoPort": false

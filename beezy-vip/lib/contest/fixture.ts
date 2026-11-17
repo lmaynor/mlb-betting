@@ -24,6 +24,8 @@ export const SAMPLE_RULES: ContestRules = {
   blackjackThresholdCents: 10_000,
   blackjackMinChipCents: 100,
   cashoutEnabled: true,
+  halftimeEnabled: false,
+  halftimeMaxStakeBp: 1000,
   altLinesEnabled: true,
   sgpEnabled: true,
   sgpMarginBp: 700,

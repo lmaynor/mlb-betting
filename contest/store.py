@@ -202,7 +202,8 @@ def _games_for(c, contest_id: int, legs) -> dict[int, GameInfo]:
         g = c.execute(text("SELECT commence_time, status FROM contest_game WHERE id = :g AND contest_id = :c"),
                       {"g": leg.game_id, "c": contest_id}).first()
         if g:
-            games[leg.game_id] = GameInfo(parse_ts(g[0]), g[1])
+            ht = c.execute(text("SELECT 1 FROM contest_halftime WHERE game_id = :g AND state = 'open'"), {"g": leg.game_id}).first() is not None
+            games[leg.game_id] = GameInfo(parse_ts(g[0]), g[1], ht)
     return games
 
 
@@ -451,6 +452,22 @@ def admin_log(engine, contest_id: int, limit: int = 100) -> list[dict]:
     return [{"ts": r[0], "actor": r[1], "action": r[2], "detail": json.loads(r[3] or "{}")} for r in rows]
 
 
+RULE_SWITCHES = ("halftime_enabled", "cashout_enabled", "alt_lines_enabled", "sgp_enabled", "blackjack_enabled")
+
+
+def set_rule_switches(engine, contest_id: int, changes: dict) -> ContestRules:
+    """Flip on / off switches in the contest's stored rules (only the booleans in RULE_SWITCHES; numbers are never edited here)."""
+    import dataclasses
+    bad = [k for k in changes if k not in RULE_SWITCHES or not isinstance(changes[k], bool)]
+    if bad:
+        raise ContestError("BAD_RULE", f"not a switch: {bad}")
+    with engine.begin() as c:
+        rules = _rules(c, contest_id)
+        new = dataclasses.replace(rules, **changes)
+        c.execute(text("UPDATE contest SET rules_json = :r WHERE id = :c"), {"r": new.to_json(), "c": contest_id})
+    return new
+
+
 def set_status(engine, contest_id: int, status: str) -> None:
     """open | closed. A closed contest refuses new bets (placing checks it); settling and cash-out of existing bets are unaffected."""
     if status not in ("open", "closed"):
@@ -516,6 +533,12 @@ def contest_by_slug(engine, slug: str) -> dict | None:
     return None if r is None else {"id": int(r[0]), "name": r[1], "status": r[2], "rules": ContestRules.from_json(r[3])}
 
 
+def contest_by_slug_id(engine, contest_id: int) -> dict:
+    with engine.connect() as c:
+        r = c.execute(text("SELECT id, name, status, rules_json FROM contest WHERE id = :i"), {"i": contest_id}).first()
+    return {"id": int(r[0]), "name": r[1], "status": r[2], "rules": ContestRules.from_json(r[3])}
+
+
 def games_of(engine, contest_id: int) -> list[dict]:
     with engine.connect() as c:
         rows = c.execute(text("""SELECT id, espn_event_id, away_team, home_team, commence_time, round_label, status, home_score, away_score, teams_json, state_json
@@ -528,18 +551,21 @@ def visible_bets(engine, contest_id: int, viewer_user_id: str, now: datetime) ->
     has kicked off (a hidden leg is `{"hidden": True}`), and the stake / payout only once every leg is visible. This is the
     server-side half of 'picks are hidden until tip-off': the API must return THIS, never raw rows."""
     with engine.connect() as c:
-        bets = c.execute(text("""SELECT b.id, e.user_id, e.display_name, b.kind, b.stake_cents, b.payout_cents, b.status, b.placed_at, b.group_id
+        closed = {int(r[0]) for r in c.execute(text("SELECT h.game_id FROM contest_halftime h JOIN contest_game g ON g.id = h.game_id WHERE g.contest_id = :c AND h.state = 'closed'"), {"c": contest_id}).all()}
+        bets = c.execute(text("""SELECT b.id, e.user_id, e.display_name, b.kind, b.stake_cents, b.payout_cents, b.status, b.placed_at, b.group_id, b.phase
                                  FROM contest_bet b JOIN contest_entry e ON e.id = b.entry_id
                                  WHERE e.contest_id = :c ORDER BY b.id"""), {"c": contest_id}).all()
         out = []
-        for bet_id, user_id, name, kind, stake, payout, status, placed, group_id in bets:
+        for bet_id, user_id, name, kind, stake, payout, status, placed, group_id, phase in bets:
             mine = user_id == viewer_user_id
-            legs = c.execute(text("""SELECT l.game_id, l.market, l.side, l.line, l.price, l.result, g.commence_time
+            legs = c.execute(text("""SELECT l.game_id, l.market, l.side, l.line, l.price, l.result, g.commence_time, g.status
                                      FROM contest_leg l JOIN contest_game g ON g.id = l.game_id WHERE l.bet_id = :b ORDER BY l.id"""),
                              {"b": bet_id}).all()
             shown, all_visible = [], True
-            for gid, market, side, line, price, result, commence in legs:
-                if mine or parse_ts(commence) <= now:
+            for gid, market, side, line, price, result, commence, gstatus in legs:
+                # a halftime bet stays hidden until its window has closed (or the game is over), so nobody can copy a pick made at the break
+                window_over = phase != "halftime" or gid in closed or gstatus in ("final", "void")
+                if mine or (parse_ts(commence) <= now and window_over):
                     shown.append({"game_id": gid, "market": market, "side": side, "line": line, "price": price, "result": result})
                 else:
                     shown.append({"hidden": True})

@@ -6,7 +6,7 @@ import type { AdminState } from '@/lib/contest/backend'
 jest.mock('../app/contest/contest.css', () => ({}), { virtual: true })
 
 const state = (over: Partial<AdminState> = {}): AdminState => ({
-  name: 'Bowl Bankroll', status: 'open', ledgerMismatches: [], log: [],
+  name: 'Bowl Bankroll', status: 'open', ledgerMismatches: [], log: [], switches: { halftime_enabled: false, cashout_enabled: true },
   entries: [{ entry_id: 1, user_id: 'user_abcdefghijklmnop', display_name: 'Alex', balance_cents: 490_000, status: 'active', name_changes: 0, joined_at: '2026-12-01T00:00:00Z' }],
   invites: [{ code: 'WELCOME', max_uses: 10, uses: 3 }],
   games: [{ id: 5, away: 'BYU', home: 'Kansas', commence: '2026-12-19T17:00:00Z', status: 'scheduled', homeScore: null, awayScore: null }], ...over,
@@ -71,4 +71,23 @@ it('creates an invite and toggles the contest closed', async () => {
   expect(sent[0].body).toEqual({ code: 'SECOND', maxUses: 10 })
   fireEvent.click(screen.getByRole('button', { name: 'Close to new bets' }))
   await waitFor(() => expect(screen.getByRole('button', { name: 'Reopen' })).toBeInTheDocument())
+})
+
+it('flips a feature switch', async () => {
+  mock(() => ({ status: 200, body: state({ switches: { halftime_enabled: true, cashout_enabled: true } }) }))
+  render(<AdminConsole slug="bowls" initial={state()} />)
+  const row = within(screen.getByRole('table', { name: 'Switches' })).getByText('Halftime window').closest('tr')!
+  expect(row).toHaveTextContent('OFF')
+  fireEvent.click(within(row).getByRole('button', { name: 'Turn on' }))
+  await waitFor(() => expect(sent[0].body).toEqual({ halftime_enabled: true }))
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Halftime window turned on.'))
+})
+
+it('shows the first 20 games of a long slate and the rest on request', () => {
+  const many = Array.from({ length: 45 }, (_, i) => ({ id: i + 1, away: `A${i}`, home: `H${i}`, commence: '2026-12-19T17:00:00Z', status: 'scheduled', homeScore: null, awayScore: null }))
+  render(<AdminConsole slug="bowls" initial={state({ games: many })} />)
+  const rows = () => within(screen.getByRole('table', { name: 'Games' })).getAllByRole('row')
+  expect(rows()).toHaveLength(1 + 20 + 1)                                       // header, 20 games, the button row
+  fireEvent.click(screen.getByRole('button', { name: 'Show all 45 games' }))
+  expect(rows()).toHaveLength(1 + 45 + 1)
 })

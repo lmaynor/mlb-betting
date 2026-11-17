@@ -60,6 +60,17 @@ TABLES = [
         state_json    TEXT,
         UNIQUE (contest_id, espn_event_id)
     )""",
+    f"""CREATE TABLE IF NOT EXISTS contest_halftime (
+        game_id       INTEGER PRIMARY KEY,
+        state         TEXT NOT NULL,
+        first_seen    TEXT NOT NULL,
+        opened_at     TEXT,
+        closed_at     TEXT,
+        close_reason  TEXT,
+        home_score    INTEGER,
+        away_score    INTEGER,
+        polls         INTEGER NOT NULL DEFAULT 1
+    )""",
     f"""CREATE TABLE IF NOT EXISTS contest_notice (
         contest_id    INTEGER NOT NULL,
         key           TEXT NOT NULL,

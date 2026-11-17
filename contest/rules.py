@@ -23,6 +23,7 @@ _DEFAULT_SIGMAS = {"ncaaf": {"spread": 15.0, "total": 15.5}, "ncaab": {"spread":
 # ncaaf: 3 -> 2.51, 7 -> 1.92 on the same 943 games, rounded; the out-of-sample log-loss gain is within noise, so UNVALIDATED.
 _DEFAULT_KEY_WEIGHTS = {"ncaaf": {3: 2.5, 7: 1.9}, "ncaab": {}}
 # PLACEHOLDER: the farthest an alt line may sit from the main line, in points
+_DEFAULT_QUOTE_AGE_S = {"ncaaf": 1_800, "ncaab": 4_500}
 _DEFAULT_ALT_MAX = {"ncaaf": 14.0, "ncaab": 10.0}
 
 
@@ -42,7 +43,7 @@ class ContestRules:
     round_robin_max_parlays: int = 500           # PLACEHOLDER: C(11,5) = 462 is the biggest single "by k" of 11 picks; the total-risk cap binds first
     round_robin_min_unit_cents: int = 500        # PLACEHOLDER: minimum stake PER PARLAY in a round robin ($5; 55 parlays at $25 would blow the cap)
     close_buffer_min: int = 15                   # bets close this long before kickoff
-    quote_max_age_s: int = 1_800                 # reject a quote older than this (NCAAF 20-min cadence; NCAAB hourly needs 4_500)
+    quote_max_age_s_override: int | None = None  # reject a quote older than this; None -> the sport's default (NCAAF 20-min cadence 1_800; NCAAB hourly 4_500)
     teaser_tables: dict = field(default_factory=dict)   # {points: {legs: american}}; empty -> the sport's placeholder table
     blackjack_enabled: bool = True               # the hidden lifeline (contest/lifeline.py)
     blackjack_threshold_cents: int = 10_000      # PLACEHOLDER: the table opens under a $100 bankroll, and winnings never lift you above it
@@ -50,6 +51,11 @@ class ContestRules:
     cashout_enabled: bool = True
     cashout_margin_bp: int = 500                 # PLACEHOLDER: 5% off the fair value of the bet, taken once
     cashout_sigmas: dict = field(default_factory=dict)  # {"spread": pts, "total": pts}; empty -> the sport's placeholder (UNVALIDATED)
+    halftime_enabled: bool = False               # the halftime window (contest/halftime.py): OFF until the owner turns it on after the rehearsals
+    halftime_max_stake_bp: int = 1_000           # PLACEHOLDER: a halftime bet is at most 10% of the balance
+    halftime_quote_max_age_s: int = 90           # a halftime quote older than this closes the window
+    halftime_window_cap_s: int = 480             # the window never stays open longer than 8 minutes
+    halftime_margin_bp: int = 700                # PLACEHOLDER: 7% on the Kalshi mid, taken once
     alt_lines_enabled: bool = True
     sgp_enabled: bool = True
     sgp_margin_bp: int = 700                     # PLACEHOLDER: 7% on the joint implied probability, taken once
@@ -62,6 +68,10 @@ class ContestRules:
     def cashout_sigma(self, market: str) -> float:
         """Std dev (points) of the final margin / total, used to move a held line to the current one. PLACEHOLDERS, not fitted."""
         return float((self.cashout_sigmas or _DEFAULT_SIGMAS[self.sport])[market])
+
+    @property
+    def quote_max_age_s(self) -> int:
+        return int(self.quote_max_age_s_override if self.quote_max_age_s_override is not None else _DEFAULT_QUOTE_AGE_S[self.sport])
 
     def sgp_rho(self, market: str) -> float:
         """Correlation of the two events of a same-game parlay: 'spread' (spread x total) or 'ml' (moneyline x total). Positive = move together."""
@@ -93,6 +103,8 @@ class ContestRules:
     @classmethod
     def from_json(cls, raw: str) -> "ContestRules":
         d = json.loads(raw)
+        if "quote_max_age_s" in d:                                      # rows written before the per-sport default
+            d["quote_max_age_s_override"] = d.pop("quote_max_age_s")
         d["key_weights_override"] = {int(k): float(v) for k, v in (d.get("key_weights_override") or {}).items()}
         d["teaser_tables"] = {float(p): {int(n): int(a) for n, a in row.items()} for p, row in (d.get("teaser_tables") or {}).items()}
         return cls(**d)
