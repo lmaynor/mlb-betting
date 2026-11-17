@@ -447,3 +447,21 @@ def test_round_robin_group_id_is_visible_but_picks_stay_hidden(world):
     theirs = store.visible_bets(engine, cid, "u2", NOW)
     assert len(theirs) == 3 and {b["group_id"] for b in theirs} == {"rr1"}
     assert all(b["legs"] == [{"hidden": True}, {"hidden": True}] and b["stake_cents"] is None for b in theirs)
+
+
+def test_eleven_pick_round_robin_places_55_parlays_and_settles(world):
+    engine, cid, g = world
+    join(world)
+    extra = [store.upsert_game(engine, cid, f"evx{i}", KICK + timedelta(hours=1, minutes=i)) for i in range(7)]
+    gids = list(g) + extra                                                                 # 11 games
+    picks_ = [leg(gid) for gid in gids]
+    bets = place_rr(world, "u1", picks_, (2,), unit=500)
+    assert len(bets) == 55 and {b["group_id"] for b in bets} == {"rr1"}
+    assert balance(world) == 500_000 - 55 * 500
+    for gid in gids:                                                                       # every home -3.5 wins
+        store.settle_game(engine, gid, 24, 20, AFTER)
+    from contest.odds import parlay_decimal, payout_cents
+    assert balance(world) == 500_000 - 55 * 500 + 55 * payout_cents(500, parlay_decimal([-110, -110]))
+    books_balance(world)
+    with engine.connect() as c:
+        assert c.execute(text("SELECT COUNT(*) FROM contest_bet WHERE status = 'won'")).scalar_one() == 55

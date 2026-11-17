@@ -6,7 +6,7 @@ the bettor's favour by `teaser_points` (see `adjusted_line`); the leg keeps the 
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import combinations
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -179,16 +179,17 @@ def validate_round_robin(picks: Sequence[Leg], sizes: Sequence[int], unit_cents:
     if len({p.game_id for p in picks}) != n:
         raise SlipError("DUP_GAME", "one pick per game in a round robin")
     ks = sorted(set(int(k) for k in sizes))
-    if not ks or ks[0] < 2 or ks[-1] > min(n, rules.parlay_max_legs):
-        raise SlipError("RR_SIZES", f"round robin sizes must be between 2 and {min(n, rules.parlay_max_legs)}")
+    top = min(n, rules.round_robin_max_picks)                # a round robin may go by up to every pick, past the normal parlay cap
+    if not ks or ks[0] < 2 or ks[-1] > top:
+        raise SlipError("RR_SIZES", f"round robin sizes must be between 2 and {top}")
     if any(p.teaser_points for p in picks):
         raise SlipError("TEASER_POINTS", "teaser points on a round robin pick")
     count = sum(len(list(combinations(range(n), k))) for k in ks)
     if count > rules.round_robin_max_parlays:
         raise SlipError("RR_TOO_MANY", f"{count} parlays is over the limit of {rules.round_robin_max_parlays}")
     total = unit_cents * count
-    if unit_cents < rules.min_stake_cents:
-        raise SlipError("STAKE_MIN", f"minimum stake per parlay is {rules.min_stake_cents} cents")
+    if unit_cents < rules.round_robin_min_unit_cents:
+        raise SlipError("STAKE_MIN", f"minimum stake per parlay is {rules.round_robin_min_unit_cents} cents")
     if total > balance_cents:
         raise SlipError("INSUFFICIENT", f"{count} parlays x {unit_cents} cents is more than the balance")
     if total > rules.min_stake_cents and total * 10_000 > balance_cents * rules.max_stake_bp:
@@ -196,8 +197,12 @@ def validate_round_robin(picks: Sequence[Leg], sizes: Sequence[int], unit_cents:
     if (open_risk_cents + total) * 10_000 > (balance_cents + open_risk_cents) * rules.max_open_risk_bp:
         raise SlipError("OPEN_RISK", "over the open-risk cap")
     slips = round_robin_slips(picks, ks, unit_cents, "rr")
+    # Each parlay is checked for its legs, games and quotes. The stake rules were applied to the TOTAL above, so the per-parlay
+    # pass runs with the round robin's own unit minimum, its own leg cap, and no further percentage caps.
+    per_parlay = replace(rules, min_stake_cents=rules.round_robin_min_unit_cents, parlay_max_legs=max(rules.parlay_max_legs, rules.round_robin_max_picks),
+                         max_stake_bp=10_000, max_open_risk_bp=10_000)
     for sl in slips:
-        validate_slip(sl, rules, balance_cents, open_risk_cents, now, games, board)
+        validate_slip(sl, per_parlay, balance_cents, open_risk_cents, now, games, board)
     return slips
 
 

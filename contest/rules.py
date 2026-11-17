@@ -26,8 +26,9 @@ class ContestRules:
     teaser_min_legs: int = 2
     teaser_max_legs: int = 4
     round_robin_min_picks: int = 3
-    round_robin_max_picks: int = 8
-    round_robin_max_parlays: int = 70            # PLACEHOLDER: C(8,4) = 70, the biggest single "by 4s" of 8 picks
+    round_robin_max_picks: int = 11              # PLACEHOLDER: also the biggest "by k" size (a by-11 is one 11-leg parlay)
+    round_robin_max_parlays: int = 500           # PLACEHOLDER: C(11,5) = 462 is the biggest single "by k" of 11 picks; the total-risk cap binds first
+    round_robin_min_unit_cents: int = 500        # PLACEHOLDER: minimum stake PER PARLAY in a round robin ($5; 55 parlays at $25 would blow the cap)
     close_buffer_min: int = 15                   # bets close this long before kickoff
     quote_max_age_s: int = 1_800                 # reject a quote older than this (NCAAF 20-min cadence; NCAAB hourly needs 4_500)
     teaser_tables: dict = field(default_factory=dict)   # {points: {legs: american}}; empty -> the sport's placeholder table

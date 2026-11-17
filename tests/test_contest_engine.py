@@ -238,17 +238,29 @@ def test_round_robin_prices_as_the_sum_of_its_parlays():
 
 
 def test_round_robin_limits():
+    G12 = {i: GameInfo(KICK, "scheduled") for i in range(1, 13)}
     assert rr_code(n=2, sizes=(2,)) == "RR_PICKS"                      # fewer than 3 picks
-    assert rr_code(n=9, sizes=(2,), games={i: GameInfo(KICK, "scheduled") for i in range(1, 10)}) == "RR_PICKS"
+    assert rr_code(n=12, sizes=(2,), games=G12) == "RR_PICKS"          # more than 11
     assert rr_code(n=4, sizes=(1,)) == "RR_SIZES"                      # a "by 1s" is just straights
-    assert rr_code(n=4, sizes=(5,)) == "RR_SIZES"
+    assert rr_code(n=4, sizes=(5,)) == "RR_SIZES"                      # cannot go by more picks than you have
     assert rr_code(n=4, sizes=()) == "RR_SIZES"
-    assert rr_code(n=8, sizes=(2, 3, 4, 5)) == "RR_TOO_MANY"           # 28 + 56 + 70 + 56 parlays
-    assert rr_code(n=4, sizes=(2,), unit=2_499) == "STAKE_MIN"
+    assert rr_code(n=11, sizes=tuple(range(2, 11)), games=G12, unit=500) == "RR_TOO_MANY"      # 2,035 parlays
+    assert rr_code(n=4, sizes=(2,), unit=499) == "STAKE_MIN"           # $5 per parlay is the round robin minimum
     pk = [L(1), L(1, market="total", side="over", line=40.5), L(2)]
     with pytest.raises(SlipError) as e:
         validate_round_robin(pk, (2,), 5_000, RULES, 500_000, 0, NOW, G8, None)
     assert e.value.code == "DUP_GAME"
+
+
+def test_round_robin_goes_up_to_eleven_picks_even_past_the_parlay_cap():
+    G11 = {i: GameInfo(KICK, "scheduled") for i in range(1, 12)}
+    assert RULES.parlay_max_legs == 8 and RULES.round_robin_max_picks == 11
+    assert len(rr(11, (2,), unit=500, games=G11)) == 55                # by 2s of 11 picks, $5 each = $275 total
+    assert len(rr(11, (11,), unit=2_500, games=G11)) == 1              # a by-11 is one 11-leg parlay (over the 8-leg parlay cap on purpose)
+    assert len(rr(11, (9, 10, 11), unit=500, games=G11)) == 55 + 11 + 1
+    assert rr_code(n=11, sizes=(2,), unit=5_000, games=G11) == "STAKE_MAX"           # 55 x $50 = $2,750 is over 25% of $5,000
+    assert rr_code(n=11, sizes=(2,), unit=500, balance=20_000, games=G11) == "INSUFFICIENT"
+    assert [sl.stake_cents for sl in rr(11, (2,), unit=500, games=G11)][:2] == [500, 500]
 
 
 def test_round_robin_stake_limits_apply_to_the_total():
