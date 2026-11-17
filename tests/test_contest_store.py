@@ -345,3 +345,47 @@ def test_ledger_always_matches_balance_over_a_random_season(world):
     books_balance(world)
     with engine.connect() as c:
         assert c.execute(text("SELECT COUNT(*) FROM contest_bet WHERE status = 'pending'")).scalar_one() == 0
+
+
+# ------------------------------------------------------------------------------------------------------------------ concurrency
+
+needs_pg = pytest.mark.skipif(not os.environ.get("CONTEST_TEST_PG_URL"), reason="row locking needs Postgres (set CONTEST_TEST_PG_URL)")
+
+
+def _hammer(engine, cid, user, slips):
+    from concurrent.futures import ThreadPoolExecutor
+
+    def go(slip):
+        try:
+            return store.place_bet(engine, cid, user, slip, NOW, None)["id"]
+        except SlipError as e:
+            return e.code
+    with ThreadPoolExecutor(max_workers=len(slips)) as pool:
+        return list(pool.map(go, slips))
+
+
+@needs_pg
+def test_concurrent_bets_cannot_overspend_the_balance(world):
+    engine, cid, g = world
+    wide = store.create_contest(engine, "wide", "Wide", ContestRules(sport="ncaaf", max_stake_bp=10_000), NOW)
+    store.create_invite(engine, wide, "W", 1, NOW)
+    store.join_contest(engine, wide, "racer", "Racer", "W", NOW)
+    gid = store.upsert_game(engine, wide, "evW", KICK)
+    # 8 simultaneous $1,000 bets against a $5,000 balance: exactly 5 may land, never 6
+    out = _hammer(engine, wide, "racer", [Slip("straight", (leg(gid),), 100_000, f"r{i}") for i in range(8)])
+    assert sum(isinstance(x, int) for x in out) == 5 and out.count("INSUFFICIENT") == 3
+    with engine.connect() as c:
+        assert c.execute(text("SELECT balance_cents FROM contest_entry WHERE contest_id = :c"), {"c": wide}).scalar_one() == 0
+    assert store.reconcile(engine, wide) == []
+
+
+@needs_pg
+def test_concurrent_retries_of_one_slip_place_it_once(world):
+    engine, cid, g = world
+    join(world)
+    out = _hammer(engine, cid, "u1", [Slip("straight", (leg(g[0]),), 10_000, "same") for _ in range(8)])
+    assert len(set(out)) == 1 and isinstance(out[0], int)                  # every caller got the same bet back
+    assert balance(world) == 490_000
+    with engine.connect() as c:
+        assert c.execute(text("SELECT COUNT(*) FROM contest_bet")).scalar_one() == 1
+    books_balance(world)
