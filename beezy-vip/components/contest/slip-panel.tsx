@@ -1,20 +1,24 @@
 'use client'
 /**
- * The bet slip: four modes (Straight / Parlay / Teaser / Round robin), the picks with their prices, a stake box with quick
+ * The bet slip: four modes (Straight / Parlay / Teaser / Round Robin), the picks with their prices, a stake box with quick
  * amounts, and a live Risk / To win / Payout line. The numbers come from lib/contest/slip.ts (a mirror of the engine) and the
  * server re-validates on placement. A flat panel: no glow, no gradient.
  */
 import { useState } from 'react'
 import { fmtLineSigned, fmtMoney, fmtPrice, parseDollars } from '@/lib/contest/odds'
 import {
-  previewParlay, previewRobin, previewStraight, previewTeaser, robinCount, slipIssue, teaserPointOptions, teasedLine, type Preview, type SlipState,
+  previewParlay, previewRobin, previewStraight, previewTeaser, robinBreakdown, robinCount, slipIssue, teaserPointOptions, teasedLine, type Preview, type SlipState,
 } from '@/lib/contest/slip'
-import type { BetKind, BoardGame, ContestRules, Pick } from '@/lib/contest/types'
+import type { BetKind, BoardGame, ContestRules, Pick, Receipt } from '@/lib/contest/types'
+import { BetReceipt } from './receipt'
 
 const KINDS: { kind: BetKind; label: string }[] = [
-  { kind: 'straight', label: 'Straight' }, { kind: 'parlay', label: 'Parlay' }, { kind: 'teaser', label: 'Teaser' }, { kind: 'round_robin', label: 'Round robin' },
+  { kind: 'straight', label: 'Straight' }, { kind: 'parlay', label: 'Parlay' }, { kind: 'teaser', label: 'Teaser' }, { kind: 'round_robin', label: 'Round Robin' },
 ]
+// quick amounts ADD to the stake (+$25 twice is $50); a round robin is staked per parlay, so its steps are smaller
 const QUICK = [2_500, 5_000, 10_000, 25_000]
+const QUICK_ROBIN = [500, 1_000, 2_500, 5_000]
+const toInput = (cents: number) => (cents / 100).toFixed(2).replace(/\.?0+$/, '')
 const PANEL: React.CSSProperties = { background: '#11131a', border: '1px solid #1e2230', borderRadius: 8 }
 
 function describe(p: Pick, g: BoardGame | undefined, points = 0): { who: string; what: string } {
@@ -25,8 +29,9 @@ function describe(p: Pick, g: BoardGame | undefined, points = 0): { who: string;
   return { who: `${team} to win`, what: g ? `${g.away.abbr} @ ${g.home.abbr}` : '' }
 }
 
-export function SlipPanel({ slip, games, rules, balanceCents, onKind, onPoints, onSizes, onRemove, onClear, onPlace }: {
+export function SlipPanel({ slip, games, rules, balanceCents, receipt, onDoneReceipt, onViewBets, onKind, onPoints, onSizes, onRemove, onClear, onPlace }: {
   slip: SlipState; games: BoardGame[]; rules: ContestRules; balanceCents: number
+  receipt: Receipt | null; onDoneReceipt: () => void; onViewBets: () => void
   onKind: (k: BetKind) => void; onPoints: (p: number) => void; onSizes: (s: number[]) => void
   onRemove: (p: Pick) => void; onClear: () => void
   onPlace: (stakeCents: number) => void
@@ -36,7 +41,10 @@ export function SlipPanel({ slip, games, rules, balanceCents, onKind, onPoints, 
   const stake = parseDollars(raw)
   const n = slip.picks.length
   const issue = stake == null ? (n === 0 ? 'Add a pick' : 'Enter a stake') : slipIssue(slip, stake, balanceCents, rules)
-  const sizeOptions = Array.from({ length: Math.max(0, Math.min(n, rules.parlayMaxLegs) - 1) }, (_, i) => i + 2)
+  const sizeOptions = Array.from({ length: Math.max(0, Math.min(n, rules.roundRobinMaxPicks) - 1) }, (_, i) => i + 2)
+  const breakdown = robinBreakdown(n, slip.robinSizes)
+  const quick = slip.kind === 'round_robin' ? QUICK_ROBIN : QUICK
+  const addStake = (c: number) => setRaw(toInput((stake ?? 0) + c))
 
   let preview: Preview | null = null
   let bets = 1
@@ -49,10 +57,12 @@ export function SlipPanel({ slip, games, rules, balanceCents, onKind, onPoints, 
   }
   const ready = !issue && stake != null && preview != null
 
+  if (receipt) return <section aria-label="Bet Slip" style={PANEL}><BetReceipt receipt={receipt} games={games} onDone={onDoneReceipt} onViewBets={onViewBets} /></section>
+
   return (
-    <section aria-label="Bet slip" style={PANEL}>
+    <section aria-label="Bet Slip" style={PANEL}>
       <div className="flex items-center justify-between" style={{ padding: '10px 12px', borderBottom: '1px solid #1e2230' }}>
-        <h2 style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>Bet slip <span className="mono" style={{ color: '#7d8596', fontWeight: 500 }}>{n}</span></h2>
+        <h2 style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>Bet Slip <span className="mono" style={{ color: '#7d8596', fontWeight: 500 }}>{n}</span></h2>
         {n > 0 && <button type="button" onClick={() => { onClear(); setRaw('') }} style={{ fontSize: 12, color: '#7d8596' }}>Clear</button>}
       </div>
       <div role="tablist" aria-label="Bet type" className="flex" style={{ borderBottom: '1px solid #1e2230' }}>
@@ -97,16 +107,30 @@ export function SlipPanel({ slip, games, rules, balanceCents, onKind, onPoints, 
       )}
 
       {n > 0 && slip.kind === 'round_robin' && (
-        <div className="flex flex-wrap items-center gap-2" style={{ padding: '10px 12px', borderBottom: '1px solid #151822' }}>
-          <span style={{ fontSize: 12, color: '#7d8596' }}>Parlays of</span>
-          {sizeOptions.length === 0 && <span style={{ fontSize: 12, color: '#7d8596' }}>add 3+ picks</span>}
-          {sizeOptions.map(k => {
-            const on = slip.robinSizes.includes(k)
-            return (
-              <button key={k} type="button" aria-pressed={on} onClick={() => onSizes(on ? slip.robinSizes.filter(x => x !== k) : [...slip.robinSizes, k].sort((a, b) => a - b))} className="mono contest-chip"
-                style={{ fontSize: 12, padding: '4px 9px', borderRadius: 6, border: `1px solid ${on ? 'var(--signal)' : '#1e2230'}`, background: on ? 'var(--win-wash)' : '#171a24', color: on ? 'var(--signal)' : '#f3f4f6' }}>by {k}s</button>
-            )
-          })}
+        <div style={{ padding: '10px 12px', borderBottom: '1px solid #151822' }}>
+          <div style={{ fontSize: 12, color: '#7d8596', marginBottom: 8 }}>
+            {sizeOptions.length === 0 ? 'Add at least 3 picks.' : `Each size bets every combination of that many of your ${n} picks as its own parlay.`}
+          </div>
+          <div role="group" aria-label="Parlay sizes" className="flex flex-wrap gap-2">
+            {sizeOptions.map(k => {
+              const on = slip.robinSizes.includes(k)
+              const count = robinBreakdown(n, [k])[0].count
+              return (
+                <button key={k} type="button" aria-pressed={on} aria-label={`By ${k}s, ${count} ${count === 1 ? 'bet' : 'bets'}`}
+                  onClick={() => onSizes(on ? slip.robinSizes.filter(x => x !== k) : [...slip.robinSizes, k].sort((a, b) => a - b))} className="mono contest-chip"
+                  style={{ minWidth: 64, padding: '5px 9px', borderRadius: 6, lineHeight: 1.25, textAlign: 'center', border: `1px solid ${on ? 'var(--signal)' : '#1e2230'}`, background: on ? 'var(--win-wash)' : '#171a24', color: on ? 'var(--signal)' : '#f3f4f6' }}>
+                  <span style={{ display: 'block', fontSize: 12, fontWeight: 600 }}>By {k}s</span>
+                  <span style={{ display: 'block', fontSize: 10, color: on ? 'var(--signal)' : '#7d8596' }}>{count} {count === 1 ? 'bet' : 'bets'}</span>
+                </button>
+              )
+            })}
+          </div>
+          {breakdown.length > 0 && (
+            <p className="mono" data-testid="robin-breakdown" style={{ margin: '10px 0 0', fontSize: 11, color: '#9ca3af', lineHeight: 1.5 }}>
+              {breakdown.map(b => `By ${b.k}s = ${b.count} ${b.count === 1 ? 'parlay' : 'parlays'}`).join('  +  ')}
+              {breakdown.length > 1 ? `  =  ${breakdown.reduce((t, b) => t + b.count, 0)} parlays in all` : ''}
+            </p>
+          )}
         </div>
       )}
 
@@ -120,22 +144,24 @@ export function SlipPanel({ slip, games, rules, balanceCents, onKind, onPoints, 
               style={{ flex: 1, minWidth: 0, height: 38, padding: '0 10px', fontSize: 15, borderRadius: 6, background: '#1b1f2b', border: '1px solid #2e3446', color: '#f3f4f6' }} />
           </div>
           <div className="flex flex-wrap gap-2" style={{ marginTop: 8 }}>
-            {QUICK.map(c => (
-              <button key={c} type="button" onClick={() => setRaw(String(c / 100))} className="mono contest-chip"
-                style={{ fontSize: 12, padding: '4px 9px', borderRadius: 6, border: '1px solid #1e2230', background: '#171a24', color: '#f3f4f6' }}>${c / 100}</button>
+            {quick.map(c => (
+              <button key={c} type="button" aria-label={`Add $${c / 100} to stake`} onClick={() => addStake(c)} className="mono contest-chip"
+                style={{ fontSize: 12, padding: '4px 9px', borderRadius: 6, border: '1px solid #1e2230', background: '#171a24', color: '#f3f4f6' }}>+${c / 100}</button>
             ))}
+            {raw !== '' && <button type="button" onClick={() => setRaw('')} className="mono contest-chip"
+              style={{ fontSize: 12, padding: '4px 9px', borderRadius: 6, border: '1px solid #1e2230', background: 'transparent', color: '#7d8596' }}>Reset</button>}
           </div>
 
           <dl className="mono" style={{ margin: '14px 0 0', display: 'grid', gridTemplateColumns: '1fr auto', rowGap: 6, fontSize: 13 }}>
             {(slip.kind === 'round_robin' || (slip.kind === 'straight' && n > 1)) && (<><dt style={{ color: '#7d8596' }}>{slip.kind === 'round_robin' ? 'Parlays' : 'Bets'}</dt><dd style={{ margin: 0, textAlign: 'right' }}>{bets}</dd></>)}
-            <dt style={{ color: '#7d8596' }}>Risk</dt><dd style={{ margin: 0, textAlign: 'right' }}>{preview ? fmtMoney(preview.riskCents) : '--'}</dd>
+            <dt style={{ color: '#7d8596' }}>{slip.kind === 'round_robin' ? 'Total risk' : 'Risk'}</dt><dd style={{ margin: 0, textAlign: 'right' }}>{preview ? fmtMoney(preview.riskCents) : '--'}</dd>
             <dt style={{ color: '#7d8596' }}>{slip.kind === 'round_robin' ? 'To win (all picks)' : 'To win'}</dt><dd style={{ margin: 0, textAlign: 'right', color: preview ? 'var(--signal)' : undefined }}>{preview ? fmtMoney(preview.toWinCents) : '--'}</dd>
             <dt style={{ color: '#7d8596' }}>Payout</dt><dd style={{ margin: 0, textAlign: 'right' }}>{preview ? fmtMoney(preview.payoutCents) : '--'}</dd>
           </dl>
 
           <button type="button" disabled={!ready} onClick={() => ready && stake != null && (onPlace(stake), setRaw(''))} className="btn-primary"
             style={{ width: '100%', height: 42, marginTop: 14, fontSize: 14, fontWeight: 600, opacity: ready ? 1 : 0.45, cursor: ready ? 'pointer' : 'not-allowed' }}>
-            {ready ? `Place bet \u00b7 ${fmtMoney(preview!.riskCents)}` : 'Place bet'}
+            {ready ? `Place Bet \u00b7 ${fmtMoney(preview!.riskCents)}` : 'Place Bet'}
           </button>
           <p role="status" className="mono" style={{ fontSize: 11, color: ready ? '#7d8596' : '#facc15', margin: '8px 0 0', minHeight: 14 }}>{ready ? 'Picks stay hidden from others until kickoff.' : issue}</p>
         </div>

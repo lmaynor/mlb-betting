@@ -23,7 +23,7 @@ function OddsButton({ pick, line, price, selected, disabled, label, onToggle }: 
   return (
     <button type="button" disabled={off} aria-pressed={selected} aria-label={label} onClick={() => pick && onToggle(pick)}
       className="mono contest-odds" style={{
-        width: '100%', minWidth: 64, height: 40, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1,
+        width: '100%', minWidth: 0, height: 40, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1,
         borderRadius: 6, cursor: off ? 'default' : 'pointer', lineHeight: 1.15,
         background: selected ? 'var(--win-wash)' : '#171a24', border: `1px solid ${selected ? 'var(--signal)' : '#1e2230'}`,
         color: off ? '#4b5469' : '#f3f4f6',
@@ -56,11 +56,11 @@ function Cell({ g, market, picks, now, rules, onToggle }: { g: BoardGame; market
       <div className="grid gap-1">
         {sides.map(side => {
           const pick = q ? makePick(g, market, side) : null
-          const line = !pick ? '' : market === 'total' ? `${side === 'over' ? 'O' : 'U'} ${pick.line}` : market === 'spread' ? fmtLineSigned(pick.line) : ''
+          const line = !pick ? '' : market === 'total' ? `${side === 'over' ? 'O' : 'U'} ${pick.line}` : market === 'spread' ? fmtLineSigned(pick.line) : 'ML'
           const who = side === 'over' ? 'Over' : side === 'under' ? 'Under' : g[side].name
           return <OddsButton key={side} pick={pick} line={line} price={pick?.price ?? null} disabled={closed}
             selected={!!pick && picks.some(p => samePick(p, pick))} onToggle={onToggle}
-            label={`${who} ${market === 'ml' ? 'moneyline' : market} ${line} ${fmtPrice(pick?.price)}`.replace(/\s+/g, ' ').trim()} />
+            label={`${who} ${market === 'ml' ? 'moneyline' : `${market} ${line}`} ${fmtPrice(pick?.price)}`.replace(/\s+/g, ' ').trim()} />
         })}
       </div>
     </td>
@@ -78,7 +78,7 @@ export function Board({ games, picks, now, rules, onToggle }: { games: BoardGame
   return (
     <div style={{ background: '#11131a', border: '1px solid #1e2230', borderRadius: 8, overflow: 'hidden' }}>
       <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed' }} aria-label="Odds board">
-        <colgroup><col /><col style={{ width: 92 }} /><col style={{ width: 92 }} /><col style={{ width: 92 }} /></colgroup>
+        <colgroup><col /><col className="contest-col" /><col className="contest-col" /><col className="contest-col" /></colgroup>
         <thead><tr>
           <th scope="col" style={{ ...TH, textAlign: 'left', paddingLeft: 12 }}>Matchup</th>
           <th scope="col" style={TH}>Spread</th><th scope="col" style={TH}>Total</th><th scope="col" style={TH}>Money</th>

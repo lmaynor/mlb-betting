@@ -7,6 +7,7 @@ import { makePick, previewParlay } from '@/lib/contest/slip'
 
 jest.mock('../app/contest/contest.css', () => ({}), { virtual: true })
 
+const MID = String.fromCharCode(183)                       // the middle dot the UI joins labels with (kept out of the source as a glyph)
 const NOW = '2026-11-17T06:00:00Z'
 const feed = () => sampleFeed(NOW)
 const game = (id: number) => feed().games.find(g => g.id === id)!
@@ -15,11 +16,17 @@ beforeEach(() => { jest.useFakeTimers({ now: new Date(NOW), doNotFake: ['setTime
 afterEach(() => { jest.useRealTimers() })
 
 const open = () => render(<ContestClient feed={feed()} />)
-const btn = (name: string) => screen.getByRole('button', { name })
+const btn = (name: string | RegExp) => screen.getByRole('button', { name })
 const tab = (name: string) => fireEvent.click(screen.getByRole('tab', { name }))
 const stake = (v: string) => fireEvent.change(screen.getByLabelText(/^Stake/), { target: { value: v } })
-const slip = () => screen.getByRole('region', { name: 'Bet slip' })
+const slip = () => screen.getByRole('region', { name: 'Bet Slip' })
 const standing = () => within(screen.getByLabelText('Your standing'))
+const place = (amount: string) => btn(`Place Bet ${MID} ${amount}`)
+
+/** The home-spread button of each game whose betting is open (11 of the 13 sample games). */
+const openHomeSpreads = (container: HTMLElement) => [...container.querySelectorAll('tr[data-game]')]
+  .filter(r => !['11', '12'].includes((r as HTMLElement).dataset.game!))
+  .map(r => within(r as HTMLElement).getAllByRole('button')[1])
 
 describe('Bankroll Challenge page', () => {
   it('is one real table with a single header, a row per game and real logos', () => {
@@ -27,9 +34,21 @@ describe('Bankroll Challenge page', () => {
     const table = screen.getByRole('table', { name: 'Odds board' })
     expect(table.querySelectorAll('thead')).toHaveLength(1)
     expect(container.querySelectorAll('tr[data-game]')).toHaveLength(feed().games.length)
-    expect(container.querySelector('img[src="https://a.espncdn.com/i/teamlogos/ncaa/500/194.png"]')).toBeInTheDocument()   // Ohio State
+    expect(container.querySelector('img[src="https://a.espncdn.com/i/teamlogos/ncaa/500-dark/194.png"]')).toBeInTheDocument()   // Ohio State
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Bowl Bankroll')
     expect(screen.getByText('SAMPLE DATA')).toBeInTheDocument()
+  })
+
+  it('labels every moneyline button ML so all three price cells line up', () => {
+    const { container } = open()
+    const row = container.querySelector('tr[data-game="1"]') as HTMLElement
+    const [, , , , mlAway, mlHome] = within(row).getAllByRole('button')
+    expect(mlAway).toHaveTextContent('ML')
+    expect(mlHome).toHaveTextContent('ML')
+    expect(mlAway).toHaveTextContent('+195')
+    // every button has a top label line, so no price sits alone
+    within(row).getAllByRole('button').forEach(b => expect(b.querySelectorAll('span')).toHaveLength(2))
+    expect(mlAway.querySelectorAll('span')[0].textContent).toBe('ML')
   })
 
   it('disables every price on games that are in play, final, or closed', () => {
@@ -48,12 +67,12 @@ describe('Bankroll Challenge page', () => {
     open()
     fireEvent.click(btn('Ohio State spread -6.5 -110'))
     fireEvent.click(btn('Georgia spread -3.5 -112'))
-    expect(slip()).toHaveTextContent('Bet slip 2')
+    expect(slip()).toHaveTextContent('Bet Slip 2')
     stake('100')
     const pv = previewParlay([makePick(game(1), 'spread', 'home')!, makePick(game(2), 'spread', 'home')!], 10_000)
     expect(within(slip()).getByText(fmtMoney(pv.toWinCents))).toBeInTheDocument()
     expect(within(slip()).getByText(fmtMoney(pv.payoutCents))).toBeInTheDocument()
-    expect(btn(`Place bet · $100.00`)).toBeEnabled()
+    expect(place('$100.00')).toBeEnabled()
   })
 
   it('toggles a pick off, and replaces a second pick on the same game outside straights', () => {
@@ -65,11 +84,30 @@ describe('Bankroll Challenge page', () => {
     expect(home).toHaveAttribute('aria-pressed', 'false')
     fireEvent.click(home)
     fireEvent.click(btn('Over total O 54.5 -110'))                   // parlay mode: same game, so it replaces
-    expect(slip()).toHaveTextContent('Bet slip 1')
+    expect(slip()).toHaveTextContent('Bet Slip 1')
     expect(home).toHaveAttribute('aria-pressed', 'false')
     tab('Straight')                                                    // straights may stack a game
     fireEvent.click(home)
-    expect(slip()).toHaveTextContent('Bet slip 2')
+    expect(slip()).toHaveTextContent('Bet Slip 2')
+  })
+
+  it('quick amounts ADD to the stake instead of replacing it, and Reset clears it', () => {
+    open()
+    tab('Straight')
+    fireEvent.click(btn('Ohio State spread -6.5 -110'))
+    const input = screen.getByLabelText(/^Stake/) as HTMLInputElement
+    fireEvent.click(btn('Add $25 to stake'))
+    expect(input.value).toBe('25')
+    fireEvent.click(btn('Add $25 to stake'))
+    expect(input.value).toBe('50')
+    fireEvent.click(btn('Add $100 to stake'))
+    expect(input.value).toBe('150')
+    stake('12.50')                                                     // typed amounts still work, and chips add to them
+    fireEvent.click(btn('Add $50 to stake'))
+    expect(input.value).toBe('62.5')
+    fireEvent.click(btn('Reset'))
+    expect(input.value).toBe('')
+    expect(screen.getByRole('button', { name: 'Add $25 to stake' })).toHaveTextContent('+$25')
   })
 
   it('refuses a teaser with a moneyline and explains why', () => {
@@ -78,7 +116,7 @@ describe('Bankroll Challenge page', () => {
     fireEvent.click(btn('Ohio State spread -6.5 -110'))
     fireEvent.click(btn('Georgia moneyline -178'))
     stake('50')
-    expect(btn('Place bet')).toBeDisabled()
+    expect(btn('Place Bet')).toBeDisabled()
     expect(screen.getByRole('status')).toHaveTextContent('Teasers are spreads and totals only')
   })
 
@@ -91,18 +129,52 @@ describe('Bankroll Challenge page', () => {
     expect(slip()).toHaveTextContent('-120')                         // 2-team 6-point placeholder price
   })
 
-  it('round robin: parlay count, total risk and the max payout across every parlay', () => {
+  it('round robin spells out how many bets each size makes', () => {
     open()
-    tab('Round robin')
+    tab('Round Robin')
+    for (const n of ['Ohio State spread -6.5 -110', 'Georgia spread -3.5 -112', 'Indiana spread -4 -110', 'Penn State spread -2.5 -110']) fireEvent.click(btn(n))
+    expect(btn('By 2s, 6 bets')).toHaveTextContent('6 bets')          // C(4,2)
+    expect(btn('By 3s, 4 bets')).toHaveTextContent('4 bets')
+    expect(btn('By 4s, 1 bet')).toHaveTextContent('1 bet')
+    expect(screen.getByTestId('robin-breakdown')).toHaveTextContent('By 2s = 6 parlays')    // by 2s is the default
+    fireEvent.click(btn('By 3s, 4 bets'))
+    expect(screen.getByTestId('robin-breakdown')).toHaveTextContent('By 2s = 6 parlays + By 3s = 4 parlays = 10 parlays in all')
+    stake('25')
+    const dl = within(slip()).getByText('Parlays').parentElement as HTMLElement
+    expect(dl).toHaveTextContent('Parlays10')
+    expect(dl).toHaveTextContent('$250.00')                           // 10 x $25 total risk
+    expect(slip()).toHaveTextContent('Stake per parlay')
+  })
+
+  it('round robin: parlay count, total risk and the place button for 3 picks', () => {
+    open()
+    tab('Round Robin')
     for (const n of ['Ohio State spread -6.5 -110', 'Georgia spread -3.5 -112', 'Indiana spread -4 -110']) fireEvent.click(btn(n))
     stake('25')
     const dl = within(slip()).getByText('Parlays').parentElement as HTMLElement
     expect(dl).toHaveTextContent('Parlays3')                          // C(3,2) by 2s
     expect(dl).toHaveTextContent('$75.00')                            // 3 x $25
-    fireEvent.click(btn('by 3s'))                                     // add the full 3-leg parlay
+    fireEvent.click(btn(/^By 3s/))                                    // add the full 3-leg parlay
     expect(dl).toHaveTextContent('Parlays4')
     expect(dl).toHaveTextContent('$100.00')
-    expect(btn('Place bet · $100.00')).toBeEnabled()
+    expect(place('$100.00')).toBeEnabled()
+  })
+
+  it('round robin goes up to 11 picks and by up to 11s', () => {
+    const { container } = open()
+    tab('Round Robin')
+    openHomeSpreads(container).forEach(b => fireEvent.click(b))
+    expect(slip()).toHaveTextContent('Bet Slip 11')
+    expect(btn('By 2s, 55 bets')).toBeInTheDocument()                 // C(11,2)
+    expect(btn('By 5s, 462 bets')).toBeInTheDocument()                // C(11,5)
+    expect(btn('By 11s, 1 bet')).toBeInTheDocument()                  // one 11-leg parlay
+    stake('5')                                                        // the round robin minimum is $5 per parlay
+    expect(screen.getByTestId('robin-breakdown')).toHaveTextContent('By 2s = 55 parlays')
+    expect(within(slip()).getByText('Parlays').parentElement).toHaveTextContent('$275.00')   // 55 x $5
+    expect(place('$275.00')).toBeEnabled()
+    fireEvent.click(btn('By 5s, 462 bets'))                           // 517 parlays is over the 500 limit
+    expect(btn('Place Bet')).toBeDisabled()
+    expect(screen.getByRole('status')).toHaveTextContent('517 parlays is over the limit of 500')
   })
 
   it('rejects stakes the rules forbid, with the reason', () => {
@@ -114,18 +186,75 @@ describe('Bankroll Challenge page', () => {
     stake('2000')
     expect(screen.getByRole('status')).toHaveTextContent('Maximum is 25%')
     stake('1000')
-    expect(btn('Place bet · $1,000.00')).toBeEnabled()
+    expect(place('$1,000.00')).toBeEnabled()
   })
 
-  it('placing a bet debits the bankroll, clears the slip and lists it under My bets', () => {
+  it('round robin stake rejection shows the parlay count and total', () => {
+    open()
+    tab('Round Robin')
+    for (const n of ['Ohio State spread -6.5 -110', 'Georgia spread -3.5 -112', 'Indiana spread -4 -110', 'Penn State spread -2.5 -110']) fireEvent.click(btn(n))
+    stake('4')
+    expect(screen.getByRole('status')).toHaveTextContent('Minimum stake is $5.00 per parlay')
+    stake('500')
+    expect(screen.getByRole('status')).toHaveTextContent('6 parlays x $500.00 = $3,000.00 is over 25% of your bankroll')
+  })
+
+  it('placing a bet shows a confirmation, debits the bankroll and lists it under My Bets', () => {
     open()
     expect(standing().getByText('$5,081.82')).toBeInTheDocument()
     tab('Straight')
     fireEvent.click(btn('Ohio State spread -6.5 -110'))
     stake('100')
-    fireEvent.click(btn('Place bet · $100.00'))
-    expect(standing().getByText('$4,981.82')).toBeInTheDocument()   // available
-    expect(standing().getByText('$200.00')).toBeInTheDocument()     // at risk: the existing $100 parlay plus the new $100 straight
+    fireEvent.click(place('$100.00'))
+    const receipt = screen.getByRole('status', { name: 'Bet confirmation' })
+    expect(receipt).toHaveTextContent('Bet placed')
+    expect(receipt).toHaveTextContent('Straight')
+    expect(receipt).toHaveTextContent('OSU -6.5 -110')
+    expect(receipt).toHaveTextContent('Slip #1')
+    expect(receipt).toHaveTextContent('Risk$100.00')
+    expect(receipt).toHaveTextContent('To win$90.91')
+    expect(receipt).toHaveTextContent('Payout$190.91')
+    expect(receipt).toHaveTextContent('hidden from other players until each game kicks off')
+    expect(standing().getByText('$4,981.82')).toBeInTheDocument()     // available
+    expect(standing().getByText('$200.00')).toBeInTheDocument()       // at risk: the existing $100 parlay plus the new $100 straight
+    expect(screen.queryByLabelText(/^Stake/)).not.toBeInTheDocument() // the slip is replaced, not stacked under the receipt
+    fireEvent.click(btn('View My Bets'))
+    expect(screen.queryByRole('status', { name: 'Bet confirmation' })).not.toBeInTheDocument()
+    expect(screen.getByRole('table', { name: 'My bets' })).toBeInTheDocument()
+  })
+
+  it('Keep Betting dismisses the confirmation and picking a price also clears it', () => {
+    open()
+    tab('Straight')
+    fireEvent.click(btn('Ohio State spread -6.5 -110'))
+    stake('50')
+    fireEvent.click(place('$50.00'))
+    fireEvent.click(btn('Keep Betting'))
+    expect(screen.queryByRole('status', { name: 'Bet confirmation' })).not.toBeInTheDocument()
+    expect(slip()).toHaveTextContent('Bet Slip 0')
+    fireEvent.click(btn('Ohio State spread -6.5 -110'))
+    stake('25')
+    fireEvent.click(place('$25.00'))
+    expect(screen.getByRole('status', { name: 'Bet confirmation' })).toBeInTheDocument()
+    fireEvent.click(btn('Georgia spread -3.5 -112'))                  // starting a new slip replaces the confirmation
+    expect(screen.queryByRole('status', { name: 'Bet confirmation' })).not.toBeInTheDocument()
+    expect(slip()).toHaveTextContent('Bet Slip 1')
+  })
+
+  it('a round robin confirmation shows one slip, its parlay count and the total', () => {
+    open()
+    tab('Round Robin')
+    for (const n of ['Ohio State spread -6.5 -110', 'Georgia spread -3.5 -112', 'Indiana spread -4 -110']) fireEvent.click(btn(n))
+    stake('25')
+    fireEvent.click(place('$75.00'))
+    const receipt = screen.getByRole('status', { name: 'Bet confirmation' })
+    expect(receipt).toHaveTextContent(`Round Robin ${MID} 3 parlays`)
+    expect(receipt).toHaveTextContent('Risk$75.00')
+    expect(receipt.querySelectorAll('li')).toHaveLength(3)           // each pick listed once, not once per parlay
+    expect(receipt).toHaveTextContent('Slip #1')
+    expect(receipt).not.toHaveTextContent('#1-0')
+    fireEvent.click(btn('View My Bets'))
+    expect(screen.getByText(`Round Robin ${MID} 3 parlays`)).toBeInTheDocument()       // folded into one row
   })
 
   it('shows another player\'s unstarted legs as locks and their stake as hidden', () => {
@@ -144,5 +273,12 @@ describe('Bankroll Challenge page', () => {
     expect(rows.map(r => within(r).getAllByRole('cell')[1].textContent)).toEqual(['Marcus', 'Priya', 'You', 'Dani', 'Tom', 'WesOUT'])
     expect(container.querySelector('tr[data-mine="true"]')).toHaveTextContent('You')
     expect(rows[5]).toHaveStyle({ opacity: '0.5' })
+  })
+
+  it('uses Title Case for Bet Slip, Round Robin, My Bets and Place Bet', () => {
+    open()
+    expect(slip()).toHaveTextContent('Bet Slip')
+    expect(screen.getByRole('tab', { name: 'Round Robin' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'My Bets' })).toBeInTheDocument()
   })
 })

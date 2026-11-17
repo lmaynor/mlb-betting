@@ -10,7 +10,7 @@ export type BetStatus = 'pending' | 'won' | 'lost' | 'push' | 'void'
 export interface TeamRef {
   abbr: string
   name: string
-  /** ESPN team id: drives the logo (a.espncdn.com/i/teamlogos/ncaa/500/{id}.png). Null when unmapped: the monogram is shown. */
+  /** ESPN team id: drives the logo (a.espncdn.com/i/teamlogos/ncaa/500-dark/{id}.png). Null when unmapped: the monogram is shown. */
   espnId: number | null
   rank?: number | null
 }
@@ -49,6 +49,8 @@ export interface ContestRules {
   roundRobinMinPicks: number
   roundRobinMaxPicks: number
   roundRobinMaxParlays: number
+  /** Minimum stake PER PARLAY in a round robin (placeholder; lower than a normal bet so 55 parlays fit the cap). */
+  roundRobinMinUnitCents: number
   closeBufferMin: number
   /** {points: {legs: American price}}. PLACEHOLDERS until the real rulebook is supplied (see contest/rules.py). */
   teaser: Record<string, Record<string, number>>
@@ -64,6 +66,15 @@ export interface PlacedBet {
   placedAt: string
   teaserPoints: number
   legs: { gameId: number; market: Market; side: Side; line: number | null; price: number; result: 'win' | 'loss' | 'push' | 'void' | null }[]
+}
+
+/** What the player sees right after placing: one slip, however many bets it expanded into (a round robin is several parlays). */
+export interface Receipt {
+  kind: BetKind
+  bets: PlacedBet[]
+  riskCents: number
+  payoutCents: number
+  placedAt: string
 }
 
 export interface PoolBet {

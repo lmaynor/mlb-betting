@@ -10,14 +10,14 @@ import { fmtMoney } from '@/lib/contest/odds'
 import {
   combinations, previewParlay, previewRobin, previewStraight, previewTeaser, samePick, teaserPointOptions, type SlipState,
 } from '@/lib/contest/slip'
-import type { BetKind, ContestFeed, Pick, PlacedBet } from '@/lib/contest/types'
+import type { BetKind, ContestFeed, Pick, PlacedBet, Receipt } from '@/lib/contest/types'
 import { Board } from './board'
 import { MyBets, Pool } from './bets-table'
 import { Leaderboard } from './leaderboard'
 import { SlipPanel } from './slip-panel'
 
 type Tab = 'board' | 'bets' | 'pool' | 'leaders'
-const TABS: { id: Tab; label: string }[] = [{ id: 'board', label: 'Board' }, { id: 'bets', label: 'My bets' }, { id: 'pool', label: 'Pool' }, { id: 'leaders', label: 'Leaderboard' }]
+const TABS: { id: Tab; label: string }[] = [{ id: 'board', label: 'Board' }, { id: 'bets', label: 'My Bets' }, { id: 'pool', label: 'Pool' }, { id: 'leaders', label: 'Leaderboard' }]
 
 export function ContestClient({ feed }: { feed: ContestFeed }) {
   const { rules } = feed
@@ -26,6 +26,7 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
   const [balance, setBalance] = useState(feed.balanceCents)
   const [bets, setBets] = useState<PlacedBet[]>(feed.myBets)
   const [sheet, setSheet] = useState(false)
+  const [receipt, setReceipt] = useState<Receipt | null>(null)
   const [now, setNow] = useState(() => Date.parse(feed.nowIso))
   const [seq, setSeq] = useState(1)
   const isMobile = useIsMobile()
@@ -33,12 +34,12 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
   // `now` starts at the server render time (no hydration mismatch) and then ticks, so closing times track the real clock
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30_000); return () => clearInterval(t) }, [])
 
-  const toggle = useCallback((p: Pick) => setSlip(s => {
+  const toggle = useCallback((p: Pick) => { setReceipt(null); setSlip(s => {
     if (s.picks.some(x => samePick(x, p))) return { ...s, picks: s.picks.filter(x => !samePick(x, p)) }
     // one leg per game outside straights: a new pick on the same game replaces the old one
     const kept = s.kind === 'straight' ? s.picks : s.picks.filter(x => x.gameId !== p.gameId)
     return { ...s, picks: [...kept, p] }
-  }), [])
+  }) }, [])
 
   const atRisk = useMemo(() => bets.filter(b => b.status === 'pending').reduce((a, b) => a + b.stakeCents, 0), [bets])
 
@@ -64,12 +65,13 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
     setBalance(b => b - out.reduce((a, x) => a + x.stakeCents, 0))
     setSlip(s => ({ ...s, picks: [] }))
     setSeq(n => n + 1)
-    setSheet(false)
-    setTab('bets')
+    // a confirmation replaces the slip; the player chooses View My Bets or Keep Betting (nothing jumps away on its own)
+    setReceipt({ kind: slip.kind, bets: out, riskCents: out.reduce((a, x) => a + x.stakeCents, 0), payoutCents: out.reduce((a, x) => a + x.stakeCents + x.toWinCents, 0), placedAt: at })
   }, [now, rules, seq, slip])
 
   const panel = (
-    <SlipPanel slip={slip} games={feed.games} rules={rules} balanceCents={balance}
+    <SlipPanel slip={slip} games={feed.games} rules={rules} balanceCents={balance} receipt={receipt}
+      onDoneReceipt={() => { setReceipt(null); setSheet(false) }} onViewBets={() => { setReceipt(null); setSheet(false); setTab('bets') }}
       onKind={kind => setSlip(s => ({ ...s, kind }))} onPoints={teaserPoints => setSlip(s => ({ ...s, teaserPoints }))}
       onSizes={robinSizes => setSlip(s => ({ ...s, robinSizes }))} onRemove={p => toggle(p)} onClear={() => setSlip(s => ({ ...s, picks: [] }))} onPlace={place} />
   )
@@ -77,7 +79,7 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
   const me = feed.leaderboard.find(r => r.mine)
   const bankroll = balance + atRisk
   return (
-    <div className="max-w-[1400px] mx-auto pt-4 px-4 sm:px-6 pb-24 lg:pb-8">
+    <div className="max-w-[1400px] mx-auto pt-4 px-4 sm:px-6 pb-40 lg:pb-8">
       <div className="flex flex-wrap items-center justify-between gap-3" style={{ marginBottom: 10 }}>
         <div className="flex items-center gap-3">
           <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>{feed.name}</h1>
@@ -108,16 +110,16 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
             Play money only. Lines are the reference price, refreshed on a schedule; a price that moves before you place is refused and shown again. Betting closes {rules.closeBufferMin} minutes before kickoff.
           </p>
         </div>
-        {!isMobile && <aside className="lg:sticky lg:top-4" aria-label="Bet slip panel">{panel}</aside>}
+        {!isMobile && <aside className="lg:sticky lg:top-4" aria-label="Bet Slip panel">{panel}</aside>}
       </div>
 
       {isMobile && (
         <>
-          <button type="button" onClick={() => setSheet(true)} className="btn-primary mono" aria-label={`Open bet slip, ${slip.picks.length} picks`}
-            style={{ position: 'fixed', left: 16, right: 16, bottom: 16, height: 46, zIndex: 40, fontSize: 14, fontWeight: 600 }}>
-            Bet slip{slip.picks.length ? ` \u00b7 ${slip.picks.length}` : ''}
+          <button type="button" onClick={() => setSheet(true)} className="btn-primary mono" aria-label={`Open Bet Slip, ${slip.picks.length} picks`}
+            style={{ position: 'fixed', left: 16, right: 16, bottom: 'calc(72px + env(safe-area-inset-bottom))', height: 46, zIndex: 40, fontSize: 14, fontWeight: 600 }}>
+            Bet Slip{slip.picks.length ? ` \u00b7 ${slip.picks.length}` : ''}
           </button>
-          <MobileBottomSheet open={sheet} onClose={() => setSheet(false)} title="Bet slip">{panel}</MobileBottomSheet>
+          <MobileBottomSheet open={sheet} onClose={() => setSheet(false)} title="Bet Slip">{panel}</MobileBottomSheet>
         </>
       )}
     </div>

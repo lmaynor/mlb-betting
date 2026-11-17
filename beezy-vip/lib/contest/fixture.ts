@@ -16,8 +16,9 @@ export const SAMPLE_RULES: ContestRules = {
   teaserMinLegs: 2,
   teaserMaxLegs: 4,
   roundRobinMinPicks: 3,
-  roundRobinMaxPicks: 8,
-  roundRobinMaxParlays: 70,
+  roundRobinMaxPicks: 11,
+  roundRobinMaxParlays: 500,
+  roundRobinMinUnitCents: 500,
   closeBufferMin: 15,
   teaser: { '6.0': { '2': -120, '3': 160, '4': 260 }, '6.5': { '2': -130, '3': 140, '4': 240 }, '7.0': { '2': -140, '3': 120, '4': 200 } },
 }
@@ -27,7 +28,7 @@ const OSU = T('OSU', 'Ohio State', 194, 2), ORE = T('ORE', 'Oregon', 2483, 5), T
 const BAMA = T('ALA', 'Alabama', 333, 9), ND = T('ND', 'Notre Dame', 87, 11), PSU = T('PSU', 'Penn State', 213, 12), MIA = T('MIA', 'Miami', 2390, 8)
 const IND = T('IND', 'Indiana', 84, 1), MISS = T('MISS', 'Ole Miss', 145, 10), SMU = T('SMU', 'SMU', 2567, 14), CLEM = T('CLEM', 'Clemson', 228, 16)
 const TENN = T('TENN', 'Tennessee', 2633, null), BSU = T('BSU', 'Boise State', 68, 13), ASU = T('ASU', 'Arizona State', 9, null), BYU = T('BYU', 'BYU', 252, null)
-const OU = T('OU', 'Oklahoma', 201, null), MICH = T('MICH', 'Michigan', 130, null), LSU = T('LSU', 'LSU', 99, null), IOWA = T('IOWA', 'Iowa', 2294, null)
+const USC = T('USC', 'USC', 30, null), UTAH = T('UTAH', 'Utah', 254, null), OU = T('OU', 'Oklahoma', 201, null), MICH = T('MICH', 'Michigan', 130, null), LSU = T('LSU', 'LSU', 99, null), IOWA = T('IOWA', 'Iowa', 2294, null)
 
 /** home handicap, total, then ML prices (away, home). Spread and total are priced -110 both ways unless a pair is given. */
 function g(id: number, round: string, commence: string, away: TeamRef, home: TeamRef, spread: number, total: number, ml: [number, number],
@@ -46,6 +47,7 @@ const GAMES: BoardGame[] = [
   g(8, 'Bowl Games', '2026-12-29T21:00:00Z', TENN, BAMA, -3.0, 50.5, [135, -160]),
   g(9, 'Bowl Games', '2026-12-30T17:00:00Z', OU, MICH, 1.5, 41.5, [-108, -112]),
   g(10, 'Bowl Games', '2026-12-31T01:00:00Z', LSU, IOWA, 2.5, 38.5, [-135, 114]),
+  g(13, 'Bowl Games', '2027-01-01T18:00:00Z', USC, UTAH, -1.0, 56.5, [-118, 100]),
   // States the board has to render: one in play and one final (both closed to betting).
   g(11, 'Earlier', '2026-11-16T18:00:00Z', IOWA, MICH, -3.5, 44.5, [140, -165], 'final'),
   g(12, 'Earlier', '2026-11-17T01:00:00Z', LSU, TEX, -1.5, 52.5, [105, -125], 'live'),

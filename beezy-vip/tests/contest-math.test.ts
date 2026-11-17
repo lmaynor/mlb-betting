@@ -3,7 +3,7 @@ import { contestEnabled } from '@/lib/contest/flag'
 import { SAMPLE_RULES } from '@/lib/contest/fixture'
 import { americanToDecimal, fmtLineSigned, fmtMoney, fmtPrice, parlayDecimal, parseDollars, payoutCents } from '@/lib/contest/odds'
 import {
-  combinations, gameClosed, makePick, previewParlay, previewRobin, previewStraight, previewTeaser, robinCount, slipIssue, teasedLine, teaserPointOptions,
+  combinations, gameClosed, makePick, previewParlay, previewRobin, previewStraight, previewTeaser, robinBreakdown, robinCount, slipIssue, teasedLine, teaserPointOptions,
   type SlipState,
 } from '@/lib/contest/slip'
 import type { BoardGame, Pick } from '@/lib/contest/types'
@@ -68,6 +68,8 @@ describe('picks and previews', () => {
   it('counts and prices round robins like itertools.combinations', () => {
     expect(combinations(4, 2)).toEqual([[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]])
     expect(combinations(3, 4)).toEqual([])
+    expect(robinBreakdown(4, [3, 2, 2])).toEqual([{ k: 2, count: 6 }, { k: 3, count: 4 }])             // sorted, de-duplicated, one entry per size
+    expect(robinBreakdown(11, [2, 5, 11])).toEqual([{ k: 2, count: 55 }, { k: 5, count: 462 }, { k: 11, count: 1 }])
     expect(robinCount(4, [2])).toBe(6); expect(robinCount(5, [2, 3])).toBe(20); expect(robinCount(8, [4])).toBe(70); expect(robinCount(4, [2, 2])).toBe(6)
     const rr = previewRobin(picks(3), [2], 10_000)
     expect(rr.riskCents).toBe(30_000); expect(rr.payoutCents).toBe(3 * 36_446); expect(rr.toWinCents).toBe(3 * 36_446 - 30_000)
@@ -89,7 +91,11 @@ describe('slip validation mirrors the engine', () => {
     expect(issue(S('round_robin', picks(2)))).toMatch(/3\+ picks/)
     expect(issue(S('round_robin', picks(3), { robinSizes: [] }))).toMatch(/Choose a size/)
     expect(issue(S('round_robin', picks(3), { robinSizes: [4] }))).toMatch(/sizes/)
-    expect(issue(S('round_robin', picks(8), { robinSizes: [2, 3, 4, 5] }), 2_500, 5_000_000)).toMatch(/over the limit/)
+    expect(issue(S('round_robin', picks(11), { robinSizes: [2, 3, 4, 5, 6, 7, 8, 9, 10] }), 500, 5_000_000)).toMatch(/2035 parlays is over the limit of 500/)
+    expect(issue(S('round_robin', picks(12), { robinSizes: [2] }), 500)).toMatch(/at most 11 picks/)
+    expect(issue(S('round_robin', picks(11), { robinSizes: [2] }), 500)).toBeNull()                   // 55 parlays x $5 = $275
+    expect(issue(S('round_robin', picks(11), { robinSizes: [11] }), 2_500)).toBeNull()                // by 11s is one 11-leg parlay, past the 8-leg parlay cap on purpose
+    expect(issue(S('round_robin', picks(4), { robinSizes: [5] }))).toMatch(/sizes/)
     expect(issue(S('round_robin', picks(4), { robinSizes: [2, 3] }), 5_000)).toBeNull()
   })
   it('stakes', () => {
@@ -98,7 +104,10 @@ describe('slip validation mirrors the engine', () => {
     expect(issue(S('parlay', picks(2)), 125_001)).toMatch(/25%/)
     expect(issue(S('parlay', picks(2)), 125_000)).toBeNull()
     expect(issue(S('parlay', picks(2)), 2_500, 3_000)).toBeNull()                         // the minimum stake is always allowed
-    expect(issue(S('round_robin', picks(4)), 50_000)).toMatch(/25%/)                       // 6 x 500 = 3,000 total risk vs the cap on the TOTAL
+    expect(issue(S('round_robin', picks(4)), 50_000)).toBe('6 parlays x $500.00 = $3,000.00 is over 25% of your bankroll ($1,250.00)')   // the cap is on the TOTAL
+    expect(issue(S('round_robin', picks(4)), 499)).toBe('Minimum stake is $5.00 per parlay')           // lower than a normal bet's $25 minimum
+    expect(issue(S('round_robin', picks(4)), 500)).toBeNull()
+    expect(issue(S('round_robin', picks(11), { robinSizes: [2] }), 5_000)).toMatch(/55 parlays x \$50.00 = \$2,750.00 is over 25%/)
     expect(issue(S('straight', [P(1), P(2)]), 70_000)).toMatch(/25%/)                      // 2 x 700 = 1,400
   })
   it('betting closes 15 minutes before kickoff and never on a started game', () => {

@@ -9,7 +9,7 @@ import type { BetKind, BetStatus, BoardGame, PlacedBet, PoolBet } from '@/lib/co
 const TH: React.CSSProperties = { fontSize: 10, fontWeight: 600, color: '#7d8596', background: '#11131a', padding: '9px 10px', borderBottom: '1px solid #1e2230', position: 'sticky', top: 0, textAlign: 'left', whiteSpace: 'nowrap' }
 const TD: React.CSSProperties = { fontSize: 13, color: '#f3f4f6', padding: '9px 10px', borderBottom: '1px solid #151822', verticalAlign: 'top' }
 const WRAP: React.CSSProperties = { background: '#11131a', border: '1px solid #1e2230', borderRadius: 8, overflow: 'hidden' }
-export const KIND_LABEL: Record<BetKind, string> = { straight: 'Straight', parlay: 'Parlay', teaser: 'Teaser', round_robin: 'Round robin' }
+export const KIND_LABEL: Record<BetKind, string> = { straight: 'Straight', parlay: 'Parlay', teaser: 'Teaser', round_robin: 'Round Robin' }
 const STATUS_TONE: Record<BetStatus, string> = { pending: '#9ca3af', won: '#57f287', lost: '#ef4444', push: '#94a3b8', void: '#94a3b8' }
 
 export const StatusText = ({ s, label }: { s: BetStatus; label?: string }) => <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: STATUS_TONE[s] }}>{label ?? s.toUpperCase()}</span>
@@ -35,7 +35,7 @@ function fold(bets: PlacedBet[]): Row[] {
   for (const [id, kids] of groups) {
     const won = kids.filter(k => k.status === 'won').length, lost = kids.filter(k => k.status === 'lost').length, open = kids.filter(k => k.status === 'pending').length
     const uniq = new Map(kids.flatMap(k => k.legs).map(l => [`${l.gameId}${l.market}${l.side}`, l]))
-    rows.push({ key: id, kind: 'round_robin', label: `Round robin \u00b7 ${kids.length} parlays`, stake: kids.reduce((s, k) => s + k.stakeCents, 0), toWin: kids.reduce((s, k) => s + k.toWinCents, 0),
+    rows.push({ key: id, kind: 'round_robin', label: `Round Robin \u00b7 ${kids.length} parlays`, stake: kids.reduce((s, k) => s + k.stakeCents, 0), toWin: kids.reduce((s, k) => s + k.toWinCents, 0),
       status: open ? 'pending' : won ? 'won' : 'lost', statusLabel: open ? `${open} OPEN` : `${won} WON ${lost} LOST`, legs: [...uniq.values()], children: kids })
   }
   return rows

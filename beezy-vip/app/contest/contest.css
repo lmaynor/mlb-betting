@@ -9,3 +9,7 @@
 .contest-tab { transition: color 120ms ease, background-color 120ms ease; }
 .contest-tab:hover { color: #f3f4f6; }
 .contest-odds:focus-visible, .contest-chip:focus-visible, .contest-tab:focus-visible { outline: 2px solid var(--link); outline-offset: 1px; }
+
+/* price columns: 92px on a normal screen, narrower on a phone so the team column keeps its logo, rank and abbreviation */
+.contest-col { width: 92px; }
+@media (max-width: 480px) { .contest-col { width: 76px; } }

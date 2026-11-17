@@ -1,11 +1,11 @@
 'use client'
-/** College team logo from ESPN's CDN (keyed by ESPN team id, like the NFL / NCAAB logos elsewhere). A missing or broken image falls back to a monogram. */
+/** College team logo from ESPN's CDN, the `500-dark` variant made for dark backgrounds (dark marks such as LSU vanish on the plain one). Keyed by ESPN team id, like the NFL / NCAAB logos elsewhere. A missing or broken image falls back to a monogram. */
 import { useState } from 'react'
 import { failedOnMount } from '@/components/ui/sport-assets'
 import type { TeamRef } from '@/lib/contest/types'
 
 export const teamLogoSrc = (espnId: number | null | undefined): string | null =>
-  espnId ? `https://a.espncdn.com/i/teamlogos/ncaa/500/${espnId}.png` : null
+  espnId ? `https://a.espncdn.com/i/teamlogos/ncaa/500-dark/${espnId}.png` : null
 
 export function ContestTeamLogo({ team, size = 28 }: { team: TeamRef; size?: number }) {
   const [bad, setBad] = useState(false)

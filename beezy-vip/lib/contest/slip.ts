@@ -41,6 +41,10 @@ export function combinations(n: number, k: number): number[][] {
 
 export const robinCount = (n: number, sizes: readonly number[]): number => [...new Set(sizes)].reduce((s, k) => s + combinations(n, k).length, 0)
 
+/** One entry per chosen size: "by 2s" of 4 picks is 6 parlays. The slip spells this out so nobody has to guess the bet count. */
+export const robinBreakdown = (n: number, sizes: readonly number[]): { k: number; count: number }[] =>
+  [...new Set(sizes)].sort((a, b) => a - b).map(k => ({ k, count: combinations(n, k).length }))
+
 export interface Preview { riskCents: number; payoutCents: number; toWinCents: number }
 const mk = (risk: number, payout: number): Preview => ({ riskCents: risk, payoutCents: payout, toWinCents: payout - risk })
 
@@ -77,10 +81,13 @@ export function slipIssue(s: SlipState, stake: number, balance: number, rules: C
   const n = s.picks.length
   const games = new Set(s.picks.map(p => p.gameId))
   if (n === 0) return 'Add a pick'
-  const perBet = (risk: number): string | null => {
-    if (stake < rules.minStakeCents) return `Minimum stake is $${(rules.minStakeCents / 100).toFixed(2)}`
-    if (risk > balance) return 'Not enough bankroll'
-    if (risk > rules.minStakeCents && risk * 10_000 > balance * rules.maxStakeBp) return `Maximum is ${rules.maxStakeBp / 100}% of your bankroll`
+  const usd = (c: number) => `$${(c / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const perBet = (risk: number, min = rules.minStakeCents, parlays = 1): string | null => {
+    const of = `${parlays} parlays x ${usd(stake)} = ${usd(risk)}`
+    const cap = `${rules.maxStakeBp / 100}% of your bankroll (${usd(Math.floor((balance * rules.maxStakeBp) / 10_000))})`
+    if (stake < min) return `Minimum stake is ${usd(min)}${parlays > 1 ? ' per parlay' : ''}`
+    if (risk > balance) return parlays > 1 ? `${of} is more than your bankroll` : 'Not enough bankroll'
+    if (risk > min && risk * 10_000 > balance * rules.maxStakeBp) return parlays > 1 ? `${of} is over ${cap}` : `Maximum is ${cap}`
     return null
   }
   if (s.kind === 'straight') return perBet(stake * n)
@@ -100,8 +107,8 @@ export function slipIssue(s: SlipState, stake: number, balance: number, rules: C
   if (n < rules.roundRobinMinPicks) return `Round robins need ${rules.roundRobinMinPicks}+ picks`
   if (n > rules.roundRobinMaxPicks) return `Round robins allow at most ${rules.roundRobinMaxPicks} picks`
   if (s.robinSizes.length === 0) return 'Choose a size (by 2s, by 3s ...)'
-  if (s.robinSizes.some(k => k < 2 || k > Math.min(n, rules.parlayMaxLegs))) return 'Pick sizes the number of picks allows'
+  if (s.robinSizes.some(k => k < 2 || k > Math.min(n, rules.roundRobinMaxPicks))) return 'Pick sizes the number of picks allows'
   const count = robinCount(n, s.robinSizes)
   if (count > rules.roundRobinMaxParlays) return `${count} parlays is over the limit of ${rules.roundRobinMaxParlays}`
-  return perBet(stake * count)
+  return perBet(stake * count, rules.roundRobinMinUnitCents, count)
 }
