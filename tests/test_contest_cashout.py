@@ -105,7 +105,7 @@ def test_margin_is_configurable():
 
 def test_basketball_uses_its_own_sigmas():
     rules = ContestRules(sport="ncaab")
-    assert rules.cashout_sigma("spread") == 11.0 and rules.cashout_sigma("total") == 15.0
+    assert rules.cashout_sigma("spread") == 11.1 and rules.cashout_sigma("total") == 17.2
     assert ContestRules(sport="ncaaf").cashout_sigma("total") == 15.5
 
 

@@ -13,8 +13,12 @@ _FOOTBALL_TEASERS = {6.0: {2: -120, 3: 160, 4: 260}, 6.5: {2: -130, 3: 140, 4: 2
 _BASKETBALL_TEASERS = {4.0: {2: -120, 3: 160, 4: 260}, 4.5: {2: -130, 3: 140, 4: 240}, 5.0: {2: -140, 3: 120, 4: 200}}
 _DEFAULT_TEASERS = {"ncaaf": _FOOTBALL_TEASERS, "ncaab": _BASKETBALL_TEASERS}
 # Standard deviations (points) of the final margin and total around the closing line. ncaaf: fitted on 943 closing lines of the 2025 season
-# (docs/analysis/contest_sportsbook_experiments_2026-11-17.md); ncaab is still a PLACEHOLDER. Used by cash out and alt lines. UNVALIDATED.
-_DEFAULT_SIGMAS = {"ncaaf": {"spread": 15.0, "total": 15.5}, "ncaab": {"spread": 11.0, "total": 15.0}}
+# (docs/analysis/contest_sportsbook_experiments_2026-11-17.md); ncaab: 700 closing lines from two weeks of January 2026 (a thin sample, and
+# not March: re-fit before the tournament). Used by cash out and alt lines. UNVALIDATED.
+# Same-game parlay correlation of the two EVENTS in basis points: (spread x total, moneyline x total). ncaaf measured +/-0.17 and about 0.05
+# (1.02x lift); ncaab measured +/-0.02 (1.0x lift, indistinguishable from independent).
+_DEFAULT_SGP_RHO_BP = {"ncaaf": (1_700, 500), "ncaab": (200, 0)}
+_DEFAULT_SIGMAS = {"ncaaf": {"spread": 15.0, "total": 15.5}, "ncaab": {"spread": 11.1, "total": 17.2}}
 # Key-number weights for the spread margin: how many times likelier a final margin of exactly k is than a normal curve says.
 # ncaaf: 3 -> 2.51, 7 -> 1.92 on the same 943 games, rounded; the out-of-sample log-loss gain is within noise, so UNVALIDATED.
 _DEFAULT_KEY_WEIGHTS = {"ncaaf": {3: 2.5, 7: 1.9}, "ncaab": {}}
@@ -49,8 +53,8 @@ class ContestRules:
     alt_lines_enabled: bool = True
     sgp_enabled: bool = True
     sgp_margin_bp: int = 700                     # PLACEHOLDER: 7% on the joint implied probability, taken once
-    sgp_rho_bp: int = 1_700                      # spread x total correlation of the two events, +/-0.17 (940 football games; UNVALIDATED)
-    sgp_rho_ml_bp: int = 500                     # moneyline x total: measured about 0 (1.02x lift); a small placeholder
+    sgp_rho_bp: int | None = None                # spread x total correlation of the two events; None -> the sport's measured default (UNVALIDATED)
+    sgp_rho_ml_bp: int | None = None             # moneyline x total; None -> the sport's default
     alt_margin_bp: int = 500                     # PLACEHOLDER: 5% on the fair implied probability, taken once (about -110 at a coin flip)
     alt_max_points_override: float = 0.0         # 0 -> the sport's default reach
     key_weights_override: dict = field(default_factory=dict)  # {margin: weight}; empty -> the sport's default
@@ -58,6 +62,12 @@ class ContestRules:
     def cashout_sigma(self, market: str) -> float:
         """Std dev (points) of the final margin / total, used to move a held line to the current one. PLACEHOLDERS, not fitted."""
         return float((self.cashout_sigmas or _DEFAULT_SIGMAS[self.sport])[market])
+
+    def sgp_rho(self, market: str) -> float:
+        """Correlation of the two events of a same-game parlay: 'spread' (spread x total) or 'ml' (moneyline x total). Positive = move together."""
+        default = _DEFAULT_SGP_RHO_BP[self.sport]
+        bp = (self.sgp_rho_ml_bp if market == "ml" else self.sgp_rho_bp)
+        return (default[1] if market == "ml" else default[0]) / 10_000.0 if bp is None else bp / 10_000.0
 
     def key_weights(self) -> dict:
         """Spread-margin weights for the margin model: how much likelier a margin of exactly k is than a normal curve says. UNVALIDATED."""

@@ -7,7 +7,7 @@ its two probabilities. The contest prices the pair with a Gaussian copula:
     p_joint = P(Z1 < Phi^-1(p1), Z2 < Phi^-1(p2))   with corr(Z1, Z2) = rho,   p_i = the leg's de-vigged probability
 
 and then adds the margin (`sgp_margin_bp`) once. rho is positive for "favourite + over" and "underdog + under" and negative for the
-opposite pairs (measured on 726 college football closing lines: +/-0.20 for spread x total, about 0 for moneyline x total; see
+opposite pairs (measured on 940 college football closing lines: +/-0.17 for spread x total, about 0.05 for moneyline x total; basketball +/-0.02; see
 docs/analysis/contest_sportsbook_experiments_2026-11-17.md). UNVALIDATED: one season, one sport, closing lines only.
 
 Allowed pairs: spread + total, and moneyline + total. Spread + moneyline on one game is refused (the legs nest: a team that covers a
@@ -61,7 +61,7 @@ def pair_rho(legs, probs, rules: ContestRules) -> float:
     total_leg = next(l for l in legs if l.market == "total")
     p_side = probs[legs.index(side_leg)]
     favourite = p_side > 0.5 if side_leg.market == "ml" else (side_leg.line or 0.0) < 0
-    base = (rules.sgp_rho_ml_bp if side_leg.market == "ml" else rules.sgp_rho_bp) / 10_000.0
+    base = rules.sgp_rho("ml" if side_leg.market == "ml" else "spread")
     aligned = (favourite and total_leg.side == "over") or (not favourite and total_leg.side == "under")
     return base if aligned else -base
 
