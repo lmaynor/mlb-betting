@@ -5,7 +5,9 @@ import { PlayerHeadshot } from '@/components/ui/sport-assets'
 import { type HeadshotSport } from '@/lib/sport-assets'
 import { BookLogo } from '@/components/ui/book-logo'
 import { LockGlyph } from '@/components/ui/lock-glyph'
-import { STAT_LABEL, type ArbRow, type LongshotRow, type MiddleResult, type OutlierRow, type ScreenRow } from '@/lib/odds-screen'
+import { CardShell, CardHeader, CardPlayerRow } from '@/components/picks/card-shell'
+import { BookComparisonBars } from '@/components/picks/book-comparison-bars'
+import { STAT_LABEL, outlierQuoteState, type ArbRow, type LongshotRow, type MiddleResult, type OutlierRow, type ScreenRow } from '@/lib/odds-screen'
 import { HAIR, GREEN, SKY } from './odds-constants'
 import { startLabel, signed, usd, fairText } from './odds-format'
 import { TierPill } from './odds-cells'
@@ -354,46 +356,76 @@ export function OutlierCard({
     ? `${signed(item.trueEvPct)}% EV \u00b7 +${item.payoutPremiumPct.toFixed(1)}% vs Mkt`
     : `+${item.payoutPremiumPct.toFixed(1)}% vs Mkt`
 
-  return (
-    <div style={{ ...SURFACE_CARD, padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      {/* Row 1: Matchup & Dislocation Pill */}
-      <div className="flex justify-between items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-1.5">
-          <span className="mono" style={{ fontSize: '11px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px', background: 'var(--color-background-tertiary-default)', color: 'var(--color-neutral-400)', border: `1px solid ${HAIR}` }}>
-            {sport.toUpperCase()}
-          </span>
-          <span className="mono text-[12px] text-neutral-300">
-            {item.row.away} @ {item.row.home} &middot; {startLabel(item.row.commence)}
-          </span>
-        </div>
-        <div className="mono" style={{ fontSize: '11px', fontWeight: 600, color: GREEN, background: 'rgba(87,242,135,0.08)', padding: '3px 8px', borderRadius: '4px', border: '1px solid rgba(87,242,135,0.25)' }}>
-          {evBadge}
-        </div>
-      </div>
+  const { lagMin, unmoved } = outlierQuoteState(item)
+  const signedFair = item.fairAmerican != null
+    ? (item.fairAmerican > 0 ? `+${item.fairAmerican}` : `${item.fairAmerican}`)
+    : null
 
-      {/* Row 2: Player, Prop Line & Giant Outlier Price */}
-      <div className="flex justify-between items-center gap-3">
-        <div className="flex items-center gap-2.5">
-          <span className="shrink-0 w-9 h-9 inline-flex">
-            <PlayerHeadshot sport={sport as HeadshotSport} id={item.row.headshot_id} name={item.row.player} size={36} />
-          </span>
-          <div>
-            <div className="text-[15px] font-semibold text-text-primary leading-[1.25]">{item.row.player}</div>
-            <div className="mono text-compact text-neutral-400 flex items-center gap-1.5 mt-[3px]">
-              <span>{item.side === 'OVER' ? 'O' : 'U'} {item.row.line} {STAT_LABEL[item.row.stat] ?? item.row.stat}</span>
-              {item.row.is_alt === true && (
-                <span className="text-micro font-semibold py-0 px-1 rounded-[3px] border border-border-button-hover text-neutral-400">[ALT]</span>
-              )}
+  return (
+    <CardShell style={{ padding: '16px', gap: '12px' }}>
+      {/* Row 1: Matchup & Dislocation Pill */}
+      <CardHeader
+        left={
+          <div className="flex items-center gap-1.5">
+            <span className="mono" style={{ fontSize: '11px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px', background: 'var(--color-background-tertiary-default)', color: 'var(--color-neutral-400)', border: `1px solid ${HAIR}` }}>
+              {sport.toUpperCase()}
+            </span>
+            <span className="mono text-[12px] text-neutral-300">
+              {item.row.away} @ {item.row.home} &middot; {startLabel(item.row.commence)}
+            </span>
+          </div>
+        }
+        right={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span
+              className="mono"
+              style={{
+                fontSize: '11px',
+                fontWeight: 600,
+                color: '#f59e0b',
+                background: 'rgba(245,158,11,0.08)',
+                border: '1px solid rgba(245,158,11,0.25)',
+                padding: '3px 8px',
+                borderRadius: '4px',
+              }}
+            >
+              {'FORWARD SHADOW \u00b7 UNGRADED'}
+            </span>
+            <div className="mono" style={{ fontSize: '11px', fontWeight: 600, color: GREEN, background: 'rgba(87,242,135,0.08)', padding: '3px 8px', borderRadius: '4px', border: '1px solid rgba(87,242,135,0.25)' }}>
+              {evBadge}
             </div>
           </div>
-        </div>
-        <div className="text-right">
-          <div className="mono" style={{ fontSize: '24px', fontWeight: 600, color: GREEN, letterSpacing: '-0.02em', lineHeight: 1 }}>
-            {item.outlierAmerican > 0 ? `+${item.outlierAmerican}` : `${item.outlierAmerican}`}
+        }
+      />
+
+      {/* Row 2: Player, Prop Line & Giant Outlier Price */}
+      <CardPlayerRow
+        sport={sport}
+        headshotId={item.row.headshot_id}
+        name={item.row.player}
+        headshotSize={36}
+        sub={
+          <div className="mono text-compact text-neutral-400 flex items-center gap-1.5 mt-[3px]">
+            <span>{item.side === 'OVER' ? 'O' : 'U'} {item.row.line} {STAT_LABEL[item.row.stat] ?? item.row.stat}</span>
+            {item.row.is_alt === true && (
+              <span className="text-micro font-semibold py-0 px-1 rounded-[3px] border border-border-button-hover text-neutral-400">[ALT]</span>
+            )}
           </div>
-          <div className="mono text-micro text-text-secondary mt-[3px]">Outlier price</div>
-        </div>
-      </div>
+        }
+        right={
+          <>
+            <div className="mono" style={{ fontSize: '24px', fontWeight: 600, color: GREEN, letterSpacing: '-0.02em', lineHeight: 1 }}>
+              {item.outlierAmerican > 0 ? `+${item.outlierAmerican}` : `${item.outlierAmerican}`}
+            </div>
+            <div className="mono text-micro text-text-secondary mt-[3px]">Outlier price</div>
+            {signedFair != null && (
+              <div className="mono text-micro text-text-secondary mt-[2px]">
+                {item.fairSource === 'consensus' ? `Cons fair ${signedFair}` : `Curve fair ${signedFair}`}
+              </div>
+            )}
+          </>
+        }
+      />
 
       {/* Row 3: Target Book / Reveal Control */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', background: 'var(--color-background-secondary-default)', borderRadius: '6px', border: `1px solid ${HAIR}` }}>
@@ -415,54 +447,50 @@ export function OutlierCard({
               <span className="text-[13px] font-semibold text-text-primary">{bookDisplay(item.outlierBook).label}</span>
               <span className="mono text-mini text-text-secondary ml-1">Implied: {(item.outlierImplied * 100).toFixed(1)}%</span>
             </div>
-            <span className="mono" style={{ fontSize: '11px', color: GREEN, fontWeight: 600 }}>Best price</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {lagMin != null && lagMin >= 5 && (
+                <span
+                  className="mono text-[10px]"
+                  style={{
+                    color: '#f59e0b',
+                    background: 'rgba(245,158,11,0.08)',
+                    border: '1px solid rgba(245,158,11,0.25)',
+                    padding: '1px 5px',
+                    borderRadius: '3px',
+                  }}
+                >
+                  +{Math.round(lagMin)}m behind mkt
+                </span>
+              )}
+              {unmoved && (
+                <span
+                  className="mono text-[10px] text-text-secondary"
+                  style={{
+                    padding: '1px 5px',
+                    borderRadius: '3px',
+                    border: `1px solid ${HAIR}`,
+                  }}
+                >
+                  Unmoved since open
+                </span>
+              )}
+              <span className="mono" style={{ fontSize: '11px', color: GREEN, fontWeight: 600 }}>Best price</span>
+            </div>
           </>
         )}
       </div>
 
       {/* Row 4: Horizontal Price Comparison Bar Chart */}
-      <div className="flex flex-col gap-2 pt-1.5 border-t border-t-[color:var(--color-border-table)]">
-        {/* Outlier Book Row */}
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 flex justify-center shrink-0">
-            {isLocked ? <LockGlyph size={12} color="var(--color-text-secondary)" /> : <BookLogo book={item.outlierBook} size={20} />}
-          </div>
-          <div className="flex-1 h-2 bg-background-tertiary-default rounded-chip overflow-hidden">
-            <div style={{ width: '100%', height: '100%', background: GREEN, borderRadius: '4px' }} />
-          </div>
-          <div className="mono" style={{ width: '56px', textAlign: 'right', fontSize: '12px', fontWeight: 600, color: GREEN, flexShrink: 0 }}>
-            {item.outlierAmerican > 0 ? `+${item.outlierAmerican}` : `${item.outlierAmerican}`}
-          </div>
-        </div>
-
-        {/* Peer Books Rows (Up to 5) */}
-        {item.peers.slice(0, 5).map((peer, idx) => (
-          <div key={`${peer.book}-${idx}`} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div className="w-8 flex justify-center shrink-0">
-              <BookLogo book={peer.book} size={20} />
-            </div>
-            <div className="flex-1 h-2 bg-background-tertiary-default rounded-chip overflow-hidden">
-              <div style={{ width: `${Math.round(peer.barRatio * 100)}%`, height: '100%', background: '#334155', borderRadius: '4px' }} />
-            </div>
-            <div className="mono w-14 text-right text-[12px] text-neutral-400 shrink-0">
-              {peer.american > 0 ? `+${peer.american}` : `${peer.american}`}
-            </div>
-          </div>
-        ))}
-
-        {/* Footer Summary Line */}
-        <div className="flex justify-between items-center mt-1 text-mini text-text-secondary">
-          <div>
-            <span>Market avg &middot; {item.nPeers} books</span>
-            {item.fairAmerican != null && (
-              <span className="ml-1.5">&middot; Fair: {item.fairAmerican > 0 ? `+${item.fairAmerican}` : `${item.fairAmerican}`}</span>
-            )}
-          </div>
-          <div className="mono text-[#d1d5db] font-semibold">
-            {item.marketAvgAmerican > 0 ? `+${item.marketAvgAmerican}` : `${item.marketAvgAmerican}`}
-          </div>
-        </div>
-      </div>
-    </div>
+      <BookComparisonBars
+        heroAmerican={item.outlierAmerican}
+        heroBook={item.outlierBook}
+        locked={isLocked}
+        peers={item.peers}
+        footerLeft={
+          <span>Market avg &middot; {item.nPeers} books{item.disp != null ? ` \u00b7 Disp ${item.disp.toFixed(3)}` : ''}</span>
+        }
+        footerRight={item.marketAvgAmerican > 0 ? `+${item.marketAvgAmerican}` : `${item.marketAvgAmerican}`}
+      />
+    </CardShell>
   )
 }

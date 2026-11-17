@@ -301,6 +301,45 @@ export interface OutlierRow {
   disp?: number | null
 }
 
+/**
+ * Pure helper returning quote freshness and unmoved status of the outlier book vs the rest of the market.
+ * lagMin: (freshest ts across row.books minus the outlier book's ts) in minutes, null when either ts is missing.
+ * unmoved: the outlier book entry's stale_opener === true.
+ */
+export function outlierQuoteState(item: OutlierRow): { lagMin: number | null; unmoved: boolean } {
+  const books = item.row?.books ?? []
+  const outlierBook = books.find(b => b.book === item.outlierBook)
+  const unmoved = outlierBook?.stale_opener === true
+
+  if (!outlierBook?.ts) {
+    return { lagMin: null, unmoved }
+  }
+
+  const outlierTsMs = Date.parse(outlierBook.ts)
+  if (isNaN(outlierTsMs)) {
+    return { lagMin: null, unmoved }
+  }
+
+  let freshestTsMs: number | null = null
+  for (const b of books) {
+    if (b.ts) {
+      const t = Date.parse(b.ts)
+      if (!isNaN(t)) {
+        if (freshestTsMs == null || t > freshestTsMs) {
+          freshestTsMs = t
+        }
+      }
+    }
+  }
+
+  if (freshestTsMs == null) {
+    return { lagMin: null, unmoved }
+  }
+
+  const lagMin = (freshestTsMs - outlierTsMs) / 60000
+  return { lagMin, unmoved }
+}
+
 export interface OutlierOptions {
   bettable: ReadonlySet<string> | null
   refs: readonly string[]
