@@ -5,15 +5,17 @@
  * server re-validates on placement. A flat panel: no glow, no gradient.
  */
 import { useState } from 'react'
+import { stepLine } from '@/lib/contest/margin'
+import { sgpPrice } from '@/lib/contest/sgp'
 import { fmtLineSigned, fmtMoney, fmtPrice, parseDollars } from '@/lib/contest/odds'
 import {
-  previewParlay, previewRobin, previewStraight, previewTeaser, robinBreakdown, robinCount, slipIssue, teaserPointOptions, teasedLine, type Preview, type SlipState,
+  makePick, previewParlay, previewRobin, previewSgp, previewStraight, previewTeaser, robinBreakdown, robinCount, slipIssue, teaserPointOptions, teasedLine, type Preview, type SlipState,
 } from '@/lib/contest/slip'
 import type { BetKind, BoardGame, ContestRules, Pick, Receipt } from '@/lib/contest/types'
 import { BetReceipt } from './receipt'
 
 const KINDS: { kind: BetKind; label: string }[] = [
-  { kind: 'straight', label: 'Straight' }, { kind: 'parlay', label: 'Parlay' }, { kind: 'teaser', label: 'Teaser' }, { kind: 'round_robin', label: 'Round Robin' },
+  { kind: 'straight', label: 'Straight' }, { kind: 'parlay', label: 'Parlay' }, { kind: 'teaser', label: 'Teaser' }, { kind: 'round_robin', label: 'Round Robin' }, { kind: 'sgp', label: 'SGP' },
 ]
 // quick amounts ADD to the stake (+$25 twice is $50); a round robin is staked per parlay, so its steps are smaller
 const QUICK = [2_500, 5_000, 10_000, 25_000]
@@ -29,18 +31,36 @@ function describe(p: Pick, g: BoardGame | undefined, points = 0): { who: string;
   return { who: `${team} to win`, what: g ? `${g.away.abbr} @ ${g.home.abbr}` : '' }
 }
 
-export function SlipPanel({ slip, games, rules, balanceCents, receipt, onDoneReceipt, onViewBets, onKind, onPoints, onSizes, onRemove, onClear, onPlace }: {
+/** Alt line control for one pick: step the number half a point either way (priced by the contest from the main price) or go back to the main line. */
+function AltLine({ pick, game, rules, onLine }: { pick: Pick; game: BoardGame; rules: ContestRules; onLine: (from: Pick, to: Pick) => void }) {
+  const main = makePick(game, pick.market, pick.side)
+  const down = stepLine(game, pick, -1, rules)
+  const up = stepLine(game, pick, 1, rules)
+  const isAlt = main != null && main.line !== pick.line
+  const btn: React.CSSProperties = { minWidth: 44, minHeight: 44, fontSize: 16, borderRadius: 6, border: '1px solid #1e2230', background: '#171a24', color: '#f3f4f6' }
+  const word = pick.market === 'total' ? 'total' : 'spread'
+  return (
+    <div className="flex items-center gap-2" role="group" aria-label={`Alt line for ${word}`}>
+      <button type="button" aria-label={`Lower the ${word} to ${down?.line ?? ''}`} disabled={!down} onClick={() => down && onLine(pick, down)} className="mono contest-chip" style={{ ...btn, opacity: down ? 1 : 0.4 }}>&minus;</button>
+      <button type="button" aria-label={`Raise the ${word} to ${up?.line ?? ''}`} disabled={!up} onClick={() => up && onLine(pick, up)} className="mono contest-chip" style={{ ...btn, opacity: up ? 1 : 0.4 }}>+</button>
+      <span className="mono" style={{ fontSize: 11, color: '#7d8596' }}>{isAlt ? 'Alt line' : 'Main line'} (half-point steps)</span>
+      {isAlt && main && <button type="button" onClick={() => onLine(pick, main)} className="mono contest-chip" style={{ marginLeft: 'auto', fontSize: 12, color: '#9ca3af', minHeight: 44, padding: '0 8px' }}>Main</button>}
+    </div>
+  )
+}
+
+export function SlipPanel({ slip, games, rules, balanceCents, receipt, onDoneReceipt, onViewBets, onKind, onPoints, onSizes, onRemove, onClear, onPlace, onLine }: {
   slip: SlipState; games: BoardGame[]; rules: ContestRules; balanceCents: number
   receipt: Receipt | null; onDoneReceipt: () => void; onViewBets: () => void
   onKind: (k: BetKind) => void; onPoints: (p: number) => void; onSizes: (s: number[]) => void
-  onRemove: (p: Pick) => void; onClear: () => void
+  onRemove: (p: Pick) => void; onClear: () => void; onLine: (from: Pick, to: Pick) => void
   onPlace: (stakeCents: number) => void
 }) {
   const [raw, setRaw] = useState('')
   const byId = new Map(games.map(g => [g.id, g]))
   const stake = parseDollars(raw)
   const n = slip.picks.length
-  const issue = stake == null ? (n === 0 ? 'Add a pick' : 'Enter a stake') : slipIssue(slip, stake, balanceCents, rules)
+  const issue = stake == null ? (n === 0 ? 'Add a pick' : 'Enter a stake') : slipIssue(slip, stake, balanceCents, rules, byId.get(slip.picks[0]?.gameId))
   const sizeOptions = Array.from({ length: Math.max(0, Math.min(n, rules.roundRobinMaxPicks) - 1) }, (_, i) => i + 2)
   const breakdown = robinBreakdown(n, slip.robinSizes)
   const quick = slip.kind === 'round_robin' ? QUICK_ROBIN : QUICK
@@ -52,6 +72,7 @@ export function SlipPanel({ slip, games, rules, balanceCents, receipt, onDoneRec
     if (slip.kind === 'straight') { bets = n; preview = n === 1 ? previewStraight(slip.picks[0], stake) : { riskCents: stake * n, payoutCents: slip.picks.reduce((s, p) => s + previewStraight(p, stake).payoutCents, 0), toWinCents: 0 } }
     else if (slip.kind === 'parlay') preview = previewParlay(slip.picks, stake)
     else if (slip.kind === 'teaser') preview = previewTeaser(slip.picks, stake, slip.teaserPoints, rules)
+    else if (slip.kind === 'sgp') preview = previewSgp(slip.picks, byId.get(slip.picks[0].gameId), stake, rules)
     else { bets = robinCount(n, slip.robinSizes); preview = previewRobin(slip.picks, slip.robinSizes, stake) }
     if (preview && preview.toWinCents === 0) preview = { ...preview, toWinCents: preview.payoutCents - preview.riskCents }
   }
@@ -71,7 +92,7 @@ export function SlipPanel({ slip, games, rules, balanceCents, receipt, onDoneRec
       <div role="tablist" aria-label="Bet type" className="flex" style={{ borderBottom: '1px solid #1e2230' }}>
         {KINDS.map(k => (
           <button key={k.kind} role="tab" type="button" aria-selected={slip.kind === k.kind} onClick={() => onKind(k.kind)} className="contest-tab"
-            style={{ flex: 1, padding: '9px 4px', fontSize: 12, fontWeight: 600, color: slip.kind === k.kind ? '#f3f4f6' : '#7d8596',
+            style={{ flex: '1 1 auto', padding: '9px 6px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', color: slip.kind === k.kind ? '#f3f4f6' : '#7d8596',
               borderBottom: `2px solid ${slip.kind === k.kind ? 'var(--signal)' : 'transparent'}`, marginBottom: -1 }}>{k.label}</button>
         ))}
       </div>
@@ -81,17 +102,22 @@ export function SlipPanel({ slip, games, rules, balanceCents, receipt, onDoneRec
       ) : (
         <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
           {slip.picks.map(p => {
-            const d = describe(p, byId.get(p.gameId), slip.kind === 'teaser' ? slip.teaserPoints : 0)
+            const g = byId.get(p.gameId)
+            const d = describe(p, g, slip.kind === 'teaser' ? slip.teaserPoints : 0)
+            const canAlt = !!g && rules.altLinesEnabled && slip.kind !== 'teaser' && slip.kind !== 'sgp' && (p.market === 'spread' || p.market === 'total')
             return (
-              <li key={`${p.gameId}-${p.market}-${p.side}`} className="flex items-center justify-between gap-2" style={{ padding: '9px 12px', borderBottom: '1px solid #151822' }}>
+              <li key={`${p.gameId}-${p.market}-${p.side}`} style={{ padding: '9px 12px', borderBottom: '1px solid #151822' }}>
+               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <div style={{ fontSize: 13, fontWeight: 600 }} className="truncate">{d.who}</div>
                   <div className="mono" style={{ fontSize: 11, color: '#7d8596' }}>{d.what}{slip.kind === 'teaser' && p.market !== 'ml' ? `  \u00b7  was ${p.market === 'total' ? p.line : fmtLineSigned(p.line)}` : ''}</div>
                 </div>
                 <div className="flex items-center gap-3 flex-none">
-                  <span className="mono" style={{ fontSize: 13, color: slip.kind === 'teaser' ? '#7d8596' : '#f3f4f6' }}>{slip.kind === 'teaser' ? '' : fmtPrice(p.price)}</span>
+                  <span className="mono" style={{ fontSize: 13, color: slip.kind === 'teaser' || slip.kind === 'sgp' ? '#7d8596' : '#f3f4f6' }}>{slip.kind === 'teaser' ? '' : fmtPrice(p.price)}</span>
                   <button type="button" aria-label={`Remove ${d.who}`} onClick={() => onRemove(p)} style={{ fontSize: 16, lineHeight: 1, color: '#7d8596', minWidth: 44, minHeight: 44 }}>&times;</button>
                 </div>
+               </div>
+               {canAlt && g && <AltLine pick={p} game={g} rules={rules} onLine={onLine} />}
               </li>
             )
           })}
@@ -106,6 +132,19 @@ export function SlipPanel({ slip, games, rules, balanceCents, receipt, onDoneRec
               style={{ fontSize: 12, padding: '4px 9px', minWidth: 44, borderRadius: 6, border: `1px solid ${slip.teaserPoints === pt ? 'var(--signal)' : '#1e2230'}`, background: slip.teaserPoints === pt ? 'var(--win-wash)' : '#171a24', color: slip.teaserPoints === pt ? 'var(--signal)' : '#f3f4f6' }}>{pt}</button>
           ))}
           <span className="mono" style={{ marginLeft: 'auto', fontSize: 12, color: '#9ca3af' }} title="Teaser price for this many legs">{fmtPrice(rules.teaser[slip.teaserPoints.toFixed(1)]?.[String(n)] ?? null)}</span>
+        </div>
+      )}
+      {slip.kind === 'sgp' && (
+        <div style={{ padding: '10px 12px', borderBottom: '1px solid #151822' }}>
+          <p style={{ fontSize: 12, color: '#7d8596', margin: 0 }}>
+            {n < 2 ? 'Pick a spread or the moneyline, and the total, from one game. The two results move together, so the ticket is priced as a pair.' : 'Priced as a pair, not the product of the two lines. Main lines only. Not offered for cash out.'}
+          </p>
+          {n === 2 && (
+            <div className="flex items-center justify-between mono" style={{ marginTop: 8, fontSize: 13 }}>
+              <span style={{ color: '#7d8596' }}>Ticket price</span>
+              <b data-testid="sgp-price">{sgpPrice(slip.picks, byId.get(slip.picks[0].gameId), rules) == null ? '--' : fmtPrice(sgpPrice(slip.picks, byId.get(slip.picks[0].gameId), rules))}</b>
+            </div>
+          )}
         </div>
       )}
       {n > 0 && slip.kind === 'teaser' && <p style={{ fontSize: 12, color: '#7d8596', margin: 0, padding: '8px 12px', borderBottom: '1px solid #151822' }}>Moves every line the chosen points in your favor. Pays from a fixed table, not the listed prices.</p>}

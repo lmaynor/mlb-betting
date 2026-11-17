@@ -150,7 +150,7 @@ def join_contest(engine, contest_id: int, user_id: str, display_name: str, invit
 
 def _bet_dict(c, bet_id: int) -> dict:
     b = c.execute(text("""SELECT id, entry_id, kind, stake_cents, payout_cents, status, teaser_points, idempotency_key, phase,
-                          group_id, placed_at, settled_at FROM contest_bet WHERE id = :i"""), {"i": bet_id}).mappings().one()
+                          group_id, ticket_price, placed_at, settled_at FROM contest_bet WHERE id = :i"""), {"i": bet_id}).mappings().one()
     legs = c.execute(text("""SELECT game_id, market, side, line, price, result FROM contest_leg WHERE bet_id = :i ORDER BY id"""),
                      {"i": bet_id}).mappings().all()
     return {**dict(b), "legs": [dict(x) for x in legs]}
@@ -185,10 +185,10 @@ def _open_risk(c, entry_id: int) -> int:
 
 def _insert_bet(c, entry_id: int, slip: Slip, now: datetime, phase: str, board, group_id: str | None = None) -> int:
     """Write one bet, its legs (with the exact line / price / quote time the bettor got) and the stake debit."""
-    bet_id = c.execute(text("""INSERT INTO contest_bet (entry_id, kind, stake_cents, status, teaser_points, idempotency_key, phase, group_id, placed_at)
-                               VALUES (:e, :k, :s, 'pending', :tp, :ik, :ph, :gr, :n) RETURNING id"""),
+    bet_id = c.execute(text("""INSERT INTO contest_bet (entry_id, kind, stake_cents, status, teaser_points, idempotency_key, phase, group_id, ticket_price, placed_at)
+                               VALUES (:e, :k, :s, 'pending', :tp, :ik, :ph, :gr, :tk, :n) RETURNING id"""),
                        {"e": entry_id, "k": slip.kind, "s": slip.stake_cents, "tp": slip.legs[0].teaser_points if slip.kind == "teaser" else 0.0,
-                        "ik": slip.idempotency_key, "ph": phase, "gr": group_id, "n": iso(now)}).scalar_one()
+                        "ik": slip.idempotency_key, "ph": phase, "gr": group_id, "tk": slip.ticket_price if slip.kind == "sgp" else None, "n": iso(now)}).scalar_one()
     for leg in slip.legs:
         q = board.get((leg.game_id, leg.market, leg.side)) if board else None
         c.execute(text("""INSERT INTO contest_leg (bet_id, game_id, market, side, line, price, quote_fetched_at)
@@ -247,15 +247,15 @@ def _grade_open_legs(c, game_id: int, home: int | None, away: int | None, now: d
 def _settle_ready(c, contest_id: int, now: datetime) -> list[int]:
     """Settle every pending bet in the contest that its legs now decide; credit the ledger; eliminate busted entries."""
     rules = _rules(c, contest_id)
-    bets = c.execute(text("""SELECT b.id, b.entry_id, b.kind, b.stake_cents, b.teaser_points FROM contest_bet b
+    bets = c.execute(text("""SELECT b.id, b.entry_id, b.kind, b.stake_cents, b.teaser_points, b.ticket_price FROM contest_bet b
                              JOIN contest_entry e ON e.id = b.entry_id
                              WHERE e.contest_id = :c AND b.status = 'pending' ORDER BY b.id"""), {"c": contest_id}).all()
     settled, touched = [], set()
-    for bet_id, entry_id, kind, stake, tp in bets:
+    for bet_id, entry_id, kind, stake, tp, ticket in bets:
         legs = c.execute(text("SELECT game_id, market, side, line, price, result FROM contest_leg WHERE bet_id = :b ORDER BY id"),
                          {"b": bet_id}).all()
         graded = [(Leg(g, m, s, ln, int(p), float(tp or 0)), r) for g, m, s, ln, p, r in legs]
-        out = settle_bet(kind, int(stake), graded, rules)
+        out = settle_bet(kind, int(stake), graded, rules, int(ticket) if ticket is not None else None)
         if out is None:
             continue
         c.execute(text("UPDATE contest_bet SET status = :s, payout_cents = :p, settled_at = :t WHERE id = :i"),

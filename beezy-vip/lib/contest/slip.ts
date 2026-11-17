@@ -3,6 +3,7 @@
  * and refuse. The server re-validates everything; this only keeps the UI honest and fast.
  */
 import { americanToDecimal, parlayDecimal, payoutCents } from './odds'
+import { sgpPairOk, sgpPrice } from './sgp'
 import type { BetKind, BoardGame, ContestRules, Market, Pick, Side } from './types'
 
 export function makePick(game: BoardGame, market: Market, side: Side): Pick | null {
@@ -56,6 +57,12 @@ export function previewTeaser(picks: readonly Pick[], stake: number, points: num
   return price == null ? null : mk(stake, payoutCents(stake, americanToDecimal(price)))
 }
 
+/** A same-game parlay pays its quoted ticket price, not the product of its legs. */
+export function previewSgp(picks: readonly Pick[], game: BoardGame | undefined, stake: number, rules: ContestRules): Preview | null {
+  const price = sgpPrice(picks, game, rules)
+  return price == null ? null : mk(stake, payoutCents(stake, americanToDecimal(price)))
+}
+
 /** Total at risk and the all-win payout of a round robin: the sum over every parlay (each at `unit`). */
 export function previewRobin(picks: readonly Pick[], sizes: readonly number[], unit: number): Preview {
   let payout = 0
@@ -78,7 +85,7 @@ export function gameClosed(g: BoardGame, now: number, rules: ContestRules): Clos
 }
 
 /** First reason this slip cannot be placed, or null. `stake` is cents (per bet; per parlay for a round robin). Mirrors validate_slip. */
-export function slipIssue(s: SlipState, stake: number, balance: number, rules: ContestRules): string | null {
+export function slipIssue(s: SlipState, stake: number, balance: number, rules: ContestRules, game?: BoardGame): string | null {
   const n = s.picks.length
   const games = new Set(s.picks.map(p => p.gameId))
   if (n === 0) return 'Add a pick'
@@ -92,6 +99,14 @@ export function slipIssue(s: SlipState, stake: number, balance: number, rules: C
     return null
   }
   if (s.kind === 'straight') return perBet(stake * n)
+  if (s.kind === 'sgp') {
+    if (!rules.sgpEnabled) return 'Same-game parlays are off'
+    if (games.size !== 1) return 'Both legs must be on one game'
+    if (n < 2) return 'Add the total, or a spread or moneyline, from the same game'
+    if (!sgpPairOk(s.picks)) return 'Pair a spread or moneyline with the total'
+    if (sgpPrice(s.picks, game, rules) == null) return 'This pair cannot be priced right now'
+    return perBet(stake)
+  }
   if (games.size !== n) return 'One leg per game: remove the duplicate game'
   if (s.kind === 'parlay') {
     if (n < rules.parlayMinLegs) return `Parlays need ${rules.parlayMinLegs}+ legs`

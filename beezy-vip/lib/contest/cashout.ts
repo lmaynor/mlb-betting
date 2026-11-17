@@ -3,43 +3,17 @@
  *
  *   value = full payout x P(every leg still wins) x (1 - margin), rounded down, never above the payout
  *
- * P(leg) is the de-vigged two-sided price on the CURRENT board, moved from the current line to the line the player holds with a
- * normal model (sigma is a placeholder, UNVALIDATED), so a line that moved in the player's favour can cash out above the stake.
+ * P(leg) is the de-vigged two-sided price on the CURRENT board, moved from the current line to the line the player holds with the
+ * contest's margin model (lib/contest/margin.ts: placeholders, UNVALIDATED), so a line that moved in the player's favour can cash out above the stake.
  * The server re-prices and refuses if the number moved. Straights and parlays only; teasers are not offered, and nothing is offered
  * once a game is closed to betting (in-game cash out waits for live prices).
  */
-import { americanToDecimal, parlayDecimal, payoutCents } from './odds'
+import { americanToDecimal, devig, parlayDecimal, payoutCents } from './odds'
+import { fairProbAt } from './margin'
 import { gameClosed } from './slip'
 import type { BoardGame, ContestRules, PlacedBet } from './types'
 
-/** Standard normal CDF (Abramowitz and Stegun 7.1.26 style erfc, absolute error about 1e-7). */
-export function normCdf(x: number): number {
-  const z = Math.abs(x) / Math.SQRT2
-  const t = 1 / (1 + 0.5 * z)
-  const erfc = t * Math.exp(-z * z - 1.26551223 + t * (1.00002368 + t * (0.37409196 + t * (0.09678418 + t * (-0.18628806 + t * (0.27886807 + t * (-1.13520398 + t * (1.48851587 + t * (-0.82215223 + t * 0.17087277)))))))))
-  const cdf = 0.5 * erfc
-  return x >= 0 ? 1 - cdf : cdf
-}
-
-/** Inverse of the standard normal CDF (Acklam's algorithm, relative error about 1e-9), for p in (0, 1). */
-export function normInv(p: number): number {
-  const a = [-39.69683028665376, 220.9460984245205, -275.9285104469687, 138.357751867269, -30.66479806614716, 2.506628277459239]
-  const b = [-54.47609879822406, 161.5858368580409, -155.6989798598866, 66.80131188771972, -13.28068155288572]
-  const c = [-0.007784894002430293, -0.3223964580411365, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783]
-  const d = [0.007784695709041462, 0.3224671290700398, 2.445134137142996, 3.754408661907416]
-  const lo = 0.02425
-  if (p < lo) { const q = Math.sqrt(-2 * Math.log(p)); return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1) }
-  if (p > 1 - lo) { const q = Math.sqrt(-2 * Math.log(1 - p)); return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1) }
-  const q = p - 0.5
-  const r = q * q
-  return ((((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q) / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1)
-}
-
-export const devig = (priceA: number, priceB: number): number => {
-  const a = 1 / americanToDecimal(priceA)
-  const b = 1 / americanToDecimal(priceB)
-  return a / (a + b)
-}
+export { devig, normCdf, normInv } from './odds'
 
 type Leg = PlacedBet['legs'][number]
 
@@ -60,9 +34,10 @@ export function legProbability(leg: Leg, g: BoardGame, rules: ContestRules): num
   const p = devig(q.price, q.oppPrice)
   if (leg.market === 'ml') return p
   if (leg.line == null || q.line == null) return null
-  const delta = leg.market === 'spread' ? leg.line - q.line : leg.side === 'over' ? q.line - leg.line : leg.line - q.line
+  if (leg.line === q.line) return p
   const sigma = leg.market === 'spread' ? rules.cashoutSigma.spread : rules.cashoutSigma.total
-  return normCdf(normInv(Math.min(Math.max(p, 1e-6), 1 - 1e-6)) + delta / sigma)
+  // the held line against the line now on offer: refit the margin model to the current price and read it at the held line (same model that prices alt lines)
+  return fairProbAt(leg.market, leg.side, p, q.line, leg.line, sigma, leg.market === 'spread' ? rules.keyWeights : undefined)
 }
 
 export type CashoutReason = 'settled' | 'disabled' | 'teaser' | 'closed' | 'no_quote'

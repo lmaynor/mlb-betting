@@ -69,6 +69,7 @@ TABLES = [
         idempotency_key TEXT NOT NULL,
         phase           TEXT NOT NULL DEFAULT 'pregame',
         group_id        TEXT,
+        ticket_price    INTEGER,
         placed_at       TEXT NOT NULL,
         settled_at      TEXT,
         UNIQUE (entry_id, idempotency_key)

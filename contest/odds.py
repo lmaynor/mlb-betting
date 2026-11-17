@@ -13,6 +13,15 @@ def american_to_decimal(american: int) -> Decimal:
     return Decimal(1) + (Decimal(100) / Decimal(-a) if a < 0 else Decimal(a) / Decimal(100))
 
 
+OPPOSITE = {"home": "away", "away": "home", "over": "under", "under": "over"}
+
+
+def devig(price_a: int, price_b: int) -> float:
+    """Fair probability of side A from a two-sided American price (proportional de-vig)."""
+    a, b = 1 / float(american_to_decimal(price_a)), 1 / float(american_to_decimal(price_b))
+    return a / (a + b)
+
+
 def parlay_decimal(prices: Iterable[int]) -> Decimal:
     total = Decimal(1)
     for p in prices:

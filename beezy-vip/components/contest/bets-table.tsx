@@ -10,7 +10,7 @@ import type { BetKind, BetStatus, BoardGame, ContestRules, PlacedBet, PoolBet } 
 const TH: React.CSSProperties = { fontSize: 10, fontWeight: 600, color: '#7d8596', background: '#11131a', padding: '9px 10px', borderBottom: '1px solid #1e2230', position: 'sticky', top: 0, textAlign: 'left', whiteSpace: 'nowrap' }
 const TD: React.CSSProperties = { fontSize: 13, color: '#f3f4f6', padding: '9px 10px', borderBottom: '1px solid #151822', verticalAlign: 'top' }
 const WRAP: React.CSSProperties = { background: '#11131a', border: '1px solid #1e2230', borderRadius: 8, overflow: 'hidden' }
-export const KIND_LABEL: Record<BetKind, string> = { straight: 'Straight', parlay: 'Parlay', teaser: 'Teaser', round_robin: 'Round Robin' }
+export const KIND_LABEL: Record<BetKind, string> = { straight: 'Straight', parlay: 'Parlay', teaser: 'Teaser', round_robin: 'Round Robin', sgp: 'SGP' }
 const STATUS_TONE: Record<BetStatus, string> = { pending: '#9ca3af', won: '#57f287', lost: '#ef4444', push: '#94a3b8', void: '#94a3b8', cashed_out: '#9ca3af' }
 
 export const StatusText = ({ s, label }: { s: BetStatus; label?: string }) => <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: STATUS_TONE[s] }}>{label ?? s.replace('_', ' ').toUpperCase()}</span>

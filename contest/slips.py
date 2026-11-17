@@ -12,10 +12,11 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Mapping, Sequence
 
-from contest.odds import american_to_decimal, parlay_decimal, payout_cents
+from contest.altlines import alt_price
+from contest.odds import OPPOSITE, american_to_decimal, parlay_decimal, payout_cents
 from contest.rules import ContestRules
 
-KINDS = ("straight", "parlay", "teaser")
+KINDS = ("straight", "parlay", "teaser", "sgp")
 SIDES = {"spread": ("home", "away"), "ml": ("home", "away"), "total": ("over", "under")}
 
 
@@ -40,10 +41,11 @@ class Leg:
 
 @dataclass(frozen=True)
 class Slip:
-    kind: str                        # straight | parlay | teaser
+    kind: str                        # straight | parlay | teaser | sgp
     legs: tuple[Leg, ...]
     stake_cents: int
     idempotency_key: str
+    ticket_price: int | None = None  # sgp only: the American price of the whole ticket, as quoted to the bettor
 
 
 @dataclass(frozen=True)
@@ -86,10 +88,17 @@ def validate_slip(slip: Slip, rules: ContestRules, balance_cents: int, open_risk
         raise SlipError("BAD_KIND", f"unknown bet kind {slip.kind!r}")
     n = len(slip.legs)
     lo, hi = {"straight": (1, 1), "parlay": (rules.parlay_min_legs, rules.parlay_max_legs),
-              "teaser": (rules.teaser_min_legs, rules.teaser_max_legs)}[slip.kind]
+              "teaser": (rules.teaser_min_legs, rules.teaser_max_legs), "sgp": (2, 2)}[slip.kind]
     if not lo <= n <= hi:
         raise SlipError("LEG_COUNT", f"{slip.kind} needs {lo}-{hi} legs, got {n}")
-    if len({leg.game_id for leg in slip.legs}) != n:
+    if slip.kind == "sgp":
+        if not rules.sgp_enabled:
+            raise SlipError("SGP_OFF", "same-game parlays are off for this contest")
+        if len({leg.game_id for leg in slip.legs}) != 1:
+            raise SlipError("SGP_GAME", "both legs of a same-game parlay must be on one game")
+        if {leg.market for leg in slip.legs} not in ({"spread", "total"}, {"ml", "total"}):
+            raise SlipError("SGP_PAIR", "a same-game parlay pairs a spread or a moneyline with the total")
+    elif len({leg.game_id for leg in slip.legs}) != n:
         raise SlipError("DUP_GAME", "one leg per game on a slip")
     for leg in slip.legs:
         if leg.market not in SIDES or leg.side not in SIDES[leg.market]:
@@ -105,6 +114,8 @@ def validate_slip(slip: Slip, rules: ContestRules, balance_cents: int, open_risk
             raise SlipError("TEASER_MARKET", "teasers are spreads and totals only")
     elif any(leg.teaser_points for leg in slip.legs):
         raise SlipError("TEASER_POINTS", "teaser points on a non-teaser slip")
+    if slip.kind == "sgp" and slip.ticket_price is None:
+        raise SlipError("SGP_PRICE", "a same-game parlay needs the ticket price it was quoted")
 
     if slip.stake_cents < rules.min_stake_cents:
         raise SlipError("STAKE_MIN", f"minimum stake is {rules.min_stake_cents} cents")
@@ -131,23 +142,48 @@ def validate_slip(slip: Slip, rules: ContestRules, balance_cents: int, open_risk
             raise SlipError("NO_QUOTE", f"no current price for game {leg.game_id} {leg.market} {leg.side}")
         if (now - q.fetched_at).total_seconds() > rules.quote_max_age_s:
             raise SlipError("QUOTE_STALE", "price is too old; refresh the board")
+        if leg.line != q.line and leg.market in ("spread", "total") and slip.kind not in ("teaser", "sgp"):
+            # an ALT LINE: the contest prices it from the main quote (contest/altlines.py), so the price must be exactly that
+            opp = board.get((leg.game_id, leg.market, OPPOSITE[leg.side]))
+            if opp is None:                              # one-sided board: nothing to price an alt from, so it is the old behaviour
+                raise SlipError("PRICE_CHANGED", "the line moved", {"game_id": leg.game_id, "market": leg.market, "side": leg.side,
+                                                                    "line": q.line, "price": q.price})
+            ap = alt_price(leg.market, leg.side, q, opp, leg.line, rules) if leg.line is not None else None
+            if ap is None:
+                raise SlipError("BAD_LINE", f"{leg.line} is not offered for game {leg.game_id} {leg.market}")
+            if leg.price != ap:
+                raise SlipError("PRICE_CHANGED", "the price moved", {"game_id": leg.game_id, "market": leg.market, "side": leg.side,
+                                                                      "line": leg.line, "price": ap})
+            continue
         # a teaser is priced from the table, not the leg price, so only the LINE must still match there
         price_ok = slip.kind == "teaser" or leg.price == q.price
         if leg.line != q.line or not price_ok:
             raise SlipError("PRICE_CHANGED", "the price moved", {"game_id": leg.game_id, "market": leg.market, "side": leg.side,
                                                                   "line": q.line, "price": q.price})
+    if slip.kind == "sgp" and board is not None:
+        from contest.sgp import sgp_price                       # imported here: sgp imports altlines, which type-checks against this module
+        quoted = sgp_price(slip.legs, board, rules)
+        if quoted is None:
+            raise SlipError("SGP_PAIR", "that pair cannot be priced right now")
+        if quoted != slip.ticket_price:
+            raise SlipError("PRICE_CHANGED", "the ticket price moved", {"game_id": slip.legs[0].game_id, "ticket_price": quoted})
 
 
 def price_slip(slip: Slip, rules: ContestRules) -> int:
     """Total return in cents (stake included) if every leg wins."""
-    return payout_cents(slip.stake_cents, win_decimal(slip.kind, slip.legs, rules))
+    return payout_cents(slip.stake_cents, win_decimal(slip.kind, slip.legs, rules, slip.ticket_price))
 
 
-def win_decimal(kind: str, legs, rules: ContestRules) -> Decimal:
-    """Decimal odds of an all-win bet. `legs` may be a subset (pushed / voided legs dropped); a teaser reprices from the table."""
+def win_decimal(kind: str, legs, rules: ContestRules, ticket_price: int | None = None) -> Decimal:
+    """Decimal odds of an all-win bet. `legs` may be a subset (pushed / voided legs dropped); a teaser reprices from the table; a
+    same-game parlay pays its ticket price while both legs live and the surviving leg at its own price once one drops out."""
     legs = tuple(legs)
-    if kind == "straight":
+    if kind == "straight" or (kind == "sgp" and len(legs) == 1):
         return american_to_decimal(legs[0].price)
+    if kind == "sgp":
+        if ticket_price is None:
+            raise SlipError("SGP_PRICE", "a same-game parlay needs its ticket price")
+        return american_to_decimal(ticket_price)
     if kind == "parlay":
         return parlay_decimal(leg.price for leg in legs)
     price = rules.teaser_price(legs[0].teaser_points, len(legs))

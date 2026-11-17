@@ -8,8 +8,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { MobileBottomSheet, useIsMobile } from '@/components/ui/mobile-sheet'
 import { MAX_RENAMES, nameKey, validateName } from '@/lib/contest/names'
 import { fmtMoney } from '@/lib/contest/odds'
+import { sgpPrice } from '@/lib/contest/sgp'
 import {
-  combinations, previewParlay, previewRobin, previewStraight, previewTeaser, samePick, teaserPointOptions, type SlipState,
+  combinations, makePick, previewParlay, previewRobin, previewSgp, previewStraight, previewTeaser, samePick, teaserPointOptions, type SlipState,
 } from '@/lib/contest/slip'
 import type { BetKind, ContestFeed, Pick, PlacedBet, Receipt } from '@/lib/contest/types'
 import { Board } from './board'
@@ -43,7 +44,10 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
   const toggle = useCallback((p: Pick) => { setReceipt(null); setSlip(s => {
     // a chosen Straight may stack picks on one game; everywhere else a new pick on a game replaces the old one
     const stacking = s.chosen === true && s.kind === 'straight'
-    const next = s.picks.some(x => samePick(x, p)) ? s.picks.filter(x => !samePick(x, p)) : [...(stacking ? s.picks : s.picks.filter(x => x.gameId !== p.gameId)), p]
+    // a same-game parlay holds one spread-or-moneyline and one total from ONE game: a new pick replaces the other pick of its kind, and a pick on another game starts over
+    const sgp = s.kind === 'sgp'
+    const sgpNext = [...s.picks.filter(x => x.gameId === p.gameId && (x.market === 'total') !== (p.market === 'total')), p]
+    const next = s.picks.some(x => samePick(x, p)) ? s.picks.filter(x => !samePick(x, p)) : sgp ? sgpNext : [...(stacking ? s.picks : s.picks.filter(x => x.gameId !== p.gameId)), p]
     // until the player picks a bet type, the slip follows the picks: one price is a straight, two or more a parlay
     const kind: BetKind = s.chosen ? s.kind : next.length >= 2 ? 'parlay' : 'straight'
     return { ...s, kind, picks: next }
@@ -68,6 +72,11 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
     if (slip.kind === 'straight') slip.picks.forEach((p, i) => out.push(mk(`s${seq}-${i}`, 'straight', [p], stake, previewStraight(p, stake).payoutCents)))
     else if (slip.kind === 'parlay') out.push(mk(`s${seq}`, 'parlay', slip.picks, stake, previewParlay(slip.picks, stake).payoutCents))
     else if (slip.kind === 'teaser') { const pv = previewTeaser(slip.picks, stake, slip.teaserPoints, rules); if (pv) out.push(mk(`s${seq}`, 'teaser', slip.picks, stake, pv.payoutCents)) }
+    else if (slip.kind === 'sgp') {
+      const game = feed.games.find(x => x.id === slip.picks[0]?.gameId)
+      const pv = previewSgp(slip.picks, game, stake, rules)
+      if (pv) out.push({ ...mk(`s${seq}`, 'sgp', slip.picks, stake, pv.payoutCents), ticketPrice: sgpPrice(slip.picks, game, rules) })
+    }
     else {
       let i = 0
       for (const k of slip.robinSizes) for (const c of combinations(slip.picks.length, k)) {
@@ -82,12 +91,15 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
     setSeq(n => n + 1)
     // a confirmation replaces the slip; the player chooses View My Bets or Keep Betting (nothing jumps away on its own)
     setReceipt({ kind: slip.kind, bets: out, riskCents: out.reduce((a, x) => a + x.stakeCents, 0), payoutCents: out.reduce((a, x) => a + x.stakeCents + x.toWinCents, 0), placedAt: at })
-  }, [now, rules, seq, slip])
+  }, [now, rules, seq, slip, feed.games])
 
   const panel = (
     <SlipPanel slip={slip} games={feed.games} rules={rules} balanceCents={balance} receipt={receipt}
       onDoneReceipt={() => { setReceipt(null); setSheet(false) }} onViewBets={() => { setReceipt(null); setSheet(false); setTab('bets') }}
-      onKind={kind => setSlip(s => ({ ...s, kind, chosen: true }))} onPoints={teaserPoints => setSlip(s => ({ ...s, teaserPoints }))}
+      onKind={kind => setSlip(s => ({ ...s, kind, chosen: true,
+        // a teaser already moves the number and a same-game parlay is priced on the main lines, so an alt line goes back to the main line there
+        picks: kind === 'teaser' || kind === 'sgp' ? s.picks.map(p => { const g = feed.games.find(x => x.id === p.gameId); return (g && makePick(g, p.market, p.side)) || p }) : s.picks }))}
+      onLine={(from, to) => setSlip(s => ({ ...s, picks: s.picks.map(p => samePick(p, from) ? to : p) }))} onPoints={teaserPoints => setSlip(s => ({ ...s, teaserPoints }))}
       onSizes={robinSizes => setSlip(s => ({ ...s, robinSizes }))} onRemove={p => toggle(p)} onClear={() => setSlip(s => ({ ...s, picks: [] }))} onPlace={place} />
   )
 
@@ -176,6 +188,8 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
               <li>Prices are the contest reference lines, refreshed on a schedule. A price that moves before you place is refused and shown again.</li>
               <li>Betting closes {rules.closeBufferMin} minutes before kickoff.</li>
               <li>Your picks stay hidden from other players until each game kicks off.</li>
+              <li>On a spread or total, the + and &minus; on your slip move the number half a point at a time. Alt lines are priced by the contest from the main price.</li>
+              <li>A same-game parlay pairs a spread or the moneyline with the total from one game. The two move together, so it is priced as a pair, on the main lines.</li>
               <li>A teaser moves every line the chosen points in your favor and pays from a fixed table.</li>
               <li>A round robin bets every combination of your picks for the sizes you choose, as separate parlays.</li>
             </ul>

@@ -12,8 +12,14 @@ from dataclasses import dataclass, field, asdict
 _FOOTBALL_TEASERS = {6.0: {2: -120, 3: 160, 4: 260}, 6.5: {2: -130, 3: 140, 4: 240}, 7.0: {2: -140, 3: 120, 4: 200}}
 _BASKETBALL_TEASERS = {4.0: {2: -120, 3: 160, 4: 260}, 4.5: {2: -130, 3: 140, 4: 240}, 5.0: {2: -140, 3: 120, 4: 200}}
 _DEFAULT_TEASERS = {"ncaaf": _FOOTBALL_TEASERS, "ncaab": _BASKETBALL_TEASERS}
-# PLACEHOLDER standard deviations (points) of the final margin and total, for cash-out line moves. Not fitted to any data.
-_DEFAULT_SIGMAS = {"ncaaf": {"spread": 13.5, "total": 13.0}, "ncaab": {"spread": 11.0, "total": 15.0}}
+# Standard deviations (points) of the final margin and total around the closing line. ncaaf: fitted on 943 closing lines of the 2025 season
+# (docs/analysis/contest_sportsbook_experiments_2026-11-17.md); ncaab is still a PLACEHOLDER. Used by cash out and alt lines. UNVALIDATED.
+_DEFAULT_SIGMAS = {"ncaaf": {"spread": 15.0, "total": 15.5}, "ncaab": {"spread": 11.0, "total": 15.0}}
+# Key-number weights for the spread margin: how many times likelier a final margin of exactly k is than a normal curve says.
+# ncaaf: 3 -> 2.51, 7 -> 1.92 on the same 943 games, rounded; the out-of-sample log-loss gain is within noise, so UNVALIDATED.
+_DEFAULT_KEY_WEIGHTS = {"ncaaf": {3: 2.5, 7: 1.9}, "ncaab": {}}
+# PLACEHOLDER: the farthest an alt line may sit from the main line, in points
+_DEFAULT_ALT_MAX = {"ncaaf": 14.0, "ncaab": 10.0}
 
 
 @dataclass(frozen=True)
@@ -40,10 +46,26 @@ class ContestRules:
     cashout_enabled: bool = True
     cashout_margin_bp: int = 500                 # PLACEHOLDER: 5% off the fair value of the bet, taken once
     cashout_sigmas: dict = field(default_factory=dict)  # {"spread": pts, "total": pts}; empty -> the sport's placeholder (UNVALIDATED)
+    alt_lines_enabled: bool = True
+    sgp_enabled: bool = True
+    sgp_margin_bp: int = 700                     # PLACEHOLDER: 7% on the joint implied probability, taken once
+    sgp_rho_bp: int = 1_700                      # spread x total correlation of the two events, +/-0.17 (940 football games; UNVALIDATED)
+    sgp_rho_ml_bp: int = 500                     # moneyline x total: measured about 0 (1.02x lift); a small placeholder
+    alt_margin_bp: int = 500                     # PLACEHOLDER: 5% on the fair implied probability, taken once (about -110 at a coin flip)
+    alt_max_points_override: float = 0.0         # 0 -> the sport's default reach
+    key_weights_override: dict = field(default_factory=dict)  # {margin: weight}; empty -> the sport's default
 
     def cashout_sigma(self, market: str) -> float:
         """Std dev (points) of the final margin / total, used to move a held line to the current one. PLACEHOLDERS, not fitted."""
         return float((self.cashout_sigmas or _DEFAULT_SIGMAS[self.sport])[market])
+
+    def key_weights(self) -> dict:
+        """Spread-margin weights for the margin model: how much likelier a margin of exactly k is than a normal curve says. UNVALIDATED."""
+        return dict(self.key_weights_override or _DEFAULT_KEY_WEIGHTS[self.sport])
+
+    @property
+    def alt_max_points(self) -> float:
+        return float(self.alt_max_points_override or _DEFAULT_ALT_MAX[self.sport])
 
     def teaser_table(self) -> dict:
         return self.teaser_tables or _DEFAULT_TEASERS[self.sport]
@@ -61,5 +83,6 @@ class ContestRules:
     @classmethod
     def from_json(cls, raw: str) -> "ContestRules":
         d = json.loads(raw)
+        d["key_weights_override"] = {int(k): float(v) for k, v in (d.get("key_weights_override") or {}).items()}
         d["teaser_tables"] = {float(p): {int(n): int(a) for n, a in row.items()} for p, row in (d.get("teaser_tables") or {}).items()}
         return cls(**d)

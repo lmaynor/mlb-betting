@@ -367,26 +367,26 @@ describe('Bankroll Challenge page', () => {
   it('My Bets offers a cash out, and a bet bought before the line moved can pay above its stake', () => {
     open()
     tab('My Bets')
-    const cash = screen.getByRole('button', { name: /^Cash out \$120\.3\d$/ })              // the sample parlay: both lines have since moved its way
-    expect(cash).toHaveTextContent(/^Cash Out \$120\.3\d$/)
-    expect(screen.getByText(/^\+\$20\.3\d vs risk$/)).toBeInTheDocument()
+    const cash = screen.getByRole('button', { name: /^Cash out \$(113\.99|114\.00)$/ })              // the sample parlay: both lines have since moved its way
+    expect(cash).toHaveTextContent(/^Cash Out \$(113\.99|114\.00)$/)
+    expect(screen.getByText(/^\+\$(13\.99|14\.00) vs risk$/)).toBeInTheDocument()
   })
 
   it('cashing out asks first (inline, no modal), then credits the bankroll and closes the bet', () => {
     open()
     tab('My Bets')
     fireEvent.click(screen.getByRole('button', { name: /^Cash out \$/ }))
-    expect(screen.getByRole('group', { name: 'Confirm cash out' })).toHaveTextContent(/Cash out for \$120\.3\d\?/)
+    expect(screen.getByRole('group', { name: 'Confirm cash out' })).toHaveTextContent(/Cash out for \$(113\.99|114\.00)\?/)
     fireEvent.click(btn('Cancel'))
     expect(screen.queryByRole('group', { name: 'Confirm cash out' })).not.toBeInTheDocument()
     expect(standing().getByText('$100.00')).toBeInTheDocument()                                  // still at risk
     fireEvent.click(screen.getByRole('button', { name: /^Cash out \$/ }))
-    fireEvent.click(screen.getByRole('button', { name: /^Confirm \$120/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Confirm \$11[34]/ }))
     expect(standing().getByText('$0.00')).toBeInTheDocument()                                    // nothing at risk any more
-    expect(standing().getAllByText('$5,202.17')).toHaveLength(2)                                 // Available and Bankroll now agree: $5,081.82 + $120.35
+    expect(standing().getAllByText(/^\$5,195\.8[12]$/)).toHaveLength(2)                                 // Available and Bankroll now agree: $5,081.82 + $113.99 (Python) or $114.00 (this mirror, one cent apart)
     expect(screen.getByRole('table', { name: 'My Bets' })).toHaveTextContent('CASHED OUT')
     expect(screen.queryByRole('button', { name: /^Cash out/ })).not.toBeInTheDocument()
-    expect(screen.getByRole('status')).toHaveTextContent(/Cashed out Parlay for \$120\.3\d \(\+\$20\.3\d vs risk\)/)
+    expect(screen.getByRole('status')).toHaveTextContent(/Cashed out Parlay for \$(113\.99|114\.00) \(\+\$(13\.99|14\.00) vs risk\)/)
   })
 
   it('a bet placed at the current prices cashes out below its stake (the vig and the margin)', () => {

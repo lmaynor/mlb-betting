@@ -32,11 +32,13 @@ class Settlement:
     payout_cents: int    # total returned to the bankroll (0 for a loss; the stake for a push / void; stake + profit for a win)
 
 
-def settle_bet(kind: str, stake_cents: int, graded: Sequence[tuple[Leg, str | None]], rules: ContestRules) -> Settlement | None:
+def settle_bet(kind: str, stake_cents: int, graded: Sequence[tuple[Leg, str | None]], rules: ContestRules,
+               ticket_price: int | None = None) -> Settlement | None:
     """Settle a bet from its legs' results, or None when it cannot be decided yet.
 
     * any loss loses the whole parlay / teaser at once, even while other legs are still open
-    * pushed / voided legs drop out: a parlay is repriced on the winners, a teaser on the table price for the remaining count
+    * pushed / voided legs drop out: a parlay is repriced on the winners, a teaser on the table price for the remaining count, a
+      same-game parlay on the surviving leg's own price
     * nothing left to win (every leg pushed / voided, or a teaser down to one winner) refunds the stake
     """
     results = [r for _, r in graded]
@@ -51,5 +53,5 @@ def settle_bet(kind: str, stake_cents: int, graded: Sequence[tuple[Leg, str | No
         return Settlement("void" if results[0] == "void" else "push", stake_cents)
     floor = 2 if kind == "teaser" else 1
     if len(wins) >= floor:
-        return Settlement("won", payout_cents(stake_cents, win_decimal(kind, wins, rules)))
+        return Settlement("won", payout_cents(stake_cents, win_decimal(kind, wins, rules, ticket_price)))
     return Settlement("void" if all(r == "void" for r in results) else "push", stake_cents)

@@ -4,10 +4,11 @@
 
 * P(leg) starts from the CURRENT two-sided price of the leg's market with the vig removed (that is where de-vigging is needed:
   a cash-out must value the bet at fair odds, then take the margin once, in the open).
-* A leg bought at a different line than the board now shows is moved to the held line with a normal model of the final margin / total:
-  p = Phi(Phi^-1(p_now) + delta / sigma), where delta is how many points the held line is better than the current one. A line that
-  moved IN YOUR FAVOR therefore lifts the value, and it can end above the stake (closing-line value). The sigmas are PLACEHOLDERS
-  (rules.cashout_sigma), not fitted, and a normal model ignores key numbers (3, 7): UNVALIDATED.
+* A leg bought at a different line than the board now shows is moved to the held line with the contest's margin model
+  (contest/margin_model.py: a discretised normal refit to the current price, with key-number weights on football spreads). A line that
+  moved IN YOUR FAVOR therefore lifts the value, and it can end above the stake (closing-line value). The same model prices alt
+  lines, so buying an alt and cashing it out at once cannot beat the margin. Sigmas and key weights are placeholders fitted to one
+  season of closing lines: UNVALIDATED.
 * Legs are on different games (one leg per game), so a parlay multiplies its legs' probabilities.
 * Offered only while every leg's game is unplayed and betting is open (the same 15-minute close as placing a bet) and every quote is
   fresh. In-game cash-out needs live prices we do not have except in the halftime window; teasers are priced from a fixed table and
@@ -20,16 +21,13 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from statistics import NormalDist
 from typing import Mapping, Sequence
 
-from contest.odds import american_to_decimal, payout_cents
+from contest.margin_model import fair_prob_at
+from contest.odds import OPPOSITE, american_to_decimal, devig, payout_cents
 from contest.rules import ContestRules
 from contest.slips import GameInfo, Leg, Quote, win_decimal
 
-_N = NormalDist()
-OPPOSITE = {"home": "away", "away": "home", "over": "under", "under": "over"}
-_EPS = 1e-6
 
 
 class CashoutRefused(Exception):
@@ -49,13 +47,7 @@ class CashoutOffer:
     leg_probs: tuple[float, ...]
 
 
-def devig(price_a: int, price_b: int) -> float:
-    """Fair probability of side A from a two-sided American price (proportional de-vig)."""
-    a, b = 1 / float(american_to_decimal(price_a)), 1 / float(american_to_decimal(price_b))
-    return a / (a + b)
-
-
-def leg_probability(leg: Leg, board: Mapping[tuple, Quote], sigma: float) -> float:
+def leg_probability(leg: Leg, board: Mapping[tuple, Quote], sigma: float, rules: ContestRules) -> float:
     """P(this leg wins) on the current board, moved from the current line to the line the player holds."""
     q = board.get((leg.game_id, leg.market, leg.side))
     o = board.get((leg.game_id, leg.market, OPPOSITE[leg.side]))
@@ -66,13 +58,10 @@ def leg_probability(leg: Leg, board: Mapping[tuple, Quote], sigma: float) -> flo
         return p
     if leg.line is None or q.line is None:
         raise CashoutRefused("NO_QUOTE", "missing line")
-    # points by which the line the player HOLDS beats the line now on offer (positive = held line is better)
-    if leg.market == "spread":
-        delta = leg.line - q.line                    # both are the picked side's handicap
-    else:
-        delta = (q.line - leg.line) if leg.side == "over" else (leg.line - q.line)
-    z = _N.inv_cdf(min(max(p, _EPS), 1 - _EPS)) + delta / sigma
-    return _N.cdf(z)
+    if leg.line == q.line:
+        return p
+    # the line the player HOLDS vs the line now on offer: refit the margin model to the current price, read it at the held line
+    return fair_prob_at(leg.market, leg.side, p, q.line, leg.line, sigma, rules.key_weights() if leg.market == "spread" else None)
 
 
 def cashout_offer(kind: str, stake_cents: int, legs: Sequence[Leg], board: Mapping[tuple, Quote], rules: ContestRules,
@@ -82,6 +71,8 @@ def cashout_offer(kind: str, stake_cents: int, legs: Sequence[Leg], board: Mappi
         raise CashoutRefused("DISABLED", "cash out is off for this contest")
     if kind == "teaser":
         raise CashoutRefused("TEASER", "teasers cannot be cashed out")
+    if kind == "sgp":
+        raise CashoutRefused("SGP", "same-game parlays cannot be cashed out")
     close_before = timedelta(minutes=rules.close_buffer_min)
     for leg in legs:
         g = games.get(leg.game_id)
@@ -92,7 +83,7 @@ def cashout_offer(kind: str, stake_cents: int, legs: Sequence[Leg], board: Mappi
             if q is not None and (now - q.fetched_at).total_seconds() > rules.quote_max_age_s:
                 raise CashoutRefused("QUOTE_STALE", "prices are too old to cash out against")
     # a moneyline has no line to move, so it needs no sigma
-    probs = tuple(leg_probability(leg, board, 1.0 if leg.market == "ml" else rules.cashout_sigma(leg.market)) for leg in legs)
+    probs = tuple(leg_probability(leg, board, 1.0 if leg.market == "ml" else rules.cashout_sigma(leg.market), rules) for leg in legs)
     payout = payout_cents(stake_cents, win_decimal(kind, legs, rules))
     p = math.prod(probs)
     value = int(math.floor(payout * p * (1 - rules.cashout_margin_bp / 10_000)))

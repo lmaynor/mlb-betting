@@ -43,24 +43,24 @@ describe('cash-out value matches the Python engine', () => {
     const held = bet('straight', [leg(1, 'spread', 'home', -3.5)])
     const up = cashoutOffer(held, games(game(1, { spread: { line: -6.5, away: -110, home: -110 } })), R, NOW)
     const down = cashoutOffer(held, games(game(1, { spread: { line: -0.5, away: -110, home: -110 } })), R, NOW)
-    close(up.ok ? up.cents : undefined, 10_662)
+    close(up.ok ? up.cents : undefined, 10_352)
     expect(up.ok && up.cents).toBeGreaterThan(10_000)
-    close(down.ok ? down.cents : undefined, 7_473)
+    close(down.ok ? down.cents : undefined, 7_150)
   })
   it('moneyline and total', () => {
     const ml = cashoutOffer(bet('straight', [leg(1, 'ml', 'home', null, -150)]), games(game(1, { ml: { away: 170, home: -200 } })), R, NOW)
     expect(ml.ok && ml.payoutCents).toBe(16_667)
     close(ml.ok ? ml.cents : undefined, 10_178)
     const tot = cashoutOffer(bet('straight', [leg(2, 'total', 'over', 47.5)]), games(game(2, { total: { line: 49.5, over: -110, under: -110 } })), R, NOW)
-    close(tot.ok ? tot.cents : undefined, 10_176)
+    close(tot.ok ? tot.cents : undefined, 9_999)
   })
-  it('parlay: flat two legs 8,655; the sample parlay bought before the lines moved 12,035', () => {
+  it('parlay: flat two legs 8,655; the sample parlay bought before the lines moved 11,399', () => {
     const flat = cashoutOffer(bet('parlay', [leg(1, 'spread', 'home', -3.5), leg(2, 'spread', 'home', -3.5)]), games(game(1), game(2)), R, NOW)
     close(flat.ok ? flat.cents : undefined, 8_655)
     const moved = cashoutOffer(bet('parlay', [leg(1, 'spread', 'home', -3.5), leg(3, 'total', 'under', 50.5)]),
       games(game(1, { spread: { line: -6.5, away: -110, home: -110 } }), game(3)), R, NOW)
-    close(moved.ok ? moved.cents : undefined, 12_035)
-    expect(moved.ok && moved.winProb).toBeCloseTo(0.347615, 4)
+    close(moved.ok ? moved.cents : undefined, 11_399)
+    expect(moved.ok && moved.winProb).toBeCloseTo(0.329247, 4)
   })
   it('never pays above the payout', () => {
     const o = cashoutOffer(bet('straight', [leg(1, 'spread', 'home', -3.5)]), games(game(1, { spread: { line: -60.5, away: -110, home: -110 } })), { ...R, cashoutMarginBp: 0 }, NOW)

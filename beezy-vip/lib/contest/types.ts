@@ -4,7 +4,7 @@
  */
 export type Market = 'spread' | 'total' | 'ml'
 export type Side = 'home' | 'away' | 'over' | 'under'
-export type BetKind = 'straight' | 'parlay' | 'teaser' | 'round_robin'
+export type BetKind = 'straight' | 'parlay' | 'teaser' | 'round_robin' | 'sgp'
 export type BetStatus = 'pending' | 'won' | 'lost' | 'push' | 'void' | 'cashed_out'
 
 export interface TeamRef {
@@ -76,6 +76,17 @@ export interface ContestRules {
   blackjackThresholdCents: number
   blackjackMinChipCents: number
   cashoutEnabled: boolean
+  /** Alt lines: any half-point number within `altMaxPoints` of the main line, priced by the contest from the main price (lib/contest/margin.ts). UNVALIDATED. */
+  altLinesEnabled: boolean
+  /** Same-game parlays: a spread or moneyline with the total, priced with a correlation (lib/contest/sgp.ts). UNVALIDATED. */
+  sgpEnabled: boolean
+  sgpMarginBp: number
+  sgpRhoBp: number
+  sgpRhoMlBp: number
+  altMarginBp: number
+  altMaxPoints: number
+  /** Football spread: how many times likelier a final margin of exactly k is than a normal curve says. */
+  keyWeights: Record<string, number>
   cashoutMarginBp: number
   cashoutSigma: { spread: number; total: number }
   /** {points: {legs: American price}}. PLACEHOLDERS until the real rulebook is supplied (see contest/rules.py). */
@@ -93,6 +104,8 @@ export interface PlacedBet {
   status: BetStatus
   placedAt: string
   teaserPoints: number
+  /** A same-game parlay's American ticket price. */
+  ticketPrice?: number | null
   legs: { gameId: number; market: Market; side: Side; line: number | null; price: number; result: 'win' | 'loss' | 'push' | 'void' | null }[]
 }
 

@@ -24,8 +24,16 @@ export const SAMPLE_RULES: ContestRules = {
   blackjackThresholdCents: 10_000,
   blackjackMinChipCents: 100,
   cashoutEnabled: true,
+  altLinesEnabled: true,
+  sgpEnabled: true,
+  sgpMarginBp: 700,
+  sgpRhoBp: 1700,
+  sgpRhoMlBp: 500,
+  altMarginBp: 500,
+  altMaxPoints: 14,
+  keyWeights: { '3': 2.5, '7': 1.9 },
   cashoutMarginBp: 500,
-  cashoutSigma: { spread: 13.5, total: 13.0 },
+  cashoutSigma: { spread: 15, total: 15.5 },
   teaser: { '6.0': { '2': -120, '3': 160, '4': 260 }, '6.5': { '2': -130, '3': 140, '4': 240 }, '7.0': { '2': -140, '3': 120, '4': 200 } },
 }
 
