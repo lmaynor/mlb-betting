@@ -9,6 +9,7 @@ const Ctx = createContext<{ format: OddsFormat; setFormat: (f: OddsFormat) => vo
 export function OddsFormatProvider({ children }: { children: React.ReactNode }) {
   const [format, setFormat] = useState<OddsFormat>('american')
   // read after mount so the server render and the first client render agree
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- reading localStorage during render would differ from the server render and break hydration
   useEffect(() => { try { const v = localStorage.getItem(KEY); if (isOddsFormat(v)) setFormat(v) } catch { /* private window: keep the default */ } }, [])
   const choose = (f: OddsFormat) => { setFormat(f); try { localStorage.setItem(KEY, f) } catch { /* not remembered */ } }
   return <Ctx.Provider value={{ format, setFormat: choose }}>{children}</Ctx.Provider>
