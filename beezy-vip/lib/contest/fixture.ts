@@ -77,7 +77,7 @@ const POOL: PoolBet[] = [
 const LEADERS: Omit<LeaderRow, 'rank'>[] = [
   { name: 'Marcus', bankrollCents: 812_500, openRiskCents: 40_000, won: 9, lost: 4, pushed: 1, status: 'active' },
   { name: 'Priya', bankrollCents: 733_000, openRiskCents: 55_000, won: 7, lost: 5, pushed: 0, status: 'active' },
-  { name: 'You', bankrollCents: 518_182, openRiskCents: 10_000, won: 1, lost: 0, pushed: 0, status: 'active', mine: true },
+  { name: 'Alex', bankrollCents: 518_182, openRiskCents: 10_000, won: 1, lost: 0, pushed: 0, status: 'active', mine: true },
   { name: 'Dani', bankrollCents: 466_000, openRiskCents: 25_000, won: 5, lost: 6, pushed: 2, status: 'active' },
   { name: 'Tom', bankrollCents: 301_500, openRiskCents: 60_000, won: 3, lost: 8, pushed: 0, status: 'active' },
   { name: 'Wes', bankrollCents: 1_250, openRiskCents: 0, won: 2, lost: 11, pushed: 0, status: 'eliminated' },
@@ -89,6 +89,7 @@ export function sampleFeed(nowIso: string): ContestFeed {
     sample: true,
     rules: SAMPLE_RULES,
     nowIso,
+    me: { joined: true, displayName: 'Alex', renamesLeft: 3, suggestedName: 'Alex' },
     balanceCents: 508_182,
     games: GAMES,
     myBets: MY_BETS,

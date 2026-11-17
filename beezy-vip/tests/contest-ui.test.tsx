@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { ContestClient } from '@/components/contest/contest-client'
 import { sampleFeed } from '@/lib/contest/fixture'
 import { fmtMoney } from '@/lib/contest/odds'
@@ -271,8 +271,8 @@ describe('Bankroll Challenge page', () => {
     const { container } = open()
     tab('Leaderboard')
     const rows = within(screen.getByRole('table', { name: 'Leaderboard' })).getAllByRole('row').slice(1)
-    expect(rows.map(r => within(r).getAllByRole('cell')[1].textContent)).toEqual(['Marcus', 'Priya', 'You', 'Dani', 'Tom', 'WesOUT'])
-    expect(container.querySelector('tr[data-mine="true"]')).toHaveTextContent('You')
+    expect(rows.map(r => within(r).getAllByRole('cell')[1].textContent)).toEqual(['Marcus', 'Priya', 'Alex you', 'Dani', 'Tom', 'WesOUT'])
+    expect(container.querySelector('tr[data-mine="true"]')).toHaveTextContent('Alex')
     expect(rows[5]).toHaveStyle({ opacity: '0.5' })
     // one money format on the page: every bankroll cell has cents (no $812,500 next to $5,181.82)
     rows.forEach(r => { const c = within(r).getAllByRole('cell'); expect(c[2].textContent).toMatch(/^\$[\d,]+\.\d{2}$/); expect(c[3].textContent).toMatch(/^[+-]\$[\d,]+\.\d{2}$/) })
@@ -429,6 +429,58 @@ describe('Bankroll Challenge page', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Confirm \$/ }))
     expect(screen.getByText(`Round Robin ${MID} 3 parlays`).closest('tr')).toHaveTextContent('CASHED OUT')
     expect(screen.getAllByRole('button', { name: /^Cash out \$/ })).toHaveLength(1)              // only the sample parlay is left
+  })
+
+  it('a new player joins with an invite code and a display name, validated as they type', async () => {
+    render(<ContestClient feed={{ ...feed(), me: { joined: false, displayName: '', renamesLeft: 3, suggestedName: 'Jordan L' } }} />)
+    expect(screen.getByRole('form', { name: 'Join Bowl Bankroll' })).toBeInTheDocument()
+    expect(screen.queryByRole('table', { name: 'Odds board' })).not.toBeInTheDocument()          // nothing to bet on until you have joined
+    const name = screen.getByLabelText('Display name') as HTMLInputElement
+    const code = screen.getByLabelText('Invite code')
+    const join = screen.getByRole('button', { name: 'Join contest' })
+    expect(name.value).toBe('Jordan L')                                                          // suggested from the account, editable
+    expect(join).toBeDisabled()                                                                  // no code yet
+    fireEvent.change(code, { target: { value: 'WELCOME' } })
+    expect(join).toBeEnabled()
+    fireEvent.change(name, { target: { value: 'A' } })
+    expect(screen.getAllByRole('status').some(n => /2 to 20 characters/.test(n.textContent ?? ''))).toBe(true)
+    expect(join).toBeDisabled()
+    fireEvent.change(name, { target: { value: 'Admin' } })
+    expect(screen.getAllByRole('status').some(n => /reserved/.test(n.textContent ?? ''))).toBe(true)
+    fireEvent.change(name, { target: { value: 'marcus' } })                                      // valid, but another player already has it (by key)
+    fireEvent.click(join)
+    await waitFor(() => expect(screen.getAllByRole('status').some(n => /taken/.test(n.textContent ?? ''))).toBe(true))
+    expect(screen.queryByRole('table', { name: 'Odds board' })).not.toBeInTheDocument()
+    fireEvent.change(name, { target: { value: 'Jordan Lee' } })
+    fireEvent.click(join)
+    expect(await screen.findByRole('table', { name: 'Odds board' })).toBeInTheDocument()
+    expect(screen.getByText('Jordan Lee')).toBeInTheDocument()                                   // "Playing as Jordan Lee"
+  })
+
+  it('a player can rename themselves a limited number of times; everyone sees the new name', async () => {
+    open()
+    expect(screen.getByText('Alex')).toBeInTheDocument()
+    fireEvent.click(btn('Edit name'))
+    const input = screen.getByLabelText('Display name') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'marcus' } })
+    fireEvent.click(btn('Save'))
+    await waitFor(() => expect(screen.getByRole('form', { name: 'Edit display name' })).toHaveTextContent('taken'))    // collides with Marcus by key
+    fireEvent.change(input, { target: { value: 'A' } })
+    expect(btn('Save')).toBeDisabled()
+    fireEvent.change(input, { target: { value: 'Alexander' } })
+    fireEvent.click(btn('Save'))
+    expect(await screen.findByText('Alexander')).toBeInTheDocument()
+    tab('Leaderboard')
+    expect(screen.getByRole('table', { name: 'Leaderboard' })).toHaveTextContent('Alexander you')
+    tab('Board')
+    for (const n of ['Al', 'Lex']) {
+      fireEvent.click(btn('Edit name'))
+      fireEvent.change(screen.getByLabelText('Display name'), { target: { value: n } })
+      fireEvent.click(btn('Save'))
+      await waitFor(() => expect(screen.queryByRole('form', { name: 'Edit display name' })).not.toBeInTheDocument())
+    }
+    expect(screen.queryByRole('button', { name: 'Edit name' })).not.toBeInTheDocument()          // three changes used
+    expect(screen.getByText('No renames left')).toBeInTheDocument()
   })
 
   it('uses Title Case for Bet Slip, Round Robin, My Bets and Place Bet', () => {

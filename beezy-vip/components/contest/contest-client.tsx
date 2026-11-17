@@ -6,6 +6,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { MobileBottomSheet, useIsMobile } from '@/components/ui/mobile-sheet'
+import { MAX_RENAMES, nameKey, validateName } from '@/lib/contest/names'
 import { fmtMoney } from '@/lib/contest/odds'
 import {
   combinations, previewParlay, previewRobin, previewStraight, previewTeaser, samePick, teaserPointOptions, type SlipState,
@@ -13,7 +14,9 @@ import {
 import type { BetKind, ContestFeed, Pick, PlacedBet, Receipt } from '@/lib/contest/types'
 import { Board } from './board'
 import { MyBets, Pool } from './bets-table'
+import { JoinPanel, type JoinResult } from './join-panel'
 import { Leaderboard } from './leaderboard'
+import { NameEditor } from './name-editor'
 import { SlipPanel } from './slip-panel'
 
 type Tab = 'board' | 'bets' | 'pool' | 'leaders'
@@ -23,6 +26,7 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
   const { rules } = feed
   const [tab, setTab] = useState<Tab>('board')
   const [slip, setSlip] = useState<SlipState>({ kind: 'straight', chosen: false, picks: [], teaserPoints: teaserPointOptions(rules)[0] ?? 6, robinSizes: [2] })
+  const [me, setMe] = useState(feed.me)
   const [balance, setBalance] = useState(feed.balanceCents)
   const [bets, setBets] = useState<PlacedBet[]>(feed.myBets)
   const [sheet, setSheet] = useState(false)
@@ -85,10 +89,40 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
       onSizes={robinSizes => setSlip(s => ({ ...s, robinSizes }))} onRemove={p => toggle(p)} onClear={() => setSlip(s => ({ ...s, picks: [] }))} onPlace={place} />
   )
 
-  const me = feed.leaderboard.find(r => r.mine)
+  // SAMPLE MODE: joining and renaming only change this page's state. The real calls go to the contest API, which enforces the invite code,
+  // uniqueness per contest and the rename limit (store.join_contest / rename_entry); this mirrors its rules so the form behaves the same.
+  const board = useMemo(() => feed.leaderboard.map(r => r.mine ? { ...r, name: me.displayName } : r), [feed.leaderboard, me.displayName])
+  const taken = (key: string) => feed.leaderboard.some(r => !r.mine && nameKey(r.name) === key)
+  const join = useCallback((input: { inviteCode: string; displayName: string }): JoinResult => {
+    const v = validateName(input.displayName)
+    if (!v.ok) return { ok: false, message: v.message }
+    if (taken(v.key)) return { ok: false, message: 'That name is taken in this contest.' }
+    setMe(m => ({ ...m, joined: true, displayName: v.name, renamesLeft: MAX_RENAMES }))
+    return { ok: true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feed.leaderboard])
+  const rename = useCallback((next: string): JoinResult => {
+    const v = validateName(next)
+    if (!v.ok) return { ok: false, message: v.message }
+    if (taken(v.key)) return { ok: false, message: 'That name is taken in this contest.' }
+    const changed = v.key !== nameKey(me.displayName)
+    if (changed && me.renamesLeft <= 0) return { ok: false, message: `A name can be changed ${MAX_RENAMES} times.` }
+    setMe(m => ({ ...m, displayName: v.name, renamesLeft: changed ? m.renamesLeft - 1 : m.renamesLeft }))
+    return { ok: true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feed.leaderboard, me.displayName, me.renamesLeft])
+  const mine = board.find(r => r.mine)
   // the slip rail follows the work: always beside the board, elsewhere only while a slip or a confirmation exists
   const showRail = !isMobile && (tab === 'board' || slip.picks.length > 0 || receipt !== null)
   const bankroll = balance + atRisk
+  if (!me.joined) {
+    return (
+      <div className="max-w-[1400px] mx-auto pt-4 px-4 sm:px-6 pb-16">
+        <h1 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 12px' }}>{feed.name}</h1>
+        <JoinPanel contestName={feed.name} suggested={me.suggestedName} onJoin={join} note="Sample mode: any invite code works here. The real server checks it." />
+      </div>
+    )
+  }
   return (
     <div className="max-w-[1400px] mx-auto pt-4 px-4 sm:px-6 pb-40 lg:pb-8">
       <div className="flex flex-wrap items-center justify-between gap-3" style={{ marginBottom: 10 }}>
@@ -105,10 +139,11 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
       </div>
 
       <div className="mono flex flex-wrap items-center gap-x-4 gap-y-1" aria-label="Your standing" style={{ background: '#11131a', border: '1px solid #1e2230', borderRadius: 8, padding: '9px 14px', fontSize: 13, marginBottom: 12 }}>
+        <NameEditor name={me.displayName} renamesLeft={me.renamesLeft} onRename={rename} />
         <span><span style={{ color: '#7d8596' }}>Available </span><b>{fmtMoney(balance)}</b></span>
         <span><span style={{ color: '#7d8596' }}>At risk </span><b>{fmtMoney(atRisk)}</b></span>
         <span><span style={{ color: '#7d8596' }}>Bankroll </span><b>{fmtMoney(bankroll)}</b> <span style={{ color: bankroll >= rules.startBankrollCents ? '#57f287' : '#ef4444' }}>{fmtMoney(bankroll - rules.startBankrollCents, { sign: true })}</span></span>
-        {me && <span><span style={{ color: '#7d8596' }}>Rank </span><b>{me.rank}</b> of {feed.leaderboard.length}</span>}
+        {mine && <span><span style={{ color: '#7d8596' }}>Rank </span><b>{mine.rank}</b> of {board.length}</span>}
       </div>
 
       <div className={`grid gap-4 items-start ${showRail ? 'lg:grid-cols-[minmax(0,1fr)_340px]' : ''}`}>
@@ -116,7 +151,7 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
           {tab === 'board' && <Board games={feed.games} picks={slip.picks} now={now} rules={rules} onToggle={toggle} />}
           {tab === 'bets' && <MyBets bets={bets} games={feed.games} rules={rules} now={now} onCashOut={cashOut} />}
           {tab === 'pool' && <Pool bets={feed.pool} games={feed.games} />}
-          {tab === 'leaders' && <Leaderboard rows={feed.leaderboard} start={rules.startBankrollCents} />}
+          {tab === 'leaders' && <Leaderboard rows={board} start={rules.startBankrollCents} />}
           <details style={{ margin: '10px 2px 0', maxWidth: '70ch' }}>
             <summary className="mono" style={{ fontSize: 12, color: '#9ca3af', cursor: 'pointer' }}>How it works</summary>
             <ul className="mono" style={{ fontSize: 12, color: '#9ca3af', lineHeight: 1.6, margin: '8px 0 0', paddingLeft: 16 }}>

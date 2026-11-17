@@ -124,11 +124,20 @@ export interface LeaderRow {
   mine?: boolean
 }
 
+/** The signed-in player's place in this contest. Before joining, `suggestedName` seeds the join form (from the account). */
+export interface MeState {
+  joined: boolean
+  displayName: string
+  renamesLeft: number
+  suggestedName: string
+}
+
 export interface ContestFeed {
   name: string
   sample: boolean
   rules: ContestRules
   nowIso: string
+  me: MeState
   balanceCents: number
   games: BoardGame[]
   myBets: PlacedBet[]
