@@ -9,7 +9,7 @@ on), so this is research-only: stdlib, one polite request at a time, one cache f
   python3 scripts/contest_history_pull.py --league cfb --start 2025-08-23 --end 2026-01-20 --out ~/contest_history/cfb_2025.jsonl
   python3 scripts/contest_history_pull.py --league cbb --start 2026-01-05 --end 2026-01-18 --max-games 600 --out ~/contest_history/cbb_sample.jsonl
 
-One JSON object per line: {id, date, league, home, away, neutral, home_score, away_score, spread_home, total, over_odds, under_odds,
+One JSON object per line: {id, day (the day queried; use this for ordering), date (ESPN's, often a placeholder), league, home, away, neutral, home_score, away_score, spread_home, total, over_odds, under_odds,
 home_spread_odds, away_spread_odds, ml_home, ml_away, open_spread_home, open_ml_home, provider}. `spread_home` is the HOME handicap
 (-6.5 = home favoured by 6.5), the same convention as the contest board.
 """
@@ -132,6 +132,7 @@ def main(argv=None) -> int:
                 g = parse_event(ev, a.league)
                 if g is None or g["id"] in have:
                     continue
+                g["day"] = d.isoformat()                       # ESPN's own `date` is a placeholder (1993-01-31) on most past events: keep the day we asked for
                 core = get(CORE.format(path=cfg["core"], eid=g["id"]))
                 time.sleep(a.sleep)
                 lines = next((p for p in (parse_odds_item(it) for it in (core or {}).get("items", [])) if p), None)
