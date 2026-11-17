@@ -71,6 +71,10 @@ export interface ContestRules {
   roundRobinMinUnitCents: number
   closeBufferMin: number
   /** Cash out: value = payout x P(win now) x (1 - margin). Margin and sigmas are PLACEHOLDERS (see contest/rules.py). */
+  /** The hidden blackjack lifeline: opens under the threshold, winnings never lift a bankroll above it (contest/lifeline.py). Placeholders. */
+  blackjackEnabled: boolean
+  blackjackThresholdCents: number
+  blackjackMinChipCents: number
   cashoutEnabled: boolean
   cashoutMarginBp: number
   cashoutSigma: { spread: number; total: number }

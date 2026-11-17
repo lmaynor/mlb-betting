@@ -20,6 +20,9 @@ export const SAMPLE_RULES: ContestRules = {
   roundRobinMaxParlays: 500,
   roundRobinMinUnitCents: 500,
   closeBufferMin: 15,
+  blackjackEnabled: true,
+  blackjackThresholdCents: 10_000,
+  blackjackMinChipCents: 100,
   cashoutEnabled: true,
   cashoutMarginBp: 500,
   cashoutSigma: { spread: 13.5, total: 13.0 },
@@ -83,17 +86,19 @@ const LEADERS: Omit<LeaderRow, 'rank'>[] = [
   { name: 'Wes', bankrollCents: 1_250, openRiskCents: 0, won: 2, lost: 11, pushed: 0, status: 'eliminated' },
 ]
 
-export function sampleFeed(nowIso: string): ContestFeed {
+/** `broke: true` previews the hidden blackjack lifeline: the same sample contest with the player down to $40 and nothing at risk. */
+export function sampleFeed(nowIso: string, opts: { broke?: boolean } = {}): ContestFeed {
+  const leaders = opts.broke ? LEADERS.map(r => r.mine ? { ...r, bankrollCents: 4_000, openRiskCents: 0, won: 1, lost: 6 } : r) : LEADERS
   return {
     name: 'Bowl Bankroll',
     sample: true,
     rules: SAMPLE_RULES,
     nowIso,
     me: { joined: true, displayName: 'Alex', renamesLeft: 3, suggestedName: 'Alex' },
-    balanceCents: 508_182,
+    balanceCents: opts.broke ? 4_000 : 508_182,
     games: GAMES,
-    myBets: MY_BETS,
+    myBets: opts.broke ? MY_BETS.filter(b => b.status !== 'pending') : MY_BETS,
     pool: POOL,
-    leaderboard: [...LEADERS].sort((a, b) => b.bankrollCents - a.bankrollCents).map((r, i) => ({ ...r, rank: i + 1 })),
+    leaderboard: [...leaders].sort((a, b) => b.bankrollCents - a.bankrollCents).map((r, i) => ({ ...r, rank: i + 1 })),
   }
 }

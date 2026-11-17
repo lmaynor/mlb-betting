@@ -15,12 +15,14 @@ import type { BetKind, ContestFeed, Pick, PlacedBet, Receipt } from '@/lib/conte
 import { Board } from './board'
 import { MyBets, Pool } from './bets-table'
 import { JoinPanel, type JoinResult } from './join-panel'
+import { BlackjackTable } from './blackjack-table'
 import { Leaderboard } from './leaderboard'
 import { NameEditor } from './name-editor'
 import { SlipPanel } from './slip-panel'
 
-type Tab = 'board' | 'bets' | 'pool' | 'leaders'
+type Tab = 'board' | 'bets' | 'pool' | 'leaders' | 'blackjack'
 const TABS: { id: Tab; label: string }[] = [{ id: 'board', label: 'Board' }, { id: 'bets', label: 'My Bets' }, { id: 'pool', label: 'Pool' }, { id: 'leaders', label: 'Leaderboard' }]
+const BLACKJACK_TAB: { id: Tab; label: string } = { id: 'blackjack', label: 'Blackjack' }
 
 export function ContestClient({ feed }: { feed: ContestFeed }) {
   const { rules } = feed
@@ -113,8 +115,12 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
   }, [feed.leaderboard, me.displayName, me.renamesLeft])
   const mine = board.find(r => r.mine)
   // the slip rail follows the work: always beside the board, elsewhere only while a slip or a confirmation exists
-  const showRail = !isMobile && (tab === 'board' || slip.picks.length > 0 || receipt !== null)
+  const slipVisible = tab === 'board' || slip.picks.length > 0 || receipt !== null
+  const showRail = !isMobile && slipVisible
   const bankroll = balance + atRisk
+  // the hidden lifeline: its tab exists only while the bankroll is under the threshold (or while you are sitting at it, so a hand is never lost)
+  const lifelineOpen = rules.blackjackEnabled && bankroll < rules.blackjackThresholdCents
+  const tabs = lifelineOpen || tab === 'blackjack' ? [...TABS, BLACKJACK_TAB] : TABS
   if (!me.joined) {
     return (
       <div className="max-w-[1400px] mx-auto pt-4 px-4 sm:px-6 pb-16">
@@ -131,7 +137,7 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
           {feed.sample && <span className="mono" title="Invented games, lines and players to exercise the page. Placing a bet changes only this page." style={{ fontSize: 11, color: '#facc15' }}>SAMPLE DATA</span>}
         </div>
         <div role="tablist" aria-label="Contest sections" className="flex gap-1">
-          {TABS.map(t => (
+          {tabs.map(t => (
             <button key={t.id} role="tab" type="button" aria-selected={tab === t.id} onClick={() => setTab(t.id)} className="contest-tab"
               style={{ padding: '6px 12px', fontSize: 13, fontWeight: 600, borderRadius: 6, color: tab === t.id ? '#f3f4f6' : '#7d8596', background: tab === t.id ? '#1b1f2b' : 'transparent', border: `1px solid ${tab === t.id ? '#2e3446' : 'transparent'}` }}>{t.label}</button>
           ))}
@@ -144,6 +150,11 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
         <span><span style={{ color: '#7d8596' }}>At risk </span><b>{fmtMoney(atRisk)}</b></span>
         <span><span style={{ color: '#7d8596' }}>Bankroll </span><b>{fmtMoney(bankroll)}</b> <span style={{ color: bankroll >= rules.startBankrollCents ? '#57f287' : '#ef4444' }}>{fmtMoney(bankroll - rules.startBankrollCents, { sign: true })}</span></span>
         {mine && <span><span style={{ color: '#7d8596' }}>Rank </span><b>{mine.rank}</b> of {board.length}</span>}
+        {lifelineOpen && tab !== 'blackjack' && (
+          <button type="button" onClick={() => setTab('blackjack')} className="contest-chip" style={{ fontSize: 12, color: '#9ca3af', minHeight: 44 }}>
+            Under {fmtMoney(rules.blackjackThresholdCents, { whole: true })}: the blackjack table is open
+          </button>
+        )}
       </div>
 
       <div className={`grid gap-4 items-start ${showRail ? 'lg:grid-cols-[minmax(0,1fr)_340px]' : ''}`}>
@@ -152,6 +163,12 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
           {tab === 'bets' && <MyBets bets={bets} games={feed.games} rules={rules} now={now} onCashOut={cashOut} />}
           {tab === 'pool' && <Pool bets={feed.pool} games={feed.games} />}
           {tab === 'leaders' && <Leaderboard rows={board} start={rules.startBankrollCents} />}
+          {(lifelineOpen || tab === 'blackjack') && (
+            <div hidden={tab !== 'blackjack'}>
+              <BlackjackTable balanceCents={balance} bankrollCents={bankroll} thresholdCents={rules.blackjackThresholdCents} minChipCents={rules.blackjackMinChipCents}
+                onMoney={d => setBalance(b => b + d)} />
+            </div>
+          )}
           <details style={{ margin: '10px 2px 0', maxWidth: '70ch' }}>
             <summary className="mono" style={{ fontSize: 12, color: '#9ca3af', cursor: 'pointer' }}>How it works</summary>
             <ul className="mono" style={{ fontSize: 12, color: '#9ca3af', lineHeight: 1.6, margin: '8px 0 0', paddingLeft: 16 }}>
@@ -167,7 +184,7 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
         {showRail && <aside className="lg:sticky lg:top-4" aria-label="Bet Slip panel">{panel}</aside>}
       </div>
 
-      {isMobile && (
+      {isMobile && slipVisible && (
         <>
           <button type="button" onClick={() => setSheet(true)} className="btn-primary mono" aria-label={`Open Bet Slip, ${slip.picks.length} picks`}
             style={{ position: 'fixed', left: 16, right: 16, bottom: 'calc(72px + env(safe-area-inset-bottom))', height: 46, zIndex: 40, fontSize: 14, fontWeight: 600 }}>

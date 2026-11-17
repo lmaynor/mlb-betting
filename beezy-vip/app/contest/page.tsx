@@ -17,7 +17,9 @@ export const metadata: Metadata = {
  * The Bankroll Challenge. OFF by default: it answers 404 unless CONTEST_ENABLED is on (0 / false / off / no / empty all mean off).
  * Until the contest API exists (milestone M2) the page runs on SAMPLE data (lib/contest/fixture.ts) and says so in its header.
  */
-export default function ContestPage() {
+export default async function ContestPage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> } = {}) {
   if (!contestEnabled()) notFound()
-  return <ContestClient feed={sampleFeed(new Date().toISOString())} />
+  // ?preview=broke shows the hidden blackjack lifeline on the sample data (a player down to $40); it changes nothing else
+  const sp = (await searchParams) ?? {}
+  return <ContestClient feed={sampleFeed(new Date().toISOString(), { broke: sp.preview === 'broke' })} />
 }

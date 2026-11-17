@@ -11,10 +11,12 @@ describe('/contest page', () => {
     const { default: ContestPage } = await import('@/app/contest/page')
     for (const v of [undefined, '', '0', 'false', 'off', 'no']) {
       if (v === undefined) delete process.env.CONTEST_ENABLED; else process.env.CONTEST_ENABLED = v
-      expect(() => ContestPage()).toThrow()                       // next/navigation notFound() throws NEXT_HTTP_ERROR_FALLBACK;404
+      await expect(ContestPage()).rejects.toThrow()               // next/navigation notFound() throws NEXT_HTTP_ERROR_FALLBACK;404
     }
     process.env.CONTEST_ENABLED = '1'
-    expect(() => ContestPage()).not.toThrow()
+    await expect(ContestPage()).resolves.toBeTruthy()
+    const broke = await ContestPage({ searchParams: Promise.resolve({ preview: 'broke' }) }) as { props: { feed: { balanceCents: number } } }
+    expect(broke.props.feed.balanceCents).toBe(4_000)                // the hidden lifeline preview
   })
 
   const FILES = ['app/contest/page.tsx', 'components/contest/board.tsx', 'components/contest/bets-table.tsx', 'components/contest/contest-client.tsx',

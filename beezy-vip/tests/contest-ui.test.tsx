@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import * as bjLib from '@/lib/contest/blackjack'
 import { ContestClient } from '@/components/contest/contest-client'
 import { sampleFeed } from '@/lib/contest/fixture'
 import { fmtMoney } from '@/lib/contest/odds'
@@ -481,6 +482,95 @@ describe('Bankroll Challenge page', () => {
     }
     expect(screen.queryByRole('button', { name: 'Edit name' })).not.toBeInTheDocument()          // three changes used
     expect(screen.getByText('No renames left')).toBeInTheDocument()
+  })
+
+  it('the blackjack table does not exist for a healthy bankroll', () => {
+    open()
+    expect(screen.queryByRole('tab', { name: 'Blackjack' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/blackjack table is open/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Blackjack table' })).not.toBeInTheDocument()
+  })
+
+  describe('the hidden blackjack lifeline (bankroll under $100)', () => {
+    const broke = () => render(<ContestClient feed={sampleFeed(NOW, { broke: true })} />)
+    const rig = (...decks: string[][]) => { const spy = jest.spyOn(bjLib, 'newDeck'); decks.forEach(d => spy.mockReturnValueOnce(d)); return spy }
+    afterEach(() => { jest.restoreAllMocks() })
+    const sit = () => { fireEvent.click(screen.getByRole('button', { name: /blackjack table is open/ })) }
+    const shows = (amount: string) => expect(standing().getAllByText(amount).length).toBeGreaterThan(0)       // Available and Bankroll agree when nothing is at risk
+    const wager = (v: string) => fireEvent.change(screen.getByLabelText('Wager'), { target: { value: v } })
+
+    it('appears as a tab and a quiet nudge, and the nudge opens it', () => {
+      broke()
+      expect(screen.getByRole('tab', { name: 'Blackjack' })).toBeInTheDocument()
+      expect(screen.getByText('Under $100: the blackjack table is open')).toBeInTheDocument()
+      sit()
+      expect(screen.getByRole('region', { name: 'Blackjack table' })).toBeVisible()
+      expect(screen.queryByText(/blackjack table is open/)).not.toBeInTheDocument()            // the nudge goes once you are at the table
+    })
+
+    it('stakes from the balance, hides the hole card until the hand ends, and pays a win', () => {
+      rig(['TS', '7H', 'TD', 'TD'])                                                              // you 20, dealer 17 (hole card ten)
+      broke()
+      sit()
+      wager('20')
+      fireEvent.click(btn('Deal'))
+      shows('$20.00')                                // $40 - $20 staked
+      expect(screen.getByRole('img', { name: 'Face-down card' })).toBeInTheDocument()
+      expect(screen.queryByRole('img', { name: '10 of diamonds' })).toBeInTheDocument()          // your own ten; the dealer's hole card is the face-down one
+      fireEvent.click(btn('Stand'))
+      expect(screen.queryByRole('img', { name: 'Face-down card' })).not.toBeInTheDocument()
+      expect(screen.getByRole('region', { name: 'Blackjack table' })).toHaveTextContent('You win. $40.00 returned.')
+      shows('$60.00')                                // $20 + $40 back
+    })
+
+    it('a loss costs only the stake, and doubling stakes a second time', () => {
+      rig(['TS', 'TH', '8D', '9D'], ['5S', 'TH', '6D', '7D', 'TC'])
+      broke()
+      sit()
+      wager('10')
+      fireEvent.click(btn('Deal'))
+      fireEvent.click(btn('Stand'))                                                              // 18 against 19
+      expect(screen.getByRole('region', { name: 'Blackjack table' })).toHaveTextContent('Dealer wins.')
+      shows('$30.00')
+      wager('10')
+      fireEvent.click(btn('Deal again'))
+      fireEvent.click(btn('Double'))                                                             // 11 + 10 = 21 against 17, $20 in play
+      expect(screen.getByRole('region', { name: 'Blackjack table' })).toHaveTextContent('You win.')
+      shows('$50.00')                                // $30 - $20 + $40
+    })
+
+    it('winnings stop at a $100 bankroll, and the table then closes', () => {
+      rig(['TS', '7H', 'TD', 'TD'], ['TS', '7H', 'TD', 'TD'])
+      broke()
+      sit()
+      wager('40')
+      fireEvent.click(btn('Deal'))
+      fireEvent.click(btn('Stand'))                                                              // $0 + $80 back: bankroll $80
+      shows('$80.00')
+      wager('60')
+      fireEvent.click(btn('Deal again'))
+      fireEvent.click(btn('Stand'))                                                              // payout $120, but only $80 is allowed: bankroll lands on exactly $100
+      const table = screen.getByRole('region', { name: 'Blackjack table' })
+      expect(table).toHaveTextContent('Winnings stop at a $100 bankroll, so $80.00 of $120.00 was paid.')
+      shows('$100.00')
+      expect(table).toHaveTextContent('The table is closed. You are back at $100.')
+      tab('Board')
+      expect(screen.queryByRole('tab', { name: 'Blackjack' })).not.toBeInTheDocument()          // the hidden feature goes back into hiding
+    })
+
+    it('validates the wager and cannot be dealt a bet it cannot afford', () => {
+      broke()
+      sit()
+      expect(btn('Deal')).toBeDisabled()
+      wager('0.50')
+      expect(screen.getByRole('region', { name: 'Blackjack table' })).toHaveTextContent('Minimum wager is $1.00')
+      wager('41')
+      expect(screen.getByRole('region', { name: 'Blackjack table' })).toHaveTextContent('Maximum wager is $40.00')
+      expect(btn('Deal')).toBeDisabled()
+      fireEvent.click(btn('Add $5.00 to wager'))
+      wager('5')
+      expect(btn('Deal')).toBeEnabled()
+    })
   })
 
   it('uses Title Case for Bet Slip, Round Robin, My Bets and Place Bet', () => {
