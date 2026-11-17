@@ -6,8 +6,13 @@ game that has started or finished, so quotes are only read from `pre` events; th
 
 Field conventions (checked against a live 2026-11-21 college football payload): `spread` is the HOME handicap (home +5.5 when the away
 team is favoured); `pointSpread.<side>.close.line` is "+5.5" / "-5.5"; `total.over.close.line` is "o47.5"; every `odds` is an American
-price string ("-112", "+185"). `curatedRank.current` is 99 for an unranked team. Football `situation` fields are read defensively: they
-have not been confirmed on a live payload yet.
+price string ("-112", "+185"). `curatedRank.current` is 99 for an unranked team.
+
+Football `situation`, checked on a LIVE payload (EMU at WMU, 2026-11-17): on a normal down it carries `down`, `distance`, `yardLine`,
+`downDistanceText` ("1st & 10 at EMU 16"), `shortDownDistanceText`, `possessionText` (the FIELD position, not who has the ball) and
+`isRedZone`; between plays (after a score, before the snap) `down` and `distance` are -1 and no text is present. It carried NO team id for
+possession, so the possession dot only appears if ESPN supplies `situation.possession`; it is never guessed from the yard-line text.
+The red-zone flag is read only on a live down (after a touchdown ESPN reports isRedZone with no down).
 """
 from __future__ import annotations
 
@@ -118,7 +123,7 @@ def parse_event(ev: dict) -> dict | None:
             dd = sit.get("downDistanceText") or sit.get("shortDownDistanceText")
             if dd:
                 state["down_distance"] = str(dd)
-            if sit.get("isRedZone"):
+            if sit.get("isRedZone") and (_num(sit.get("down")) or 0) > 0:
                 state["red_zone"] = True
         out["state"] = state
     return out

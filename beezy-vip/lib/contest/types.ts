@@ -17,8 +17,9 @@ export interface TeamRef {
 
 /**
  * Live or final game state, refreshed from the ESPN scoreboard (its `status`, `competitors[].score` and, for football, `situation`).
- * Absent before kickoff. `downDistance` and `possession` are football-only and UNCONFIRMED against a live payload (no football game
- * was live when this was written); basketball and every final carry just the score and the status line.
+ * Absent before kickoff. `downDistance` is football-only, checked against a live payload 2026-11-17 (present on a normal down, absent between plays);
+ * `possession` is only set when ESPN supplies a possession team id, which that payload did not. Basketball and every final carry just the
+ * score and the status line.
  */
 export interface GameState {
   homeScore: number

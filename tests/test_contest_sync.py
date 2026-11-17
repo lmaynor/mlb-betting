@@ -146,3 +146,22 @@ def test_include_filters_games_out(world):
     r = sync_events(engine, cid, [parse_event(event("1", notes=[{"headline": "Rose Bowl"}])), parse_event(event("2"))], NOW,
                     include=lambda e: "Bowl" in e["round"])
     assert r["games"] == 1
+
+
+def _live(situation):
+    e = event(state="in", name="STATUS_IN_PROGRESS", scores=("6", "0"), situation=situation)
+    return parse_event(e)["state"]
+
+
+def test_the_live_football_payloads_seen_on_2026_11_17():
+    # a normal down: the text ESPN sends, with no possession team id (so no dot)
+    on_down = {"down": 1, "yardLine": 84, "distance": 10, "downDistanceText": "1st & 10 at EMU 16", "shortDownDistanceText": "1st & 10",
+               "possessionText": "EMU 16", "isRedZone": False, "homeTimeouts": 3, "awayTimeouts": 3}
+    assert _live(on_down) == {"detail": "8:42 - 3rd Quarter", "possession": None, "down_distance": "1st & 10 at EMU 16"}
+    # right after a touchdown: down and distance are -1, no text, and ESPN still says red zone: nothing is shown
+    after_td = {"down": -1, "yardLine": 100, "distance": 0, "isRedZone": True, "homeTimeouts": 3, "awayTimeouts": 3}
+    assert _live(after_td) == {"detail": "8:42 - 3rd Quarter", "possession": None}
+    # a red-zone DOWN does carry the flag
+    assert _live({**on_down, "down": 2, "downDistanceText": "2nd & 3 at EMU 5", "isRedZone": True})["red_zone"] is True
+    # when ESPN does send the possession team id it is used (home id 2305 in this fixture)
+    assert _live({**on_down, "possession": "2305"})["possession"] == "home"
