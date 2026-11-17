@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { ContestClient } from '@/components/contest/contest-client'
 import { sampleFeed } from '@/lib/contest/fixture'
 import { fmtMoney } from '@/lib/contest/odds'
@@ -361,6 +361,74 @@ describe('Bankroll Challenge page', () => {
     fireEvent.click(btn('Ohio State spread -6.5 -110'))
     tab('Leaderboard')
     expect(screen.getByLabelText('Bet Slip panel')).toBeInTheDocument()                       // a slip in progress stays reachable
+  })
+
+  it('My Bets offers a cash out, and a bet bought before the line moved can pay above its stake', () => {
+    open()
+    tab('My Bets')
+    const cash = screen.getByRole('button', { name: /^Cash out \$120\.3\d$/ })              // the sample parlay: both lines have since moved its way
+    expect(cash).toHaveTextContent(/^Cash Out \$120\.3\d$/)
+    expect(screen.getByText(/^\+\$20\.3\d vs risk$/)).toBeInTheDocument()
+  })
+
+  it('cashing out asks first (inline, no modal), then credits the bankroll and closes the bet', () => {
+    open()
+    tab('My Bets')
+    fireEvent.click(screen.getByRole('button', { name: /^Cash out \$/ }))
+    expect(screen.getByRole('group', { name: 'Confirm cash out' })).toHaveTextContent(/Cash out for \$120\.3\d\?/)
+    fireEvent.click(btn('Cancel'))
+    expect(screen.queryByRole('group', { name: 'Confirm cash out' })).not.toBeInTheDocument()
+    expect(standing().getByText('$100.00')).toBeInTheDocument()                                  // still at risk
+    fireEvent.click(screen.getByRole('button', { name: /^Cash out \$/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Confirm \$120/ }))
+    expect(standing().getByText('$0.00')).toBeInTheDocument()                                    // nothing at risk any more
+    expect(standing().getAllByText('$5,202.17')).toHaveLength(2)                                 // Available and Bankroll now agree: $5,081.82 + $120.35
+    expect(screen.getByRole('table', { name: 'My Bets' })).toHaveTextContent('CASHED OUT')
+    expect(screen.queryByRole('button', { name: /^Cash out/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent(/Cashed out Parlay for \$120\.3\d \(\+\$20\.3\d vs risk\)/)
+  })
+
+  it('a bet placed at the current prices cashes out below its stake (the vig and the margin)', () => {
+    open()
+    tab('Straight')
+    fireEvent.click(btn('Ohio State spread -6.5 -110'))
+    stake('100')
+    fireEvent.click(place('$100.00'))
+    fireEvent.click(btn('View My Bets'))
+    expect(screen.getAllByRole('button', { name: /^Cash out \$/ })).toHaveLength(2)             // the sample parlay and the new straight
+    expect(screen.getByRole('button', { name: /^Cash out \$90\.\d\d$/ })).toBeInTheDocument()
+    expect(screen.getByText(/^-\$9\.\d\d vs risk$/)).toBeInTheDocument()
+  })
+
+  it('says why a bet cannot be cashed out: a teaser, or a game too close to kickoff', () => {
+    open()
+    tab('Teaser')
+    fireEvent.click(btn('Ohio State spread -6.5 -110'))
+    fireEvent.click(btn('Georgia spread -3.5 -112'))
+    stake('50')
+    fireEvent.click(place('$50.00'))
+    fireEvent.click(btn('View My Bets'))
+    expect(screen.getByText('Not offered on teasers')).toBeInTheDocument()
+    cleanup()
+    render(<ContestClient feed={{ ...feed(), nowIso: '2026-12-19T16:50:00Z' }} />)                // Ohio State kicks off at 17:00Z: inside the 15-minute close
+    tab('My Bets')
+    expect(screen.getByText('Closed for cash out')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Cash out/ })).not.toBeInTheDocument()
+  })
+
+  it('a round robin cashes out as one group', () => {
+    open()
+    tab('Round Robin')
+    for (const n of ['Ohio State spread -6.5 -110', 'Georgia spread -3.5 -112', 'Indiana spread -4 -110']) fireEvent.click(btn(n))
+    stake('25')
+    fireEvent.click(place('$75.00'))
+    fireEvent.click(btn('View My Bets'))
+    const rr = screen.getAllByRole('button', { name: /^Cash out \$/ })                          // the sample parlay and the round robin
+    expect(rr).toHaveLength(2)
+    fireEvent.click(rr[1])
+    fireEvent.click(screen.getByRole('button', { name: /^Confirm \$/ }))
+    expect(screen.getByText(`Round Robin ${MID} 3 parlays`).closest('tr')).toHaveTextContent('CASHED OUT')
+    expect(screen.getAllByRole('button', { name: /^Cash out \$/ })).toHaveLength(1)              // only the sample parlay is left
   })
 
   it('uses Title Case for Bet Slip, Round Robin, My Bets and Place Bet', () => {

@@ -20,6 +20,9 @@ export const SAMPLE_RULES: ContestRules = {
   roundRobinMaxParlays: 500,
   roundRobinMinUnitCents: 500,
   closeBufferMin: 15,
+  cashoutEnabled: true,
+  cashoutMarginBp: 500,
+  cashoutSigma: { spread: 13.5, total: 13.0 },
   teaser: { '6.0': { '2': -120, '3': 160, '4': 260 }, '6.5': { '2': -130, '3': 140, '4': 240 }, '7.0': { '2': -140, '3': 120, '4': 200 } },
 }
 
@@ -61,7 +64,7 @@ const MY_BETS: PlacedBet[] = [
   { id: 'b1', kind: 'straight', groupId: null, stakeCents: 20_000, toWinCents: 18_182, status: 'won', placedAt: '2026-11-15T15:00:00Z', teaserPoints: 0,
     legs: [LEG(11, 'spread', 'away', 3.5, -110, 'win')] },
   { id: 'b2', kind: 'parlay', groupId: null, stakeCents: 10_000, toWinCents: 26_446, status: 'pending', placedAt: '2026-11-16T16:00:00Z', teaserPoints: 0,
-    legs: [LEG(1, 'spread', 'home', -6.5, -110), LEG(3, 'total', 'under', 47.5, -110)] },
+    legs: [LEG(1, 'spread', 'home', -3.5, -110), LEG(3, 'total', 'under', 50.5, -110)] },
 ]
 
 const POOL: PoolBet[] = [

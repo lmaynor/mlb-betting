@@ -5,7 +5,7 @@
 export type Market = 'spread' | 'total' | 'ml'
 export type Side = 'home' | 'away' | 'over' | 'under'
 export type BetKind = 'straight' | 'parlay' | 'teaser' | 'round_robin'
-export type BetStatus = 'pending' | 'won' | 'lost' | 'push' | 'void'
+export type BetStatus = 'pending' | 'won' | 'lost' | 'push' | 'void' | 'cashed_out'
 
 export interface TeamRef {
   abbr: string
@@ -70,6 +70,10 @@ export interface ContestRules {
   /** Minimum stake PER PARLAY in a round robin (placeholder; lower than a normal bet so 55 parlays fit the cap). */
   roundRobinMinUnitCents: number
   closeBufferMin: number
+  /** Cash out: value = payout x P(win now) x (1 - margin). Margin and sigmas are PLACEHOLDERS (see contest/rules.py). */
+  cashoutEnabled: boolean
+  cashoutMarginBp: number
+  cashoutSigma: { spread: number; total: number }
   /** {points: {legs: American price}}. PLACEHOLDERS until the real rulebook is supplied (see contest/rules.py). */
   teaser: Record<string, Record<string, number>>
 }
@@ -80,6 +84,8 @@ export interface PlacedBet {
   groupId: string | null
   stakeCents: number
   toWinCents: number
+  /** What a cashed-out bet paid. */
+  payoutCents?: number
   status: BetStatus
   placedAt: string
   teaserPoints: number

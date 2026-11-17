@@ -43,6 +43,13 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
     return { ...s, kind, picks: next }
   }) }, [])
 
+  // SAMPLE MODE: a cash out only updates this page's own state; the server re-prices and refuses if the number moved (store.cash_out)
+  const cashOut = useCallback((offers: { id: string; cents: number }[]) => {
+    const paid = new Map(offers.map(o => [o.id, o.cents]))
+    setBets(bs => bs.map(b => paid.has(b.id) ? { ...b, status: 'cashed_out' as const, payoutCents: paid.get(b.id) } : b))
+    setBalance(b => b + offers.reduce((a, o) => a + o.cents, 0))
+  }, [])
+
   const atRisk = useMemo(() => bets.filter(b => b.status === 'pending').reduce((a, b) => a + b.stakeCents, 0), [bets])
 
   const place = useCallback((stake: number) => {
@@ -107,7 +114,7 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
       <div className={`grid gap-4 items-start ${showRail ? 'lg:grid-cols-[minmax(0,1fr)_340px]' : ''}`}>
         <div className="min-w-0">
           {tab === 'board' && <Board games={feed.games} picks={slip.picks} now={now} rules={rules} onToggle={toggle} />}
-          {tab === 'bets' && <MyBets bets={bets} games={feed.games} />}
+          {tab === 'bets' && <MyBets bets={bets} games={feed.games} rules={rules} now={now} onCashOut={cashOut} />}
           {tab === 'pool' && <Pool bets={feed.pool} games={feed.games} />}
           {tab === 'leaders' && <Leaderboard rows={feed.leaderboard} start={rules.startBankrollCents} />}
           <details style={{ margin: '10px 2px 0', maxWidth: '70ch' }}>

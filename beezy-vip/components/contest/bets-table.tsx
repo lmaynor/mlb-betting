@@ -4,15 +4,16 @@
 import { Fragment, useState } from 'react'
 import { LockGlyph } from '@/components/ui/lock-glyph'
 import { fmtLineSigned, fmtMoney, fmtPrice } from '@/lib/contest/odds'
-import type { BetKind, BetStatus, BoardGame, PlacedBet, PoolBet } from '@/lib/contest/types'
+import { CASHOUT_REASON_TEXT, cashoutGroup } from '@/lib/contest/cashout'
+import type { BetKind, BetStatus, BoardGame, ContestRules, PlacedBet, PoolBet } from '@/lib/contest/types'
 
 const TH: React.CSSProperties = { fontSize: 10, fontWeight: 600, color: '#7d8596', background: '#11131a', padding: '9px 10px', borderBottom: '1px solid #1e2230', position: 'sticky', top: 0, textAlign: 'left', whiteSpace: 'nowrap' }
 const TD: React.CSSProperties = { fontSize: 13, color: '#f3f4f6', padding: '9px 10px', borderBottom: '1px solid #151822', verticalAlign: 'top' }
 const WRAP: React.CSSProperties = { background: '#11131a', border: '1px solid #1e2230', borderRadius: 8, overflow: 'hidden' }
 export const KIND_LABEL: Record<BetKind, string> = { straight: 'Straight', parlay: 'Parlay', teaser: 'Teaser', round_robin: 'Round Robin' }
-const STATUS_TONE: Record<BetStatus, string> = { pending: '#9ca3af', won: '#57f287', lost: '#ef4444', push: '#94a3b8', void: '#94a3b8' }
+const STATUS_TONE: Record<BetStatus, string> = { pending: '#9ca3af', won: '#57f287', lost: '#ef4444', push: '#94a3b8', void: '#94a3b8', cashed_out: '#9ca3af' }
 
-export const StatusText = ({ s, label }: { s: BetStatus; label?: string }) => <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: STATUS_TONE[s] }}>{label ?? s.toUpperCase()}</span>
+export const StatusText = ({ s, label }: { s: BetStatus; label?: string }) => <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: STATUS_TONE[s] }}>{label ?? s.replace('_', ' ').toUpperCase()}</span>
 
 type LegLike = { gameId: number; market: 'spread' | 'total' | 'ml'; side: 'home' | 'away' | 'over' | 'under'; line: number | null; price: number }
 export function legText(l: LegLike, byId: Map<number, BoardGame>): string {
@@ -23,29 +24,70 @@ export function legText(l: LegLike, byId: Map<number, BoardGame>): string {
   return `${team} ML ${fmtPrice(l.price)}`
 }
 
-interface Row { key: string; kind: BetKind; label: string; stake: number; toWin: number; status: BetStatus; statusLabel?: string; legs: PlacedBet['legs']; children?: PlacedBet[] }
+interface Row { key: string; kind: BetKind; label: string; stake: number; toWin: number; status: BetStatus; statusLabel?: string; legs: PlacedBet['legs']; children?: PlacedBet[]; bets: PlacedBet[] }
 
 function fold(bets: PlacedBet[]): Row[] {
   const rows: Row[] = []
   const groups = new Map<string, PlacedBet[]>()
   for (const b of bets) {
     if (b.groupId) { (groups.get(b.groupId) ?? groups.set(b.groupId, []).get(b.groupId)!).push(b); continue }
-    rows.push({ key: b.id, kind: b.kind, label: KIND_LABEL[b.kind], stake: b.stakeCents, toWin: b.toWinCents, status: b.status, legs: b.legs })
+    rows.push({ key: b.id, kind: b.kind, label: KIND_LABEL[b.kind], stake: b.stakeCents, toWin: b.toWinCents, status: b.status, legs: b.legs, bets: [b] })
   }
   for (const [id, kids] of groups) {
-    const won = kids.filter(k => k.status === 'won').length, lost = kids.filter(k => k.status === 'lost').length, open = kids.filter(k => k.status === 'pending').length
+    const n = (s: BetStatus) => kids.filter(k => k.status === s).length
+    const won = n('won'), lost = n('lost'), open = n('pending'), cashed = n('cashed_out')
     const uniq = new Map(kids.flatMap(k => k.legs).map(l => [`${l.gameId}${l.market}${l.side}`, l]))
-    rows.push({ key: id, kind: 'round_robin', label: `Round Robin \u00b7 ${kids.length} parlays`, stake: kids.reduce((s, k) => s + k.stakeCents, 0), toWin: kids.reduce((s, k) => s + k.toWinCents, 0),
-      status: open ? 'pending' : won ? 'won' : 'lost', statusLabel: open ? `${open} OPEN` : `${won} WON ${lost} LOST`, legs: [...uniq.values()], children: kids })
+    const tail = cashed ? ` ${cashed} CASHED OUT` : ''
+    rows.push({ key: id, kind: 'round_robin', label: `Round Robin \u00b7 ${kids.length} parlays`, stake: kids.reduce((a, k) => a + k.stakeCents, 0), toWin: kids.reduce((a, k) => a + k.toWinCents, 0),
+      status: open ? 'pending' : cashed === kids.length ? 'cashed_out' : won ? 'won' : 'lost', statusLabel: open ? `${open} OPEN${tail}` : cashed === kids.length ? 'CASHED OUT' : `${won} WON ${lost} LOST${tail}`,
+      legs: [...uniq.values()], children: kids, bets: kids })
   }
   return rows
 }
 
-export function MyBets({ bets, games }: { bets: PlacedBet[]; games: BoardGame[] }) {
+const BTN: React.CSSProperties = { fontSize: 12, fontWeight: 600, padding: '6px 10px', minHeight: 44, borderRadius: 6, border: '1px solid #2e3446', background: '#171a24', color: '#f3f4f6' }
+
+/** The cash-out control under an open bet's status: the value now, or the reason it is not offered; asking opens an inline Confirm / Cancel (no modal). */
+function CashoutControl({ row, rules, byId, now, confirming, setConfirming, onConfirm }: {
+  row: Row; rules: ContestRules; byId: Map<number, BoardGame>; now: number
+  confirming: boolean; setConfirming: (key: string | null) => void; onConfirm: (row: Row, offers: { id: string; cents: number }[], cents: number, stake: number) => void
+}) {
+  const c = cashoutGroup(row.bets, byId, rules, now)
+  if (!c.ok) return c.reason === 'disabled' || c.reason === 'settled' ? null : <div className="mono" style={{ fontSize: 12, color: '#7d8596', marginTop: 6 }}>{CASHOUT_REASON_TEXT[c.reason]}</div>
+  const delta = c.cents - c.stakeCents
+  return (
+    <div style={{ marginTop: 6 }}>
+      {confirming ? (
+        <div role="group" aria-label="Confirm cash out">
+          <div className="mono" style={{ fontSize: 12, color: '#f3f4f6', marginBottom: 6 }}>Cash out for {fmtMoney(c.cents)}?</div>
+          <div className="flex gap-2">
+            <button type="button" className="btn-primary" style={{ ...BTN, border: undefined, background: undefined, color: undefined }} onClick={e => { e.stopPropagation(); onConfirm(row, c.offers, c.cents, c.stakeCents) }}>Confirm {fmtMoney(c.cents)}</button>
+            <button type="button" className="btn-ghost" style={BTN} onClick={e => { e.stopPropagation(); setConfirming(null) }}>Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <button type="button" className="contest-chip" style={BTN} aria-label={`Cash out ${fmtMoney(c.cents)}`} onClick={e => { e.stopPropagation(); setConfirming(row.key) }}>Cash Out {fmtMoney(c.cents)}</button>
+      )}
+      <div className="mono" style={{ fontSize: 12, marginTop: 4, color: delta >= 0 ? '#57f287' : '#9ca3af' }}>{fmtMoney(delta, { sign: true })} vs risk</div>
+    </div>
+  )
+}
+
+export function MyBets({ bets, games, rules, now, onCashOut }: {
+  bets: PlacedBet[]; games: BoardGame[]; rules: ContestRules; now: number; onCashOut: (offers: { id: string; cents: number }[]) => void
+}) {
   const [open, setOpen] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const byId = new Map(games.map(g => [g.id, g]))
   const rows = fold(bets)
   if (rows.length === 0) return <p style={{ ...WRAP, padding: 20, fontSize: 13, color: '#7d8596', margin: 0 }}>No bets yet. Your picks are always visible to you and hidden from everyone else until kickoff.</p>
+  const confirm = (row: Row, offers: { id: string; cents: number }[], cents: number, stake: number) => {
+    onCashOut(offers)
+    setConfirming(null)
+    setNotice(`Cashed out ${row.label} for ${fmtMoney(cents)} (${fmtMoney(cents - stake, { sign: true })} vs risk).`)
+  }
+  const paid = (r: Row) => r.bets.filter(b => b.status === 'cashed_out').reduce((a, b) => a + (b.payoutCents ?? 0), 0)
   return (
     <div style={WRAP}>
       <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }} aria-label="My Bets">
@@ -57,8 +99,12 @@ export function MyBets({ bets, games }: { bets: PlacedBet[]; games: BoardGame[] 
                 <td style={{ ...TD, whiteSpace: 'nowrap' }}>{r.label}{r.children && <span className="mono" style={{ color: '#7d8596', marginLeft: 6 }}>{open === r.key ? '-' : '+'}</span>}</td>
                 <td style={TD}>{r.legs.map((l, i) => <div key={i} className="mono" style={{ fontSize: 12, color: '#d1d5db' }}>{legText(l, byId)}</div>)}</td>
                 <td className="mono" style={{ ...TD, textAlign: 'right' }}>{fmtMoney(r.stake)}</td>
-                <td className="mono" style={{ ...TD, textAlign: 'right', color: '#57f287' }}>{fmtMoney(r.toWin)}</td>
-                <td style={TD}><StatusText s={r.status} label={r.statusLabel} /></td>
+                <td className="mono" style={{ ...TD, textAlign: 'right', color: r.status === 'cashed_out' ? '#7d8596' : '#57f287' }}>{r.status === 'cashed_out' ? '--' : fmtMoney(r.toWin)}</td>
+                <td style={TD}>
+                  <StatusText s={r.status} label={r.statusLabel} />
+                  {paid(r) > 0 && <div className="mono" style={{ fontSize: 12, marginTop: 4, color: paid(r) >= r.stake ? '#57f287' : '#9ca3af' }}>{fmtMoney(paid(r))} ({fmtMoney(paid(r) - r.stake, { sign: true })})</div>}
+                  {r.status === 'pending' && <CashoutControl row={r} rules={rules} byId={byId} now={now} confirming={confirming === r.key} setConfirming={setConfirming} onConfirm={confirm} />}
+                </td>
               </tr>
               {r.children && open === r.key && (
                 <tr><td colSpan={5} style={{ ...TD, background: '#0e1017', padding: '8px 10px 8px 24px' }}>
@@ -74,6 +120,7 @@ export function MyBets({ bets, games }: { bets: PlacedBet[]; games: BoardGame[] 
           ))}
         </tbody>
       </table>
+      {notice && <p role="status" className="mono" style={{ margin: 0, padding: '8px 12px', fontSize: 12, color: '#9ca3af', borderTop: '1px solid #151822' }}>{notice}</p>}
     </div>
   )
 }

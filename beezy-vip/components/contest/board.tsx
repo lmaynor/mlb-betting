@@ -76,7 +76,7 @@ function Cell({ g, market, picks, now, rules, onToggle }: { g: BoardGame; market
   const sides: [Side, Side] = market === 'total' ? ['over', 'under'] : ['away', 'home']
   const q = market === 'spread' ? g.spread : market === 'total' ? g.total : g.ml
   return (
-    <td style={TD}>
+    <td style={{ ...TD, opacity: closed ? 0.6 : 1 }}>   {/* only the prices fade when betting is closed; the score and game state stay at full strength */}
       <div className="grid gap-1">
         {sides.map(side => {
           const pick = q ? makePick(g, market, side) : null
@@ -116,7 +116,7 @@ export function Board({ games, picks, now, rules, onToggle }: { games: BoardGame
               {s.games.map(g => {
                 const c = gameClosed(g, now, rules)
                 return (
-                  <tr key={g.id} data-game={g.id} className="contest-row" style={{ opacity: c.closed ? 0.55 : 1 }}>
+                  <tr key={g.id} data-game={g.id} className="contest-row">
                     <td style={{ ...TD, paddingLeft: 12 }}>
                       <div className="grid gap-1">
                         <Team g={g} side="away" /><Team g={g} side="home" />
