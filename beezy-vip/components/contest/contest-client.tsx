@@ -16,9 +16,11 @@ import type { BetKind, ContestFeed, Pick, PlacedBet, Receipt } from '@/lib/conte
 import { Board } from './board'
 import { MyBets, Pool } from './bets-table'
 import { JoinPanel, type JoinResult } from './join-panel'
+import { BankrollChart } from './bankroll-chart'
 import { BlackjackTable } from './blackjack-table'
 import { Leaderboard } from './leaderboard'
 import { NameEditor } from './name-editor'
+import { OddsFormatProvider, OddsFormatSelect } from './odds-format'
 import { SlipPanel } from './slip-panel'
 
 type Tab = 'board' | 'bets' | 'pool' | 'leaders' | 'blackjack'
@@ -34,7 +36,11 @@ const newKey = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? 
  * `slug` set (and `feed.sample` false) means LIVE: every action goes to /api/contest/<slug>/* and the page replaces its state with the fresh
  * feed the server returns. Without it the page runs on sample data and nothing leaves the browser.
  */
-export function ContestClient({ feed: initial, slug }: { feed: ContestFeed; slug?: string }) {
+export function ContestClient(props: { feed: ContestFeed; slug?: string }) {
+  return <OddsFormatProvider><ContestBody {...props} /></OddsFormatProvider>
+}
+
+function ContestBody({ feed: initial, slug }: { feed: ContestFeed; slug?: string }) {
   const live = !initial.sample && !!slug
   const [feed, setFeed] = useState(initial)
   const { rules } = feed
@@ -101,6 +107,16 @@ export function ContestClient({ feed: initial, slug }: { feed: ContestFeed; slug
     setBets(bs => bs.map(b => paid.has(b.id) ? { ...b, status: 'cashed_out' as const, payoutCents: paid.get(b.id) } : b))
     setBalance(b => b + offers.reduce((a, o) => a + o.cents, 0))
   }, [live, call, applyFeed, refresh])
+
+  // Bet Again: the same picks of a settled bet, back on the slip at TODAY's prices (a moved price is the board's, never the old one)
+  const rebet = useCallback((b: PlacedBet) => {
+    const picks = b.legs.map(l => { const g = feed.games.find(x => x.id === l.gameId); return g ? makePick(g, l.market, l.side) : null })
+    if (picks.some(p => p === null)) return
+    setReceipt(null)
+    setNotice(null)
+    setSlip(s => ({ ...s, kind: b.kind === 'round_robin' ? 'parlay' : b.kind, chosen: true, picks: picks as Pick[], teaserPoints: b.kind === 'teaser' ? b.teaserPoints : s.teaserPoints }))
+    setTab('board')
+  }, [feed.games])
 
   const atRisk = useMemo(() => bets.filter(b => b.status === 'pending').reduce((a, b) => a + b.stakeCents, 0), [bets])
 
@@ -253,6 +269,7 @@ export function ContestClient({ feed: initial, slug }: { feed: ContestFeed; slug
         <span><span style={{ color: '#7d8596' }}>Available </span><b>{fmtMoney(balance)}</b></span>
         <span><span style={{ color: '#7d8596' }}>At risk </span><b>{fmtMoney(atRisk)}</b></span>
         <span><span style={{ color: '#7d8596' }}>Bankroll </span><b>{fmtMoney(bankroll)}</b> <span style={{ color: bankroll >= rules.startBankrollCents ? '#57f287' : '#ef4444' }}>{fmtMoney(bankroll - rules.startBankrollCents, { sign: true })}</span></span>
+        <OddsFormatSelect />
         {mine && <span><span style={{ color: '#7d8596' }}>Rank </span><b>{mine.rank}</b> of {board.length}</span>}
         {lifelineOpen && tab !== 'blackjack' && (
           <button type="button" onClick={() => setTab('blackjack')} className="contest-chip" style={{ fontSize: 12, color: '#9ca3af', minHeight: 44 }}>
@@ -264,7 +281,8 @@ export function ContestClient({ feed: initial, slug }: { feed: ContestFeed; slug
       <div className={`grid gap-4 items-start ${showRail ? 'lg:grid-cols-[minmax(0,1fr)_340px]' : ''}`}>
         <div className="min-w-0">
           {tab === 'board' && <Board games={feed.games} picks={slip.picks} now={now} rules={rules} onToggle={toggle} />}
-          {tab === 'bets' && <MyBets bets={bets} games={feed.games} rules={rules} now={now} onCashOut={cashOut} />}
+          {tab === 'bets' && <BankrollChart points={feed.history ?? []} start={rules.startBankrollCents} />}
+          {tab === 'bets' && <MyBets bets={bets} games={feed.games} rules={rules} now={now} onCashOut={cashOut} onRebet={rebet} />}
           {tab === 'pool' && <Pool bets={feed.pool} games={feed.games} />}
           {tab === 'leaders' && <Leaderboard rows={board} start={rules.startBankrollCents} />}
           {(lifelineOpen || tab === 'blackjack') && (

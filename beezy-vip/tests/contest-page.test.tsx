@@ -55,7 +55,8 @@ describe('/contest page', () => {
   })
 
   const FILES = ['app/contest/page.tsx', 'components/contest/board.tsx', 'components/contest/bets-table.tsx', 'components/contest/contest-client.tsx',
-    'components/contest/leaderboard.tsx', 'components/contest/receipt.tsx', 'components/contest/slip-panel.tsx', 'components/contest/team-logo.tsx']
+    'components/contest/leaderboard.tsx', 'components/contest/receipt.tsx', 'components/contest/slip-panel.tsx', 'components/contest/team-logo.tsx',
+    'components/contest/admin-console.tsx', 'components/contest/bankroll-chart.tsx', 'components/contest/odds-format.tsx', 'app/contest/admin/page.tsx']
   const src = (f: string) => fs.readFileSync(path.resolve(__dirname, '..', f), 'utf8')
 
   it('uses only the repo type scale (10/11/12/13/14/16, 20 for the h1) and never text under 10px', () => {

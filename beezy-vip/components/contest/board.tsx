@@ -5,7 +5,8 @@
  * are dimmed and their buttons disabled. Section rows (round / day) are plain sub-rows, not extra tables.
  */
 import { Fragment } from 'react'
-import { fmtLineSigned, fmtPrice } from '@/lib/contest/odds'
+import { fmtLineSigned } from '@/lib/contest/odds'
+import { useFmtPrice } from './odds-format'
 import { periodFirst } from '@/lib/contest/state'
 import { gameClosed, makePick, samePick } from '@/lib/contest/slip'
 import type { BoardGame, ContestRules, Market, Pick, Side } from '@/lib/contest/types'
@@ -21,6 +22,7 @@ function OddsButton({ pick, line, price, selected, disabled, label, onToggle }: 
   pick: Pick | null; line: string; price: number | null; selected: boolean; disabled: boolean; label: string; onToggle: (p: Pick) => void
 }) {
   const off = disabled || !pick
+  const fmtPrice = useFmtPrice()
   return (
     <button type="button" disabled={off} aria-pressed={selected} aria-label={label} onClick={() => pick && onToggle(pick)}
       className="mono contest-odds" style={{
@@ -75,6 +77,7 @@ function StateLine({ g, closed, reason }: { g: BoardGame; closed: boolean; reaso
 }
 
 function Cell({ g, market, picks, now, rules, onToggle }: { g: BoardGame; market: Market; picks: Pick[]; now: number; rules: ContestRules; onToggle: (p: Pick) => void }) {
+  const fmtPrice = useFmtPrice()
   const closed = gameClosed(g, now, rules).closed
   const sides: [Side, Side] = market === 'total' ? ['over', 'under'] : ['away', 'home']
   const q = market === 'spread' ? g.spread : market === 'total' ? g.total : g.ml

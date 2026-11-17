@@ -34,6 +34,8 @@ export async function POST(req: Request, { params }: Ctx) {
   if (!isAction(action)) return NextResponse.json({ error: { code: 'NO_ROUTE', message: 'not found' } }, { status: 404 })
   const user = await contestUser()
   if (!user) return signIn()
+  // a seat in the contest needs a verified email: it is the cheapest check that one inbox is one account
+  if (action === 'join' && !user.emailVerified) return NextResponse.json({ error: { code: 'EMAIL_UNVERIFIED', message: 'Verify your email address in your account settings, then join.' } }, { status: 403 })
   const body = await req.json().catch(() => null)
   if (!body || typeof body !== 'object') return NextResponse.json({ error: { code: 'BAD_REQUEST', message: 'a JSON object body is required' } }, { status: 400 })
   const r = await postAction(slug, action, user.id, body)

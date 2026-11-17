@@ -7,7 +7,8 @@
 import { useState } from 'react'
 import { stepLine } from '@/lib/contest/margin'
 import { sgpPrice } from '@/lib/contest/sgp'
-import { fmtLineSigned, fmtMoney, fmtPrice, parseDollars } from '@/lib/contest/odds'
+import { fmtLineSigned, fmtMoney, parseDollars } from '@/lib/contest/odds'
+import { useFmtPrice } from './odds-format'
 import {
   makePick, previewParlay, previewRobin, previewSgp, previewStraight, previewTeaser, robinBreakdown, robinCount, slipIssue, teaserPointOptions, teasedLine, type Preview, type SlipState,
 } from '@/lib/contest/slip'
@@ -61,6 +62,7 @@ export function SlipPanel({ slip, games, rules, balanceCents, receipt, onDoneRec
   busy?: boolean
 }) {
   const [raw, setRaw] = useState('')
+  const fmtPrice = useFmtPrice()
   const byId = new Map(games.map(g => [g.id, g]))
   const stake = parseDollars(raw)
   const n = slip.picks.length

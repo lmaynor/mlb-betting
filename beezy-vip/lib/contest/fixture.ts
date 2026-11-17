@@ -78,6 +78,9 @@ const MY_BETS: PlacedBet[] = [
     legs: [LEG(1, 'spread', 'home', -3.5, -110), LEG(3, 'total', 'under', 50.5, -110)] },
 ]
 
+/** Invented: the sample player's bankroll after each settled bet (start, a win, a loss, a win, a loss, a win). */
+const HISTORY = [500_000, 520_000, 510_000, 540_909, 531_000, 518_182].map((cents, i) => ({ ts: `2026-11-1${i}T20:00:00Z`, cents }))
+
 const POOL: PoolBet[] = [
   { id: 'p1', owner: 'Marcus', kind: 'parlay', status: 'pending', stakeCents: null, legs: [null, null, null] },
   { id: 'p2', owner: 'Dani', kind: 'straight', status: 'pending', stakeCents: 25_000, legs: [{ gameId: 12, market: 'total', side: 'over', line: 52.5, price: -110 }] },
@@ -104,6 +107,7 @@ export function sampleFeed(nowIso: string, opts: { broke?: boolean } = {}): Cont
     nowIso,
     me: { joined: true, displayName: 'Alex', renamesLeft: 3, suggestedName: 'Alex' },
     balanceCents: opts.broke ? 4_000 : 508_182,
+    history: opts.broke ? HISTORY.map(p => ({ ...p, cents: Math.min(p.cents, 4_000) })).concat([{ ts: '2026-11-16T22:00:00Z', cents: 4_000 }]) : HISTORY,
     games: GAMES,
     myBets: opts.broke ? MY_BETS.filter(b => b.status !== 'pending') : MY_BETS,
     pool: POOL,

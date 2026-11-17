@@ -157,6 +157,8 @@ export interface ContestFeed {
   nowIso: string
   me: MeState
   balanceCents: number
+  /** The player's bankroll after each event that changed it, oldest first (contest/store.py bankroll_history). */
+  history?: { ts: string; cents: number }[]
   games: BoardGame[]
   myBets: PlacedBet[]
   pool: PoolBet[]

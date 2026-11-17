@@ -25,7 +25,7 @@ describe('no-slop-ui', () => {
     'components/picks/sport-board-page.tsx', 'components/picks/system-page.tsx', 'components/picks/system-methodology.tsx',
     'components/picks/systems-table.tsx', 'components/picks/filter-bar.tsx', 'components/picks/games-strip.tsx', 'components/picks/day-toggle.tsx',
     'components/contest/board.tsx', 'components/contest/slip-panel.tsx', 'components/contest/bets-table.tsx', 'components/contest/leaderboard.tsx', 'components/contest/contest-client.tsx',
-    'components/contest/receipt.tsx', 'components/contest/team-logo.tsx', 'app/contest/page.tsx',
+    'components/contest/receipt.tsx', 'components/contest/team-logo.tsx', 'app/contest/page.tsx', 'components/contest/admin-console.tsx', 'components/contest/bankroll-chart.tsx', 'components/contest/odds-format.tsx', 'app/contest/admin/page.tsx',
   ])('%s: no eyebrow+mood header, no gradient header, no card-per-row stack', (f) => {
     const src = read(f)
     expect(src).not.toMatch(/ui-display[^}]*clamp\(/)   // the mood-headline h1 style
