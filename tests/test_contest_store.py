@@ -681,3 +681,14 @@ def test_pool_and_leaderboard_show_the_current_name(world):
     place(world, "u1", "straight", [leg(g[0])])
     store.rename_entry(engine, cid, "u1", "Alexander", NOW)
     assert store.visible_bets(engine, cid, "u2", NOW)[0]["owner"] == "Alexander"
+
+
+def test_equal_bankrolls_share_a_rank_and_are_marked_tied(world):
+    engine, cid, _ = world
+    for i, u in enumerate(("u1", "u2", "u3", "u4")):
+        join(world, u)
+    eid = {e["user_id"]: e["entry_id"] for e in store.entries_of(engine, cid)}
+    store.adjust(engine, eid["u1"], 10_000, "tie test", NOW)
+    store.adjust(engine, eid["u4"], -10_000, "tie test", NOW)
+    board_ = store.leaderboard(engine, cid)
+    assert [(r["rank"], r["tied"]) for r in board_] == [(1, False), (2, True), (2, True), (4, False)]

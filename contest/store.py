@@ -433,8 +433,10 @@ def leaderboard(engine, contest_id: int) -> list[dict]:
     out = [{"entry_id": i, "user_id": uid, "display_name": n, "balance_cents": int(bal), "open_risk_cents": int(risk), "bankroll_cents": int(bal) + int(risk),
             "status": st, "won": int(w), "lost": int(lo), "pushed": int(p)} for i, n, bal, st, uid, risk, w, lo, p in rows]
     out.sort(key=lambda r: (-r["bankroll_cents"], r["display_name"].lower()))
-    for rank, r in enumerate(out, 1):
-        r["rank"] = rank
+    # equal bankrolls share a rank (1, 1, 3): the order inside a tie is only alphabetical, so it must not read as a ranking
+    for i, r in enumerate(out):
+        r["rank"] = out[i - 1]["rank"] if i and r["bankroll_cents"] == out[i - 1]["bankroll_cents"] else i + 1
+        r["tied"] = (i > 0 and r["bankroll_cents"] == out[i - 1]["bankroll_cents"]) or (i + 1 < len(out) and r["bankroll_cents"] == out[i + 1]["bankroll_cents"])
     return out
 
 

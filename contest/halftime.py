@@ -14,8 +14,10 @@ THE WINDOW (one row per game in `contest_halftime`, a state machine driven by `a
 
 PRICING (Kalshi only: BettingPros has no live lines): the mid of bid and ask is the probability, a fixed contest margin goes on top, and a
 market is offered only when its bid-ask width is at most `MAX_WIDTH`. Spread and total use the rung whose mid is closest to 50%. Expect a
-moneyline and a football spread on liquid games only, not a full menu. The total-market strike parsing is UNVERIFIED against a live payload
-(Kalshi rate-limited the check): it reads `floor_strike` on the total series; the spread and moneyline titles were read live.
+moneyline and a football spread on liquid games only, not a full menu. Verified against live payloads 2026-11-17: the football total series
+is KXNCAAFTOTAL (not KXNCAFTOTAL, which is empty), a total is titled "Full Game: Over X points scored" with `floor_strike` X, a spread "<Team>
+wins by over X points" with `floor_strike` X, a moneyline "<Team> wins"; every series carries many games, so a game's markets are selected by
+its EVENT TICKER (the suffix after the series name), found from the team names on its moneyline and spread titles.
 """
 from __future__ import annotations
 
@@ -31,7 +33,8 @@ from contest.rules import ContestRules
 from contest.slips import Quote
 
 MAX_WIDTH = 0.06
-SERIES = {"ncaaf": {"game": "KXNCAAFGAME", "spread": "KXNCAAFSPREAD", "total": "KXNCAFTOTAL"},
+# a value may list several tickers: Kalshi has used both KXNCAAFTOTAL and KXNCAFTOTAL for football totals (the second is empty today), so both are read
+SERIES = {"ncaaf": {"game": "KXNCAAFGAME", "spread": "KXNCAAFSPREAD", "total": ("KXNCAAFTOTAL", "KXNCAFTOTAL")},
           "ncaab": {"game": "KXNCAAMBGAME", "spread": "KXNCAAMBSPREAD", "total": "KXNCAAMBTOTAL"}}
 KALSHI = "https://api.elections.kalshi.com/trade-api/v2/markets"
 _WINS_BY = re.compile(r"^(.*) wins by over ([0-9.]+) points?$")
@@ -69,11 +72,35 @@ def _teams_match(name: str, names: set[str]) -> bool:
     return any(n == x or n in x or x in n for x in names if x)
 
 
+def _event_key(mk: dict) -> str:
+    return str(mk.get("event_ticker") or "").split("-", 1)[-1]
+
+
+def _for_this_game(home_names: set[str], away_names: set[str], markets: Mapping[str, list[dict]]) -> dict[str, list[dict]] | None:
+    """Keep only the markets of ONE Kalshi event: the one whose moneyline / spread titles name both teams. A series lists every game of the
+    day, and totals carry no team name, so the event ticker is the only thing tying them to this game. No match or several -> None (fail closed)."""
+    keys: set[str] = set()
+    for series in ("game", "spread"):
+        for mk in markets.get(series, []):
+            title = str(mk.get("title") or "")
+            mm = _WINS_BY.match(title)
+            team = mm.group(1) if mm else title[:-5] if title.endswith(" wins") else None
+            if team and (_teams_match(team, home_names) or _teams_match(team, away_names)):
+                keys.add(_event_key(mk))
+    if len(keys) != 1:
+        return None
+    key = next(iter(keys))
+    return {s: [mk for mk in ms if _event_key(mk) == key] for s, ms in markets.items()}
+
+
 def game_quotes(home_names: set[str], away_names: set[str], markets: Mapping[str, list[dict]], rules: ContestRules, fetched_at: datetime) -> dict[tuple, Quote]:
     """{(market, side): Quote} for ONE game from Kalshi markets of the sport's three series. `home_names` / `away_names` are normalised
     spellings of each team (ESPN's location, short and display names). Whatever is not liquid enough is simply absent."""
     out: dict[tuple, Quote] = {}
     m = rules.halftime_margin_bp
+    markets = _for_this_game(home_names, away_names, markets)
+    if markets is None:
+        return out
     # moneyline: "<Team> wins"
     ml: dict[str, float] = {}
     for mk in markets.get("game", []):
@@ -110,6 +137,9 @@ def game_quotes(home_names: set[str], away_names: set[str], markets: Mapping[str
     tb: tuple[float, float, float] | None = None
     for mk in markets.get("total", []):
         p, x = _mid(mk), _f(mk.get("floor_strike"))
+        title = str(mk.get("title") or "").lower()
+        if "points scored" not in title or "half" in title or "quarter" in title:          # full-game totals only
+            continue
         if p is not None and x is not None and (tb is None or abs(p - 0.5) < tb[0]):
             tb = (abs(p - 0.5), x, p)
     if tb:
@@ -184,15 +214,16 @@ def open_games(engine, contest_id: int) -> set[int]:
 
 def fetch_kalshi(sport: str, http: Callable) -> dict[str, list[dict]]:
     out: dict[str, list[dict]] = {}
-    for key, series in SERIES[sport].items():
+    for key, series_list in SERIES[sport].items():
         ms: list[dict] = []
-        cursor = None
-        while True:
-            d = http(KALSHI, {"series_ticker": series, "status": "open", "limit": 1000, **({"cursor": cursor} if cursor else {})})
-            ms += d.get("markets") or []
-            cursor = d.get("cursor")
-            if not cursor:
-                break
+        for series in (series_list,) if isinstance(series_list, str) else series_list:
+            cursor = None
+            while True:
+                d = http(KALSHI, {"series_ticker": series, "status": "open", "limit": 1000, **({"cursor": cursor} if cursor else {})})
+                ms += d.get("markets") or []
+                cursor = d.get("cursor")
+                if not cursor:
+                    break
         out[key] = ms
     return out
 

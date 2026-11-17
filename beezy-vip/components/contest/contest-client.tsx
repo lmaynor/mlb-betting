@@ -5,6 +5,7 @@
  * adapter that talks to the contest API is milestone M2. All numbers shown come from lib/contest (a mirror of the Python engine).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import { MobileBottomSheet, useIsMobile } from '@/components/ui/mobile-sheet'
 import { MAX_RENAMES, nameKey, validateName } from '@/lib/contest/names'
 import { fmtMoney } from '@/lib/contest/odds'
@@ -270,7 +271,7 @@ function ContestBody({ feed: initial, slug }: { feed: ContestFeed; slug?: string
         <span><span style={{ color: '#7d8596' }}>At risk </span><b>{fmtMoney(atRisk)}</b></span>
         <span><span style={{ color: '#7d8596' }}>Bankroll </span><b>{fmtMoney(bankroll)}</b> <span style={{ color: bankroll >= rules.startBankrollCents ? '#57f287' : '#ef4444' }}>{fmtMoney(bankroll - rules.startBankrollCents, { sign: true })}</span></span>
         <OddsFormatSelect />
-        {mine && <span><span style={{ color: '#7d8596' }}>Rank </span><b>{mine.rank}</b> of {board.length}</span>}
+        {mine && <span><span style={{ color: '#7d8596' }}>Rank </span><b>{mine.tied ? `T${mine.rank}` : mine.rank}</b> of {board.length}</span>}
         {lifelineOpen && tab !== 'blackjack' && (
           <button type="button" onClick={() => setTab('blackjack')} className="contest-chip" style={{ fontSize: 12, color: '#9ca3af', minHeight: 44 }}>
             Under {fmtMoney(rules.blackjackThresholdCents, { whole: true })}: the blackjack table is open
@@ -294,7 +295,7 @@ function ContestBody({ feed: initial, slug }: { feed: ContestFeed; slug?: string
           <details style={{ margin: '10px 2px 0', maxWidth: '70ch' }}>
             <summary className="mono" style={{ fontSize: 12, color: '#9ca3af', cursor: 'pointer' }}>How it works</summary>
             <ul className="mono" style={{ fontSize: 12, color: '#9ca3af', lineHeight: 1.6, margin: '8px 0 0', paddingLeft: 16 }}>
-              <li>Play money only. Nothing is wagered.</li>
+              <li>Play money only. Nothing is wagered. This is a game for fun. If gambling is a problem for you or someone you know, call 1-800-GAMBLER or read our <Link href="/legal/responsible-gambling" style={{ color: 'var(--link)' }}>responsible gambling page</Link>.</li>
               <li>Prices are the contest reference lines, refreshed on a schedule. A price that moves before you place is refused and shown again.</li>
               <li>Betting closes {rules.closeBufferMin} minutes before kickoff.</li>
               <li>Your picks stay hidden from other players until each game kicks off.</li>

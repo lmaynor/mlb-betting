@@ -145,6 +145,8 @@ export interface LeaderRow {
   pushed: number
   status: 'active' | 'eliminated'
   mine?: boolean
+  /** Another player has exactly this bankroll: the rank is shared and shown as T2. */
+  tied?: boolean
 }
 
 /** The signed-in player's place in this contest. Before joining, `suggestedName` seeds the join form (from the account). */

@@ -128,3 +128,22 @@ describe('halftime window', () => {
     expect(within(row).getAllByRole('button').every(b => (b as HTMLButtonElement).disabled)).toBe(true)
   })
 })
+
+describe('ties', () => {
+  it('a shared bankroll shows a shared rank with a T', () => {
+    const f = sampleFeed(NOW)
+    const rows = f.leaderboard.map((r, i) => i < 2 ? { ...r, bankrollCents: 600_000, tied: true, rank: 1 } : r)
+    render(<ContestClient feed={{ ...f, leaderboard: rows }} />)
+    tab('Leaderboard')
+    expect(within(screen.getByRole('table', { name: 'Leaderboard' })).getAllByText('T1')).toHaveLength(2)
+  })
+})
+
+describe('responsible play', () => {
+  it('How it works carries the help line and links to the responsible gambling page', () => {
+    render(<ContestClient feed={sampleFeed(NOW)} />)
+    fireEvent.click(screen.getByText('How it works'))
+    expect(screen.getByText(/1-800-GAMBLER/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'responsible gambling page' })).toHaveAttribute('href', '/legal/responsible-gambling')
+  })
+})

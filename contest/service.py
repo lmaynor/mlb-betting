@@ -153,7 +153,7 @@ def feed(engine, slug: str, user_id: str, now: datetime, suggested_name: str = "
                   "legs": [None if l.get("hidden") else {"gameId": l["game_id"], "market": l["market"], "side": l["side"], "line": l["line"], "price": l["price"]} for l in p["legs"]]}
                  for p in store.visible_bets(engine, cid, user_id, now) if not p["mine"]],
         "leaderboard": [{"rank": r["rank"], "name": r["display_name"], "bankrollCents": r["bankroll_cents"], "openRiskCents": r["open_risk_cents"],
-                         "won": r["won"], "lost": r["lost"], "pushed": r["pushed"], "status": r["status"], **({"mine": True} if r["user_id"] in mine else {})} for r in lb],
+                         "won": r["won"], "lost": r["lost"], "pushed": r["pushed"], "status": r["status"], **({"tied": True} if r["tied"] else {}), **({"mine": True} if r["user_id"] in mine else {})} for r in lb],
     }
 
 

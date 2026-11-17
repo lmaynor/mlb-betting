@@ -19,14 +19,14 @@ SLUG = "bowls"
 RULES_ON = ContestRules(sport="ncaaf", halftime_enabled=True)
 
 
-def m(title, bid, ask, strike=None):
-    return {"title": title, "yes_bid_dollars": f"{bid:.4f}", "yes_ask_dollars": f"{ask:.4f}", **({"floor_strike": strike} if strike is not None else {})}
+def m(title, bid, ask, strike=None, event="26DEC19BYUKU"):
+    return {"event_ticker": f"KXSERIES-{event}", "title": title, "yes_bid_dollars": f"{bid:.4f}", "yes_ask_dollars": f"{ask:.4f}", **({"floor_strike": strike} if strike is not None else {})}
 
 
 KALSHI = {
     "game": [m("Kansas wins", 0.58, 0.60), m("BYU wins", 0.40, 0.42)],
     "spread": [m("Kansas wins by over 3.5 points", 0.49, 0.51, 3.5), m("Kansas wins by over 6.5 points", 0.36, 0.38, 6.5), m("Kansas wins by over 0.5 points", 0.66, 0.68, 0.5)],
-    "total": [m("Over 47.5 points scored", 0.50, 0.52, 47.5), m("Over 50.5 points scored", 0.38, 0.40, 50.5)],
+    "total": [m("Full Game: Over 47.5 points scored", 0.50, 0.52, 47.5), m("Full Game: Over 50.5 points scored", 0.38, 0.40, 50.5)],
 }
 HOME, AWAY = {"kansas"}, {"byu"}
 
@@ -40,8 +40,29 @@ def test_pricing_uses_the_mid_adds_the_margin_and_picks_the_rung_nearest_a_coin_
     assert -125 <= q[("spread", "home")].price <= -105 and -125 <= q[("spread", "away")].price <= -105        # a coin flip plus 7% is about -110
 
 
+def test_other_games_markets_in_the_same_series_never_leak_in():
+    other = {"game": [m("Duke wins", 0.50, 0.52, event="26DEC19DUKEUNC"), m("UNC wins", 0.48, 0.50, event="26DEC19DUKEUNC")],
+             "spread": [m("Duke wins by over 0.5 points", 0.50, 0.50, 0.5, event="26DEC19DUKEUNC")],
+             "total": [m("Full Game: Over 60.5 points scored", 0.50, 0.50, 60.5, event="26DEC19DUKEUNC")]}
+    mixed = {k: KALSHI[k] + other[k] for k in KALSHI}
+    q = halftime.game_quotes(HOME, AWAY, mixed, RULES_ON, HALF)
+    assert q[("total", "over")].line == 47.5 and q[("spread", "home")].line == -3.5               # not Duke-UNC's 60.5 / 0.5
+    assert halftime.game_quotes({"duke"}, {"unc"}, mixed, RULES_ON, HALF)[("total", "over")].line == 60.5
+
+
+def test_a_game_with_no_or_ambiguous_kalshi_event_gets_nothing():
+    assert halftime.game_quotes({"nobody"}, {"nowhere"}, KALSHI, RULES_ON, HALF) == {}
+    two = {"game": [m("Kansas wins", 0.5, 0.52, event="A"), m("BYU wins", 0.48, 0.5, event="A"), m("Kansas wins", 0.5, 0.52, event="B")]}
+    assert halftime.game_quotes(HOME, AWAY, two, RULES_ON, HALF) == {}
+
+
+def test_half_and_quarter_totals_are_ignored():
+    markets = {"game": KALSHI["game"], "total": [m("1st Half: Over 23.5 points scored", 0.50, 0.50, 23.5), m("Full Game: Over 47.5 points scored", 0.45, 0.47, 47.5)]}
+    assert halftime.game_quotes(HOME, AWAY, markets, RULES_ON, HALF)[("total", "over")].line == 47.5
+
+
 def test_wide_or_lopsided_markets_are_not_offered():
-    wide = {"game": [m("Kansas wins", 0.50, 0.62), m("BYU wins", 0.40, 0.42)], "spread": [m("Kansas wins by over 3.5 points", 0.30, 0.50, 3.5)], "total": [m("Over 47.5 points scored", 0.97, 0.99, 47.5)]}
+    wide = {"game": [m("Kansas wins", 0.50, 0.62), m("BYU wins", 0.40, 0.42)], "spread": [m("Kansas wins by over 3.5 points", 0.30, 0.50, 3.5)], "total": [m("Full Game: Over 47.5 points scored", 0.97, 0.99, 47.5)]}
     assert halftime.game_quotes(HOME, AWAY, wide, RULES_ON, HALF) == {}
     one_side = {"game": [m("Kansas wins", 0.58, 0.60)]}
     assert halftime.game_quotes(HOME, AWAY, one_side, RULES_ON, HALF) == {}
@@ -208,3 +229,15 @@ def test_espn_flags_halftime():
     assert parse_event({"id": "9", "date": "2026-12-19T17:00Z", "status": {"type": {"name": "STATUS_HALFTIME", "state": "in", "completed": False, "detail": "Halftime"}},
                         "competitions": [{"competitors": [{"homeAway": "home", "score": "1", "team": {"id": "1", "abbreviation": "H"}}, {"homeAway": "away", "score": "0", "team": {"id": "2", "abbreviation": "A"}}]}]})["halftime"] is True
     assert espn_event("1")["halftime"] is False
+
+
+def test_fetch_reads_every_listed_total_series_and_pages():
+    seen = []
+    def http(url, params):
+        seen.append((params["series_ticker"], params.get("cursor")))
+        if params["series_ticker"] == "KXNCAAFTOTAL" and not params.get("cursor"):
+            return {"markets": [{"title": "Full Game: Over 47.5 points scored"}], "cursor": "next"}
+        return {"markets": [{"title": params["series_ticker"]}], "cursor": None}
+    out = halftime.fetch_kalshi("ncaaf", http)
+    assert [t for t, _ in seen] == ["KXNCAAFGAME", "KXNCAAFSPREAD", "KXNCAAFTOTAL", "KXNCAAFTOTAL", "KXNCAFTOTAL"]
+    assert len(out["total"]) == 3 and len(out["game"]) == 1

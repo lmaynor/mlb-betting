@@ -22,7 +22,7 @@ export function Leaderboard({ rows, start }: { rows: LeaderRow[]; start: number 
             const delta = r.bankrollCents - start
             return (
               <tr key={r.name} className="contest-row" data-mine={r.mine ? 'true' : undefined} style={{ opacity: out ? 0.5 : 1, background: r.mine ? '#13171f' : undefined }}>
-                <td className="mono" style={{ ...TD, color: '#7d8596', borderLeft: `2px solid ${r.mine ? 'var(--signal)' : 'transparent'}` }}>{r.rank}</td>
+                <td className="mono" style={{ ...TD, color: '#7d8596', borderLeft: `2px solid ${r.mine ? 'var(--signal)' : 'transparent'}` }}>{r.tied ? `T${r.rank}` : r.rank}</td>
                 <td style={TD}>{r.name}{r.mine && <>{' '}<span className="mono" style={{ fontSize: 11, color: '#7d8596' }}>you</span></>}{out && <span className="mono" style={{ marginLeft: 8, fontSize: 11, color: '#ef4444' }}>OUT</span>}</td>
                 <td className="mono" style={{ ...TD, textAlign: 'right', fontWeight: 600 }}>{fmtMoney(r.bankrollCents)}</td>
                 <td className="mono" style={{ ...TD, textAlign: 'right', color: delta >= 0 ? '#57f287' : '#ef4444' }}>{fmtMoney(delta, { sign: true })}</td>
