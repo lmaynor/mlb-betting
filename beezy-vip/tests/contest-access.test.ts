@@ -1,13 +1,23 @@
 import { contestRoles, grantContestRole, isAdmin, isParticipant, revokeContestRole, roleIn, type ClerkUsers } from '@/lib/contest/access'
 
-/** An in-memory stand-in for Clerk's backend users API. */
+/** An in-memory stand-in for Clerk's backend users API with Clerk's real merge rule: nested objects merge deeply and `null` deletes a key. */
+function deepMerge(into: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...into }
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === null) delete out[k]
+    else if (typeof v === 'object' && !Array.isArray(v) && typeof out[k] === 'object' && out[k] !== null) out[k] = deepMerge(out[k] as Record<string, unknown>, v as Record<string, unknown>)
+    else out[k] = v
+  }
+  return out
+}
+
 function fakeClerk(initial: Record<string, unknown>): ClerkUsers & { meta: Record<string, unknown>; writes: number } {
   const state = { meta: JSON.parse(JSON.stringify(initial)) as Record<string, unknown>, writes: 0 }
   return {
     get meta() { return state.meta }, get writes() { return state.writes },
     users: {
       async getUser() { return { privateMetadata: state.meta } },
-      async updateUserMetadata(_id, { privateMetadata }) { state.meta = { ...state.meta, ...privateMetadata }; state.writes += 1 },
+      async updateUserMetadata(_id, { privateMetadata }) { state.meta = deepMerge(state.meta, privateMetadata); state.writes += 1 },
     },
   }
 }
@@ -47,5 +57,6 @@ describe('granting and revoking', () => {
     const c = fakeClerk({ tier: 'pro', contest: { roles: { bowls: 'participant', march: 'participant' } } })
     expect(await revokeContestRole(c, 'u1', 'bowls')).toEqual({ march: 'participant' })
     expect(c.meta).toMatchObject({ tier: 'pro', contest: { roles: { march: 'participant' } } })
+    expect((c.meta.contest as { roles: Record<string, string> }).roles).not.toHaveProperty('bowls')       // really gone, not just left out of the write
   })
 })

@@ -15,6 +15,11 @@
  * control from code, so nothing here depends on it.
  *
  * Pure parsing and a thin writer: the Clerk client is injected so the tests never touch Clerk.
+ *
+ * CLERK'S MERGE RULE (verified against a development instance with the Clerk CLI, 2026-11-17): `updateUserMetadata` DEEP-merges nested objects,
+ * so writing `{contest: {roles: {march: 'admin'}}}` keeps the user's other roles and every other private-metadata key, and a key is REMOVED only
+ * by writing `null` for it. A write that merely leaves a key out does not delete it. So a grant writes just its own slug (race-safe) and a
+ * revoke writes `null` for its slug.
  */
 export type ContestRole = 'participant' | 'admin'
 
@@ -52,8 +57,7 @@ export async function grantContestRole(clerk: ClerkUsers, userId: string, slug: 
   const roles = contestRoles(user.privateMetadata)
   if (roles[slug] === 'admin' && role === 'participant') return roles
   const next: Roles = { ...roles, [slug]: role }
-  const existing = (user.privateMetadata as { contest?: Record<string, unknown> } | undefined)?.contest ?? {}
-  await clerk.users.updateUserMetadata(userId, { privateMetadata: { contest: { ...existing, roles: next } } })
+  await clerk.users.updateUserMetadata(userId, { privateMetadata: { contest: { roles: { [slug]: role } } } })
   return next
 }
 
@@ -61,7 +65,6 @@ export async function grantContestRole(clerk: ClerkUsers, userId: string, slug: 
 export async function revokeContestRole(clerk: ClerkUsers, userId: string, slug: string): Promise<Roles> {
   const user = await clerk.users.getUser(userId)
   const rest = Object.fromEntries(Object.entries(contestRoles(user.privateMetadata)).filter(([k]) => k !== slug)) as Roles
-  const existing = (user.privateMetadata as { contest?: Record<string, unknown> } | undefined)?.contest ?? {}
-  await clerk.users.updateUserMetadata(userId, { privateMetadata: { contest: { ...existing, roles: rest } } })
+  await clerk.users.updateUserMetadata(userId, { privateMetadata: { contest: { roles: { [slug]: null } } } })      // null deletes; omitting a key would not
   return rest
 }
