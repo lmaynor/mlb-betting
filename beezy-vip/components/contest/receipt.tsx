@@ -21,7 +21,7 @@ export function BetReceipt({ receipt, games, onDone, onViewBets }: { receipt: Re
   return (
     <section aria-label="Bet confirmation" role="status" style={{ padding: 14 }}>
       <h2 style={{ fontSize: 14, fontWeight: 600, margin: 0, color: 'var(--signal)' }}>Bet placed</h2>
-      <p className="mono" style={{ margin: '4px 0 12px', fontSize: 11, color: '#7d8596' }}>{dt(receipt.placedAt)} ET &middot; Slip #{slipNo}</p>
+      <p className="mono" style={{ margin: '4px 0 12px', fontSize: 11, color: '#7d8596' }}>{dt(receipt.placedAt)} ET &middot; Slip #{slipNo} &middot; Play money</p>
       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{title}</div>
       <ul style={{ listStyle: 'none', margin: 0, padding: 0, borderTop: '1px solid #151822' }}>
         {lines.map((l, i) => <li key={i} className="mono" style={{ fontSize: 12, color: '#d1d5db', padding: '6px 0', borderBottom: '1px solid #151822' }}>{legText(l, byId)}</li>)}

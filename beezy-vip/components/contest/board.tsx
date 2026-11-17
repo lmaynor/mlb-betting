@@ -24,12 +24,14 @@ function OddsButton({ pick, line, price, selected, disabled, label, onToggle }: 
     <button type="button" disabled={off} aria-pressed={selected} aria-label={label} onClick={() => pick && onToggle(pick)}
       className="mono contest-odds" style={{
         width: '100%', minWidth: 0, height: 40, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1,
-        borderRadius: 6, cursor: off ? 'default' : 'pointer', lineHeight: 1.15,
+        position: 'relative', borderRadius: 6, cursor: off ? 'default' : 'pointer', lineHeight: 1.15,
         background: selected ? 'var(--win-wash)' : '#171a24', border: `1px solid ${selected ? 'var(--signal)' : '#1e2230'}`,
         color: off ? '#4b5469' : '#f3f4f6',
       }}>
       <span style={{ fontSize: 11, color: selected ? 'var(--signal)' : off ? '#4b5469' : '#9ca3af' }}>{line || '\u00a0'}</span>
       <span style={{ fontSize: 13, fontWeight: 600, color: selected ? 'var(--signal)' : undefined }}>{fmtPrice(price)}</span>
+      {/* a picked price is also marked by a check, so selection never depends on colour alone (hex: var() does not work in SVG attributes) */}
+      {selected && <svg aria-hidden="true" data-selected-mark width="10" height="10" viewBox="0 0 10 10" style={{ position: 'absolute', top: 4, right: 4 }}><path d="M2 5.2 4.1 7.3 8 3" fill="none" stroke="#57f287" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>}
     </button>
   )
 }
@@ -69,7 +71,9 @@ function Cell({ g, market, picks, now, rules, onToggle }: { g: BoardGame; market
 
 export function Board({ games, picks, now, rules, onToggle }: { games: BoardGame[]; picks: Pick[]; now: number; rules: ContestRules; onToggle: (p: Pick) => void }) {
   const sections: { key: string; label: string; games: BoardGame[] }[] = []
-  for (const g of [...games].sort((a, b) => Date.parse(a.commence) - Date.parse(b.commence))) {
+  // games you can still bet come first, in kickoff order; finished and in-play games go last
+  const ordered = [...games].sort((a, b) => Number(a.status !== 'scheduled') - Number(b.status !== 'scheduled') || Date.parse(a.commence) - Date.parse(b.commence))
+  for (const g of ordered) {
     const label = `${g.round}  \u00b7  ${dayLabel(g.commence)}`
     const last = sections[sections.length - 1]
     if (last && last.label === label) last.games.push(g)
@@ -86,7 +90,7 @@ export function Board({ games, picks, now, rules, onToggle }: { games: BoardGame
         <tbody>
           {sections.map(s => (
             <Fragment key={s.key}>
-              <tr><td colSpan={4} className="mono" style={{ padding: '7px 12px', fontSize: 11, color: '#9ca3af', background: '#171a24', borderBottom: '1px solid #1e2230', whiteSpace: 'pre' }}>{s.label}</td></tr>
+              <tr><td colSpan={4} className="mono" style={{ padding: '7px 12px', fontSize: 12, color: '#9ca3af', background: '#171a24', borderBottom: '1px solid #1e2230', whiteSpace: 'pre' }}>{s.label}</td></tr>
               {s.games.map(g => {
                 const c = gameClosed(g, now, rules)
                 return (

@@ -66,7 +66,8 @@ export function previewRobin(picks: readonly Pick[], sizes: readonly number[], u
   return mk(unit * count, payout)
 }
 
-export interface SlipState { kind: BetKind; picks: Pick[]; teaserPoints: number; robinSizes: number[] }
+/** `chosen`: the player picked a bet type themselves; until then the slip follows the picks (one price is a straight, two or more a parlay). */
+export interface SlipState { kind: BetKind; picks: Pick[]; teaserPoints: number; robinSizes: number[]; chosen?: boolean }
 
 export interface Closed { closed: boolean; reason: string }
 /** Betting closes `closeBufferMin` before kickoff and never opens on a started game. `now` is the server render time, ticked on the client. */

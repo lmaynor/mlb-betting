@@ -48,7 +48,7 @@ export function MyBets({ bets, games }: { bets: PlacedBet[]; games: BoardGame[] 
   if (rows.length === 0) return <p style={{ ...WRAP, padding: 20, fontSize: 13, color: '#7d8596', margin: 0 }}>No bets yet. Your picks are always visible to you and hidden from everyone else until kickoff.</p>
   return (
     <div style={WRAP}>
-      <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }} aria-label="My bets">
+      <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }} aria-label="My Bets">
         <thead><tr><th style={TH}>Bet</th><th style={TH}>Selections</th><th style={{ ...TH, textAlign: 'right' }}>Risk</th><th style={{ ...TH, textAlign: 'right' }}>To win</th><th style={TH}>Status</th></tr></thead>
         <tbody>
           {rows.map(r => (
@@ -78,6 +78,21 @@ export function MyBets({ bets, games }: { bets: PlacedBet[]; games: BoardGame[] 
   )
 }
 
+function PoolLegs({ legs, byId }: { legs: PoolBet['legs']; byId: Map<number, BoardGame> }) {
+  const shown = legs.filter((l): l is NonNullable<typeof l> => l !== null)
+  const hidden = legs.length - shown.length
+  return (
+    <>
+      {shown.map((l, i) => <div key={i} className="mono" style={{ fontSize: 12, color: '#d1d5db' }}>{legText(l, byId)}</div>)}
+      {hidden > 0 && (
+        <div className="mono flex items-center gap-1.5" style={{ fontSize: 12, color: '#7d8596' }}>
+          <LockGlyph size={12} color="#7d8596" />{shown.length > 0 ? `${hidden} more ` : `${hidden} `}{hidden === 1 ? 'leg' : 'legs'} hidden until kickoff
+        </div>
+      )}
+    </>
+  )
+}
+
 export function Pool({ bets, games }: { bets: PoolBet[]; games: BoardGame[] }) {
   const byId = new Map(games.map(g => [g.id, g]))
   return (
@@ -89,14 +104,13 @@ export function Pool({ bets, games }: { bets: PoolBet[]; games: BoardGame[] }) {
             <tr key={b.id} className="contest-row">
               <td style={TD}>{b.owner}</td>
               <td style={{ ...TD, whiteSpace: 'nowrap' }}>{KIND_LABEL[b.kind]}</td>
-              <td style={TD}>{b.legs.map((l, i) => l
-                ? <div key={i} className="mono" style={{ fontSize: 12, color: '#d1d5db' }}>{legText(l, byId)}</div>
-                : <div key={i} className="mono flex items-center gap-1.5" style={{ fontSize: 12, color: '#7d8596' }}><LockGlyph size={12} color="#7d8596" />Hidden until kickoff</div>)}</td>
+              <td style={TD}><PoolLegs legs={b.legs} byId={byId} /></td>
               <td className="mono" style={{ ...TD, textAlign: 'right', color: b.stakeCents == null ? '#7d8596' : undefined }}>{b.stakeCents == null ? 'Hidden' : fmtMoney(b.stakeCents)}</td>
             </tr>
           ))}
         </tbody>
       </table>
+      <p className="mono" style={{ margin: 0, padding: '8px 12px', fontSize: 12, color: '#7d8596', borderTop: '1px solid #151822' }}>Open bets from every player. A pick appears when its game kicks off.</p>
     </div>
   )
 }

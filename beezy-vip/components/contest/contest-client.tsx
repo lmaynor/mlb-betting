@@ -22,7 +22,7 @@ const TABS: { id: Tab; label: string }[] = [{ id: 'board', label: 'Board' }, { i
 export function ContestClient({ feed }: { feed: ContestFeed }) {
   const { rules } = feed
   const [tab, setTab] = useState<Tab>('board')
-  const [slip, setSlip] = useState<SlipState>({ kind: 'parlay', picks: [], teaserPoints: teaserPointOptions(rules)[0] ?? 6, robinSizes: [2] })
+  const [slip, setSlip] = useState<SlipState>({ kind: 'straight', chosen: false, picks: [], teaserPoints: teaserPointOptions(rules)[0] ?? 6, robinSizes: [2] })
   const [balance, setBalance] = useState(feed.balanceCents)
   const [bets, setBets] = useState<PlacedBet[]>(feed.myBets)
   const [sheet, setSheet] = useState(false)
@@ -35,10 +35,12 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30_000); return () => clearInterval(t) }, [])
 
   const toggle = useCallback((p: Pick) => { setReceipt(null); setSlip(s => {
-    if (s.picks.some(x => samePick(x, p))) return { ...s, picks: s.picks.filter(x => !samePick(x, p)) }
-    // one leg per game outside straights: a new pick on the same game replaces the old one
-    const kept = s.kind === 'straight' ? s.picks : s.picks.filter(x => x.gameId !== p.gameId)
-    return { ...s, picks: [...kept, p] }
+    // a chosen Straight may stack picks on one game; everywhere else a new pick on a game replaces the old one
+    const stacking = s.chosen === true && s.kind === 'straight'
+    const next = s.picks.some(x => samePick(x, p)) ? s.picks.filter(x => !samePick(x, p)) : [...(stacking ? s.picks : s.picks.filter(x => x.gameId !== p.gameId)), p]
+    // until the player picks a bet type, the slip follows the picks: one price is a straight, two or more a parlay
+    const kind: BetKind = s.chosen ? s.kind : next.length >= 2 ? 'parlay' : 'straight'
+    return { ...s, kind, picks: next }
   }) }, [])
 
   const atRisk = useMemo(() => bets.filter(b => b.status === 'pending').reduce((a, b) => a + b.stakeCents, 0), [bets])
@@ -72,11 +74,13 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
   const panel = (
     <SlipPanel slip={slip} games={feed.games} rules={rules} balanceCents={balance} receipt={receipt}
       onDoneReceipt={() => { setReceipt(null); setSheet(false) }} onViewBets={() => { setReceipt(null); setSheet(false); setTab('bets') }}
-      onKind={kind => setSlip(s => ({ ...s, kind }))} onPoints={teaserPoints => setSlip(s => ({ ...s, teaserPoints }))}
+      onKind={kind => setSlip(s => ({ ...s, kind, chosen: true }))} onPoints={teaserPoints => setSlip(s => ({ ...s, teaserPoints }))}
       onSizes={robinSizes => setSlip(s => ({ ...s, robinSizes }))} onRemove={p => toggle(p)} onClear={() => setSlip(s => ({ ...s, picks: [] }))} onPlace={place} />
   )
 
   const me = feed.leaderboard.find(r => r.mine)
+  // the slip rail follows the work: always beside the board, elsewhere only while a slip or a confirmation exists
+  const showRail = !isMobile && (tab === 'board' || slip.picks.length > 0 || receipt !== null)
   const bankroll = balance + atRisk
   return (
     <div className="max-w-[1400px] mx-auto pt-4 px-4 sm:px-6 pb-40 lg:pb-8">
@@ -100,17 +104,25 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
         {me && <span><span style={{ color: '#7d8596' }}>Rank </span><b>{me.rank}</b> of {feed.leaderboard.length}</span>}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px] items-start">
+      <div className={`grid gap-4 items-start ${showRail ? 'lg:grid-cols-[minmax(0,1fr)_340px]' : ''}`}>
         <div className="min-w-0">
           {tab === 'board' && <Board games={feed.games} picks={slip.picks} now={now} rules={rules} onToggle={toggle} />}
           {tab === 'bets' && <MyBets bets={bets} games={feed.games} />}
           {tab === 'pool' && <Pool bets={feed.pool} games={feed.games} />}
           {tab === 'leaders' && <Leaderboard rows={feed.leaderboard} start={rules.startBankrollCents} />}
-          <p className="mono" style={{ fontSize: 11, color: '#7d8596', margin: '10px 2px 0' }}>
-            Play money only. Lines are the reference price, refreshed on a schedule; a price that moves before you place is refused and shown again. Betting closes {rules.closeBufferMin} minutes before kickoff.
-          </p>
+          <details style={{ margin: '10px 2px 0', maxWidth: '70ch' }}>
+            <summary className="mono" style={{ fontSize: 12, color: '#9ca3af', cursor: 'pointer' }}>How it works</summary>
+            <ul className="mono" style={{ fontSize: 12, color: '#9ca3af', lineHeight: 1.6, margin: '8px 0 0', paddingLeft: 16 }}>
+              <li>Play money only. Nothing is wagered.</li>
+              <li>Prices are the contest reference lines, refreshed on a schedule. A price that moves before you place is refused and shown again.</li>
+              <li>Betting closes {rules.closeBufferMin} minutes before kickoff.</li>
+              <li>Your picks stay hidden from other players until each game kicks off.</li>
+              <li>A teaser moves every line the chosen points in your favor and pays from a fixed table.</li>
+              <li>A round robin bets every combination of your picks for the sizes you choose, as separate parlays.</li>
+            </ul>
+          </details>
         </div>
-        {!isMobile && <aside className="lg:sticky lg:top-4" aria-label="Bet Slip panel">{panel}</aside>}
+        {showRail && <aside className="lg:sticky lg:top-4" aria-label="Bet Slip panel">{panel}</aside>}
       </div>
 
       {isMobile && (

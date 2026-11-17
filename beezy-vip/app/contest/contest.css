@@ -13,3 +13,4 @@
 /* price columns: 92px on a normal screen, narrower on a phone so the team column keeps its logo, rank and abbreviation */
 .contest-col { width: 92px; }
 @media (max-width: 480px) { .contest-col { width: 76px; } }
+@media (min-width: 1024px) { .contest-col { width: 132px; } }

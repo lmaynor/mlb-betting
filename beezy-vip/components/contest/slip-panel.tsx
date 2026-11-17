@@ -62,8 +62,11 @@ export function SlipPanel({ slip, games, rules, balanceCents, receipt, onDoneRec
   return (
     <section aria-label="Bet Slip" style={PANEL}>
       <div className="flex items-center justify-between" style={{ padding: '10px 12px', borderBottom: '1px solid #1e2230' }}>
-        <h2 style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>Bet Slip <span className="mono" style={{ color: '#7d8596', fontWeight: 500 }}>{n}</span></h2>
-        {n > 0 && <button type="button" onClick={() => { onClear(); setRaw('') }} style={{ fontSize: 12, color: '#7d8596' }}>Clear</button>}
+        <div className="flex items-center gap-2">
+          <h2 style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>Bet Slip <span className="mono" style={{ color: '#7d8596', fontWeight: 500 }}>{n}</span></h2>
+          <span className="mono" title="Contest bets use play money. Nothing is wagered." style={{ fontSize: 11, color: '#9ca3af', border: '1px solid #2e3446', borderRadius: 4, padding: '1px 6px' }}>Play money</span>
+        </div>
+        {n > 0 && <button type="button" onClick={() => { onClear(); setRaw('') }} style={{ fontSize: 12, color: '#7d8596', minWidth: 44, minHeight: 44 }}>Clear</button>}
       </div>
       <div role="tablist" aria-label="Bet type" className="flex" style={{ borderBottom: '1px solid #1e2230' }}>
         {KINDS.map(k => (
@@ -87,7 +90,7 @@ export function SlipPanel({ slip, games, rules, balanceCents, receipt, onDoneRec
                 </div>
                 <div className="flex items-center gap-3 flex-none">
                   <span className="mono" style={{ fontSize: 13, color: slip.kind === 'teaser' ? '#7d8596' : '#f3f4f6' }}>{slip.kind === 'teaser' ? '' : fmtPrice(p.price)}</span>
-                  <button type="button" aria-label={`Remove ${d.who}`} onClick={() => onRemove(p)} style={{ fontSize: 16, lineHeight: 1, color: '#7d8596', padding: 2 }}>&times;</button>
+                  <button type="button" aria-label={`Remove ${d.who}`} onClick={() => onRemove(p)} style={{ fontSize: 16, lineHeight: 1, color: '#7d8596', minWidth: 44, minHeight: 44 }}>&times;</button>
                 </div>
               </li>
             )
@@ -100,11 +103,12 @@ export function SlipPanel({ slip, games, rules, balanceCents, receipt, onDoneRec
           <span style={{ fontSize: 12, color: '#7d8596' }}>Points</span>
           {teaserPointOptions(rules).map(pt => (
             <button key={pt} type="button" aria-pressed={slip.teaserPoints === pt} onClick={() => onPoints(pt)} className="mono contest-chip"
-              style={{ fontSize: 12, padding: '4px 9px', borderRadius: 6, border: `1px solid ${slip.teaserPoints === pt ? 'var(--signal)' : '#1e2230'}`, background: slip.teaserPoints === pt ? 'var(--win-wash)' : '#171a24', color: slip.teaserPoints === pt ? 'var(--signal)' : '#f3f4f6' }}>{pt}</button>
+              style={{ fontSize: 12, padding: '4px 9px', minWidth: 44, borderRadius: 6, border: `1px solid ${slip.teaserPoints === pt ? 'var(--signal)' : '#1e2230'}`, background: slip.teaserPoints === pt ? 'var(--win-wash)' : '#171a24', color: slip.teaserPoints === pt ? 'var(--signal)' : '#f3f4f6' }}>{pt}</button>
           ))}
           <span className="mono" style={{ marginLeft: 'auto', fontSize: 12, color: '#9ca3af' }} title="Teaser price for this many legs">{fmtPrice(rules.teaser[slip.teaserPoints.toFixed(1)]?.[String(n)] ?? null)}</span>
         </div>
       )}
+      {n > 0 && slip.kind === 'teaser' && <p style={{ fontSize: 12, color: '#7d8596', margin: 0, padding: '8px 12px', borderBottom: '1px solid #151822' }}>Moves every line the chosen points in your favor. Pays from a fixed table, not the listed prices.</p>}
 
       {n > 0 && slip.kind === 'round_robin' && (
         <div style={{ padding: '10px 12px', borderBottom: '1px solid #151822' }}>
@@ -146,10 +150,10 @@ export function SlipPanel({ slip, games, rules, balanceCents, receipt, onDoneRec
           <div className="flex flex-wrap gap-2" style={{ marginTop: 8 }}>
             {quick.map(c => (
               <button key={c} type="button" aria-label={`Add $${c / 100} to stake`} onClick={() => addStake(c)} className="mono contest-chip"
-                style={{ fontSize: 12, padding: '4px 9px', borderRadius: 6, border: '1px solid #1e2230', background: '#171a24', color: '#f3f4f6' }}>+${c / 100}</button>
+                style={{ fontSize: 12, padding: '4px 9px', minWidth: 44, borderRadius: 6, border: '1px solid #1e2230', background: '#171a24', color: '#f3f4f6' }}>+${c / 100}</button>
             ))}
             {raw !== '' && <button type="button" onClick={() => setRaw('')} className="mono contest-chip"
-              style={{ fontSize: 12, padding: '4px 9px', borderRadius: 6, border: '1px solid #1e2230', background: 'transparent', color: '#7d8596' }}>Reset</button>}
+              style={{ fontSize: 12, padding: '4px 9px', minWidth: 44, borderRadius: 6, border: '1px solid #1e2230', background: 'transparent', color: '#7d8596' }}>Reset</button>}
           </div>
 
           <dl className="mono" style={{ margin: '14px 0 0', display: 'grid', gridTemplateColumns: '1fr auto', rowGap: 6, fontSize: 13 }}>
@@ -163,7 +167,7 @@ export function SlipPanel({ slip, games, rules, balanceCents, receipt, onDoneRec
             style={{ width: '100%', height: 42, marginTop: 14, fontSize: 14, fontWeight: 600, opacity: ready ? 1 : 0.45, cursor: ready ? 'pointer' : 'not-allowed' }}>
             {ready ? `Place Bet \u00b7 ${fmtMoney(preview!.riskCents)}` : 'Place Bet'}
           </button>
-          <p role="status" className="mono" style={{ fontSize: 11, color: ready ? '#7d8596' : '#facc15', margin: '8px 0 0', minHeight: 14 }}>{ready ? 'Picks stay hidden from others until kickoff.' : issue}</p>
+          <p role="status" className="mono" style={{ fontSize: 12, color: ready ? '#7d8596' : '#facc15', margin: '8px 0 0', minHeight: 16 }}>{ready ? 'Picks stay hidden from others until kickoff.' : issue}</p>
         </div>
       )}
     </section>

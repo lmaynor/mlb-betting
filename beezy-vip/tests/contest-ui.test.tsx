@@ -220,7 +220,7 @@ describe('Bankroll Challenge page', () => {
     expect(screen.queryByLabelText(/^Stake/)).not.toBeInTheDocument() // the slip is replaced, not stacked under the receipt
     fireEvent.click(btn('View My Bets'))
     expect(screen.queryByRole('status', { name: 'Bet confirmation' })).not.toBeInTheDocument()
-    expect(screen.getByRole('table', { name: 'My bets' })).toBeInTheDocument()
+    expect(screen.getByRole('table', { name: 'My Bets' })).toBeInTheDocument()
   })
 
   it('Keep Betting dismisses the confirmation and picking a price also clears it', () => {
@@ -261,7 +261,8 @@ describe('Bankroll Challenge page', () => {
     open()
     tab('Pool')
     const table = screen.getByRole('table', { name: 'Pool' })
-    expect(within(table).getAllByText('Hidden until kickoff').length).toBeGreaterThanOrEqual(3)
+    expect(within(table).getByText('3 legs hidden until kickoff')).toBeInTheDocument()          // one line, not one per leg
+    expect(within(table).getByText('1 more leg hidden until kickoff')).toBeInTheDocument()      // a partly revealed bet says what is left
     expect(within(table).getAllByText('Hidden').length).toBeGreaterThanOrEqual(1)
     expect(within(table).getByText(/Over 52.5/)).toBeInTheDocument()    // the one leg whose game has started is visible
   })
@@ -275,6 +276,64 @@ describe('Bankroll Challenge page', () => {
     expect(rows[5]).toHaveStyle({ opacity: '0.5' })
     // one money format on the page: every bankroll cell has cents (no $812,500 next to $5,181.82)
     rows.forEach(r => { const c = within(r).getAllByRole('cell'); expect(c[2].textContent).toMatch(/^\$[\d,]+\.\d{2}$/); expect(c[3].textContent).toMatch(/^[+-]\$[\d,]+\.\d{2}$/) })
+  })
+
+  it('starts as a Straight and becomes a Parlay on the second pick, until the player chooses a type', () => {
+    open()
+    expect(screen.getByRole('tab', { name: 'Straight' })).toHaveAttribute('aria-selected', 'true')
+    fireEvent.click(btn('Ohio State spread -6.5 -110'))
+    expect(screen.getByRole('tab', { name: 'Straight' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('status')).not.toHaveTextContent('Parlays need')                  // no warning on the very first pick
+    fireEvent.click(btn('Georgia spread -3.5 -112'))
+    expect(screen.getByRole('tab', { name: 'Parlay' })).toHaveAttribute('aria-selected', 'true')
+    fireEvent.click(btn('Georgia spread -3.5 -112'))                                          // back to one pick
+    expect(screen.getByRole('tab', { name: 'Straight' })).toHaveAttribute('aria-selected', 'true')
+    tab('Teaser')                                                                             // a chosen type sticks
+    fireEvent.click(btn('Georgia spread -3.5 -112'))
+    fireEvent.click(btn('Indiana spread -4 -110'))
+    expect(screen.getByRole('tab', { name: 'Teaser' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('marks a picked price with a check as well as colour', () => {
+    open()
+    const b = btn('Ohio State spread -6.5 -110')
+    expect(b.querySelector('[data-selected-mark]')).toBeNull()
+    fireEvent.click(b)
+    expect(b.querySelector('[data-selected-mark]')).not.toBeNull()
+    expect(b).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('labels the slip as play money and keeps its small controls at least 44px wide', () => {
+    open()
+    expect(slip()).toHaveTextContent('Play money')
+    fireEvent.click(btn('Ohio State spread -6.5 -110'))
+    expect(btn('Clear')).toHaveStyle({ minWidth: '44px', minHeight: '44px' })
+    expect(btn(/^Remove/)).toHaveStyle({ minWidth: '44px', minHeight: '44px' })
+    tab('Straight')
+    stake('25')
+    expect(btn('Add $25 to stake')).toHaveStyle({ minWidth: '44px' })
+    fireEvent.click(place('$25.00'))
+    expect(screen.getByRole('status', { name: 'Bet confirmation' })).toHaveTextContent('Play money')
+  })
+
+  it('lists games you can bet first and puts finished and in-play games last', () => {
+    const { container } = open()
+    const order = [...container.querySelectorAll('tr[data-game]')].map(r => (r as HTMLElement).dataset.game)
+    expect(order.slice(-2).sort()).toEqual(['11', '12'])
+    expect(order.slice(0, -2)).not.toContain('11')
+  })
+
+  it('keeps the rules in a disclosure and shows the slip rail only where it is useful', () => {
+    open()
+    expect(screen.getByText('How it works')).toBeInTheDocument()
+    expect(screen.getByText(/Play money only. Nothing is wagered./)).toBeInTheDocument()
+    expect(screen.getByLabelText('Bet Slip panel')).toBeInTheDocument()
+    tab('Leaderboard')
+    expect(screen.queryByLabelText('Bet Slip panel')).not.toBeInTheDocument()                 // empty slip, not the board: no empty rail
+    tab('Board')
+    fireEvent.click(btn('Ohio State spread -6.5 -110'))
+    tab('Leaderboard')
+    expect(screen.getByLabelText('Bet Slip panel')).toBeInTheDocument()                       // a slip in progress stays reachable
   })
 
   it('uses Title Case for Bet Slip, Round Robin, My Bets and Place Bet', () => {
