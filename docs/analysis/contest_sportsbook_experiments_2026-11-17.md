@@ -86,6 +86,21 @@ money for the bettor in both sports, and only the favorites-through-the-3 spot c
 87 percent: not distinguishable from it). The table has not been changed: it is the owner's rulebook decision, and the contest is play
 money.
 
+#### Input for the owner's teaser table decision (nothing changed in code)
+
+Prices a RANDOM teased spread leg would justify (leg win rate from all 1,885 football and 1,400 basketball spread legs, both sides, pushes dropped, legs treated as independent, rounded to 5; a 5 percent hold on the implied probability):
+
+| sport | points | leg win | 2-team fair / held | 3-team fair / held | 4-team fair / held |
+|---|---|---|---|---|---|
+| football | 6 | 0.658 | +130 / +120 | +250 / +235 | +435 / +410 |
+| football | 6.5 | 0.672 | +120 / +110 | +230 / +215 | +390 / +365 |
+| football | 7 | 0.680 | +115 / +105 | +220 / +205 | +370 / +345 |
+| basketball | 4 | 0.632 | +150 / +140 | +295 / +275 | +525 / +495 |
+| basketball | 4.5 | 0.652 | +135 / +125 | +260 / +245 | +455 / +425 |
+| basketball | 5 | 0.663 | +130 / +115 | +245 / +225 | +420 / +395 |
+
+The catch: a bettor who picks legs does not pick at random. Football favourites of 3 to 3.5 points win a teased leg 74 to 79 percent of the time (n about 80), and two of those parlay at about 0.77 squared = 0.59, a fair price near -145. A table priced for random legs (about +120 for a 6-point 2-team) would be generous to anyone who knows that. The placeholder table (-120, +160, +260 football) is priced the way books do it, to survive the smart picks, which is why a random teaser loses against it here. The choice is therefore about what the contest wants: a house-safe table (keep the placeholders), a fair-for-random table (above), or a point-dependent price (cheaper when a leg crosses 3 or 7). Whichever is chosen goes in `ContestRules` (`teaser_tables`) with no code change.
+
 ### 6. Vig in the closing lines
 
 Football: spread 4.67 percent, total 4.70, moneyline 4.32 (n 943 / 943 / 814). Basketball: 4.70, 4.74, 4.25. The contest margin on
