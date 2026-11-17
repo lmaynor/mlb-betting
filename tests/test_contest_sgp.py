@@ -4,6 +4,8 @@ from datetime import datetime, timedelta, timezone
 import pytest
 import sqlalchemy as sa
 
+from tests._contest_engine import make_engine
+
 from contest import store
 from contest.cashout import CashoutRefused, cashout_offer
 from contest.odds import american_to_decimal, payout_cents
@@ -120,7 +122,7 @@ def test_a_ticket_cannot_be_cashed_out():
 
 @pytest.fixture
 def world(tmp_path):
-    engine = sa.create_engine(f"sqlite:///{tmp_path / 'c.db'}")
+    engine = make_engine(tmp_path)
     ensure_schema(engine)
     cid = store.create_contest(engine, "sgp", "SGP test", R, NOW)
     store.create_invite(engine, cid, "WELCOME", 5, NOW)
@@ -138,7 +140,8 @@ def place(world, ticket=None, stake=10_000):
 
 def bal(world):
     engine, cid, _ = world
-    return int(engine.connect().execute(sa.text("SELECT balance_cents FROM contest_entry WHERE user_id = 'u1'")).scalar_one())
+    with engine.connect() as c:                  # closed on exit: a leaked connection would hold a lock that blocks the next test's DROP on Postgres
+        return int(c.execute(sa.text("SELECT balance_cents FROM contest_entry WHERE user_id = 'u1'")).scalar_one())
 
 
 def test_both_legs_win_pays_the_ticket_price(world):

@@ -4,6 +4,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 import sqlalchemy as sa
+
+from tests._contest_engine import make_engine
 from flask import Flask, jsonify
 
 from contest import store
@@ -17,7 +19,7 @@ KEY = "site-key"
 
 
 def make_app(tmp_path):
-    engine = sa.create_engine(f"sqlite:///{tmp_path / 'c.db'}")
+    engine = make_engine(tmp_path)
     app = Flask("t")
     from flask import request
 

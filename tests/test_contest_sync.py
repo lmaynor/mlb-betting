@@ -4,6 +4,8 @@ from datetime import datetime, timedelta, timezone
 import pytest
 import sqlalchemy as sa
 
+from tests._contest_engine import make_engine
+
 from contest import store
 from contest.espn import parse_event, parse_odds, status_of
 from contest.rules import ContestRules
@@ -79,7 +81,7 @@ def test_quotes_follow_the_board_convention():
 
 @pytest.fixture
 def world(tmp_path):
-    engine = sa.create_engine(f"sqlite:///{tmp_path / 'c.db'}")
+    engine = make_engine(tmp_path)
     ensure_schema(engine)
     cid = store.create_contest(engine, "sync", "Sync", ContestRules(sport="ncaaf"), NOW)
     store.create_invite(engine, cid, "WELCOME", 5, NOW)

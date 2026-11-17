@@ -26,7 +26,7 @@ def _engine(tmp_path):
         return sa.create_engine(f"sqlite:///{tmp_path / 'contest.db'}")
     engine = sa.create_engine(url)
     with engine.begin() as c:
-        for t in ("contest_ledger", "contest_leg", "contest_bet", "contest_game", "contest_entry", "contest_invite", "contest"):
+        for t in ("contest_ledger", "contest_blackjack", "contest_quote", "contest_leg", "contest_bet", "contest_game", "contest_entry", "contest_invite", "contest"):
             c.execute(text(f"DROP TABLE IF EXISTS {t}"))
     return engine
 

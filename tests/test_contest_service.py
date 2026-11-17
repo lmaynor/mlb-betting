@@ -4,6 +4,8 @@ from datetime import datetime, timedelta, timezone
 import pytest
 import sqlalchemy as sa
 
+from tests._contest_engine import make_engine
+
 from contest import service, store
 from contest.espn import parse_event
 from contest.rules import ContestRules
@@ -29,7 +31,7 @@ def espn_event(eid, kick=KICK, home_id="2305", away_id="252", spread="+5.5", sta
 
 @pytest.fixture
 def w(tmp_path):
-    engine = sa.create_engine(f"sqlite:///{tmp_path / 'c.db'}")
+    engine = make_engine(tmp_path)
     ensure_schema(engine)
     cid = store.create_contest(engine, SLUG, "Bowl Bankroll", ContestRules(sport="ncaaf"), NOW)
     store.create_invite(engine, cid, "WELCOME", 5, NOW)
