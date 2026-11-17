@@ -4,7 +4,7 @@
  * Leaderboard tabs. SAMPLE MODE: placing a bet only updates this page's own state (nothing is sent anywhere); the feed
  * adapter that talks to the contest API is milestone M2. All numbers shown come from lib/contest (a mirror of the Python engine).
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MobileBottomSheet, useIsMobile } from '@/components/ui/mobile-sheet'
 import { MAX_RENAMES, nameKey, validateName } from '@/lib/contest/names'
 import { fmtMoney } from '@/lib/contest/odds'
@@ -25,7 +25,18 @@ type Tab = 'board' | 'bets' | 'pool' | 'leaders' | 'blackjack'
 const TABS: { id: Tab; label: string }[] = [{ id: 'board', label: 'Board' }, { id: 'bets', label: 'My Bets' }, { id: 'pool', label: 'Pool' }, { id: 'leaders', label: 'Leaderboard' }]
 const BLACKJACK_TAB: { id: Tab; label: string } = { id: 'blackjack', label: 'Blackjack' }
 
-export function ContestClient({ feed }: { feed: ContestFeed }) {
+/** What the server said when it refused: `error: { code, message, detail }` (contest/service.py RequestError.body). */
+type ApiError = { code?: string; message?: string; detail?: Record<string, unknown> }
+const errorOf = (json: unknown): ApiError => (json as { error?: ApiError } | null)?.error ?? {}
+const newKey = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `k${Date.now()}${Math.random().toString(36).slice(2)}`)
+
+/**
+ * `slug` set (and `feed.sample` false) means LIVE: every action goes to /api/contest/<slug>/* and the page replaces its state with the fresh
+ * feed the server returns. Without it the page runs on sample data and nothing leaves the browser.
+ */
+export function ContestClient({ feed: initial, slug }: { feed: ContestFeed; slug?: string }) {
+  const live = !initial.sample && !!slug
+  const [feed, setFeed] = useState(initial)
   const { rules } = feed
   const [tab, setTab] = useState<Tab>('board')
   const [slip, setSlip] = useState<SlipState>({ kind: 'straight', chosen: false, picks: [], teaserPoints: teaserPointOptions(rules)[0] ?? 6, robinSizes: [2] })
@@ -36,10 +47,31 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
   const [receipt, setReceipt] = useState<Receipt | null>(null)
   const [now, setNow] = useState(() => Date.parse(feed.nowIso))
   const [seq, setSeq] = useState(1)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [placing, setPlacing] = useState(false)
+  const attempt = useRef<{ sig: string; key: string } | null>(null)      // the idempotency key of the slip being placed: a retry of the SAME slip reuses it
   const isMobile = useIsMobile()
 
   // `now` starts at the server render time (no hydration mismatch) and then ticks, so closing times track the real clock
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30_000); return () => clearInterval(t) }, [])
+
+  // LIVE MODE: the server is the only source of truth. Every response is the player's whole fresh feed and replaces local state.
+  const applyFeed = useCallback((f: ContestFeed) => { setFeed(f); setMe(f.me); setBalance(f.balanceCents); setBets(f.myBets); setNow(Date.parse(f.nowIso)) }, [])
+  const call = useCallback(async (action: string, body?: unknown): Promise<{ ok: boolean; json: unknown }> => {
+    try {
+      const res = await fetch(`/api/contest/${slug}/${action}`, body === undefined ? { cache: 'no-store' } : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      return { ok: res.ok, json: await res.json().catch(() => ({})) }
+    } catch {
+      return { ok: false, json: { error: { code: 'OFFLINE', message: 'Could not reach the contest. Check your connection and try again.' } } }
+    }
+  }, [slug])
+  const refresh = useCallback(async () => { const r = await call('feed'); if (r.ok) applyFeed(r.json as ContestFeed) }, [call, applyFeed])
+  // scores, game state and prices move on their own: pull a fresh feed every minute while nothing is being placed
+  useEffect(() => {
+    if (!live) return
+    const t = setInterval(() => { if (!placing && document.visibilityState === 'visible') void refresh() }, 60_000)
+    return () => clearInterval(t)
+  }, [live, placing, refresh])
 
   const toggle = useCallback((p: Pick) => { setReceipt(null); setSlip(s => {
     // a chosen Straight may stack picks on one game; everywhere else a new pick on a game replaces the old one
@@ -54,15 +86,72 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
   }) }, [])
 
   // SAMPLE MODE: a cash out only updates this page's own state; the server re-prices and refuses if the number moved (store.cash_out)
-  const cashOut = useCallback((offers: { id: string; cents: number }[]) => {
+  const cashOut = useCallback((offers: { id: string; cents: number }[]): void | Promise<string | null> => {
+    if (live) {
+      return (async () => {
+        const r = await call('cashout', { betIds: offers.map(o => Number(o.id)), expectedCents: offers.reduce((a, o) => a + o.cents, 0) })
+        if (r.ok) { applyFeed(r.json as ContestFeed); return null }
+        const e = errorOf(r.json)
+        await refresh()
+        if (e.code === 'VALUE_CHANGED') return `The cash-out value moved to ${fmtMoney(Number(e.detail?.cents ?? 0))}. Review it and try again.`
+        return e.message || 'That bet cannot be cashed out right now.'
+      })()
+    }
     const paid = new Map(offers.map(o => [o.id, o.cents]))
     setBets(bs => bs.map(b => paid.has(b.id) ? { ...b, status: 'cashed_out' as const, payoutCents: paid.get(b.id) } : b))
     setBalance(b => b + offers.reduce((a, o) => a + o.cents, 0))
-  }, [])
+  }, [live, call, applyFeed, refresh])
 
   const atRisk = useMemo(() => bets.filter(b => b.status === 'pending').reduce((a, b) => a + b.stakeCents, 0), [bets])
 
-  const place = useCallback((stake: number) => {
+  const placeLive = useCallback(async (stake: number): Promise<boolean> => {
+    if (placing) return false
+    setPlacing(true)
+    setNotice(null)
+    const game = feed.games.find(x => x.id === slip.picks[0]?.gameId)
+    const body = {
+      kind: slip.kind, stakeCents: stake, teaserPoints: slip.teaserPoints, robinSizes: slip.robinSizes,
+      picks: slip.picks.map(p => ({ gameId: p.gameId, market: p.market, side: p.side, line: p.line, price: p.price })),
+      ...(slip.kind === 'sgp' ? { ticketPrice: sgpPrice(slip.picks, game, rules) } : {}),
+    }
+    // the same slip and stake retried (a dropped connection, a double click) reuses its key, so it can only ever be placed once
+    const sig = JSON.stringify(body)
+    if (attempt.current?.sig !== sig) attempt.current = { sig, key: newKey() }
+    const before = new Set(bets.map(b => b.id))
+    const r = await call('place', { ...body, key: attempt.current.key })
+    if (r.ok) {
+      const f = r.json as ContestFeed
+      const fresh = f.myBets.filter(b => !before.has(b.id))
+      applyFeed(f)
+      attempt.current = null
+      setSlip(s => ({ ...s, picks: [] }))
+      setReceipt({ kind: slip.kind, bets: fresh, riskCents: fresh.reduce((a, x) => a + x.stakeCents, 0), payoutCents: fresh.reduce((a, x) => a + x.stakeCents + x.toWinCents, 0), placedAt: f.nowIso })
+      setPlacing(false)
+      return true
+    } else {
+      const e = errorOf(r.json)
+      const d = e.detail as { game_id?: number; market?: string; side?: string; line?: number | null; price?: number } | undefined
+      if (e.code === 'PRICE_CHANGED' && d?.game_id != null && d.price != null) {
+        // show the player the number that is on offer now; they place again if they still want it
+        setSlip(s => ({ ...s, picks: s.picks.map(p => p.gameId === d.game_id && p.market === d.market && p.side === d.side ? { ...p, line: d.line ?? p.line, price: Number(d.price) } : p) }))
+        setNotice('A price moved. The slip now shows the current price. Review it and place again.')
+        attempt.current = null
+      } else if (e.code === 'PRICE_CHANGED') {
+        setNotice('The ticket price moved. Review the slip and place again.')
+        attempt.current = null
+      } else if (e.code === 'QUOTE_STALE' || e.code === 'NO_QUOTE' || e.code === 'GAME_CLOSED') {
+        setNotice(e.code === 'GAME_CLOSED' ? 'Betting on one of those games has closed.' : 'Those prices are out of date. The board has been refreshed.')
+      } else {
+        setNotice(e.message || 'The bet was not placed.')
+      }
+      await refresh()
+    }
+    setPlacing(false)
+    return false
+  }, [placing, feed.games, slip, rules, bets, call, applyFeed, refresh])
+
+  const place = useCallback((stake: number): void | Promise<boolean> => {
+    if (live) return placeLive(stake)
     const at = new Date(now).toISOString()
     const mk = (id: string, kind: BetKind, picks: Pick[], risk: number, payout: number, groupId: string | null = null): PlacedBet => ({
       id, kind, groupId, stakeCents: risk, toWinCents: payout - risk, status: 'pending', placedAt: at, teaserPoints: kind === 'teaser' ? slip.teaserPoints : 0,
@@ -91,7 +180,7 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
     setSeq(n => n + 1)
     // a confirmation replaces the slip; the player chooses View My Bets or Keep Betting (nothing jumps away on its own)
     setReceipt({ kind: slip.kind, bets: out, riskCents: out.reduce((a, x) => a + x.stakeCents, 0), payoutCents: out.reduce((a, x) => a + x.stakeCents + x.toWinCents, 0), placedAt: at })
-  }, [now, rules, seq, slip, feed.games])
+  }, [live, placeLive, now, rules, seq, slip, feed.games])
 
   const panel = (
     <SlipPanel slip={slip} games={feed.games} rules={rules} balanceCents={balance} receipt={receipt}
@@ -100,24 +189,27 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
         // a teaser already moves the number and a same-game parlay is priced on the main lines, so an alt line goes back to the main line there
         picks: kind === 'teaser' || kind === 'sgp' ? s.picks.map(p => { const g = feed.games.find(x => x.id === p.gameId); return (g && makePick(g, p.market, p.side)) || p }) : s.picks }))}
       onLine={(from, to) => setSlip(s => ({ ...s, picks: s.picks.map(p => samePick(p, from) ? to : p) }))} onPoints={teaserPoints => setSlip(s => ({ ...s, teaserPoints }))}
-      onSizes={robinSizes => setSlip(s => ({ ...s, robinSizes }))} onRemove={p => toggle(p)} onClear={() => setSlip(s => ({ ...s, picks: [] }))} onPlace={place} />
+      onSizes={robinSizes => setSlip(s => ({ ...s, robinSizes }))} onRemove={p => { setNotice(null); toggle(p) }} onClear={() => { setNotice(null); setSlip(s => ({ ...s, picks: [] })) }}
+      onPlace={place} notice={notice} busy={placing} />
   )
 
   // SAMPLE MODE: joining and renaming only change this page's state. The real calls go to the contest API, which enforces the invite code,
   // uniqueness per contest and the rename limit (store.join_contest / rename_entry); this mirrors its rules so the form behaves the same.
   const board = useMemo(() => feed.leaderboard.map(r => r.mine ? { ...r, name: me.displayName } : r), [feed.leaderboard, me.displayName])
   const taken = (key: string) => feed.leaderboard.some(r => !r.mine && nameKey(r.name) === key)
-  const join = useCallback((input: { inviteCode: string; displayName: string }): JoinResult => {
+  const join = useCallback((input: { inviteCode: string; displayName: string }): JoinResult | Promise<JoinResult> => {
     const v = validateName(input.displayName)
     if (!v.ok) return { ok: false, message: v.message }
+    if (live) return call('join', { inviteCode: input.inviteCode, displayName: v.name }).then(r => { if (r.ok) { applyFeed(r.json as ContestFeed); return { ok: true } as const } return { ok: false, message: errorOf(r.json).message || 'Could not join.' } as const })
     if (taken(v.key)) return { ok: false, message: 'That name is taken in this contest.' }
     setMe(m => ({ ...m, joined: true, displayName: v.name, renamesLeft: MAX_RENAMES }))
     return { ok: true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [feed.leaderboard])
-  const rename = useCallback((next: string): JoinResult => {
+  const rename = useCallback((next: string): JoinResult | Promise<JoinResult> => {
     const v = validateName(next)
     if (!v.ok) return { ok: false, message: v.message }
+    if (live) return call('rename', { displayName: v.name }).then(r => { if (r.ok) { applyFeed(r.json as ContestFeed); return { ok: true } as const } return { ok: false, message: errorOf(r.json).message || 'Could not rename.' } as const })
     if (taken(v.key)) return { ok: false, message: 'That name is taken in this contest.' }
     const changed = v.key !== nameKey(me.displayName)
     if (changed && me.renamesLeft <= 0) return { ok: false, message: `A name can be changed ${MAX_RENAMES} times.` }
@@ -137,7 +229,7 @@ export function ContestClient({ feed }: { feed: ContestFeed }) {
     return (
       <div className="max-w-[1400px] mx-auto pt-4 px-4 sm:px-6 pb-16">
         <h1 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 12px' }}>{feed.name}</h1>
-        <JoinPanel contestName={feed.name} suggested={me.suggestedName} onJoin={join} note="Sample mode: any invite code works here. The real server checks it." />
+        <JoinPanel contestName={feed.name} suggested={me.suggestedName} onJoin={join} note={feed.sample ? 'Sample mode: any invite code works here. The real server checks it.' : undefined} />
       </div>
     )
   }

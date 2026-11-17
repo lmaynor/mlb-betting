@@ -79,7 +79,7 @@ export interface SlipState { kind: BetKind; picks: Pick[]; teaserPoints: number;
 export interface Closed { closed: boolean; reason: string }
 /** Betting closes `closeBufferMin` before kickoff and never opens on a started game. `now` is the server render time, ticked on the client. */
 export function gameClosed(g: BoardGame, now: number, rules: ContestRules): Closed {
-  if (g.status !== 'scheduled') return { closed: true, reason: g.status === 'live' ? 'In play' : 'Final' }
+  if (g.status !== 'scheduled') return { closed: true, reason: g.status === 'live' ? 'In play' : g.status === 'void' ? 'Postponed' : 'Final' }
   if (now >= Date.parse(g.commence) - rules.closeBufferMin * 60_000) return { closed: true, reason: 'Betting closed' }
   return { closed: false, reason: '' }
 }

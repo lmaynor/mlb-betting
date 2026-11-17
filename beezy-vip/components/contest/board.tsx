@@ -69,6 +69,7 @@ function StateLine({ g, closed, reason }: { g: BoardGame; closed: boolean; reaso
       </div>
     )
   }
+  if (g.status === 'void') return <div className="mono" style={{ ...base, color: '#facc15' }}>Postponed or cancelled. Bets on it are refunded.</div>
   if (g.status === 'final') return <div className="mono" style={{ ...base, color: '#7d8596' }}>{st?.detail ?? 'Final'}</div>
   return <div className="mono" style={{ ...base, color: closed ? '#facc15' : '#7d8596' }}>{closed ? reason : `${timeLabel(g.commence)} ET`}</div>
 }

@@ -1,7 +1,13 @@
 import fs from 'fs'
 import path from 'path'
+import { renderToStaticMarkup } from 'react-dom/server'
 
 jest.mock('../app/contest/contest.css', () => ({}), { virtual: true })
+// the live page reads the Clerk user and the contest API; the page test supplies both
+const mockUser = jest.fn()
+const mockFeed = jest.fn()
+jest.mock('@/lib/contest/identity', () => ({ contestUser: () => mockUser() }))
+jest.mock('@/lib/contest/backend', () => ({ fetchFeed: (...a: unknown[]) => mockFeed(...a) }))
 
 describe('/contest page', () => {
   const OLD = process.env.CONTEST_ENABLED
@@ -17,6 +23,35 @@ describe('/contest page', () => {
     await expect(ContestPage()).resolves.toBeTruthy()
     const broke = await ContestPage({ searchParams: Promise.resolve({ preview: 'broke' }) }) as { props: { feed: { balanceCents: number } } }
     expect(broke.props.feed.balanceCents).toBe(4_000)                // the hidden lifeline preview
+  })
+
+  describe('live mode (CONTEST_SLUG set)', () => {
+    const OLD_SLUG = process.env.CONTEST_SLUG
+    beforeEach(() => { process.env.CONTEST_ENABLED = '1'; process.env.CONTEST_SLUG = 'bowls'; mockUser.mockReset(); mockFeed.mockReset() })
+    afterEach(() => { if (OLD_SLUG === undefined) delete process.env.CONTEST_SLUG; else process.env.CONTEST_SLUG = OLD_SLUG })
+    const page = async () => (await import('@/app/contest/page')).default()
+    const text = (n: unknown): string => renderToStaticMarkup(n as React.ReactElement)
+
+    it('asks an anonymous visitor to sign in and never calls the API', async () => {
+      mockUser.mockResolvedValue(null)
+      expect(text(await page())).toContain('Sign in')
+      expect(mockFeed).not.toHaveBeenCalled()
+    })
+    it('passes the signed-in player and the slug to the API and renders the live client with the slug', async () => {
+      mockUser.mockResolvedValue({ id: 'user_1', suggestedName: 'alex' })
+      mockFeed.mockResolvedValue({ status: 200, body: { name: 'Bowl Bankroll', sample: false } })
+      const el = await page() as { props: { feed: { sample: boolean }; slug: string } }
+      expect(mockFeed).toHaveBeenCalledWith('bowls', 'user_1', 'alex')
+      expect(el.props.slug).toBe('bowls')
+      expect(el.props.feed.sample).toBe(false)
+    })
+    it('says so when the contest does not exist or the service is down, and never falls back to sample data', async () => {
+      mockUser.mockResolvedValue({ id: 'user_1', suggestedName: '' })
+      mockFeed.mockResolvedValue({ status: 404, body: {} })
+      expect(text(await page())).toContain('not open')
+      mockFeed.mockResolvedValue({ status: 503, body: {} })
+      expect(text(await page())).toContain('could not be loaded')
+    })
   })
 
   const FILES = ['app/contest/page.tsx', 'components/contest/board.tsx', 'components/contest/bets-table.tsx', 'components/contest/contest-client.tsx',

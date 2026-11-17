@@ -37,7 +37,8 @@ export interface BoardGame {
   /** Section label on the board, e.g. "CFP First Round" or "Bowl Games". */
   round: string
   commence: string
-  status: 'scheduled' | 'live' | 'final'
+  /** `void`: postponed or cancelled. Every open leg on it is refunded or dropped by the server. */
+  status: 'scheduled' | 'live' | 'final' | 'void'
   away: TeamRef
   home: TeamRef
   /** `line` is the HOME handicap (home -3.5 is -3.5); `away` / `home` are the prices of that side. */

@@ -50,7 +50,7 @@ const BTN: React.CSSProperties = { fontSize: 12, fontWeight: 600, padding: '6px 
 /** The cash-out control under an open bet's status: the value now, or the reason it is not offered; asking opens an inline Confirm / Cancel (no modal). */
 function CashoutControl({ row, rules, byId, now, confirming, setConfirming, onConfirm }: {
   row: Row; rules: ContestRules; byId: Map<number, BoardGame>; now: number
-  confirming: boolean; setConfirming: (key: string | null) => void; onConfirm: (row: Row, offers: { id: string; cents: number }[], cents: number, stake: number) => void
+  confirming: boolean; setConfirming: (key: string | null) => void; onConfirm: (row: Row, offers: { id: string; cents: number }[], cents: number, stake: number) => void | Promise<void>
 }) {
   const c = cashoutGroup(row.bets, byId, rules, now)
   if (!c.ok) return c.reason === 'disabled' || c.reason === 'settled' ? null : <div className="mono" style={{ fontSize: 12, color: '#7d8596', marginTop: 6 }}>{CASHOUT_REASON_TEXT[c.reason]}</div>
@@ -74,7 +74,9 @@ function CashoutControl({ row, rules, byId, now, confirming, setConfirming, onCo
 }
 
 export function MyBets({ bets, games, rules, now, onCashOut }: {
-  bets: PlacedBet[]; games: BoardGame[]; rules: ContestRules; now: number; onCashOut: (offers: { id: string; cents: number }[]) => void
+  bets: PlacedBet[]; games: BoardGame[]; rules: ContestRules; now: number
+  /** Sample mode returns nothing. Live mode returns a message when the server refused (the value moved, the game closed). */
+  onCashOut: (offers: { id: string; cents: number }[]) => void | string | null | Promise<void | string | null>
 }) {
   const [open, setOpen] = useState<string | null>(null)
   const [confirming, setConfirming] = useState<string | null>(null)
@@ -82,9 +84,11 @@ export function MyBets({ bets, games, rules, now, onCashOut }: {
   const byId = new Map(games.map(g => [g.id, g]))
   const rows = fold(bets)
   if (rows.length === 0) return <p style={{ ...WRAP, padding: 20, fontSize: 13, color: '#7d8596', margin: 0 }}>No bets yet. Your picks are always visible to you and hidden from everyone else until kickoff.</p>
-  const confirm = (row: Row, offers: { id: string; cents: number }[], cents: number, stake: number) => {
-    onCashOut(offers)
+  const confirm = async (row: Row, offers: { id: string; cents: number }[], cents: number, stake: number) => {
+    const r = onCashOut(offers)
+    const refused = r instanceof Promise ? await r : r                          // sample mode answers at once: the confirm closes in the same click
     setConfirming(null)
+    if (refused) { setNotice(refused); return }
     setNotice(`Cashed out ${row.label} for ${fmtMoney(cents)} (${fmtMoney(cents - stake, { sign: true })} vs risk).`)
   }
   const paid = (r: Row) => r.bets.filter(b => b.status === 'cashed_out').reduce((a, b) => a + (b.payoutCents ?? 0), 0)

@@ -49,12 +49,16 @@ function AltLine({ pick, game, rules, onLine }: { pick: Pick; game: BoardGame; r
   )
 }
 
-export function SlipPanel({ slip, games, rules, balanceCents, receipt, onDoneReceipt, onViewBets, onKind, onPoints, onSizes, onRemove, onClear, onPlace, onLine }: {
+export function SlipPanel({ slip, games, rules, balanceCents, receipt, onDoneReceipt, onViewBets, onKind, onPoints, onSizes, onRemove, onClear, onPlace, onLine, notice, busy }: {
   slip: SlipState; games: BoardGame[]; rules: ContestRules; balanceCents: number
   receipt: Receipt | null; onDoneReceipt: () => void; onViewBets: () => void
   onKind: (k: BetKind) => void; onPoints: (p: number) => void; onSizes: (s: number[]) => void
   onRemove: (p: Pick) => void; onClear: () => void; onLine: (from: Pick, to: Pick) => void
-  onPlace: (stakeCents: number) => void
+  /** Sample mode returns nothing (the stake box clears at once). Live mode returns whether the server accepted the slip: a refusal keeps the stake. */
+  onPlace: (stakeCents: number) => void | Promise<boolean>
+  /** A server message to show above the Place button (a price moved, a game closed). */
+  notice?: string | null
+  busy?: boolean
 }) {
   const [raw, setRaw] = useState('')
   const byId = new Map(games.map(g => [g.id, g]))
@@ -76,7 +80,7 @@ export function SlipPanel({ slip, games, rules, balanceCents, receipt, onDoneRec
     else { bets = robinCount(n, slip.robinSizes); preview = previewRobin(slip.picks, slip.robinSizes, stake) }
     if (preview && preview.toWinCents === 0) preview = { ...preview, toWinCents: preview.payoutCents - preview.riskCents }
   }
-  const ready = !issue && stake != null && preview != null
+  const ready = !issue && stake != null && preview != null && !busy
 
   if (receipt) return <section aria-label="Bet Slip" style={PANEL}><BetReceipt receipt={receipt} games={games} onDone={onDoneReceipt} onViewBets={onViewBets} /></section>
 
@@ -202,11 +206,11 @@ export function SlipPanel({ slip, games, rules, balanceCents, receipt, onDoneRec
             <dt style={{ color: '#7d8596' }}>Payout</dt><dd style={{ margin: 0, textAlign: 'right' }}>{preview ? fmtMoney(preview.payoutCents) : '--'}</dd>
           </dl>
 
-          <button type="button" disabled={!ready} onClick={() => ready && stake != null && (onPlace(stake), setRaw(''))} className="btn-primary"
+          <button type="button" disabled={!ready} onClick={() => { if (!ready || stake == null) return; const r = onPlace(stake); if (r instanceof Promise) { void r.then(ok => { if (ok) setRaw('') }) } else setRaw('') }} className="btn-primary"
             style={{ width: '100%', height: 42, marginTop: 14, fontSize: 14, fontWeight: 600, opacity: ready ? 1 : 0.45, cursor: ready ? 'pointer' : 'not-allowed' }}>
-            {ready ? `Place Bet \u00b7 ${fmtMoney(preview!.riskCents)}` : 'Place Bet'}
+            {busy ? 'Placing' : ready ? `Place Bet \u00b7 ${fmtMoney(preview!.riskCents)}` : 'Place Bet'}
           </button>
-          <p role="status" className="mono" style={{ fontSize: 12, color: ready ? '#7d8596' : '#facc15', margin: '8px 0 0', minHeight: 16 }}>{ready ? 'Picks stay hidden from others until kickoff.' : issue}</p>
+          <p role="status" className="mono" style={{ fontSize: 12, color: notice || !ready ? '#facc15' : '#7d8596', margin: '8px 0 0', minHeight: 16 }}>{notice ?? (ready ? 'Picks stay hidden from others until kickoff.' : issue)}</p>
         </div>
       )}
     </section>
