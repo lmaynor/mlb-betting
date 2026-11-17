@@ -5,6 +5,7 @@ Postgres. Server time is passed in as `now`; nothing reads a client clock.
 """
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from typing import Mapping, Sequence
 
@@ -81,6 +82,33 @@ def upsert_game(engine, contest_id: int, espn_event_id: str, commence_time: date
         sport = c.execute(text("SELECT sport FROM contest WHERE id = :c"), {"c": contest_id}).scalar_one()
         return c.execute(text("""INSERT INTO contest_game (contest_id, sport, espn_event_id, bp_key, away_team, home_team, commence_time, round_label)
                                  VALUES (:c, :sp, :e, :b, :a, :h, :ct, :r) RETURNING id"""), {**p, "sp": sport}).scalar_one()
+
+
+def set_game_meta(engine, game_id: int, teams: dict | None = None, state: dict | None = None) -> None:
+    """Display data only (team ids / ranks for the logos, the live score line). Never read by betting or grading."""
+    with engine.begin() as c:
+        c.execute(text("UPDATE contest_game SET teams_json = COALESCE(:t, teams_json), state_json = COALESCE(:s, state_json) WHERE id = :g"),
+                  {"t": json.dumps(teams, sort_keys=True) if teams is not None else None,
+                   "s": json.dumps(state, sort_keys=True) if state is not None else None, "g": game_id})
+
+
+def write_quotes(engine, game_id: int, quotes: Mapping[tuple, Quote], fetched_at: datetime, source: str | None = None) -> None:
+    """Replace the stored board for one game with `quotes` ({(market, side): Quote}). `fetched_at` is the FEED's own timestamp."""
+    with engine.begin() as c:
+        for (market, side), q in quotes.items():
+            p = {"g": game_id, "m": market, "s": side, "l": q.line, "p": q.price, "t": iso(fetched_at), "src": source}
+            if c.execute(text("SELECT 1 FROM contest_quote WHERE game_id = :g AND market = :m AND side = :s"), p).first():
+                c.execute(text("UPDATE contest_quote SET line = :l, price = :p, fetched_at = :t, source = :src WHERE game_id = :g AND market = :m AND side = :s"), p)
+            else:
+                c.execute(text("INSERT INTO contest_quote (game_id, market, side, line, price, fetched_at, source) VALUES (:g, :m, :s, :l, :p, :t, :src)"), p)
+
+
+def load_board(engine, contest_id: int) -> dict[tuple, Quote]:
+    """Every stored quote of the contest as {(game_id, market, side): Quote}, the form validate_slip and cash out take."""
+    with engine.connect() as c:
+        rows = c.execute(text("""SELECT q.game_id, q.market, q.side, q.line, q.price, q.fetched_at FROM contest_quote q
+                                 JOIN contest_game g ON g.id = q.game_id WHERE g.contest_id = :c"""), {"c": contest_id}).all()
+    return {(gid, m, s): Quote(None if ln is None else float(ln), int(px), parse_ts(t)) for gid, m, s, ln, px, t in rows}
 
 
 def _valid_name(c, contest_id: int, raw: str, exclude_entry: int | None) -> tuple[str, str]:
@@ -394,19 +422,48 @@ def reconcile(engine, contest_id: int) -> list[dict]:
 def leaderboard(engine, contest_id: int) -> list[dict]:
     """Ranked by bankroll = balance + stakes still at risk. Shows no picks, only totals and the settled record."""
     with engine.connect() as c:
-        rows = c.execute(text("""SELECT e.id, e.display_name, e.balance_cents, e.status,
+        rows = c.execute(text("""SELECT e.id, e.display_name, e.balance_cents, e.status, e.user_id,
                   COALESCE(SUM(CASE WHEN b.status = 'pending' THEN b.stake_cents ELSE 0 END), 0),
                   COALESCE(SUM(CASE WHEN b.status = 'won' OR (b.status = 'cashed_out' AND b.payout_cents > b.stake_cents) THEN 1 ELSE 0 END), 0),
                   COALESCE(SUM(CASE WHEN b.status = 'lost' OR (b.status = 'cashed_out' AND b.payout_cents < b.stake_cents) THEN 1 ELSE 0 END), 0),
                   COALESCE(SUM(CASE WHEN b.status IN ('push', 'void') OR (b.status = 'cashed_out' AND b.payout_cents = b.stake_cents) THEN 1 ELSE 0 END), 0)
                   FROM contest_entry e LEFT JOIN contest_bet b ON b.entry_id = e.id
-                  WHERE e.contest_id = :c GROUP BY e.id, e.display_name, e.balance_cents, e.status"""), {"c": contest_id}).all()
-    out = [{"entry_id": i, "display_name": n, "balance_cents": int(bal), "open_risk_cents": int(risk), "bankroll_cents": int(bal) + int(risk),
-            "status": st, "won": int(w), "lost": int(lo), "pushed": int(p)} for i, n, bal, st, risk, w, lo, p in rows]
+                  WHERE e.contest_id = :c GROUP BY e.id, e.display_name, e.balance_cents, e.status, e.user_id"""), {"c": contest_id}).all()
+    out = [{"entry_id": i, "user_id": uid, "display_name": n, "balance_cents": int(bal), "open_risk_cents": int(risk), "bankroll_cents": int(bal) + int(risk),
+            "status": st, "won": int(w), "lost": int(lo), "pushed": int(p)} for i, n, bal, st, uid, risk, w, lo, p in rows]
     out.sort(key=lambda r: (-r["bankroll_cents"], r["display_name"].lower()))
     for rank, r in enumerate(out, 1):
         r["rank"] = rank
     return out
+
+
+def entry_of(engine, contest_id: int, user_id: str) -> dict | None:
+    """The player's own entry (balance, name, renames used, status), or None before they join."""
+    with engine.connect() as c:
+        r = c.execute(text("""SELECT id, display_name, balance_cents, status, name_changes FROM contest_entry
+                              WHERE contest_id = :c AND user_id = :u"""), {"c": contest_id, "u": user_id}).first()
+    return None if r is None else {"entry_id": int(r[0]), "display_name": r[1], "balance_cents": int(r[2]), "status": r[3], "name_changes": int(r[4])}
+
+
+def bets_of(engine, contest_id: int, user_id: str) -> list[dict]:
+    """Every bet the player has placed, newest first, with its legs (the player always sees their own picks)."""
+    with engine.connect() as c:
+        ids = [int(r[0]) for r in c.execute(text("""SELECT b.id FROM contest_bet b JOIN contest_entry e ON e.id = b.entry_id
+                                                  WHERE e.contest_id = :c AND e.user_id = :u ORDER BY b.id DESC"""), {"c": contest_id, "u": user_id}).all()]
+        return [_bet_dict(c, i) for i in ids]
+
+
+def contest_by_slug(engine, slug: str) -> dict | None:
+    with engine.connect() as c:
+        r = c.execute(text("SELECT id, name, status, rules_json FROM contest WHERE slug = :s"), {"s": slug}).first()
+    return None if r is None else {"id": int(r[0]), "name": r[1], "status": r[2], "rules": ContestRules.from_json(r[3])}
+
+
+def games_of(engine, contest_id: int) -> list[dict]:
+    with engine.connect() as c:
+        rows = c.execute(text("""SELECT id, espn_event_id, away_team, home_team, commence_time, round_label, status, home_score, away_score, teams_json, state_json
+                                 FROM contest_game WHERE contest_id = :c ORDER BY commence_time, id"""), {"c": contest_id}).mappings().all()
+    return [dict(r) for r in rows]
 
 
 def visible_bets(engine, contest_id: int, viewer_user_id: str, now: datetime) -> list[dict]:

@@ -56,7 +56,19 @@ TABLES = [
         status        TEXT NOT NULL DEFAULT 'scheduled',
         home_score    INTEGER,
         away_score    INTEGER,
+        teams_json    TEXT,
+        state_json    TEXT,
         UNIQUE (contest_id, espn_event_id)
+    )""",
+    f"""CREATE TABLE IF NOT EXISTS contest_quote (
+        game_id       INTEGER NOT NULL,
+        market        TEXT NOT NULL,
+        side          TEXT NOT NULL,
+        line          DOUBLE PRECISION,
+        price         INTEGER NOT NULL,
+        fetched_at    TEXT NOT NULL,
+        source        TEXT,
+        PRIMARY KEY (game_id, market, side)
     )""",
     f"""CREATE TABLE IF NOT EXISTS contest_bet (
         id              {_PK},

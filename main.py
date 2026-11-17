@@ -995,6 +995,15 @@ def _scheduler_auth_required(req):
     return jsonify({"error": "Unauthorized -- scheduler OIDC verification failed"}), 401
 
 
+# Bankroll Challenge (play-money contest): /api/contest/* and /contest-refresh. OFF unless CONTEST_ENABLED is on; a missing contest/
+# directory in the image must never take the rest of the service down, so a failed import only logs.
+try:
+    from contest.api import register_contest_api
+    register_contest_api(app, _get_engine, _auth_required, _scheduler_auth_required)
+except ImportError as _contest_exc:  # noqa: BLE001
+    logger.warning(f"contest API not registered: {_contest_exc}")
+
+
 @app.route("/api/public/picks/today", methods=["GET", "OPTIONS"])
 def public_picks_today():
     if request.method == "OPTIONS":
