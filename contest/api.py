@@ -16,8 +16,8 @@ from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
 
-from contest import refresh as refresh_mod
-from contest import service
+from contest import notify, refresh as refresh_mod, service, store
+from contest.ratelimit import RateLimiter
 from contest.schema import ensure_schema
 
 logger = logging.getLogger(__name__)
@@ -29,10 +29,18 @@ def contest_enabled(env=os.environ) -> bool:
     return (env.get("CONTEST_ENABLED") or "").strip().lower() not in _OFF
 
 
-def register_contest_api(app, get_engine, auth_required, scheduler_auth_required) -> None:
+def register_contest_api(app, get_engine, auth_required, scheduler_auth_required, limiter: RateLimiter | None = None) -> None:
     """Attach the routes. `get_engine` -> SQLAlchemy engine; the two auth callables return None when allowed, else a Flask response."""
     bp = Blueprint("contest", __name__)                            # built per call so a test can register it on many apps
     state = {"schema": False}
+    limiter = limiter or RateLimiter()
+
+    def limited(bucket):
+        wait = limiter.check(user_id(), bucket)
+        if not wait:
+            return None
+        resp = jsonify({"error": {"code": "RATE_LIMITED", "message": f"Too many requests. Try again in {int(wait) + 1} seconds.", "detail": {"retry_after": int(wait) + 1}}})
+        return resp, 429, {"Retry-After": str(int(wait) + 1)}
 
     def engine():
         e = get_engine()
@@ -65,6 +73,9 @@ def register_contest_api(app, get_engine, auth_required, scheduler_auth_required
             return err
         if not user_id():
             return jsonify({"error": {"code": "NO_USER", "message": "sign in first"}}), 401
+        slow = limited("read")
+        if slow:
+            return slow
         return run(lambda: service.feed(engine(), slug, user_id(), datetime.now(timezone.utc), (request.args.get("name") or "")[:40]))
 
     @bp.route("/api/contest/<slug>/<action>", methods=["POST"])
@@ -77,10 +88,41 @@ def register_contest_api(app, get_engine, auth_required, scheduler_auth_required
             return jsonify({"error": {"code": "NO_ROUTE", "message": f"no action {action!r}"}}), 404
         if not user_id():
             return jsonify({"error": {"code": "NO_USER", "message": "sign in first"}}), 401
+        slow = limited(action)
+        if slow:
+            return slow
         body = request.get_json(silent=True)
         if not isinstance(body, dict):
             return jsonify({"error": {"code": "BAD_REQUEST", "message": "a JSON object body is required"}}), 400
         return run(lambda: fn(engine(), slug, user_id(), body, datetime.now(timezone.utc)))
+
+    def admin_gate():
+        err = gate()
+        if err:
+            return err
+        if not user_id():
+            return jsonify({"error": {"code": "NO_USER", "message": "sign in first"}}), 401
+        # the Next proxy sets this only after checking the player's Clerk organiser role; the site key is what makes the header trustworthy
+        if request.headers.get("X-Contest-Admin") != "1":
+            return jsonify({"error": {"code": "FORBIDDEN", "message": "organisers only"}}), 403
+        return None
+
+    @bp.route("/api/contest/<slug>/admin", methods=["GET"])
+    def admin_state_route(slug):
+        err = admin_gate()
+        if err:
+            return err
+        return run(lambda: service.admin_state(engine(), slug))
+
+    @bp.route("/api/contest/<slug>/admin/<op>", methods=["POST"])
+    def admin_op_route(slug, op):
+        err = admin_gate()
+        if err:
+            return err
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            return jsonify({"error": {"code": "BAD_REQUEST", "message": "a JSON object body is required"}}), 400
+        return run(lambda: service.admin_action(engine(), slug, user_id(), op, body, datetime.now(timezone.utc)))
 
     @bp.route("/contest-refresh", methods=["POST"])
     def refresh_route():
@@ -101,6 +143,12 @@ def register_contest_api(app, get_engine, auth_required, scheduler_auth_required
         except Exception:                                          # noqa: BLE001
             logger.exception("contest refresh failed")
             return jsonify({"error": {"code": "SERVER", "message": "refresh failed"}}), 500
+        if notify.enabled():
+            try:
+                hook = os.environ["CONTEST_DISCORD_WEBHOOK"].strip()
+                res["notify"] = notify.notify_pass(engine(), store.contest_by_slug(engine(), slug)["id"], datetime.now(timezone.utc), lambda m: notify.post_discord(hook, m))
+            except Exception:                                      # noqa: BLE001 - announcements are a courtesy, never a reason to fail the refresh
+                logger.exception("contest notify failed")
         return jsonify(res)
 
     app.register_blueprint(bp)

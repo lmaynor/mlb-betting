@@ -205,3 +205,27 @@ def test_bad_requests_are_400_and_an_unknown_contest_is_404(w):
     with pytest.raises(RequestError) as e:
         service.cash_out(engine, SLUG, "u1", {"betIds": [], "expectedCents": 0}, NOW)
     assert e.value.http == 400
+
+
+def test_bankroll_history_follows_settled_bets_not_placed_ones(w):
+    engine, cid = w
+    joined(w)
+    assert [p["cents"] for p in service.feed(engine, SLUG, "u1", NOW)["history"]] == [500_000]
+    service.place(engine, SLUG, "u1", {"kind": "straight", "picks": [pick()], "stakeCents": 10_000, "key": "k"}, NOW)
+    assert [p["cents"] for p in service.feed(engine, SLUG, "u1", NOW)["history"]] == [500_000]          # a stake moves balance to risk: bankroll unchanged
+    sync_events(engine, cid, [espn_event("1", state="post", name="STATUS_FINAL", completed=True, scores=("21", "20"))], KICK + timedelta(hours=4))
+    assert [p["cents"] for p in service.feed(engine, SLUG, "u1", KICK + timedelta(hours=4))["history"]] == [500_000, 508_929]
+    store.adjust(engine, store.entry_of(engine, cid, "u1")["entry_id"], -5_000, "refund a duplicate", KICK + timedelta(hours=5))
+    assert service.feed(engine, SLUG, "u1", KICK + timedelta(hours=5))["history"][-1]["cents"] == 503_929
+    assert service.feed(engine, SLUG, "nobody", NOW)["history"] == []
+
+
+def test_a_lost_bet_is_a_step_down_by_the_stake(w):
+    engine, cid = w
+    joined(w)
+    service.place(engine, SLUG, "u1", {"kind": "straight", "picks": [pick()], "stakeCents": 10_000, "key": "k"}, NOW)
+    sync_events(engine, cid, [espn_event("1", state="post", name="STATUS_FINAL", completed=True, scores=("10", "30"))], KICK + timedelta(hours=4))
+    h = service.feed(engine, SLUG, "u1", KICK + timedelta(hours=4))["history"]
+    assert [p["cents"] for p in h] == [500_000, 490_000]
+    f = service.feed(engine, SLUG, "u1", KICK + timedelta(hours=4))
+    assert f["balanceCents"] == h[-1]["cents"]                      # nothing at risk, so bankroll equals balance

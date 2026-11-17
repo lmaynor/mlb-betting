@@ -105,3 +105,25 @@ def test_refresh_needs_the_scheduler_and_runs_a_pass_with_an_injected_feed(tmp_p
     monkeypatch.setattr(R, "fetch_events", lambda sport, start, end, http=None: [espn_event("9", kick=datetime.now(timezone.utc) + timedelta(days=2))])
     r = c.post("/contest-refresh", json={"slug": "bowls"}, headers={"Authorization": "Bearer ok"})
     assert r.status_code == 200 and r.json["games"] == 1 and r.json["errors"] == []
+
+
+def test_rate_limits_answer_429_with_retry_after_and_are_per_user_and_bucket(tmp_path, monkeypatch):
+    from contest.ratelimit import RateLimiter
+    monkeypatch.setenv("CONTEST_ENABLED", "1")
+    engine = make_engine(tmp_path)
+    from contest.schema import ensure_schema
+    ensure_schema(engine)
+    cid = store.create_contest(engine, "bowls", "Bowl Bankroll", ContestRules(sport="ncaaf"), NOW)
+    store.create_invite(engine, cid, "WELCOME", 5, NOW)
+    clock = {"t": 0.0}
+    app = Flask("rl")
+    register_contest_api(app, lambda: engine, lambda req: None, lambda req: None, RateLimiter({"join": (2, 600), "read": (3, 60)}, lambda: clock["t"]))
+    c = app.test_client()
+    for _ in range(2):
+        assert c.post("/api/contest/bowls/join", json={"inviteCode": "WRONG", "displayName": "Alex"}, headers=H).status_code == 403
+    r = c.post("/api/contest/bowls/join", json={"inviteCode": "WELCOME", "displayName": "Alex"}, headers=H)
+    assert r.status_code == 429 and r.json["error"]["code"] == "RATE_LIMITED" and int(r.headers["Retry-After"]) >= 1
+    assert c.post("/api/contest/bowls/join", json={"inviteCode": "WELCOME", "displayName": "Blake"}, headers={**H, "X-Contest-User": "u2"}).status_code == 200   # another user is not limited
+    assert c.get("/api/contest/bowls/feed", headers=H).status_code == 200                          # another bucket is not limited
+    clock["t"] = 601.0
+    assert c.post("/api/contest/bowls/join", json={"inviteCode": "WELCOME", "displayName": "Alex"}, headers=H).status_code == 200   # the window passed

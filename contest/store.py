@@ -437,6 +437,63 @@ def leaderboard(engine, contest_id: int) -> list[dict]:
     return out
 
 
+def log_admin(engine, contest_id: int, actor: str, action: str, detail: dict, now: datetime) -> None:
+    """Every organiser action leaves a row: who, what, when. Append-only."""
+    with engine.begin() as c:
+        c.execute(text("INSERT INTO contest_admin_log (contest_id, ts, actor, action, detail_json) VALUES (:c, :t, :a, :x, :d)"),
+                  {"c": contest_id, "t": iso(now), "a": actor, "x": action, "d": json.dumps(detail, sort_keys=True)})
+
+
+def admin_log(engine, contest_id: int, limit: int = 100) -> list[dict]:
+    with engine.connect() as c:
+        rows = c.execute(text("SELECT ts, actor, action, detail_json FROM contest_admin_log WHERE contest_id = :c ORDER BY id DESC LIMIT :n"),
+                         {"c": contest_id, "n": limit}).all()
+    return [{"ts": r[0], "actor": r[1], "action": r[2], "detail": json.loads(r[3] or "{}")} for r in rows]
+
+
+def set_status(engine, contest_id: int, status: str) -> None:
+    """open | closed. A closed contest refuses new bets (placing checks it); settling and cash-out of existing bets are unaffected."""
+    if status not in ("open", "closed"):
+        raise ContestError("BAD_STATUS", "status is open or closed")
+    with engine.begin() as c:
+        c.execute(text("UPDATE contest SET status = :s WHERE id = :c"), {"s": status, "c": contest_id})
+
+
+def invites_of(engine, contest_id: int) -> list[dict]:
+    with engine.connect() as c:
+        rows = c.execute(text("SELECT code, max_uses, uses FROM contest_invite WHERE contest_id = :c ORDER BY created_at, code"), {"c": contest_id}).all()
+    return [{"code": r[0], "max_uses": int(r[1]), "uses": int(r[2])} for r in rows]
+
+
+def entries_of(engine, contest_id: int) -> list[dict]:
+    with engine.connect() as c:
+        rows = c.execute(text("""SELECT id, user_id, display_name, balance_cents, status, name_changes, joined_at FROM contest_entry
+                              WHERE contest_id = :c ORDER BY id"""), {"c": contest_id}).all()
+    return [{"entry_id": int(r[0]), "user_id": r[1], "display_name": r[2], "balance_cents": int(r[3]), "status": r[4], "name_changes": int(r[5]), "joined_at": r[6]} for r in rows]
+
+
+def bankroll_history(engine, contest_id: int, user_id: str) -> list[dict]:
+    """The player's bankroll (balance plus stakes at risk) after each event that changed it, oldest first: the starting bankroll, every bet
+    as it settles (payout minus stake: a loss is just the stake), cash outs, adjustments and blackjack results. Placing a bet moves money
+    from balance to risk, so it does not change the bankroll and is not a point."""
+    with engine.connect() as c:
+        e = c.execute(text("SELECT id FROM contest_entry WHERE contest_id = :c AND user_id = :u"), {"c": contest_id, "u": user_id}).first()
+        if e is None:
+            return []
+        events: list[tuple[str, int, int]] = []        # (ts, order, delta)
+        for ts, kind, amt, bet_id in c.execute(text("SELECT ts, kind, amount_cents, bet_id FROM contest_ledger WHERE entry_id = :e ORDER BY id"), {"e": e[0]}).all():
+            if kind in ("START", "ADJUST", "BJ_PAYOUT", "BJ_STAKE"):
+                events.append((ts, 0, int(amt)))
+        for ts, stake, payout in c.execute(text("SELECT settled_at, stake_cents, payout_cents FROM contest_bet WHERE entry_id = :e AND settled_at IS NOT NULL ORDER BY settled_at, id"), {"e": e[0]}).all():
+            events.append((ts, 1, int(payout or 0) - int(stake)))
+    events.sort(key=lambda x: (x[0], x[1]))
+    out, total = [], 0
+    for ts, _o, d in events:
+        total += d
+        out.append({"ts": ts, "cents": total})
+    return out
+
+
 def entry_of(engine, contest_id: int, user_id: str) -> dict | None:
     """The player's own entry (balance, name, renames used, status), or None before they join."""
     with engine.connect() as c:

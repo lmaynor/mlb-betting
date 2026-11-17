@@ -60,6 +60,20 @@ TABLES = [
         state_json    TEXT,
         UNIQUE (contest_id, espn_event_id)
     )""",
+    f"""CREATE TABLE IF NOT EXISTS contest_notice (
+        contest_id    INTEGER NOT NULL,
+        key           TEXT NOT NULL,
+        sent_at       TEXT NOT NULL,
+        PRIMARY KEY (contest_id, key)
+    )""",
+    f"""CREATE TABLE IF NOT EXISTS contest_admin_log (
+        id            {_PK},
+        contest_id    INTEGER NOT NULL,
+        ts            TEXT NOT NULL,
+        actor         TEXT NOT NULL,
+        action        TEXT NOT NULL,
+        detail_json   TEXT
+    )""",
     f"""CREATE TABLE IF NOT EXISTS contest_quote (
         game_id       INTEGER NOT NULL,
         market        TEXT NOT NULL,

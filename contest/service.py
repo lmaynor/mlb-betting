@@ -15,6 +15,8 @@ import json
 from datetime import datetime, timedelta
 from typing import Any
 
+import sqlalchemy.exc as sa_exc
+
 from contest import store
 from contest.cashout import CashoutRefused
 from contest.names import MAX_RENAMES
@@ -140,6 +142,7 @@ def feed(engine, slug: str, user_id: str, now: datetime, suggested_name: str = "
         "me": {"joined": entry is not None, "displayName": entry["display_name"] if entry else "", "suggestedName": suggested_name,
                "renamesLeft": max(0, MAX_RENAMES - entry["name_changes"]) if entry else MAX_RENAMES},
         "balanceCents": entry["balance_cents"] if entry else 0,
+        "history": store.bankroll_history(engine, cid, user_id),
         "games": games_json(engine, cid, now),
         "myBets": [_bet_json(b, rules) for b in store.bets_of(engine, cid, user_id)] if entry else [],
         "pool": [{"id": str(p["bet_id"]), "owner": p["owner"], "kind": p["kind"], "status": p["status"], "stakeCents": p["stake_cents"],
@@ -206,3 +209,55 @@ def cash_out(engine, slug: str, user_id: str, body: dict, now: datetime) -> dict
         raise RequestError(400, "BAD_REQUEST", "no bets to cash out")
     _wrap(store.cash_out, engine, c["id"], user_id, ids, expected, now, store.load_board(engine, c["id"]))
     return feed(engine, slug, user_id, now)
+
+
+# ------------------------------------------------------------------------------------------------------------ organiser
+
+def _admin_state(engine, slug: str) -> dict:
+    c = contest_or_404(engine, slug)
+    cid = c["id"]
+    return {"name": c["name"], "status": c["status"], "entries": store.entries_of(engine, cid), "invites": store.invites_of(engine, cid),
+            "games": [{"id": g["id"], "away": g["away_team"], "home": g["home_team"], "commence": g["commence_time"], "status": g["status"],
+                       "homeScore": g["home_score"], "awayScore": g["away_score"]} for g in store.games_of(engine, cid)],
+            "ledgerMismatches": store.reconcile(engine, cid), "log": store.admin_log(engine, cid, 50)}
+
+
+def admin_state(engine, slug: str) -> dict:
+    return _admin_state(engine, slug)
+
+
+def admin_action(engine, slug: str, actor: str, op: str, body: dict, now: datetime) -> dict:
+    """An organiser action. `op`: rename | adjust | void-game | settle-game | invite | status. Each is logged with who did it."""
+    c = contest_or_404(engine, slug)
+    cid = c["id"]
+    try:
+        if op == "rename":
+            name = _wrap(store.admin_rename, engine, int(body["entryId"]), str(body["displayName"]))
+            detail = {"entry": int(body["entryId"]), "name": name}
+        elif op == "adjust":
+            bal = _wrap(store.adjust, engine, int(body["entryId"]), int(body["cents"]), str(body.get("note") or ""), now)
+            detail = {"entry": int(body["entryId"]), "cents": int(body["cents"]), "note": str(body.get("note")), "balance": bal}
+        elif op == "void-game":
+            settled = _wrap(store.void_game, engine, int(body["gameId"]), now)
+            detail = {"game": int(body["gameId"]), "bets_settled": len(settled)}
+        elif op == "settle-game":
+            settled = _wrap(store.settle_game, engine, int(body["gameId"]), int(body["homeScore"]), int(body["awayScore"]), now)
+            detail = {"game": int(body["gameId"]), "home": int(body["homeScore"]), "away": int(body["awayScore"]), "bets_settled": len(settled)}
+        elif op == "invite":
+            code = str(body["code"]).strip()
+            if not code:
+                raise RequestError(400, "BAD_REQUEST", "an invite needs a code")
+            store.create_invite(engine, cid, code, int(body.get("maxUses", 1)), now)
+            detail = {"code": code, "max_uses": int(body.get("maxUses", 1))}
+        elif op == "status":
+            _wrap(store.set_status, engine, cid, str(body["status"]))
+            detail = {"status": str(body["status"])}
+        else:
+            raise RequestError(404, "NO_ROUTE", f"no organiser action {op!r}")
+    except (KeyError, TypeError, ValueError) as e:
+        raise RequestError(400, "BAD_REQUEST", f"bad request: {e}") from e
+    except sa_exc.IntegrityError as e:
+        raise RequestError(409, "DUPLICATE", "that already exists") from e
+    store.log_admin(engine, cid, actor, op, detail, now)
+    return _admin_state(engine, slug)
+
