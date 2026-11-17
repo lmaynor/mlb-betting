@@ -34,6 +34,9 @@ class ContestRules:
     close_buffer_min: int = 15                   # bets close this long before kickoff
     quote_max_age_s: int = 1_800                 # reject a quote older than this (NCAAF 20-min cadence; NCAAB hourly needs 4_500)
     teaser_tables: dict = field(default_factory=dict)   # {points: {legs: american}}; empty -> the sport's placeholder table
+    blackjack_enabled: bool = True               # the hidden lifeline (contest/lifeline.py)
+    blackjack_threshold_cents: int = 10_000      # PLACEHOLDER: the table opens under a $100 bankroll, and winnings never lift you above it
+    blackjack_min_chip_cents: int = 100          # PLACEHOLDER: $1; a player is only eliminated when they cannot afford one chip
     cashout_enabled: bool = True
     cashout_margin_bp: int = 500                 # PLACEHOLDER: 5% off the fair value of the bet, taken once
     cashout_sigmas: dict = field(default_factory=dict)  # {"spread": pts, "total": pts}; empty -> the sport's placeholder (UNVALIDATED)

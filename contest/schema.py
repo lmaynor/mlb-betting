@@ -85,6 +85,19 @@ TABLES = [
         result           TEXT,
         graded_at        TEXT
     )""",
+    f"""CREATE TABLE IF NOT EXISTS contest_blackjack (
+        id                    {_PK},
+        entry_id              INTEGER NOT NULL,
+        status                TEXT NOT NULL DEFAULT 'open',
+        stake_cents           BIGINT NOT NULL,
+        state_json            TEXT NOT NULL,
+        bankroll_before_cents BIGINT NOT NULL,
+        outcome               TEXT,
+        payout_cents          BIGINT,
+        credited_cents        BIGINT,
+        created_at            TEXT NOT NULL,
+        settled_at            TEXT
+    )""",
     f"""CREATE TABLE IF NOT EXISTS contest_ledger (
         id                  {_PK},
         entry_id            INTEGER NOT NULL,
@@ -103,6 +116,7 @@ INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_contest_bet_entry ON contest_bet (entry_id, status)",
     "CREATE INDEX IF NOT EXISTS idx_contest_bet_group ON contest_bet (entry_id, group_id)",
     "CREATE INDEX IF NOT EXISTS idx_contest_ledger_entry ON contest_ledger (entry_id)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_contest_blackjack_one_open ON contest_blackjack (entry_id) WHERE status = 'open'",
     "CREATE INDEX IF NOT EXISTS idx_contest_game_contest ON contest_game (contest_id, commence_time)",
 ]
 

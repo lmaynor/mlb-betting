@@ -31,14 +31,24 @@ def _engine(tmp_path):
     return engine
 
 
-@pytest.fixture
-def world(tmp_path):
+def _world(tmp_path, rules):
     engine = _engine(tmp_path)
     ensure_schema(engine)
-    cid = store.create_contest(engine, "bowls-2026", "Bowl Bankroll", RULES, NOW)
+    cid = store.create_contest(engine, "bowls-2026", "Bowl Bankroll", rules, NOW)
     store.create_invite(engine, cid, "WELCOME", 10, NOW)
     games = [store.upsert_game(engine, cid, f"ev{i}", KICK + timedelta(minutes=30 * i), f"A{i}", f"H{i}", round_label="Bowl") for i in range(1, 5)]
     return engine, cid, games
+
+
+@pytest.fixture
+def world(tmp_path):
+    return _world(tmp_path, RULES)
+
+
+@pytest.fixture
+def world_no_lifeline(tmp_path):
+    """The same contest with the blackjack lifeline off: a player is out as soon as the balance cannot cover the minimum stake."""
+    return _world(tmp_path, ContestRules(sport="ncaaf", blackjack_enabled=False))
 
 
 def join(w, user="u1", name=None):
@@ -243,7 +253,8 @@ def test_void_game_refunds_a_straight_and_drops_a_parlay_leg(world):
         store.settle_game(engine, g[0], 1, 0, AFTER)                                   # a voided game cannot be graded
 
 
-def test_busting_eliminates_only_when_nothing_is_pending(world):
+def test_busting_eliminates_only_when_nothing_is_pending(world_no_lifeline):
+    world = world_no_lifeline
     engine, cid, g = world
     join(world)
     store.adjust(engine, 1, -480_000, "test: leave $200", NOW)                          # balance 20,000

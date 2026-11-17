@@ -270,11 +270,15 @@ def _settle_ready(c, contest_id: int, now: datetime) -> list[int]:
 
 
 def _eliminate_if_bust(c, entry_id: int, rules: ContestRules, now: datetime) -> bool:
-    """Out when the balance cannot cover the minimum stake AND nothing is still pending."""
+    """Out when the balance cannot cover the smallest thing left to play (one blackjack chip when the lifeline is on, else the minimum
+    stake) AND nothing is pending AND no blackjack hand is open."""
     bal, status = c.execute(text("SELECT balance_cents, status FROM contest_entry WHERE id = :e"), {"e": entry_id}).one()
-    if status != "active" or bal >= rules.min_stake_cents:
+    floor = rules.blackjack_min_chip_cents if rules.blackjack_enabled else rules.min_stake_cents
+    if status != "active" or bal >= floor:
         return False
     if c.execute(text("SELECT COUNT(*) FROM contest_bet WHERE entry_id = :e AND status = 'pending'"), {"e": entry_id}).scalar_one():
+        return False
+    if c.execute(text("SELECT COUNT(*) FROM contest_blackjack WHERE entry_id = :e AND status = 'open'"), {"e": entry_id}).scalar_one():
         return False
     c.execute(text("UPDATE contest_entry SET status = 'eliminated', eliminated_at = :t WHERE id = :e"), {"t": iso(now), "e": entry_id})
     return True
