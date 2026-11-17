@@ -1,0 +1,347 @@
+"""contest.store on SQLite (same SQL as Postgres minus FOR UPDATE): placing, settling, hiding picks, the ledger invariant."""
+import os
+import random
+from datetime import datetime, timedelta, timezone
+
+import pytest
+import sqlalchemy as sa
+from sqlalchemy import text
+
+from contest import store
+from contest.rules import ContestRules
+from contest.schema import ensure_schema
+from contest.slips import Leg, Quote, Slip, SlipError
+
+NOW = datetime(2026, 12, 19, 12, 0, tzinfo=timezone.utc)
+KICK = NOW + timedelta(hours=5)
+AFTER = KICK + timedelta(hours=4)
+RULES = ContestRules(sport="ncaaf")
+
+
+def _engine(tmp_path):
+    """SQLite by default. Set CONTEST_TEST_PG_URL (e.g. postgresql+pg8000://postgres@127.0.0.1:55432/contest_test) to run the SAME
+    tests against a throwaway local Postgres, which exercises SERIAL, RETURNING and FOR UPDATE through pg8000 (not run in CI)."""
+    url = os.environ.get("CONTEST_TEST_PG_URL")
+    if not url:
+        return sa.create_engine(f"sqlite:///{tmp_path / 'contest.db'}")
+    engine = sa.create_engine(url)
+    with engine.begin() as c:
+        for t in ("contest_ledger", "contest_leg", "contest_bet", "contest_game", "contest_entry", "contest_invite", "contest"):
+            c.execute(text(f"DROP TABLE IF EXISTS {t}"))
+    return engine
+
+
+@pytest.fixture
+def world(tmp_path):
+    engine = _engine(tmp_path)
+    ensure_schema(engine)
+    cid = store.create_contest(engine, "bowls-2026", "Bowl Bankroll", RULES, NOW)
+    store.create_invite(engine, cid, "WELCOME", 10, NOW)
+    games = [store.upsert_game(engine, cid, f"ev{i}", KICK + timedelta(minutes=30 * i), f"A{i}", f"H{i}", round_label="Bowl") for i in range(1, 5)]
+    return engine, cid, games
+
+
+def join(w, user="u1", name="Alex"):
+    engine, cid, _ = w
+    return store.join_contest(engine, cid, user, name, "WELCOME", NOW)
+
+
+def leg(gid, market="spread", side="home", line=-3.5, price=-110, pts=0.0):
+    return Leg(gid, market, side, line, price, pts)
+
+
+def board(*legs, at=NOW):
+    return {(g.game_id, g.market, g.side): Quote(g.line, g.price, at - timedelta(seconds=30)) for g in legs}
+
+
+def place(w, user, kind, legs, stake=10_000, key="k1", now=NOW):
+    engine, cid, _ = w
+    slip = Slip(kind, tuple(legs), stake, key)
+    return store.place_bet(engine, cid, user, slip, now, board(*legs, at=now))
+
+
+def balance(w, user="u1"):
+    engine, cid, _ = w
+    with engine.connect() as c:
+        return c.execute(text("SELECT balance_cents FROM contest_entry WHERE contest_id = :c AND user_id = :u"), {"c": cid, "u": user}).scalar_one()
+
+
+def books_balance(w):
+    assert store.reconcile(w[0], w[1]) == []
+
+
+# ------------------------------------------------------------------------------------------------------------------ join
+
+def test_join_credits_the_starting_bankroll_once(world):
+    eid = join(world)
+    assert balance(world) == 500_000
+    assert join(world) == eid and balance(world) == 500_000          # idempotent; invite not consumed twice
+    with world[0].connect() as c:
+        assert c.execute(text("SELECT uses FROM contest_invite WHERE code = 'WELCOME'")).scalar_one() == 1
+    books_balance(world)
+
+
+def test_invite_must_be_valid_and_has_a_use_limit(world):
+    engine, cid, _ = world
+    with pytest.raises(store.ContestError) as e:
+        store.join_contest(engine, cid, "x", "X", "WRONG", NOW)
+    assert e.value.code == "INVITE_INVALID"
+    store.create_invite(engine, cid, "ONCE", 1, NOW)
+    store.join_contest(engine, cid, "a", "A", "ONCE", NOW)
+    with pytest.raises(store.ContestError):
+        store.join_contest(engine, cid, "b", "B", "ONCE", NOW)
+
+
+# ------------------------------------------------------------------------------------------------------------------ place
+
+def test_place_debits_and_records_the_quote(world):
+    join(world)
+    g = world[2]
+    b = place(world, "u1", "straight", [leg(g[0])], stake=10_000)
+    assert b["status"] == "pending" and b["stake_cents"] == 10_000 and balance(world) == 490_000
+    assert b["legs"][0]["line"] == -3.5 and b["legs"][0]["price"] == -110
+    books_balance(world)
+
+
+def test_retry_with_same_key_moves_no_money(world):
+    join(world)
+    g = world[2]
+    a = place(world, "u1", "straight", [leg(g[0])], key="same")
+    b = place(world, "u1", "straight", [leg(g[0])], key="same")
+    assert a["id"] == b["id"] and balance(world) == 490_000
+    place(world, "u1", "straight", [leg(g[0])], key="other")
+    assert balance(world) == 480_000
+
+
+def test_rejections_write_nothing(world):
+    engine, cid, g = world
+    join(world)
+    for bad in (
+        lambda: place(world, "u1", "straight", [leg(g[0])], stake=1),                              # below minimum
+        lambda: place(world, "u1", "straight", [leg(g[0])], stake=999_999),                        # over balance
+        lambda: place(world, "u1", "parlay", [leg(g[0]), leg(g[0], market="total", side="over", line=40.5)]),   # same game twice
+        lambda: place(world, "u1", "straight", [leg(g[0])], now=KICK + timedelta(minutes=25)),    # game 1 kicks off at KICK+30m: inside the 15-minute closing buffer
+        lambda: store.place_bet(engine, cid, "u1", Slip("straight", (leg(g[0], price=-125),), 10_000, "pc"), NOW, board(leg(g[0]))),  # price moved
+    ):
+        with pytest.raises(SlipError):
+            bad()
+    assert balance(world) == 500_000
+    with engine.connect() as c:
+        assert c.execute(text("SELECT COUNT(*) FROM contest_bet")).scalar_one() == 0
+    books_balance(world)
+
+
+def test_must_be_entered_and_active(world):
+    g = world[2]
+    with pytest.raises(store.ContestError) as e:
+        place(world, "stranger", "straight", [leg(g[0])])
+    assert e.value.code == "NOT_ENTERED"
+
+
+def test_a_leg_from_another_contest_is_refused(world):
+    engine, cid, g = world
+    join(world)
+    other = store.create_contest(engine, "other", "Other", RULES, NOW)
+    foreign = store.upsert_game(engine, other, "evX", KICK)
+    with pytest.raises(SlipError) as e:
+        place(world, "u1", "straight", [leg(foreign)])
+    assert e.value.code == "NO_GAME"
+
+
+# ------------------------------------------------------------------------------------------------------------------ settle
+
+def test_straight_win_and_loss(world):
+    engine, cid, g = world
+    join(world, "u1", "Alex")
+    join(world, "u2", "Blair")
+    place(world, "u1", "straight", [leg(g[0], side="home", line=-3.5)], key="a")      # home -3.5
+    place(world, "u2", "straight", [leg(g[0], side="away", line=3.5)], key="b")       # away +3.5
+    settled = store.settle_game(engine, g[0], 24, 20, AFTER)                           # home wins by 4
+    assert len(settled) == 2
+    assert balance(world, "u1") == 490_000 + 19_091 and balance(world, "u2") == 490_000
+    books_balance(world)
+
+
+def test_settle_is_idempotent_and_refuses_a_different_score(world):
+    engine, cid, g = world
+    join(world)
+    place(world, "u1", "straight", [leg(g[0])])
+    store.settle_game(engine, g[0], 24, 20, AFTER)
+    before = balance(world)
+    assert store.settle_game(engine, g[0], 24, 20, AFTER) == []                       # nothing left to settle
+    assert balance(world) == before
+    with pytest.raises(store.ContestError) as e:
+        store.settle_game(engine, g[0], 10, 20, AFTER)
+    assert e.value.code == "SCORE_MISMATCH"
+
+
+def test_parlay_loses_early_and_wins_when_all_legs_land(world):
+    engine, cid, g = world
+    join(world, "u1")
+    join(world, "u2")
+    p1 = [leg(g[0], line=-3.5), leg(g[1], side="away", line=7.5)]
+    place(world, "u1", "parlay", p1, key="p")
+    place(world, "u2", "parlay", p1, key="p")
+    store.settle_game(engine, g[0], 17, 20, AFTER)                                     # home -3.5 loses: both parlays dead now
+    assert balance(world, "u1") == 490_000 and balance(world, "u2") == 490_000
+    with engine.connect() as c:
+        assert {r[0] for r in c.execute(text("SELECT status FROM contest_bet")).all()} == {"lost"}
+    store.settle_game(engine, g[1], 20, 21, AFTER)                                     # later leg grades; nothing more to settle
+    books_balance(world)
+
+
+def test_parlay_win_pays_the_product(world):
+    engine, cid, g = world
+    join(world)
+    place(world, "u1", "parlay", [leg(g[0], line=-3.5), leg(g[1], side="away", line=7.5)])
+    assert store.settle_game(engine, g[0], 24, 20, AFTER) == []                        # one leg still open
+    assert len(store.settle_game(engine, g[1], 20, 21, AFTER)) == 1
+    assert balance(world) == 490_000 + 36_446
+    books_balance(world)
+
+
+def test_teaser_push_reduces_to_the_remaining_table_price(world):
+    engine, cid, g = world
+    join(world, "u1")
+    join(world, "u2")
+    legs = [leg(g[0], line=-7.0, pts=6.0), leg(g[1], side="away", line=2.5, pts=6.0), leg(g[2], market="total", side="over", line=50.5, pts=6.0)]
+    place(world, "u1", "teaser", legs, stake=10_000, key="t")
+    place(world, "u2", "teaser", legs, stake=10_000, key="t")
+    store.settle_game(engine, g[0], 21, 20, AFTER)                                     # -7 teased to -1.0: wins by 1 = push
+    store.settle_game(engine, g[1], 10, 20, AFTER)                                     # away +2.5 teased to +8.5: wins
+    assert balance(world, "u1") == 490_000                                             # one leg still open
+    store.settle_game(engine, g[2], 30, 20, AFTER)                                     # total 50 > 44.5: wins
+    two_leg = 10_000 + 8_333                                                           # table price -120 for the 2 surviving legs
+    assert balance(world, "u1") == 490_000 + two_leg and balance(world, "u2") == 490_000 + two_leg
+    books_balance(world)
+
+
+def test_teaser_with_one_loss_loses(world):
+    engine, cid, g = world
+    join(world)
+    place(world, "u1", "teaser", [leg(g[0], line=-7.0, pts=6.0), leg(g[1], side="away", line=2.5, pts=6.0)])
+    store.settle_game(engine, g[1], 30, 10, AFTER)                                     # away +8.5 loses by 20
+    with engine.connect() as c:
+        assert c.execute(text("SELECT status FROM contest_bet")).scalar_one() == "lost"
+    books_balance(world)
+
+
+def test_void_game_refunds_a_straight_and_drops_a_parlay_leg(world):
+    engine, cid, g = world
+    join(world, "u1")
+    join(world, "u2")
+    place(world, "u1", "straight", [leg(g[0])], key="s")
+    place(world, "u2", "parlay", [leg(g[0]), leg(g[1], side="away", line=7.5)], key="p")
+    store.void_game(engine, g[0], AFTER)
+    assert balance(world, "u1") == 500_000                                             # refunded
+    assert balance(world, "u2") == 490_000                                             # parlay now rides on one leg
+    store.settle_game(engine, g[1], 20, 21, AFTER)                                     # away +7.5 wins -> straight at -110
+    assert balance(world, "u2") == 490_000 + 19_091
+    books_balance(world)
+    with pytest.raises(store.ContestError):
+        store.settle_game(engine, g[0], 1, 0, AFTER)                                   # a voided game cannot be graded
+
+
+def test_busting_eliminates_only_when_nothing_is_pending(world):
+    engine, cid, g = world
+    join(world)
+    store.adjust(engine, 1, -480_000, "test: leave $200", NOW)                          # balance 20,000
+    # 25% max stake: place the largest legal bet repeatedly until under the $25 minimum
+    bal = balance(world)
+    i = 0
+    while bal >= 2_500:
+        stake = max(2_500, min(bal * 25 // 100, bal))
+        place(world, "u1", "straight", [leg(g[i % 4])], stake=stake, key=f"k{i}")
+        bal = balance(world)
+        i += 1
+        assert i < 60
+    with engine.connect() as c:
+        assert c.execute(text("SELECT status FROM contest_entry")).scalar_one() == "active"     # still pending bets: not out yet
+    for gid in g:
+        store.settle_game(engine, gid, 0, 30, AFTER)                                    # every home -3.5 loses
+    with engine.connect() as c:
+        status, bal = c.execute(text("SELECT status, balance_cents FROM contest_entry")).one()
+    assert status == "eliminated" and bal < 2_500
+    with pytest.raises(store.ContestError) as e:
+        place(world, "u1", "straight", [leg(g[0])], key="after")
+    assert e.value.code == "ELIMINATED"
+    books_balance(world)
+
+
+def test_adjust_needs_a_reason_and_keeps_books_balanced(world):
+    engine, _, _ = world
+    join(world)
+    with pytest.raises(store.ContestError):
+        store.adjust(engine, 1, 500, " ", NOW)
+    assert store.adjust(engine, 1, 500, "goodwill", NOW) == 500_500
+    books_balance(world)
+
+
+# ------------------------------------------------------------------------------------------------------------------ reading
+
+def test_picks_are_hidden_from_others_until_kickoff(world):
+    engine, cid, g = world
+    join(world, "u1", "Alex")
+    join(world, "u2", "Blair")
+    place(world, "u1", "parlay", [leg(g[0]), leg(g[3], side="away", line=7.5)], stake=10_000)      # g0 kicks +30m, g3 +2h
+    mine = store.visible_bets(engine, cid, "u1", NOW)[0]
+    assert mine["mine"] and mine["stake_cents"] == 10_000 and all("hidden" not in x for x in mine["legs"])
+    theirs = store.visible_bets(engine, cid, "u2", NOW)[0]
+    assert theirs["legs"] == [{"hidden": True}, {"hidden": True}] and theirs["stake_cents"] is None and theirs["owner"] == "Alex"
+    mid = store.visible_bets(engine, cid, "u2", KICK + timedelta(minutes=45))[0]                  # g0 started, g3 not
+    assert mid["legs"][0]["game_id"] == g[0] and mid["legs"][1] == {"hidden": True} and mid["stake_cents"] is None
+    late = store.visible_bets(engine, cid, "u2", KICK + timedelta(hours=3))[0]                    # both started
+    assert late["stake_cents"] == 10_000 and all("hidden" not in x for x in late["legs"])
+
+
+def test_a_lost_parlay_still_hides_its_unstarted_legs(world):
+    engine, cid, g = world
+    join(world, "u1", "Alex")
+    join(world, "u2", "Blair")
+    place(world, "u1", "parlay", [leg(g[0]), leg(g[3], side="away", line=7.5)])
+    store.settle_game(engine, g[0], 0, 30, KICK + timedelta(minutes=40))                          # leg 1 lost, bet settled lost
+    theirs = store.visible_bets(engine, cid, "u2", KICK + timedelta(minutes=40))[0]
+    assert theirs["status"] == "lost" and theirs["legs"][1] == {"hidden": True}
+
+
+def test_leaderboard_ranks_by_bankroll_including_open_risk(world):
+    engine, cid, g = world
+    join(world, "u1", "Alex")
+    join(world, "u2", "Blair")
+    place(world, "u1", "straight", [leg(g[0])], stake=50_000)                                      # at risk, still counts
+    place(world, "u2", "straight", [leg(g[1], side="away", line=3.5)], stake=50_000, key="b")
+    store.settle_game(engine, g[1], 20, 30, AFTER)                                                 # away +3.5 wins
+    board_ = store.leaderboard(engine, cid)
+    assert [r["display_name"] for r in board_] == ["Blair", "Alex"] and board_[0]["rank"] == 1
+    assert board_[1]["bankroll_cents"] == 500_000 and board_[1]["open_risk_cents"] == 50_000
+    assert board_[0]["won"] == 1 and board_[0]["bankroll_cents"] > 500_000
+
+
+def test_ledger_always_matches_balance_over_a_random_season(world):
+    engine, cid, g = world
+    rng = random.Random(7)
+    users = [f"u{i}" for i in range(4)]
+    for u in users:
+        join(world, u, u)
+    n = 0
+    for gid in g:
+        for u in users:
+            for _ in range(3):
+                kind = rng.choice(["straight", "parlay", "teaser"])
+                others = [x for x in g if x != gid]
+                if kind == "straight":
+                    legs = [leg(gid, side=rng.choice(["home", "away"]), line=rng.choice([-3.5, 3.5, -7.0, 2.5]))]
+                else:
+                    legs = [leg(gid, line=-3.5, pts=6.0 if kind == "teaser" else 0.0),
+                            leg(rng.choice(others), side="away", line=rng.choice([3.5, 7.5]), pts=6.0 if kind == "teaser" else 0.0)]
+                try:
+                    place(world, u, kind, legs, stake=rng.choice([2_500, 5_000, 10_000]), key=f"{u}-{n}")
+                except SlipError:
+                    pass
+                n += 1
+    books_balance(world)
+    for gid in g:
+        store.settle_game(engine, gid, rng.randint(0, 45), rng.randint(0, 45), AFTER)
+    books_balance(world)
+    with engine.connect() as c:
+        assert c.execute(text("SELECT COUNT(*) FROM contest_bet WHERE status = 'pending'")).scalar_one() == 0
