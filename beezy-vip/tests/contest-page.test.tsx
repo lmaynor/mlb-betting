@@ -17,6 +17,25 @@ describe('/contest page', () => {
     expect(() => ContestPage()).not.toThrow()
   })
 
+  const FILES = ['app/contest/page.tsx', 'components/contest/board.tsx', 'components/contest/bets-table.tsx', 'components/contest/contest-client.tsx',
+    'components/contest/leaderboard.tsx', 'components/contest/receipt.tsx', 'components/contest/slip-panel.tsx', 'components/contest/team-logo.tsx']
+  const src = (f: string) => fs.readFileSync(path.resolve(__dirname, '..', f), 'utf8')
+
+  it('uses only the repo type scale (10/11/12/13/14/16, 20 for the h1) and never text under 10px', () => {
+    for (const f of FILES) {
+      for (const m of src(f).matchAll(/fontSize: *(\d+(?:\.\d+)?)/g)) expect([10, 11, 12, 13, 14, 16, 20]).toContain(Number(m[1]))
+    }
+  })
+
+  it('has no exclamation points, emoji, tracked or CSS-uppercase text, glows or gradients in its source', () => {
+    for (const f of FILES) {
+      const s = src(f)
+      expect(s).not.toMatch(/(?<![!=])![ '"`<}](?!=)/)               // "Bet placed!" style copy; not `!x` or `!==`
+      expect(s).not.toMatch(/textTransform|text-transform|letterSpacing|letter-spacing|tracking-|gradient\(|boxShadow|box-shadow|drop-shadow/)
+      expect(/[^\x00-\x7F]/.test(s)).toBe(false)
+    }
+  })
+
   it('is noindex and its stylesheet only changes colours on hover (no transform)', async () => {
     const { metadata } = await import('@/app/contest/page')
     expect(metadata.robots).toEqual({ index: false, follow: false })

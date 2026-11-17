@@ -141,7 +141,7 @@ export function SlipPanel({ slip, games, rules, balanceCents, receipt, onDoneRec
           </label>
           <div className="flex items-center gap-2">
             <input id="contest-stake" inputMode="decimal" autoComplete="off" value={raw} onChange={e => setRaw(e.target.value)} placeholder="0.00" className="mono"
-              style={{ flex: 1, minWidth: 0, height: 38, padding: '0 10px', fontSize: 15, borderRadius: 6, background: '#1b1f2b', border: '1px solid #2e3446', color: '#f3f4f6' }} />
+              style={{ flex: 1, minWidth: 0, height: 38, padding: '0 10px', fontSize: 16, borderRadius: 6, background: '#1b1f2b', border: '1px solid #2e3446', color: '#f3f4f6' }} />
           </div>
           <div className="flex flex-wrap gap-2" style={{ marginTop: 8 }}>
             {quick.map(c => (

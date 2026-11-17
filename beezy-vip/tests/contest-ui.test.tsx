@@ -273,6 +273,8 @@ describe('Bankroll Challenge page', () => {
     expect(rows.map(r => within(r).getAllByRole('cell')[1].textContent)).toEqual(['Marcus', 'Priya', 'You', 'Dani', 'Tom', 'WesOUT'])
     expect(container.querySelector('tr[data-mine="true"]')).toHaveTextContent('You')
     expect(rows[5]).toHaveStyle({ opacity: '0.5' })
+    // one money format on the page: every bankroll cell has cents (no $812,500 next to $5,181.82)
+    rows.forEach(r => { const c = within(r).getAllByRole('cell'); expect(c[2].textContent).toMatch(/^\$[\d,]+\.\d{2}$/); expect(c[3].textContent).toMatch(/^[+-]\$[\d,]+\.\d{2}$/) })
   })
 
   it('uses Title Case for Bet Slip, Round Robin, My Bets and Place Bet', () => {

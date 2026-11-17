@@ -20,7 +20,7 @@ export function BetReceipt({ receipt, games, onDone, onViewBets }: { receipt: Re
   const slipNo = receipt.bets[0].id.replace(/^s(\d+).*$/, '$1')
   return (
     <section aria-label="Bet confirmation" role="status" style={{ padding: 14 }}>
-      <h2 style={{ fontSize: 15, fontWeight: 600, margin: 0, color: 'var(--signal)' }}>Bet placed</h2>
+      <h2 style={{ fontSize: 14, fontWeight: 600, margin: 0, color: 'var(--signal)' }}>Bet placed</h2>
       <p className="mono" style={{ margin: '4px 0 12px', fontSize: 11, color: '#7d8596' }}>{dt(receipt.placedAt)} ET &middot; Slip #{slipNo}</p>
       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{title}</div>
       <ul style={{ listStyle: 'none', margin: 0, padding: 0, borderTop: '1px solid #151822' }}>
