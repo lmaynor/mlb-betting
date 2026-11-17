@@ -1,4 +1,5 @@
 import { playerIdByName, stripSuffixSlug } from '@/lib/sport-assets.server'
+import { headshotUrlById } from '@/lib/sport-assets'
 
 describe('stripSuffixSlug', () => {
   it('strips common suffix tokens while preserving base name', () => {
@@ -44,5 +45,22 @@ describe('playerIdByName NHL resolution (IA-08 NHL cards)', () => {
 
   it('returns null for an NHL player with no map entry, so the card shows the grey silhouette', () => {
     expect(playerIdByName('nhl', 'Nikita Tolopilo', 'VAN')).toBeNull()
+  })
+})
+
+describe('playerIdByName NFL resolution (IA-08 NFL cards)', () => {
+  it('resolves Marvin Harrison Jr. and Marvin Harrison to the same nfl.com image token', () => {
+    const withSuffix = playerIdByName('nfl', 'Marvin Harrison Jr.', 'ARI')
+    const withoutSuffix = playerIdByName('nfl', 'Marvin Harrison', 'ARI')
+
+    expect(withSuffix).not.toBeNull()
+    expect(typeof withSuffix).toBe('string')
+    expect(withSuffix).toBe(withoutSuffix)
+    expect(headshotUrlById('nfl', withSuffix)).toContain('https://static.www.nfl.com/image/upload/')
+  })
+
+  it('returns null for an NFL player with no map entry, so the card shows the grey silhouette', () => {
+    expect(playerIdByName('nfl', 'Nonexistent Fakeplayer Zzz', 'HOU')).toBeNull()
+    expect(headshotUrlById('nfl', null)).toBeNull()
   })
 })

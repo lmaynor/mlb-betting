@@ -7,9 +7,11 @@ export type CardSort = 'ev' | 'score' | 'time'
  * Leagues whose projections board offers the cards/table switch (IA-08). NBA at launch; NHL added
  * 2026-11-16 at Luc's direction — its feed carries the same percentiles, blend and book counts the
  * card consumes (verified against the live payload), so enablement is a board switch, not a feed
- * change. Every other league keeps the table only.
+ * change. NFL added the same day, also at Luc's direction: its yardage/count families carry the
+ * same fields, and the card gate's projection-range rule (below) keeps the anytime family, which
+ * carries no percentiles by design, table-only. Every other league keeps the table only.
  */
-export const CARD_LAYOUT_SPORTS: readonly SportSlug[] = ['nba', 'nhl']
+export const CARD_LAYOUT_SPORTS: readonly SportSlug[] = ['nba', 'nhl', 'nfl']
 
 export function hasCardLayout(sport: SportSlug): boolean {
   return CARD_LAYOUT_SPORTS.includes(sport)
@@ -17,7 +19,13 @@ export function hasCardLayout(sport: SportSlug): boolean {
 
 /**
  * Filter board rows down to those suitable for card presentation:
- * must have a posted line, odds, book, at least 3 books, and either positive market EV or score >= 35.
+ * must have a posted line, odds, book, at least 3 books, either positive market EV or score >= 35,
+ * and a projection range (p10 and p90). The range is a uniform admission rule, not an NFL carve-out:
+ * the card's evidence is the distribution strip, so a card without a range is not a card. It is a
+ * proven no-op for NBA and NHL — measured against the live payloads on 2026-11-16, the gate with
+ * and without the range rule admits identical sets (NBA 60 = 60, NHL 54 = 54), because their lined
+ * rows carry percentiles universally. For NFL it is what keeps anytime_td (proj_range returns no
+ * percentiles for the anytime family, by design) in the table where it belongs.
  * Input order is preserved.
  */
 export function cardGate(rows: BoardRow[]): BoardRow[] {
@@ -27,7 +35,9 @@ export function cardGate(rows: BoardRow[]): BoardRow[] {
       r.odds != null &&
       r.book != null &&
       (r.nBooks ?? 0) >= 3 &&
-      ((r.marketEv ?? 0) > 0 || r.score >= 35)
+      ((r.marketEv ?? 0) > 0 || r.score >= 35) &&
+      r.p10 != null &&
+      r.p90 != null
   )
 }
 

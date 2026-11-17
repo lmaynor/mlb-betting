@@ -78,6 +78,14 @@ describe('cardGate', () => {
     expect(cardGate([posEvScore0])).toEqual([posEvScore0])
   })
 
+  it('filters out rows with no projection range, however strong the price signal', () => {
+    const noRange = makeRow({ p10: null, p90: null, marketEv: 0.09, score: 80 })
+    const halfRange = makeRow({ p10: 12.0, p90: null })
+    const valid = makeRow()
+
+    expect(cardGate([noRange, halfRange, valid])).toEqual([valid])
+  })
+
   it('preserves input order', () => {
     const r1 = makeRow({ key: 'k1', marketEv: 0.05, score: 50 })
     const r2 = makeRow({ key: 'k2', marketEv: -0.01, score: 40 })
@@ -148,6 +156,11 @@ describe('cockpitHref', () => {
     const row = makeNhlRow()
     expect(cockpitHref(row)).toBe(`/edge?sport=nhl&prop=${encodeURIComponent('proj|nhl|nhl:2026-11-16:VAN@EDM|connor_mcdavid|sog')}`)
   })
+
+  it('formats an NFL cockpit href with the nfl sport', () => {
+    const row = makeNflRow()
+    expect(cockpitHref(row)).toBe(`/edge?sport=nfl&prop=${encodeURIComponent('proj|nfl|nfl:2026-11-22:HOU@JAC|nico_collins|rec')}`)
+  })
 })
 
 function makeNhlRow(overrides: Partial<BoardRow> = {}): BoardRow {
@@ -193,10 +206,10 @@ function makeNhlRow(overrides: Partial<BoardRow> = {}): BoardRow {
 }
 
 describe('hasCardLayout', () => {
-  it('enables the cards/table switch for NBA and NHL only', () => {
+  it('enables the cards/table switch for NBA, NHL and NFL only', () => {
     expect(hasCardLayout('nba')).toBe(true)
     expect(hasCardLayout('nhl')).toBe(true)
-    expect(hasCardLayout('nfl')).toBe(false)
+    expect(hasCardLayout('nfl')).toBe(true)
     expect(hasCardLayout('mlb')).toBe(false)
     expect(hasCardLayout('soccer')).toBe(false)
   })
@@ -227,5 +240,80 @@ describe('cardGate on NHL-shaped rows', () => {
     const a = makeNhlRow({ key: 'a', marketEv: 0.03, score: 60 })
     const b = makeNhlRow({ key: 'b', marketEv: 0.08, score: 40 })
     expect(sortCards([a, b], 'ev').map(r => r.key)).toEqual(['b', 'a'])
+  })
+})
+
+function makeNflRow(overrides: Partial<BoardRow> = {}): BoardRow {
+  return {
+    key: 'nfl:2026-11-22:HOU@JAC|nico_collins|rec',
+    sport: 'nfl',
+    system: 'NFL_RECEPTIONS',
+    marketLabel: 'Receptions',
+    player: 'Nico Collins',
+    headshotId: 'yslz8jcyiekbmm7iguxm',
+    team: 'HOU',
+    matchup: 'HOU @ JAC',
+    gameKey: 'nfl:2026-11-22:HOU@JAC',
+    away: 'HOU',
+    home: 'JAC',
+    start: '2026-11-22T18:00:00Z',
+    side: 'over',
+    line: 5.5,
+    hasLine: true,
+    proj: 6.4,
+    avg10: 6.1,
+    avgSzn: 5.9,
+    pModel: 0.57,
+    pFair: 0.52,
+    pBlend: 0.55,
+    nBooks: 6,
+    l5: 0.6,
+    l10: 0.6,
+    odds: 105,
+    book: 'novig',
+    modelEdge: 0.05,
+    marketEv: 0.05,
+    confluence: false,
+    score: 55,
+    isPick: false,
+    result: null,
+    engine: 'Hierarchical',
+    tier: null,
+    p10: 3.0,
+    p90: 10.0,
+    ...overrides,
+  }
+}
+
+describe('cardGate on NFL-shaped rows (IA-08 NFL cards)', () => {
+  it('keeps a qualifying NFL yardage/count row (receptions, with a projection range)', () => {
+    const row = makeNflRow()
+    expect(cardGate([row])).toEqual([row])
+  })
+
+  it('never cards an anytime_td row: no projection range, even with positive EV and a high score', () => {
+    const td = makeNflRow({
+      key: 'nfl:2026-11-22:HOU@JAC|nico_collins|anytime_td',
+      system: 'NFL_ANYTIME_TD',
+      marketLabel: 'Anytime TD',
+      line: 0.5,
+      proj: 0.62,
+      p10: null,
+      p90: null,
+      marketEv: 0.11,
+      score: 88,
+      nBooks: 9,
+    })
+    expect(cardGate([td])).toEqual([])
+  })
+
+  it('keeps a negative-EV NFL passing-yards row when the score clears 35', () => {
+    const yds = makeNflRow({ system: 'NFL_PASS_YDS', marketLabel: 'Passing Yards', line: 248.5, proj: 261.2, p10: 178.0, p90: 344.0, marketEv: -0.01, score: 41 })
+    expect(cardGate([yds])).toEqual([yds])
+  })
+
+  it('drops an NFL count row priced by fewer than 3 books even with positive EV', () => {
+    const thin = makeNflRow({ nBooks: 2, marketEv: 0.09 })
+    expect(cardGate([thin])).toEqual([])
   })
 })

@@ -62,7 +62,7 @@ export function ProjectionsCards({ rows, census, onShowTable }: ProjectionsCards
             No cards for these filters
           </div>
           <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', margin: 0, lineHeight: 1.5 }}>
-            Cards need a posted price from at least 3 books, and a positive EV or a Beezy Score of 35 or more.{' '}
+            Cards need a posted price from at least 3 books, a projection range, and a positive EV or a Beezy Score of 35 or more.{' '}
             <button
               type="button"
               onClick={onShowTable}
