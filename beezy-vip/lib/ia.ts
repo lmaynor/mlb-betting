@@ -161,6 +161,8 @@ export const ROUTES: RouteEntry[] = [
   { path: '/blocked', stage: 'utility', strangerQuestion: 'Why is this page unavailable in this region?' },
   { path: '/cheat-sheet', stage: 'commitment', strangerQuestion: 'Which official plays cleared every validation and consensus gate today? (Permanent alias of /picks.)' },
   { path: '/compare/oddsjam-alternative', stage: 'guide', strangerQuestion: 'How does beezy compare with OddsJam?' },
+  { path: '/contest', stage: 'utility', strangerQuestion: 'Can I play a free, play-money bankroll contest? (Hidden: OFF by default, 404 unless CONTEST_ENABLED, no tab, link or sitemap entry.)' },
+  { path: '/contest/admin', stage: 'utility', strangerQuestion: 'Is this the organiser console for the contest? (Hidden: 404 unless CONTEST_ENABLED, a contest is configured and the user is its organiser; noindex, no link or sitemap entry.)' },
   { path: '/dashboard', stage: 'utility', strangerQuestion: 'What is my account status and subscription?' },
   { path: '/dashboard/history', stage: 'utility', strangerQuestion: 'What picks has my account followed?' },
   { path: '/dashboard/picks', stage: 'utility', strangerQuestion: 'Which picks does my account track?' },

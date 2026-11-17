@@ -15,7 +15,7 @@ def _ignored(rel: str) -> bool:
 
 def test_no_python_package_is_excluded_from_the_build_context():
     lost = []
-    for top in ("mlb_core", "mlb", "nba", "nfl", "nhl", "ev"):
+    for top in ("mlb_core", "mlb", "nba", "nfl", "nhl", "ev", "contest"):
         for init in (ROOT / top).rglob("__init__.py"):
             rel = init.relative_to(ROOT).as_posix()
             if _ignored(rel):
