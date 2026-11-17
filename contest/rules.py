@@ -12,6 +12,8 @@ from dataclasses import dataclass, field, asdict
 _FOOTBALL_TEASERS = {6.0: {2: -120, 3: 160, 4: 260}, 6.5: {2: -130, 3: 140, 4: 240}, 7.0: {2: -140, 3: 120, 4: 200}}
 _BASKETBALL_TEASERS = {4.0: {2: -120, 3: 160, 4: 260}, 4.5: {2: -130, 3: 140, 4: 240}, 5.0: {2: -140, 3: 120, 4: 200}}
 _DEFAULT_TEASERS = {"ncaaf": _FOOTBALL_TEASERS, "ncaab": _BASKETBALL_TEASERS}
+# PLACEHOLDER standard deviations (points) of the final margin and total, for cash-out line moves. Not fitted to any data.
+_DEFAULT_SIGMAS = {"ncaaf": {"spread": 13.5, "total": 13.0}, "ncaab": {"spread": 11.0, "total": 15.0}}
 
 
 @dataclass(frozen=True)
@@ -32,6 +34,13 @@ class ContestRules:
     close_buffer_min: int = 15                   # bets close this long before kickoff
     quote_max_age_s: int = 1_800                 # reject a quote older than this (NCAAF 20-min cadence; NCAAB hourly needs 4_500)
     teaser_tables: dict = field(default_factory=dict)   # {points: {legs: american}}; empty -> the sport's placeholder table
+    cashout_enabled: bool = True
+    cashout_margin_bp: int = 500                 # PLACEHOLDER: 5% off the fair value of the bet, taken once
+    cashout_sigmas: dict = field(default_factory=dict)  # {"spread": pts, "total": pts}; empty -> the sport's placeholder (UNVALIDATED)
+
+    def cashout_sigma(self, market: str) -> float:
+        """Std dev (points) of the final margin / total, used to move a held line to the current one. PLACEHOLDERS, not fitted."""
+        return float((self.cashout_sigmas or _DEFAULT_SIGMAS[self.sport])[market])
 
     def teaser_table(self) -> dict:
         return self.teaser_tables or _DEFAULT_TEASERS[self.sport]

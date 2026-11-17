@@ -465,3 +465,134 @@ def test_eleven_pick_round_robin_places_55_parlays_and_settles(world):
     books_balance(world)
     with engine.connect() as c:
         assert c.execute(text("SELECT COUNT(*) FROM contest_bet WHERE status = 'won'")).scalar_one() == 55
+
+
+# ------------------------------------------------------------------------------------------------------------------ cash out
+
+from contest.cashout import CashoutRefused, OPPOSITE                                   # noqa: E402
+
+
+def two_sided(game_id, line, price=-110, opp_price=-110, at=NOW, market="spread", side="home"):
+    """The current board for one spread market: `side` at (line, price), the other side mirrored."""
+    t = at - timedelta(seconds=30)
+    return {(game_id, market, side): Quote(line, price, t), (game_id, market, OPPOSITE[side]): Quote(-line, opp_price, t)}
+
+
+def place_straight(w, user="u1", game_idx=0, line=-3.5, stake=10_000, key="s1"):
+    g = w[2]
+    return place(w, user, "straight", [leg(g[game_idx], line=line)], stake=stake, key=key)
+
+
+def test_cash_out_pays_the_current_value_and_closes_the_bet(world):
+    engine, cid, g = world
+    join(world)
+    bet = place_straight(world)
+    now = NOW + timedelta(hours=1)
+    brd = two_sided(g[0], -3.5, at=now)
+    value = store.cashout_quote(engine, cid, "u1", [bet["id"]], now, brd)
+    assert value == 9_068                                                               # 19,091 x 0.5 x 0.95
+    out = store.cash_out(engine, cid, "u1", [bet["id"]], value, now, brd)
+    assert out[0]["status"] == "cashed_out" and out[0]["payout_cents"] == 9_068
+    assert [x["result"] for x in out[0]["legs"]] == ["void"]                            # closed: a later score cannot settle it
+    assert balance(world) == 500_000 - 10_000 + 9_068
+    with engine.connect() as c:
+        assert c.execute(text("SELECT kind, amount_cents FROM contest_ledger WHERE kind = 'CASHOUT'")).one() == ("CASHOUT", 9_068)
+    books_balance(world)
+    assert store.settle_game(engine, g[0], 24, 20, AFTER) == []                         # the score does not pay it again
+    assert balance(world) == 500_000 - 10_000 + 9_068
+    books_balance(world)
+
+
+def test_a_line_that_moved_your_way_cashes_out_above_the_stake(world):
+    engine, cid, g = world
+    join(world)
+    bet = place_straight(world, line=-3.5)
+    now = NOW + timedelta(hours=1)
+    brd = two_sided(g[0], -6.5, at=now)                                                         # the same side now costs 3 more points
+    value = store.cashout_quote(engine, cid, "u1", [bet["id"]], now, brd)
+    assert value > 10_000
+    store.cash_out(engine, cid, "u1", [bet["id"]], value, now, brd)
+    assert balance(world) == 500_000 - 10_000 + value > 500_000                          # a profit before the game is played
+    books_balance(world)
+
+
+def test_value_changed_writes_nothing(world):
+    engine, cid, g = world
+    join(world)
+    bet = place_straight(world)
+    now = NOW + timedelta(hours=1)
+    shown = store.cashout_quote(engine, cid, "u1", [bet["id"]], now, two_sided(g[0], -3.5, at=now))
+    with pytest.raises(CashoutRefused) as e:                                            # the board moved between the quote and the click
+        store.cash_out(engine, cid, "u1", [bet["id"]], shown, now, two_sided(g[0], -5.5, at=now))
+    assert e.value.code == "VALUE_CHANGED" and e.value.detail["cents"] != shown
+    assert balance(world) == 490_000
+    with engine.connect() as c:
+        assert c.execute(text("SELECT status FROM contest_bet")).scalar_one() == "pending"
+    books_balance(world)
+
+
+def test_cannot_cash_out_twice_a_stranger_or_a_closed_game(world):
+    engine, cid, g = world
+    join(world, "u1")
+    join(world, "u2")
+    bet = place_straight(world)
+    now = NOW + timedelta(hours=1)
+    brd = two_sided(g[0], -3.5, at=now)
+    with pytest.raises(store.ContestError) as e:
+        store.cash_out(engine, cid, "u2", [bet["id"]], 9_068, now, brd)                 # someone else's bet
+    assert e.value.code == "NO_BET"
+    late = KICK + timedelta(minutes=25)                                                 # game 0 kicks off at KICK+30m: inside the 15-minute close
+    with pytest.raises(CashoutRefused) as e2:
+        store.cash_out(engine, cid, "u1", [bet["id"]], 9_068, late, two_sided(g[0], -3.5, at=late))
+    assert e2.value.code == "GAME_CLOSED"
+    store.cash_out(engine, cid, "u1", [bet["id"]], 9_068, now, brd)
+    with pytest.raises(store.ContestError) as e3:
+        store.cash_out(engine, cid, "u1", [bet["id"]], 9_068, now, brd)
+    assert e3.value.code == "NOT_PENDING"
+    books_balance(world)
+
+
+def test_a_round_robin_cashes_out_all_or_nothing(world):
+    engine, cid, g = world
+    join(world)
+    picks_ = [leg(g[i]) for i in range(3)]
+    bets = place_rr(world, "u1", picks_, (2,), unit=5_000)                              # 3 parlays
+    ids = [b["id"] for b in bets]
+    now = NOW + timedelta(hours=1)
+    brd = {}
+    for i in range(3):
+        brd.update(two_sided(g[i], -3.5, at=now))
+    total = store.cashout_quote(engine, cid, "u1", ids, now, brd)
+    assert total == 3 * int(18_223 * 0.25 * 0.95)                                        # each parlay: 5,000 at -110/-110 pays 18,223
+    with pytest.raises(CashoutRefused):
+        store.cash_out(engine, cid, "u1", ids, total + 1, now, brd)                     # a wrong total refuses the whole group
+    assert balance(world) == 500_000 - 15_000
+    out = store.cash_out(engine, cid, "u1", ids, total, now, brd)
+    assert {b["status"] for b in out} == {"cashed_out"} and len(out) == 3
+    assert balance(world) == 500_000 - 15_000 + total
+    books_balance(world)
+
+
+def test_the_record_counts_a_cash_out_by_its_profit(world):
+    engine, cid, g = world
+    join(world, "u1", "Alex")
+    win = place_straight(world, "u1", 0, key="a")
+    lose = place_straight(world, "u1", 1, key="b")
+    now = NOW + timedelta(hours=1)
+    brd = {**two_sided(g[0], -6.5, at=now), **two_sided(g[1], -3.5, at=now)}                            # bet a moved your way (profit), bet b is flat (a small loss)
+    store.cash_out(engine, cid, "u1", [win["id"]], store.cashout_quote(engine, cid, "u1", [win["id"]], now, brd), now, brd)
+    store.cash_out(engine, cid, "u1", [lose["id"]], store.cashout_quote(engine, cid, "u1", [lose["id"]], now, brd), now, brd)
+    row = store.leaderboard(engine, cid)[0]
+    assert (row["won"], row["lost"], row["pushed"]) == (1, 1, 0) and row["open_risk_cents"] == 0
+
+
+def test_others_still_cannot_see_a_cashed_out_pick_before_kickoff(world):
+    engine, cid, g = world
+    join(world, "u1", "Alex")
+    join(world, "u2", "Blair")
+    bet = place_straight(world)
+    now = NOW + timedelta(hours=1)
+    brd = two_sided(g[0], -3.5, at=now)
+    store.cash_out(engine, cid, "u1", [bet["id"]], 9_068, now, brd)
+    theirs = store.visible_bets(engine, cid, "u2", now)[0]
+    assert theirs["status"] == "cashed_out" and theirs["legs"] == [{"hidden": True}] and theirs["stake_cents"] is None and theirs["payout_cents"] is None

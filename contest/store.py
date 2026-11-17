@@ -11,6 +11,7 @@ from typing import Mapping, Sequence
 import sqlalchemy as sa
 from sqlalchemy import text
 
+from contest.cashout import CashoutOffer, CashoutRefused, cashout_offer
 from contest.grading import grade_leg, settle_bet
 from contest.rules import ContestRules
 from contest.slips import GameInfo, Leg, Quote, Slip, parse_ts, validate_round_robin, validate_slip
@@ -273,6 +274,63 @@ def adjust(engine, entry_id: int, amount_cents: int, note: str, now: datetime) -
         return _ledger(c, entry_id, now, "ADJUST", amount_cents, note=note.strip())
 
 
+# ------------------------------------------------------------------------------------------------------------ cashing out
+
+def _open_bets_for_cashout(c, entry_id: int, bet_ids: list[int]) -> list[tuple[int, str, int, list[Leg]]]:
+    """-> [(bet id, kind, stake, legs)] for the entry's PENDING bets among `bet_ids`; anything else refuses."""
+    out = []
+    for bid in bet_ids:
+        b = c.execute(text("SELECT kind, stake_cents, status, teaser_points FROM contest_bet WHERE id = :b AND entry_id = :e"),
+                      {"b": bid, "e": entry_id}).first()
+        if b is None:
+            raise ContestError("NO_BET", f"bet {bid} not found")
+        if b[2] != "pending":
+            raise ContestError("NOT_PENDING", f"bet {bid} is already {b[2]}")
+        legs = [Leg(g, m, sd, ln, int(pr), float(b[3] or 0)) for g, m, sd, ln, pr in c.execute(
+            text("SELECT game_id, market, side, line, price FROM contest_leg WHERE bet_id = :b ORDER BY id"), {"b": bid}).all()]
+        out.append((int(bid), b[0], int(b[1]), legs))
+    return out
+
+
+def _offers(c, contest_id: int, rules: ContestRules, bets, now: datetime, board) -> list[tuple[int, CashoutOffer]]:
+    games = _games_for(c, contest_id, [leg for _, _, _, legs in bets for leg in legs])
+    return [(bid, cashout_offer(kind, stake, legs, board, rules, games, now)) for bid, kind, stake, legs in bets]
+
+
+def cashout_quote(engine, contest_id: int, user_id: str, bet_ids: list[int], now: datetime, board: Mapping[tuple, Quote]) -> int:
+    """Read-only: what cashing out these bets would pay right now, in cents. Raises CashoutRefused (the UI shows the reason)."""
+    with engine.connect() as c:
+        rules = _rules(c, contest_id)
+        row = c.execute(text("SELECT id FROM contest_entry WHERE contest_id = :c AND user_id = :u"), {"c": contest_id, "u": user_id}).first()
+        if row is None:
+            raise ContestError("NOT_ENTERED", "join the contest first")
+        return sum(o.cents for _, o in _offers(c, contest_id, rules, _open_bets_for_cashout(c, int(row[0]), bet_ids), now, board))
+
+
+def cash_out(engine, contest_id: int, user_id: str, bet_ids: list[int], expected_cents: int, now: datetime,
+             board: Mapping[tuple, Quote]) -> list[dict]:
+    """Sell open bets back at the current value, ALL OR NOTHING in one transaction (a round robin passes every parlay in its group).
+
+    The caller names the value it was shown; if the board moved so the total differs, nothing is written and CashoutRefused
+    VALUE_CHANGED carries the new one, exactly like a price change on placing. A cashed-out bet is closed: its legs are voided (so a
+    later score never settles it), the ledger gets one CASHOUT credit, and it is never paid again."""
+    with engine.begin() as c:
+        rules, entry_id, _balance, status = _open_entry(c, contest_id, user_id)
+        if status != "active":
+            raise ContestError("ELIMINATED", "this entry is out of the contest")
+        offers = _offers(c, contest_id, rules, _open_bets_for_cashout(c, entry_id, bet_ids), now, board)
+        total = sum(o.cents for _, o in offers)
+        if total != int(expected_cents):
+            raise CashoutRefused("VALUE_CHANGED", "the cash-out value moved", {"cents": total})
+        for bid, o in offers:
+            c.execute(text("UPDATE contest_bet SET status = 'cashed_out', payout_cents = :p, settled_at = :t WHERE id = :b"),
+                      {"p": o.cents, "t": iso(now), "b": bid})
+            c.execute(text("UPDATE contest_leg SET result = 'void', graded_at = :t WHERE bet_id = :b AND result IS NULL"), {"t": iso(now), "b": bid})
+            if o.cents > 0:
+                _ledger(c, entry_id, now, "CASHOUT", o.cents, bid, note="cash out")
+        return [_bet_dict(c, bid) for bid, _ in offers]
+
+
 # ------------------------------------------------------------------------------------------------------------ reading
 
 def reconcile(engine, contest_id: int) -> list[dict]:
@@ -289,9 +347,9 @@ def leaderboard(engine, contest_id: int) -> list[dict]:
     with engine.connect() as c:
         rows = c.execute(text("""SELECT e.id, e.display_name, e.balance_cents, e.status,
                   COALESCE(SUM(CASE WHEN b.status = 'pending' THEN b.stake_cents ELSE 0 END), 0),
-                  COALESCE(SUM(CASE WHEN b.status = 'won' THEN 1 ELSE 0 END), 0),
-                  COALESCE(SUM(CASE WHEN b.status = 'lost' THEN 1 ELSE 0 END), 0),
-                  COALESCE(SUM(CASE WHEN b.status IN ('push', 'void') THEN 1 ELSE 0 END), 0)
+                  COALESCE(SUM(CASE WHEN b.status = 'won' OR (b.status = 'cashed_out' AND b.payout_cents > b.stake_cents) THEN 1 ELSE 0 END), 0),
+                  COALESCE(SUM(CASE WHEN b.status = 'lost' OR (b.status = 'cashed_out' AND b.payout_cents < b.stake_cents) THEN 1 ELSE 0 END), 0),
+                  COALESCE(SUM(CASE WHEN b.status IN ('push', 'void') OR (b.status = 'cashed_out' AND b.payout_cents = b.stake_cents) THEN 1 ELSE 0 END), 0)
                   FROM contest_entry e LEFT JOIN contest_bet b ON b.entry_id = e.id
                   WHERE e.contest_id = :c GROUP BY e.id, e.display_name, e.balance_cents, e.status"""), {"c": contest_id}).all()
     out = [{"entry_id": i, "display_name": n, "balance_cents": int(bal), "open_risk_cents": int(risk), "bankroll_cents": int(bal) + int(risk),
