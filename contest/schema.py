@@ -65,6 +65,7 @@ TABLES = [
         teaser_points   DOUBLE PRECISION NOT NULL DEFAULT 0,
         idempotency_key TEXT NOT NULL,
         phase           TEXT NOT NULL DEFAULT 'pregame',
+        group_id        TEXT,
         placed_at       TEXT NOT NULL,
         settled_at      TEXT,
         UNIQUE (entry_id, idempotency_key)
@@ -97,6 +98,7 @@ INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_contest_leg_game ON contest_leg (game_id)",
     "CREATE INDEX IF NOT EXISTS idx_contest_leg_bet ON contest_leg (bet_id)",
     "CREATE INDEX IF NOT EXISTS idx_contest_bet_entry ON contest_bet (entry_id, status)",
+    "CREATE INDEX IF NOT EXISTS idx_contest_bet_group ON contest_bet (entry_id, group_id)",
     "CREATE INDEX IF NOT EXISTS idx_contest_ledger_entry ON contest_ledger (entry_id)",
     "CREATE INDEX IF NOT EXISTS idx_contest_game_contest ON contest_game (contest_id, commence_time)",
 ]

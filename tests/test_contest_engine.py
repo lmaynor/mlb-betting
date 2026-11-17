@@ -7,7 +7,8 @@ import pytest
 from contest.grading import grade_leg, settle_bet
 from contest.odds import american_to_decimal, parlay_decimal, payout_cents
 from contest.rules import ContestRules
-from contest.slips import GameInfo, Leg, Quote, Slip, SlipError, adjusted_line, price_slip, validate_slip
+from contest.slips import (GameInfo, Leg, Quote, Slip, SlipError, adjusted_line, price_round_robin, price_slip, round_robin_slips,
+                           validate_round_robin, validate_slip)
 
 NOW = datetime(2026, 12, 19, 12, 0, tzinfo=timezone.utc)
 RULES = ContestRules(sport="ncaaf")
@@ -197,3 +198,71 @@ def test_rules_json_round_trip():
     again = ContestRules.from_json(RULES.to_json())
     assert again.teaser_price(6.0, 3) == RULES.teaser_price(6.0, 3) and again.min_stake_cents == RULES.min_stake_cents
     assert ContestRules(sport="ncaab").teaser_price(4.0, 2) == -120
+
+
+# ------------------------------------------------------------------------------------------------------------------ round robins
+
+G8 = {i: GameInfo(KICK, "scheduled") for i in range(1, 9)}
+
+
+def picks(n, price=-110):
+    return [L(i, price=price) for i in range(1, n + 1)]
+
+
+def rr(n=4, sizes=(2,), unit=5_000, balance=500_000, open_risk=0, board="auto", games=G8, now=NOW, rules=RULES):
+    pk = picks(n)
+    b = board_for(*pk) if board == "auto" else board
+    return validate_round_robin(pk, sizes, unit, rules, balance, open_risk, now, games, b)
+
+
+def rr_code(**kw):
+    with pytest.raises(SlipError) as e:
+        rr(**kw)
+    return e.value.code
+
+
+def test_round_robin_expands_to_every_combination():
+    assert len(rr(4, (2,))) == 6                      # by 2s from 4 picks
+    assert len(rr(4, (3,))) == 4
+    assert len(rr(5, (2, 3))) == 10 + 10              # by 2s and 3s from 5 picks
+    assert len(rr(8, (4,), unit=2_500, rules=ContestRules(sport="ncaaf", max_stake_bp=10_000))) == 70
+    slips = rr(4, (2, 3))
+    assert all(sl.kind == "parlay" and sl.stake_cents == 5_000 for sl in slips)
+    assert len({sl.idempotency_key for sl in slips}) == len(slips) == 10
+    assert {tuple(g.game_id for g in sl.legs) for sl in round_robin_slips(picks(3), [2], 100, "k")} == {(1, 2), (1, 3), (2, 3)}
+
+
+def test_round_robin_prices_as_the_sum_of_its_parlays():
+    slips = rr(3, (2,), unit=10_000)                  # three 2-leg parlays at -110, $100 each
+    assert price_round_robin(slips, RULES) == 3 * 36_446
+
+
+def test_round_robin_limits():
+    assert rr_code(n=2, sizes=(2,)) == "RR_PICKS"                      # fewer than 3 picks
+    assert rr_code(n=9, sizes=(2,), games={i: GameInfo(KICK, "scheduled") for i in range(1, 10)}) == "RR_PICKS"
+    assert rr_code(n=4, sizes=(1,)) == "RR_SIZES"                      # a "by 1s" is just straights
+    assert rr_code(n=4, sizes=(5,)) == "RR_SIZES"
+    assert rr_code(n=4, sizes=()) == "RR_SIZES"
+    assert rr_code(n=8, sizes=(2, 3, 4, 5)) == "RR_TOO_MANY"           # 28 + 56 + 70 + 56 parlays
+    assert rr_code(n=4, sizes=(2,), unit=2_499) == "STAKE_MIN"
+    pk = [L(1), L(1, market="total", side="over", line=40.5), L(2)]
+    with pytest.raises(SlipError) as e:
+        validate_round_robin(pk, (2,), 5_000, RULES, 500_000, 0, NOW, G8, None)
+    assert e.value.code == "DUP_GAME"
+
+
+def test_round_robin_stake_limits_apply_to_the_total():
+    assert rr_code(n=4, sizes=(2,), unit=50_000, balance=500_000) == "STAKE_MAX"       # 6 x 500 = 3,000 > 25% of 5,000 (1,250)
+    rr(4, (2,), unit=20_000, balance=500_000)                                          # 6 x 200 = 1,200 <= 1,250
+    assert rr_code(n=4, sizes=(2,), unit=20_000, balance=100_000) == "INSUFFICIENT"
+    rules = ContestRules(sport="ncaaf", max_stake_bp=10_000, max_open_risk_bp=3_000)
+    assert rr_code(n=4, sizes=(2,), unit=10_000, balance=400_000, open_risk=100_000, rules=rules) == "OPEN_RISK"
+
+
+def test_round_robin_checks_every_pick_against_the_board_and_clock():
+    assert rr_code(n=4, sizes=(2,), board={}) == "NO_QUOTE"
+    assert rr_code(n=4, sizes=(2,), now=KICK) == "GAME_CLOSED"
+    pk = picks(4)
+    stale = board_for(*pk)
+    stale[(3, "spread", "home")] = Quote(-3.5, -125, NOW)
+    assert rr_code(n=4, sizes=(2,), board=stale) == "PRICE_CHANGED"

@@ -389,3 +389,61 @@ def test_concurrent_retries_of_one_slip_place_it_once(world):
     with engine.connect() as c:
         assert c.execute(text("SELECT COUNT(*) FROM contest_bet")).scalar_one() == 1
     books_balance(world)
+
+
+# ------------------------------------------------------------------------------------------------------------------ round robins
+
+def rr_picks(g, n=4):
+    return [leg(g[i], side="home", line=-3.5) for i in range(n)]
+
+
+def place_rr(w, user, picks_, sizes, unit=5_000, key="rr1", now=NOW):
+    engine, cid, _ = w
+    return store.place_round_robin(engine, cid, user, picks_, sizes, unit, key, now, board(*picks_, at=now))
+
+
+def test_round_robin_places_every_parlay_in_one_group(world):
+    join(world)
+    g = world[2]
+    bets = place_rr(world, "u1", rr_picks(g), (2,), unit=5_000)
+    assert len(bets) == 6 and {b["group_id"] for b in bets} == {"rr1"} and all(b["kind"] == "parlay" and len(b["legs"]) == 2 for b in bets)
+    assert balance(world) == 500_000 - 6 * 5_000
+    books_balance(world)
+
+
+def test_round_robin_retry_moves_no_money_and_failure_writes_nothing(world):
+    engine, cid, g = world
+    join(world)
+    a = place_rr(world, "u1", rr_picks(g), (2,))
+    b = place_rr(world, "u1", rr_picks(g), (2,))
+    assert [x["id"] for x in a] == [x["id"] for x in b] and balance(world) == 470_000
+    with pytest.raises(SlipError):                                                  # one pick is inside the closing buffer
+        place_rr(world, "u1", rr_picks(g), (2, 3), key="late", now=KICK + timedelta(minutes=25))
+    assert balance(world) == 470_000
+    with engine.connect() as c:
+        assert c.execute(text("SELECT COUNT(*) FROM contest_bet WHERE group_id = 'late'")).scalar_one() == 0
+    books_balance(world)
+
+
+def test_round_robin_settles_each_parlay_on_its_own_legs(world):
+    engine, cid, g = world
+    join(world)
+    place_rr(world, "u1", rr_picks(g), (2,), unit=10_000)                           # 4 picks, 6 parlays, 600.00 at risk
+    for gid, (h, a) in zip(g, [(24, 20), (24, 20), (24, 20), (17, 20)]):            # picks 1-3 win, pick 4 loses
+        store.settle_game(engine, gid, h, a, AFTER)
+    # parlays among picks 1-3 win (3 of them); the 3 that include pick 4 lose
+    assert balance(world) == 500_000 - 60_000 + 3 * 36_446
+    with engine.connect() as c:
+        rows = c.execute(text("SELECT status, COUNT(*) FROM contest_bet GROUP BY status")).all()
+    assert dict(rows) == {"won": 3, "lost": 3}
+    books_balance(world)
+
+
+def test_round_robin_group_id_is_visible_but_picks_stay_hidden(world):
+    engine, cid, g = world
+    join(world, "u1", "Alex")
+    join(world, "u2", "Blair")
+    place_rr(world, "u1", rr_picks(g, 3), (2,))
+    theirs = store.visible_bets(engine, cid, "u2", NOW)
+    assert len(theirs) == 3 and {b["group_id"] for b in theirs} == {"rr1"}
+    assert all(b["legs"] == [{"hidden": True}, {"hidden": True}] and b["stake_cents"] is None for b in theirs)

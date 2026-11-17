@@ -7,9 +7,10 @@ the bettor's favour by `teaser_points` (see `adjusted_line`); the leg keeps the 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import combinations
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Mapping
+from typing import Mapping, Sequence
 
 from contest.odds import american_to_decimal, parlay_decimal, payout_cents
 from contest.rules import ContestRules
@@ -153,3 +154,53 @@ def win_decimal(kind: str, legs, rules: ContestRules) -> Decimal:
     if price is None:
         raise SlipError("TEASER_POINTS", f"no teaser price for {len(legs)} legs at {legs[0].teaser_points}")
     return american_to_decimal(price)
+
+
+# ------------------------------------------------------------------------------------------------------------ round robins
+
+def round_robin_slips(picks: Sequence[Leg], sizes: Sequence[int], unit_cents: int, key: str) -> list[Slip]:
+    """Expand N picks into every k-leg parlay for each k in `sizes` ("by 2s", "by 3s" ...), each staked at `unit_cents`.
+    A round robin is nothing but these parlays: they place, grade and settle as ordinary parlays, tied together by a group id."""
+    out: list[Slip] = []
+    for k in sorted(set(sizes)):
+        for combo in combinations(range(len(picks)), k):
+            out.append(Slip("parlay", tuple(picks[i] for i in combo), unit_cents, f"{key}#{len(out)}"))
+    return out
+
+
+def validate_round_robin(picks: Sequence[Leg], sizes: Sequence[int], unit_cents: int, rules: ContestRules, balance_cents: int,
+                         open_risk_cents: int, now: datetime, games: Mapping[int, GameInfo],
+                         board: Mapping[tuple, Quote] | None = None) -> list[Slip]:
+    """Raise SlipError for the first problem; return the parlays to place. The stake limits apply to the TOTAL at risk (unit x
+    parlays), not to one unit, so a round robin cannot slip a bigger exposure past the per-bet cap."""
+    n = len(picks)
+    if not rules.round_robin_min_picks <= n <= rules.round_robin_max_picks:
+        raise SlipError("RR_PICKS", f"a round robin needs {rules.round_robin_min_picks}-{rules.round_robin_max_picks} picks, got {n}")
+    if len({p.game_id for p in picks}) != n:
+        raise SlipError("DUP_GAME", "one pick per game in a round robin")
+    ks = sorted(set(int(k) for k in sizes))
+    if not ks or ks[0] < 2 or ks[-1] > min(n, rules.parlay_max_legs):
+        raise SlipError("RR_SIZES", f"round robin sizes must be between 2 and {min(n, rules.parlay_max_legs)}")
+    if any(p.teaser_points for p in picks):
+        raise SlipError("TEASER_POINTS", "teaser points on a round robin pick")
+    count = sum(len(list(combinations(range(n), k))) for k in ks)
+    if count > rules.round_robin_max_parlays:
+        raise SlipError("RR_TOO_MANY", f"{count} parlays is over the limit of {rules.round_robin_max_parlays}")
+    total = unit_cents * count
+    if unit_cents < rules.min_stake_cents:
+        raise SlipError("STAKE_MIN", f"minimum stake per parlay is {rules.min_stake_cents} cents")
+    if total > balance_cents:
+        raise SlipError("INSUFFICIENT", f"{count} parlays x {unit_cents} cents is more than the balance")
+    if total > rules.min_stake_cents and total * 10_000 > balance_cents * rules.max_stake_bp:
+        raise SlipError("STAKE_MAX", f"total risk is over {rules.max_stake_bp / 100:g}% of balance")
+    if (open_risk_cents + total) * 10_000 > (balance_cents + open_risk_cents) * rules.max_open_risk_bp:
+        raise SlipError("OPEN_RISK", "over the open-risk cap")
+    slips = round_robin_slips(picks, ks, unit_cents, "rr")
+    for sl in slips:
+        validate_slip(sl, rules, balance_cents, open_risk_cents, now, games, board)
+    return slips
+
+
+def price_round_robin(slips: Sequence[Slip], rules: ContestRules) -> int:
+    """Total return in cents if every pick wins (the sum of every parlay's all-win payout)."""
+    return sum(price_slip(sl, rules) for sl in slips)

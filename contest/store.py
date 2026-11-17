@@ -6,14 +6,14 @@ Postgres. Server time is passed in as `now`; nothing reads a client clock.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Mapping
+from typing import Mapping, Sequence
 
 import sqlalchemy as sa
 from sqlalchemy import text
 
 from contest.grading import grade_leg, settle_bet
 from contest.rules import ContestRules
-from contest.slips import GameInfo, Leg, Quote, Slip, parse_ts, validate_slip
+from contest.slips import GameInfo, Leg, Quote, Slip, parse_ts, validate_round_robin, validate_slip
 
 
 class ContestError(Exception):
@@ -104,10 +104,53 @@ def join_contest(engine, contest_id: int, user_id: str, display_name: str, invit
 
 def _bet_dict(c, bet_id: int) -> dict:
     b = c.execute(text("""SELECT id, entry_id, kind, stake_cents, payout_cents, status, teaser_points, idempotency_key, phase,
-                          placed_at, settled_at FROM contest_bet WHERE id = :i"""), {"i": bet_id}).mappings().one()
+                          group_id, placed_at, settled_at FROM contest_bet WHERE id = :i"""), {"i": bet_id}).mappings().one()
     legs = c.execute(text("""SELECT game_id, market, side, line, price, result FROM contest_leg WHERE bet_id = :i ORDER BY id"""),
                      {"i": bet_id}).mappings().all()
     return {**dict(b), "legs": [dict(x) for x in legs]}
+
+
+def _open_entry(c, contest_id: int, user_id: str):
+    """Common preamble of every placement: contest open, entry locked (Postgres) and found. -> (rules, entry_id, balance, status)."""
+    rules = _rules(c, contest_id)
+    if c.execute(text("SELECT status FROM contest WHERE id = :i"), {"i": contest_id}).scalar_one() != "open":
+        raise ContestError("CONTEST_CLOSED", "this contest is not open for bets")
+    entry = c.execute(text(_lock(c, "SELECT id, balance_cents, status FROM contest_entry WHERE contest_id = :c AND user_id = :u")),
+                      {"c": contest_id, "u": user_id}).first()
+    if entry is None:
+        raise ContestError("NOT_ENTERED", "join the contest first")
+    return rules, int(entry[0]), int(entry[1]), entry[2]
+
+
+def _games_for(c, contest_id: int, legs) -> dict[int, GameInfo]:
+    games: dict[int, GameInfo] = {}
+    for leg in legs:
+        g = c.execute(text("SELECT commence_time, status FROM contest_game WHERE id = :g AND contest_id = :c"),
+                      {"g": leg.game_id, "c": contest_id}).first()
+        if g:
+            games[leg.game_id] = GameInfo(parse_ts(g[0]), g[1])
+    return games
+
+
+def _open_risk(c, entry_id: int) -> int:
+    return int(c.execute(text("SELECT COALESCE(SUM(stake_cents), 0) FROM contest_bet WHERE entry_id = :e AND status = 'pending'"),
+                         {"e": entry_id}).scalar_one())
+
+
+def _insert_bet(c, entry_id: int, slip: Slip, now: datetime, phase: str, board, group_id: str | None = None) -> int:
+    """Write one bet, its legs (with the exact line / price / quote time the bettor got) and the stake debit."""
+    bet_id = c.execute(text("""INSERT INTO contest_bet (entry_id, kind, stake_cents, status, teaser_points, idempotency_key, phase, group_id, placed_at)
+                               VALUES (:e, :k, :s, 'pending', :tp, :ik, :ph, :gr, :n) RETURNING id"""),
+                       {"e": entry_id, "k": slip.kind, "s": slip.stake_cents, "tp": slip.legs[0].teaser_points if slip.kind == "teaser" else 0.0,
+                        "ik": slip.idempotency_key, "ph": phase, "gr": group_id, "n": iso(now)}).scalar_one()
+    for leg in slip.legs:
+        q = board.get((leg.game_id, leg.market, leg.side)) if board else None
+        c.execute(text("""INSERT INTO contest_leg (bet_id, game_id, market, side, line, price, quote_fetched_at)
+                          VALUES (:b, :g, :m, :s, :l, :p, :q)"""),
+                  {"b": bet_id, "g": leg.game_id, "m": leg.market, "s": leg.side, "l": leg.line, "p": leg.price,
+                   "q": iso(q.fetched_at) if q else None})
+    _ledger(c, entry_id, now, "STAKE", -slip.stake_cents, int(bet_id))
+    return int(bet_id)
 
 
 def place_bet(engine, contest_id: int, user_id: str, slip: Slip, now: datetime,
@@ -116,42 +159,32 @@ def place_bet(engine, contest_id: int, user_id: str, slip: Slip, now: datetime,
     bet and legs (with the exact line / price / quote time the bettor got). A retry with the same idempotency key returns the
     original bet and moves no money. Raises SlipError / ContestError; on any error nothing is written."""
     with engine.begin() as c:
-        rules = _rules(c, contest_id)
-        if c.execute(text("SELECT status FROM contest WHERE id = :i"), {"i": contest_id}).scalar_one() != "open":
-            raise ContestError("CONTEST_CLOSED", "this contest is not open for bets")
-        entry = c.execute(text(_lock(c, "SELECT id, balance_cents, status FROM contest_entry WHERE contest_id = :c AND user_id = :u")),
-                          {"c": contest_id, "u": user_id}).first()
-        if entry is None:
-            raise ContestError("NOT_ENTERED", "join the contest first")
-        entry_id, balance, status = int(entry[0]), int(entry[1]), entry[2]
+        rules, entry_id, balance, status = _open_entry(c, contest_id, user_id)
         dup = c.execute(text("SELECT id FROM contest_bet WHERE entry_id = :e AND idempotency_key = :k"),
                         {"e": entry_id, "k": slip.idempotency_key}).first()
         if dup:
             return _bet_dict(c, int(dup[0]))
         if status != "active":
             raise ContestError("ELIMINATED", "this entry is out of the contest")
-        open_risk = int(c.execute(text("SELECT COALESCE(SUM(stake_cents), 0) FROM contest_bet WHERE entry_id = :e AND status = 'pending'"),
-                                  {"e": entry_id}).scalar_one())
-        games: dict[int, GameInfo] = {}
-        for leg in slip.legs:
-            g = c.execute(text("SELECT commence_time, status FROM contest_game WHERE id = :g AND contest_id = :c"),
-                          {"g": leg.game_id, "c": contest_id}).first()
-            if g:
-                games[leg.game_id] = GameInfo(parse_ts(g[0]), g[1])
-        validate_slip(slip, rules, balance, open_risk, now, games, board)
+        validate_slip(slip, rules, balance, _open_risk(c, entry_id), now, _games_for(c, contest_id, slip.legs), board)
+        return _bet_dict(c, _insert_bet(c, entry_id, slip, now, phase, board))
 
-        bet_id = c.execute(text("""INSERT INTO contest_bet (entry_id, kind, stake_cents, status, teaser_points, idempotency_key, phase, placed_at)
-                                   VALUES (:e, :k, :s, 'pending', :tp, :ik, :ph, :n) RETURNING id"""),
-                           {"e": entry_id, "k": slip.kind, "s": slip.stake_cents, "tp": slip.legs[0].teaser_points if slip.kind == "teaser" else 0.0,
-                            "ik": slip.idempotency_key, "ph": phase, "n": iso(now)}).scalar_one()
-        for leg in slip.legs:
-            q = board.get((leg.game_id, leg.market, leg.side)) if board else None
-            c.execute(text("""INSERT INTO contest_leg (bet_id, game_id, market, side, line, price, quote_fetched_at)
-                              VALUES (:b, :g, :m, :s, :l, :p, :q)"""),
-                      {"b": bet_id, "g": leg.game_id, "m": leg.market, "s": leg.side, "l": leg.line, "p": leg.price,
-                       "q": iso(q.fetched_at) if q else None})
-        _ledger(c, entry_id, now, "STAKE", -slip.stake_cents, bet_id)
-        return _bet_dict(c, int(bet_id))
+
+def place_round_robin(engine, contest_id: int, user_id: str, picks: Sequence[Leg], sizes: Sequence[int], unit_cents: int,
+                      key: str, now: datetime, board: Mapping[tuple, Quote] | None = None, phase: str = "pregame") -> list[dict]:
+    """Place a round robin: every k-leg parlay of `picks` for each k in `sizes`, `unit_cents` each, ALL or NOTHING in one
+    transaction, tied together by group id `key`. A retry with the same key returns the original parlays and moves no money."""
+    with engine.begin() as c:
+        rules, entry_id, balance, status = _open_entry(c, contest_id, user_id)
+        dup = c.execute(text("SELECT id FROM contest_bet WHERE entry_id = :e AND group_id = :g ORDER BY id"), {"e": entry_id, "g": key}).all()
+        if dup:
+            return [_bet_dict(c, int(r[0])) for r in dup]
+        if status != "active":
+            raise ContestError("ELIMINATED", "this entry is out of the contest")
+        slips = validate_round_robin(picks, sizes, unit_cents, rules, balance, _open_risk(c, entry_id), now,
+                                     _games_for(c, contest_id, picks), board)
+        return [_bet_dict(c, _insert_bet(c, entry_id, Slip("parlay", sl.legs, sl.stake_cents, f"{key}#{n}"), now, phase, board, key))
+                for n, sl in enumerate(slips)]
 
 
 # ------------------------------------------------------------------------------------------------------------ settling
@@ -274,11 +307,11 @@ def visible_bets(engine, contest_id: int, viewer_user_id: str, now: datetime) ->
     has kicked off (a hidden leg is `{"hidden": True}`), and the stake / payout only once every leg is visible. This is the
     server-side half of 'picks are hidden until tip-off': the API must return THIS, never raw rows."""
     with engine.connect() as c:
-        bets = c.execute(text("""SELECT b.id, e.user_id, e.display_name, b.kind, b.stake_cents, b.payout_cents, b.status, b.placed_at
+        bets = c.execute(text("""SELECT b.id, e.user_id, e.display_name, b.kind, b.stake_cents, b.payout_cents, b.status, b.placed_at, b.group_id
                                  FROM contest_bet b JOIN contest_entry e ON e.id = b.entry_id
                                  WHERE e.contest_id = :c ORDER BY b.id"""), {"c": contest_id}).all()
         out = []
-        for bet_id, user_id, name, kind, stake, payout, status, placed in bets:
+        for bet_id, user_id, name, kind, stake, payout, status, placed, group_id in bets:
             mine = user_id == viewer_user_id
             legs = c.execute(text("""SELECT l.game_id, l.market, l.side, l.line, l.price, l.result, g.commence_time
                                      FROM contest_leg l JOIN contest_game g ON g.id = l.game_id WHERE l.bet_id = :b ORDER BY l.id"""),
@@ -291,6 +324,6 @@ def visible_bets(engine, contest_id: int, viewer_user_id: str, now: datetime) ->
                     shown.append({"hidden": True})
                     all_visible = False
             reveal_money = mine or all_visible
-            out.append({"bet_id": bet_id, "owner": name, "mine": mine, "kind": kind, "status": status, "placed_at": placed,
+            out.append({"bet_id": bet_id, "owner": name, "mine": mine, "kind": kind, "status": status, "placed_at": placed, "group_id": group_id,
                         "stake_cents": stake if reveal_money else None, "payout_cents": payout if reveal_money else None, "legs": shown})
     return out
