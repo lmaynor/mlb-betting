@@ -150,6 +150,9 @@ def test_stake_rules():
     assert code(S(stake=125_001)) == "STAKE_MAX"                 # 25% of 5,000.00 is 1,250.00
     ok(S(stake=125_000))
     ok(S(stake=125_000), balance=500_000, open_risk=300_000)     # default open-risk cap is off
+    ok(S(stake=2_500), balance=3_000)                            # the minimum stake is always allowed, even above the % cap
+    assert code(S(stake=3_000), balance=3_000) == "STAKE_MAX"
+    assert code(S(stake=2_500), balance=2_000) == "INSUFFICIENT"
 
 
 def test_open_risk_cap():

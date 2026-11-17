@@ -109,8 +109,10 @@ def validate_slip(slip: Slip, rules: ContestRules, balance_cents: int, open_risk
         raise SlipError("STAKE_MIN", f"minimum stake is {rules.min_stake_cents} cents")
     if slip.stake_cents > balance_cents:
         raise SlipError("INSUFFICIENT", "stake exceeds balance")
-    if slip.stake_cents * 10_000 > balance_cents * rules.max_stake_bp:
-        raise SlipError("STAKE_MAX", f"maximum stake is {rules.max_stake_bp / 100:g}% of balance")
+    # the percentage cap never shuts a player out: the minimum stake is always allowed (balance permitting), otherwise a balance
+    # under min / pct would be neither able to bet nor eliminated
+    if slip.stake_cents > rules.min_stake_cents and slip.stake_cents * 10_000 > balance_cents * rules.max_stake_bp:
+        raise SlipError("STAKE_MAX", f"maximum stake is {rules.max_stake_bp / 100:g}% of balance (minimum stake always allowed)")
     if (open_risk_cents + slip.stake_cents) * 10_000 > (balance_cents + open_risk_cents) * rules.max_open_risk_bp:
         raise SlipError("OPEN_RISK", "over the open-risk cap")
 
