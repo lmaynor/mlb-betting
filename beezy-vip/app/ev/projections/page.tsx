@@ -19,6 +19,7 @@ import { applyPickFilters } from '@/lib/board-rows'
 import { siteDateKey } from '@/lib/dates'
 import type { GameProjectionsFeed } from '@/lib/game-lines'
 import { activeFilterCount, parsePickFilters } from '@/lib/picks-filters'
+import { hasCardLayout } from '@/lib/prop-cards'
 import { loadSportBoard } from '@/lib/sport-board-data'
 import { isSportSlug, LIVE_SPORTS, SPORT_PILLARS, type SportSlug } from '@/lib/sports'
 import { GameLinesClient } from '../games/game-lines-client'
@@ -167,7 +168,7 @@ export default async function ProjectionsPage({ searchParams }: Props) {
       <GamesStrip games={games} selected={f.game} today={today} total={board.rows.length} />
       <FilterBar sport={league} kind={league === 'mlb' ? 'player' : undefined} />
       <div className="max-w-page mx-auto p-6">
-        {league === 'nba' ? (
+        {hasCardLayout(league) ? (
           <ProjectionsBoardSwitch
             sport={league}
             rows={rows}

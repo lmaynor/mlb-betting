@@ -1,6 +1,19 @@
 import type { BoardRow } from './board-rows'
+import type { SportSlug } from './sports'
 
 export type CardSort = 'ev' | 'score' | 'time'
+
+/**
+ * Leagues whose projections board offers the cards/table switch (IA-08). NBA at launch; NHL added
+ * 2026-11-16 at Luc's direction — its feed carries the same percentiles, blend and book counts the
+ * card consumes (verified against the live payload), so enablement is a board switch, not a feed
+ * change. Every other league keeps the table only.
+ */
+export const CARD_LAYOUT_SPORTS: readonly SportSlug[] = ['nba', 'nhl']
+
+export function hasCardLayout(sport: SportSlug): boolean {
+  return CARD_LAYOUT_SPORTS.includes(sport)
+}
 
 /**
  * Filter board rows down to those suitable for card presentation:

@@ -33,3 +33,16 @@ describe('playerIdByName suffix resolution', () => {
     expect(playerIdByName('nba', 'Nonexistent Fakeplayer Zzz', 'BOS')).toBeNull()
   })
 })
+
+describe('playerIdByName NHL resolution (IA-08 NHL cards)', () => {
+  it('resolves an NHL skater by code or full team name to the same id', () => {
+    const byCode = playerIdByName('nhl', 'Connor McDavid', 'EDM')
+    const byName = playerIdByName('nhl', 'Connor McDavid', 'Edmonton Oilers')
+    expect(byCode).toBe(8478402)
+    expect(byName).toBe(byCode)
+  })
+
+  it('returns null for an NHL player with no map entry, so the card shows the grey silhouette', () => {
+    expect(playerIdByName('nhl', 'Nikita Tolopilo', 'VAN')).toBeNull()
+  })
+})

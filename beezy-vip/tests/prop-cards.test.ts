@@ -1,5 +1,5 @@
 import type { BoardRow } from '@/lib/board-rows'
-import { cardGate, cockpitHref, resolveLayout, sortCards } from '@/lib/prop-cards'
+import { cardGate, cockpitHref, hasCardLayout, resolveLayout, sortCards } from '@/lib/prop-cards'
 
 function makeRow(overrides: Partial<BoardRow> = {}): BoardRow {
   return {
@@ -142,5 +142,90 @@ describe('cockpitHref', () => {
   it('formats cockpit href correctly', () => {
     const row = makeRow({ sport: 'nba', key: 'nba:game1|player_one|pts' })
     expect(cockpitHref(row)).toBe(`/edge?sport=nba&prop=${encodeURIComponent('proj|nba|nba:game1|player_one|pts')}`)
+  })
+
+  it('formats an NHL cockpit href with the nhl sport', () => {
+    const row = makeNhlRow()
+    expect(cockpitHref(row)).toBe(`/edge?sport=nhl&prop=${encodeURIComponent('proj|nhl|nhl:2026-11-16:VAN@EDM|connor_mcdavid|sog')}`)
+  })
+})
+
+function makeNhlRow(overrides: Partial<BoardRow> = {}): BoardRow {
+  return {
+    key: 'nhl:2026-11-16:VAN@EDM|connor_mcdavid|sog',
+    sport: 'nhl',
+    system: 'NHL_SOG',
+    marketLabel: 'Shots on Goal',
+    player: 'Connor McDavid',
+    headshotId: 8478402,
+    team: 'EDM',
+    matchup: 'VAN @ EDM',
+    gameKey: 'nhl:2026-11-16:VAN@EDM',
+    away: 'VAN',
+    home: 'EDM',
+    start: '2026-11-17T02:00:00Z',
+    side: 'over',
+    line: 3.5,
+    hasLine: true,
+    proj: 4.1,
+    avg10: 3.8,
+    avgSzn: 3.9,
+    pModel: 0.57,
+    pFair: 0.52,
+    pBlend: 0.55,
+    nBooks: 7,
+    l5: 0.6,
+    l10: 0.6,
+    odds: 110,
+    book: 'novig',
+    modelEdge: 0.05,
+    marketEv: 0.06,
+    confluence: false,
+    score: 55,
+    isPick: false,
+    result: null,
+    engine: 'Hierarchical',
+    tier: null,
+    p10: 1.0,
+    p90: 7.0,
+    ...overrides,
+  }
+}
+
+describe('hasCardLayout', () => {
+  it('enables the cards/table switch for NBA and NHL only', () => {
+    expect(hasCardLayout('nba')).toBe(true)
+    expect(hasCardLayout('nhl')).toBe(true)
+    expect(hasCardLayout('nfl')).toBe(false)
+    expect(hasCardLayout('mlb')).toBe(false)
+    expect(hasCardLayout('soccer')).toBe(false)
+  })
+})
+
+describe('cardGate on NHL-shaped rows', () => {
+  it('keeps a qualifying NHL row (priced, 7 books, positive EV)', () => {
+    const row = makeNhlRow()
+    expect(cardGate([row])).toEqual([row])
+  })
+
+  it('drops an NHL row with no two-sided consensus (no blend, no market EV, low score)', () => {
+    const noConsensus = makeNhlRow({ pBlend: null, marketEv: null, score: 20 })
+    expect(cardGate([noConsensus])).toEqual([])
+  })
+
+  it('keeps a negative-EV NHL row when the score clears 35 (saves shape)', () => {
+    const saves = makeNhlRow({ system: 'NHL_SAVES', marketLabel: 'Saves', marketEv: -0.01, score: 42, nBooks: 4 })
+    expect(cardGate([saves])).toEqual([saves])
+  })
+
+  it('drops an NHL row priced by fewer than 3 books even with positive EV', () => {
+    const thin = makeNhlRow({ nBooks: 2, marketEv: 0.09 })
+    expect(cardGate([thin])).toEqual([])
+  })
+
+  it('sorts NHL cards by EV desc with the same rules as NBA', () => {
+    const a = makeNhlRow({ key: 'a', marketEv: 0.03, score: 60 })
+    const b = makeNhlRow({ key: 'b', marketEv: 0.08, score: 40 })
+    expect(sortCards([a, b], 'ev').map(r => r.key)).toEqual(['b', 'a'])
   })
 })
