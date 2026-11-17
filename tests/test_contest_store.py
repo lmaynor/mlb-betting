@@ -41,8 +41,9 @@ def world(tmp_path):
     return engine, cid, games
 
 
-def join(w, user="u1", name="Alex"):
+def join(w, user="u1", name=None):
     engine, cid, _ = w
+    name = name or ("Alex" if user == "u1" else f"Player {user}")         # names are unique per contest
     return store.join_contest(engine, cid, user, name, "WELCOME", NOW)
 
 
@@ -87,9 +88,9 @@ def test_invite_must_be_valid_and_has_a_use_limit(world):
         store.join_contest(engine, cid, "x", "X", "WRONG", NOW)
     assert e.value.code == "INVITE_INVALID"
     store.create_invite(engine, cid, "ONCE", 1, NOW)
-    store.join_contest(engine, cid, "a", "A", "ONCE", NOW)
+    store.join_contest(engine, cid, "a", "Aaron", "ONCE", NOW)
     with pytest.raises(store.ContestError):
-        store.join_contest(engine, cid, "b", "B", "ONCE", NOW)
+        store.join_contest(engine, cid, "b", "Bea", "ONCE", NOW)
 
 
 # ------------------------------------------------------------------------------------------------------------------ place
@@ -596,3 +597,76 @@ def test_others_still_cannot_see_a_cashed_out_pick_before_kickoff(world):
     store.cash_out(engine, cid, "u1", [bet["id"]], 9_068, now, brd)
     theirs = store.visible_bets(engine, cid, "u2", now)[0]
     assert theirs["status"] == "cashed_out" and theirs["legs"] == [{"hidden": True}] and theirs["stake_cents"] is None and theirs["payout_cents"] is None
+
+
+# ------------------------------------------------------------------------------------------------------------------ display names
+
+def test_names_are_unique_per_contest_by_key(world):
+    engine, cid, _ = world
+    store.join_contest(engine, cid, "u1", "Alex", "WELCOME", NOW)
+    for clash in ("alex", "A.L.E.X", " ALEX "):
+        with pytest.raises(store.ContestError) as e:
+            store.join_contest(engine, cid, "u2", clash, "WELCOME", NOW)
+        assert e.value.code == "NAME_TAKEN"
+    other = store.create_contest(engine, "other", "Other", RULES, NOW)
+    store.create_invite(engine, other, "O", 5, NOW)
+    store.join_contest(engine, other, "u2", "Alex", "O", NOW)                         # the same name in another contest is fine
+
+
+def test_a_bad_name_refuses_the_join_and_does_not_burn_the_invite(world):
+    engine, cid, _ = world
+    for raw, code in (("A", "NAME_INVALID"), ("Admin", "NAME_RESERVED"), ("bad@name", "NAME_INVALID")):
+        with pytest.raises(store.ContestError) as e:
+            store.join_contest(engine, cid, "u1", raw, "WELCOME", NOW)
+        assert e.value.code == code
+    with engine.connect() as c:
+        assert c.execute(text("SELECT uses FROM contest_invite WHERE code = 'WELCOME'")).scalar_one() == 0
+        assert c.execute(text("SELECT COUNT(*) FROM contest_entry")).scalar_one() == 0
+
+
+def test_rename_changes_what_everyone_sees_and_is_limited(world):
+    engine, cid, g = world
+    join(world, "u1", "Alex")
+    join(world, "u2", "Blair")
+    assert store.rename_entry(engine, cid, "u1", "Alexander", NOW) == "Alexander"
+    assert {r["display_name"] for r in store.leaderboard(engine, cid)} == {"Alexander", "Blair"}
+    with pytest.raises(store.ContestError) as e:
+        store.rename_entry(engine, cid, "u1", "blair", NOW)                           # taken by another player
+    assert e.value.code == "NAME_TAKEN"
+    assert store.rename_entry(engine, cid, "u1", "ALEXANDER", NOW) == "ALEXANDER"      # re-casing the same name is free
+    for n in ("Al", "Lex"):
+        store.rename_entry(engine, cid, "u1", n, NOW)                                  # changes 2 and 3 (Alexander was the first)
+    with pytest.raises(store.ContestError) as e2:
+        store.rename_entry(engine, cid, "u1", "Fourth One", NOW)
+    assert e2.value.code == "RENAME_LIMIT"
+    with pytest.raises(store.ContestError) as e3:
+        store.rename_entry(engine, cid, "stranger", "Whoever", NOW)
+    assert e3.value.code == "NOT_ENTERED"
+
+
+def test_admin_rename_ignores_the_limit_but_not_the_rules(world):
+    engine, cid, _ = world
+    eid = join(world, "u1", "Alex")
+    join(world, "u2", "Blair")
+    for n in ("Al", "Lex", "Xander"):
+        try:
+            store.rename_entry(engine, cid, "u1", n, NOW)
+        except store.ContestError:
+            pass                                                                       # the player is out of renames; the organiser is not
+    assert store.admin_rename(engine, eid, "Moved Along") == "Moved Along"
+    with pytest.raises(store.ContestError):
+        store.admin_rename(engine, eid, "Blair")
+    with pytest.raises(store.ContestError):
+        store.admin_rename(engine, eid, "House")
+    with pytest.raises(store.ContestError) as e:
+        store.admin_rename(engine, 999, "Anyone")
+    assert e.value.code == "NO_ENTRY"
+
+
+def test_pool_and_leaderboard_show_the_current_name(world):
+    engine, cid, g = world
+    join(world, "u1", "Alex")
+    join(world, "u2", "Blair")
+    place(world, "u1", "straight", [leg(g[0])])
+    store.rename_entry(engine, cid, "u1", "Alexander", NOW)
+    assert store.visible_bets(engine, cid, "u2", NOW)[0]["owner"] == "Alexander"

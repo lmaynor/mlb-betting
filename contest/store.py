@@ -13,6 +13,7 @@ from sqlalchemy import text
 
 from contest.cashout import CashoutOffer, CashoutRefused, cashout_offer
 from contest.grading import grade_leg, settle_bet
+from contest.names import MAX_RENAMES, NameInvalid, validate_display_name
 from contest.rules import ContestRules
 from contest.slips import GameInfo, Leg, Quote, Slip, parse_ts, validate_round_robin, validate_slip
 
@@ -82,6 +83,46 @@ def upsert_game(engine, contest_id: int, espn_event_id: str, commence_time: date
                                  VALUES (:c, :sp, :e, :b, :a, :h, :ct, :r) RETURNING id"""), {**p, "sp": sport}).scalar_one()
 
 
+def _valid_name(c, contest_id: int, raw: str, exclude_entry: int | None) -> tuple[str, str]:
+    """Clean and validate a display name and check nobody else in the contest has its KEY. -> (display, key)."""
+    try:
+        display, key = validate_display_name(raw)
+    except NameInvalid as e:
+        raise ContestError(e.code, e.message) from e
+    row = c.execute(text("SELECT id FROM contest_entry WHERE contest_id = :c AND name_key = :k"), {"c": contest_id, "k": key}).first()
+    if row is not None and (exclude_entry is None or int(row[0]) != exclude_entry):
+        raise ContestError("NAME_TAKEN", "that name is taken")
+    return display, key
+
+
+def rename_entry(engine, contest_id: int, user_id: str, new_name: str, now: datetime) -> str:
+    """A player changes their own display name. At most MAX_RENAMES changes (re-casing the same name is free), unique per contest."""
+    with engine.begin() as c:
+        row = c.execute(text(_lock(c, "SELECT id, name_key, name_changes FROM contest_entry WHERE contest_id = :c AND user_id = :u")),
+                        {"c": contest_id, "u": user_id}).first()
+        if row is None:
+            raise ContestError("NOT_ENTERED", "join the contest first")
+        entry_id, old_key, changes = int(row[0]), row[1], int(row[2])
+        display, key = _valid_name(c, contest_id, new_name, exclude_entry=entry_id)
+        changed = key != old_key
+        if changed and changes >= MAX_RENAMES:
+            raise ContestError("RENAME_LIMIT", f"a name can be changed {MAX_RENAMES} times")
+        c.execute(text("UPDATE contest_entry SET display_name = :d, name_key = :k, name_changes = name_changes + :n WHERE id = :e"),
+                  {"d": display, "k": key, "n": 1 if changed else 0, "e": entry_id})
+        return display
+
+
+def admin_rename(engine, entry_id: int, new_name: str) -> str:
+    """An organiser renames any entry (impersonation, a name that slipped through). No rename limit; still unique and valid."""
+    with engine.begin() as c:
+        row = c.execute(text("SELECT contest_id FROM contest_entry WHERE id = :e"), {"e": entry_id}).first()
+        if row is None:
+            raise ContestError("NO_ENTRY", f"entry {entry_id} not found")
+        display, key = _valid_name(c, int(row[0]), new_name, exclude_entry=entry_id)
+        c.execute(text("UPDATE contest_entry SET display_name = :d, name_key = :k WHERE id = :e"), {"d": display, "k": key, "e": entry_id})
+        return display
+
+
 def join_contest(engine, contest_id: int, user_id: str, display_name: str, invite_code: str, now: datetime) -> int:
     """Join with an invite code and receive the starting bankroll. Idempotent: a user already in gets their entry back and the
     invite is not consumed again."""
@@ -94,9 +135,13 @@ def join_contest(engine, contest_id: int, user_id: str, display_name: str, invit
                          {"k": invite_code, "c": contest_id}).rowcount
         if used != 1:
             raise ContestError("INVITE_INVALID", "invite code is wrong or used up")
-        eid = c.execute(text("""INSERT INTO contest_entry (contest_id, user_id, display_name, balance_cents, status, joined_at)
-                                VALUES (:c, :u, :d, 0, 'active', :n) RETURNING id"""),
-                        {"c": contest_id, "u": user_id, "d": display_name.strip()[:40] or "player", "n": iso(now)}).scalar_one()
+        display, key = _valid_name(c, contest_id, display_name, exclude_entry=None)     # raises (and rolls the invite use back) on a bad or taken name
+        try:
+            eid = c.execute(text("""INSERT INTO contest_entry (contest_id, user_id, display_name, name_key, balance_cents, status, joined_at)
+                                    VALUES (:c, :u, :d, :k, 0, 'active', :n) RETURNING id"""),
+                            {"c": contest_id, "u": user_id, "d": display, "k": key, "n": iso(now)}).scalar_one()
+        except sa.exc.IntegrityError as exc:                                              # two players claiming one name at the same moment
+            raise ContestError("NAME_TAKEN", "someone just took that name") from exc
         _ledger(c, eid, now, "START", rules.start_bankroll_cents, note="starting bankroll")
         return int(eid)
 

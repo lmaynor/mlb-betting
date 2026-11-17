@@ -34,11 +34,14 @@ TABLES = [
         contest_id    INTEGER NOT NULL,
         user_id       TEXT NOT NULL,
         display_name  TEXT NOT NULL,
+        name_key      TEXT NOT NULL,
+        name_changes  INTEGER NOT NULL DEFAULT 0,
         balance_cents BIGINT NOT NULL DEFAULT 0,
         status        TEXT NOT NULL DEFAULT 'active',
         joined_at     TEXT NOT NULL,
         eliminated_at TEXT,
-        UNIQUE (contest_id, user_id)
+        UNIQUE (contest_id, user_id),
+        UNIQUE (contest_id, name_key)
     )""",
     f"""CREATE TABLE IF NOT EXISTS contest_game (
         id            {_PK},
