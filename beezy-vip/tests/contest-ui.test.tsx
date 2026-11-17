@@ -316,6 +316,33 @@ describe('Bankroll Challenge page', () => {
     expect(screen.getByRole('status', { name: 'Bet confirmation' })).toHaveTextContent('Play money')
   })
 
+  it('shows the live score beside the team names with the clock, down and distance and who has the ball', () => {
+    const { container } = open()
+    const live = container.querySelector('tr[data-game="12"]') as HTMLElement
+    expect(within(live).getByLabelText('LSU score')).toHaveTextContent('17')
+    expect(within(live).getByLabelText('Texas score')).toHaveTextContent('20')
+    expect(live).toHaveTextContent('Live')
+    expect(live).toHaveTextContent('8:42 - 3rd Quarter')
+    expect(live).toHaveTextContent('2nd & 7 at LSU 35')
+    expect(within(live).getByLabelText('Texas has the ball')).toBeInTheDocument()
+    expect(within(live).queryByLabelText('LSU has the ball')).not.toBeInTheDocument()
+    expect(live).not.toHaveTextContent('In play')
+    expect(live).not.toHaveTextContent('Betting closed')
+  })
+
+  it('shows a final score with the loser dimmed, and no score before kickoff', () => {
+    const { container } = open()
+    const fin = container.querySelector('tr[data-game="11"]') as HTMLElement
+    expect(within(fin).getByLabelText('Iowa score')).toHaveTextContent('17')
+    expect(within(fin).getByLabelText('Michigan score')).toHaveTextContent('24')
+    expect(within(fin).getByLabelText('Iowa score')).toHaveStyle({ color: '#7d8596' })
+    expect(within(fin).getByLabelText('Michigan score')).toHaveStyle({ color: '#f3f4f6' })
+    expect(fin).toHaveTextContent('Final')
+    const upcoming = container.querySelector('tr[data-game="1"]') as HTMLElement
+    expect(upcoming.querySelectorAll('[aria-label$=" score"]')).toHaveLength(0)
+    expect(upcoming).toHaveTextContent('12:00 PM ET')
+  })
+
   it('lists games you can bet first and puts finished and in-play games last', () => {
     const { container } = open()
     const order = [...container.querySelectorAll('tr[data-game]')].map(r => (r as HTMLElement).dataset.game)

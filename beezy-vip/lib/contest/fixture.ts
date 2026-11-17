@@ -4,7 +4,7 @@
  * (board builder, ESPN mapping, API) is milestone M2 of docs/designs/bowl-bankroll-contest-scope.md.
  * Team ids are real ESPN ids so the logos are real.
  */
-import type { BoardGame, ContestFeed, ContestRules, LeaderRow, PlacedBet, PoolBet, TeamRef } from './types'
+import type { BoardGame, ContestFeed, ContestRules, GameState, LeaderRow, PlacedBet, PoolBet, TeamRef } from './types'
 
 // PLACEHOLDER limits and teaser tables: identical to contest/rules.py (football). Replace both from the owner's rulebook.
 export const SAMPLE_RULES: ContestRules = {
@@ -32,8 +32,8 @@ const USC = T('USC', 'USC', 30, null), UTAH = T('UTAH', 'Utah', 254, null), OU =
 
 /** home handicap, total, then ML prices (away, home). Spread and total are priced -110 both ways unless a pair is given. */
 function g(id: number, round: string, commence: string, away: TeamRef, home: TeamRef, spread: number, total: number, ml: [number, number],
-  status: BoardGame['status'] = 'scheduled', juice: [number, number] = [-110, -110]): BoardGame {
-  return { id, round, commence, status, away, home, spread: { line: spread, away: juice[0], home: juice[1] }, total: { line: total, over: -110, under: -110 }, ml: { away: ml[0], home: ml[1] } }
+  status: BoardGame['status'] = 'scheduled', juice: [number, number] = [-110, -110], state?: GameState): BoardGame {
+  return { id, round, commence, status, away, home, spread: { line: spread, away: juice[0], home: juice[1] }, total: { line: total, over: -110, under: -110 }, ml: { away: ml[0], home: ml[1] }, ...(state ? { state } : {}) }
 }
 
 const GAMES: BoardGame[] = [
@@ -49,8 +49,9 @@ const GAMES: BoardGame[] = [
   g(10, 'Bowl Games', '2026-12-31T01:00:00Z', LSU, IOWA, 2.5, 38.5, [-135, 114]),
   g(13, 'Bowl Games', '2027-01-01T18:00:00Z', USC, UTAH, -1.0, 56.5, [-118, 100]),
   // States the board has to render: one in play and one final (both closed to betting).
-  g(11, 'Earlier', '2026-11-16T18:00:00Z', IOWA, MICH, -3.5, 44.5, [140, -165], 'final'),
-  g(12, 'Earlier', '2026-11-17T01:00:00Z', LSU, TEX, -1.5, 52.5, [105, -125], 'live'),
+  g(11, 'Earlier', '2026-11-16T18:00:00Z', IOWA, MICH, -3.5, 44.5, [140, -165], 'final', [-110, -110], { homeScore: 24, awayScore: 17, detail: 'Final' }),
+  g(12, 'Earlier', '2026-11-17T01:00:00Z', LSU, TEX, -1.5, 52.5, [105, -125], 'live', [-110, -110],
+    { homeScore: 20, awayScore: 17, detail: '8:42 - 3rd Quarter', possession: 'home', downDistance: '2nd & 7 at LSU 35', redZone: false }),
 ]
 
 const LEG = (gameId: number, market: 'spread' | 'total' | 'ml', side: 'home' | 'away' | 'over' | 'under', line: number | null, price: number,

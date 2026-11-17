@@ -15,6 +15,23 @@ export interface TeamRef {
   rank?: number | null
 }
 
+/**
+ * Live or final game state, refreshed from the ESPN scoreboard (its `status`, `competitors[].score` and, for football, `situation`).
+ * Absent before kickoff. `downDistance` and `possession` are football-only and UNCONFIRMED against a live payload (no football game
+ * was live when this was written); basketball and every final carry just the score and the status line.
+ */
+export interface GameState {
+  homeScore: number
+  awayScore: number
+  /** ESPN's own status line: "8:42 - 3rd Quarter", "Halftime", "Final", "Final/OT". */
+  detail: string
+  /** Who has the ball (football), or null/absent. */
+  possession?: 'home' | 'away' | null
+  /** Football only, e.g. "2nd & 7 at LSU 35". */
+  downDistance?: string | null
+  redZone?: boolean
+}
+
 export interface BoardGame {
   id: number
   /** Section label on the board, e.g. "CFP First Round" or "Bowl Games". */
@@ -27,6 +44,7 @@ export interface BoardGame {
   spread: { line: number; away: number; home: number } | null
   total: { line: number; over: number; under: number } | null
   ml: { away: number; home: number } | null
+  state?: GameState
 }
 
 /** One selection on the slip. For a spread, `line` is the picked side's handicap; for a total, the total; null for a moneyline. */

@@ -38,6 +38,10 @@ function OddsButton({ pick, line, price, selected, disabled, label, onToggle }: 
 
 function Team({ g, side }: { g: BoardGame; side: 'away' | 'home' }) {
   const t = g[side]
+  const st = g.state
+  const score = st ? (side === 'home' ? st.homeScore : st.awayScore) : null
+  const other = st ? (side === 'home' ? st.awayScore : st.homeScore) : null
+  const trailingFinal = g.status === 'final' && score != null && other != null && score < other
   return (
     <div className="flex items-center gap-2 min-w-0" style={{ height: 40 }}>
       <ContestTeamLogo team={t} size={28} />
@@ -45,8 +49,26 @@ function Team({ g, side }: { g: BoardGame; side: 'away' | 'home' }) {
         {t.rank ? <span className="mono" style={{ fontSize: 10, color: '#7d8596', marginRight: 4 }}>{t.rank}</span> : null}
         <span className="sm:hidden">{t.abbr}</span><span className="hidden sm:inline">{t.name}</span>
       </span>
+      {st?.possession === side && <svg role="img" aria-label={`${t.name} has the ball`} data-possession width="8" height="8" viewBox="0 0 8 8" style={{ flex: '0 0 auto' }}><circle cx="4" cy="4" r="3" fill="#f3f4f6" /></svg>}
+      {score != null && <span className="mono ml-auto flex-none" aria-label={`${t.name} score`} style={{ fontSize: 16, fontWeight: 700, paddingLeft: 6, color: trailingFinal ? '#7d8596' : '#f3f4f6' }}>{score}</span>}
     </div>
   )
+}
+
+/** The line under a matchup: the game state while it is live (clock, down and distance, red zone), Final, why betting is closed, or the kickoff time. */
+function StateLine({ g, closed, reason }: { g: BoardGame; closed: boolean; reason: string }) {
+  const st = g.state
+  const base: React.CSSProperties = { fontSize: 11, marginTop: 4, lineHeight: 1.4 }
+  if (g.status === 'live') {
+    return (
+      <div className="mono" style={{ ...base, color: '#9ca3af' }}>
+        <span style={{ color: 'var(--signal)' }}>Live</span>
+        {st ? ` \u00b7 ${st.detail}${st.downDistance ? ` \u00b7 ${st.downDistance}` : ''}${st.redZone ? ' \u00b7 Red zone' : ''}` : ' \u00b7 In play'}
+      </div>
+    )
+  }
+  if (g.status === 'final') return <div className="mono" style={{ ...base, color: '#7d8596' }}>{st?.detail ?? 'Final'}</div>
+  return <div className="mono" style={{ ...base, color: closed ? '#facc15' : '#7d8596' }}>{closed ? reason : `${timeLabel(g.commence)} ET`}</div>
 }
 
 function Cell({ g, market, picks, now, rules, onToggle }: { g: BoardGame; market: Market; picks: Pick[]; now: number; rules: ContestRules; onToggle: (p: Pick) => void }) {
@@ -99,9 +121,7 @@ export function Board({ games, picks, now, rules, onToggle }: { games: BoardGame
                       <div className="grid gap-1">
                         <Team g={g} side="away" /><Team g={g} side="home" />
                       </div>
-                      <div className="mono" style={{ fontSize: 10, color: c.closed ? '#facc15' : '#7d8596', marginTop: 4 }}>
-                        {c.closed ? c.reason : `${timeLabel(g.commence)} ET`}
-                      </div>
+                      <StateLine g={g} closed={c.closed} reason={c.reason} />
                     </td>
                     {(['spread', 'total', 'ml'] as const).map(m => <Cell key={m} g={g} market={m} picks={picks} now={now} rules={rules} onToggle={onToggle} />)}
                   </tr>
