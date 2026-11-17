@@ -27,6 +27,52 @@ const MAPS: Record<HeadshotSport, Record<string, number | string>> = {
   soccer: {}, // no headshot source wired for soccer yet
 }
 
+const SUFFIX_TOKENS = new Set(['jr', 'sr', 'ii', 'iii', 'iv', 'v'])
+
+/**
+ * Removes trailing suffix tokens (jr, sr, ii, iii, iv, v) from an underscore slug,
+ * repeatedly, keeping at least 2 tokens if the slug has them, or at least 1 token.
+ */
+export function stripSuffixSlug(slug: string): string {
+  if (!slug) return ''
+  const tokens = slug.split('_')
+  const minTokens = tokens.length >= 2 ? 2 : 1
+  while (tokens.length > minTokens && SUFFIX_TOKENS.has(tokens[tokens.length - 1])) {
+    tokens.pop()
+  }
+  return tokens.join('_')
+}
+
+function buildAliasIndex(map: Record<string, number | string>): Map<string, number | string> {
+  const aliases = new Map<string, number | string>()
+  const ambiguous = new Set<string>()
+  for (const [key, id] of Object.entries(map)) {
+    const idx = key.lastIndexOf('__')
+    const slugPart = idx === -1 ? key : key.slice(0, idx)
+    const strippedSlug = stripSuffixSlug(slugPart)
+    const strippedKey = idx === -1 ? strippedSlug : `${strippedSlug}__${key.slice(idx + 2)}`
+    if (strippedKey !== key) {
+      if (ambiguous.has(strippedKey)) continue
+      const existing = aliases.get(strippedKey)
+      if (existing !== undefined && existing !== id) {
+        aliases.delete(strippedKey)
+        ambiguous.add(strippedKey)
+      } else {
+        aliases.set(strippedKey, id)
+      }
+    }
+  }
+  return aliases
+}
+
+const ALIAS_INDEXES: Record<HeadshotSport, Map<string, number | string>> = {
+  nfl: buildAliasIndex(MAPS.nfl),
+  nhl: buildAliasIndex(MAPS.nhl),
+  nba: buildAliasIndex(MAPS.nba),
+  mlb: new Map(),
+  soccer: new Map(),
+}
+
 /** accent-preserving slug (hyphen -> underscore, strip everything but letters/digits/_): what the MLB map keys use. */
 function slugAccented(name: string): string {
   return name.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_').replace(/[^\p{L}\p{N}_]/gu, '')
@@ -51,7 +97,28 @@ export function playerIdByName(sport: HeadshotSport, name: string | null | undef
   if (!slug) return null
   // NFL rows carry the ev/ team code already (HOU, JAC, LAR); NHL / NBA spell teams many ways, so normalise those
   const code = sport === 'nfl' ? (team ?? '').trim().toUpperCase() || null : teamCode(sport as AssetSport, team)
-  return (code ? map[`${slug}__${code.toLowerCase()}`] : undefined) ?? map[slug] ?? null
+  const codeLower = code ? code.toLowerCase() : null
+
+  // (a) exact `${slug}__${code}` then exact bare `slug` in the map
+  if (codeLower && map[`${slug}__${codeLower}`] !== undefined) {
+    return map[`${slug}__${codeLower}`]
+  }
+  if (map[slug] !== undefined) {
+    return map[slug]
+  }
+
+  // (b) the canonical alias for `${strippedSlug}__${code}` then bare `strippedSlug`, checking BOTH the map itself and the alias index
+  const strippedSlug = stripSuffixSlug(slug)
+  const aliasIndex = ALIAS_INDEXES[sport]
+  if (codeLower) {
+    const k = `${strippedSlug}__${codeLower}`
+    if (map[k] !== undefined) return map[k]
+    if (aliasIndex && aliasIndex.has(k)) return aliasIndex.get(k)!
+  }
+  if (map[strippedSlug] !== undefined) return map[strippedSlug]
+  if (aliasIndex && aliasIndex.has(strippedSlug)) return aliasIndex.get(strippedSlug)!
+
+  return null
 }
 
 export function headshotUrlByName(sport: HeadshotSport, name: string | null | undefined, team?: string | null): string | null {

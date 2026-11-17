@@ -52,6 +52,7 @@ export function fromBets(bets: Bet[], opts: { collapse?: boolean } = {}): BoardR
       avgSzn: null,
       pModel: asFraction(b.model_prob),
       pFair: asFraction(b.market_prob),
+      pBlend: null,
       nBooks: b.bookCount > 1 ? b.bookCount : null,
       l5: null,
       l10: null,

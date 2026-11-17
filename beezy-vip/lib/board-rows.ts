@@ -43,6 +43,8 @@ export interface BoardRow {
   pModel: number | null
   /** the market's de-vigged consensus probability for the listed side, 0-1 */
   pFair: number | null
+  /** the blended probability for the listed side (model blended with the market), 0-1; null when the feed carries none */
+  pBlend: number | null
   nBooks: number | null
   /** share of the last 5 / 10 games that cleared the listed side, 0-1 */
   l5: number | null
@@ -124,6 +126,7 @@ export function fromSportProjections(rows: SportProjectionRow[]): BoardRow[] {
       avgSzn: r.szn_avg ?? null,
       pModel: r.has_line ? r.p_model_side : null,
       pFair: r.has_line ? r.p_mkt_side : null,
+      pBlend: r.has_line ? (r.p_blend_side ?? forSide(r.p_over_blend, side)) : null,
       nBooks: r.n_books,
       l5: r.has_line ? forSide(r.l5_hit_rate, side) : null,
       l10: r.has_line ? forSide(r.l10_hit_rate, side) : null,
@@ -168,6 +171,7 @@ export function fromMlbProjections(rows: MlbProjectionRow[]): BoardRow[] {
       pModel: r.pModel,
       // the edge is model probability minus the de-vigged market, so the market's own number is the difference
       pFair: r.pModel != null && r.edge != null ? r.pModel - r.edge : null,
+      pBlend: null,
       nBooks: null,
       l5: null,
       l10: null,

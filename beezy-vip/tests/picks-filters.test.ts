@@ -4,7 +4,7 @@ import { filterTopPicks, matchesType, type TopPick } from '../lib/top-picks'
 
 const r = (o: Partial<BoardRow>): BoardRow => ({
   key: 'k', sport: 'nfl', system: 'NFL_REC_YDS', marketLabel: 'Rec Yds', player: 'Pat Receiver', headshotId: null, team: 'KC', matchup: 'KC @ LV', gameKey: 'nfl:2026-10-18:KC@LV', away: 'KC', home: 'LV', avg10: null, avgSzn: null, result: null, start: '2026-10-18T17:00:00Z',
-  side: 'over', line: 64.5, hasLine: true, proj: 70, pModel: 0.6, pFair: 0.5, nBooks: 6, l5: 0.6, l10: 0.6, odds: 110, book: 'draftkings',
+  side: 'over', line: 64.5, hasLine: true, proj: 70, pModel: 0.6, pFair: 0.5, pBlend: null, nBooks: 6, l5: 0.6, l10: 0.6, odds: 110, book: 'draftkings',
   modelEdge: 0.05, marketEv: 0.04, confluence: true, score: 80, isPick: false, ...o,
 })
 
