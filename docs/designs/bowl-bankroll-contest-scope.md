@@ -1,6 +1,6 @@
 # Bankroll Contest (paper betting game) -- scope and plan
 
-Status (2026-11-17): M0 spikes done (section 11). M1 engine + schema + store BUILT on this branch (`contest/`, tested on SQLite and local PostgreSQL 16.2 incl. concurrency, not deployed). Round robins (engine) and a sample-data UI at `/contest` (OFF by default, not browser-verified) also built. M2+ not started. Written 2026-11-16 (Mon). Working title "BZ Bankroll Challenge"; rename freely.
+Status (2026-11-17): M0 spikes done (section 11). M1 engine + schema + store BUILT on this branch (`contest/`, tested on SQLite and local PostgreSQL 16.2 incl. concurrency, not deployed). Round robins (engine, up to 11 picks) and a sample-data UI at `/contest` (OFF by default, browser-verified at 1280px and 375px) also built. M2+ not started. Written 2026-11-16 (Mon). Working title "BZ Bankroll Challenge"; rename freely.
 Proof of concept: college football bowls + CFP (bowls open mid-December, about 4 weeks out). Then March Madness.
 
 ## 1. Decisions already made (owner, 2026-11-16)
