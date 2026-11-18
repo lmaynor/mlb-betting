@@ -101,9 +101,9 @@ Design:
 
 Offline only (conftest fixtures, saved ESPN and banked-feed JSON, no GCS or network). Engine unit tests (payout math, push/void, teaser tables), ledger invariants (sum of ledger equals balance), concurrent double-submit placement test, grading from recorded scoreboards, halftime state machine from recorded status sequences. No real-money path exists anywhere in this project.
 
-## 10. Not in v1 (cash out and live game state are in, see section 12)
+## 10. Not in v1 (as of 2026-11-18; cash out, live game state, alt lines, same-game parlays, notifications and the hidden blackjack lifeline were built later, see sections 12-15)
 
-Player props, alts, ladders, same-game parlays, live in-play betting beyond the halftime window, prizes/fees, public signup, casino games, notifications (a Discord ping at halftime open is a cheap later add).
+Player props, alt-line LADDERS from a real book (our alt lines are priced from the main line), live in-play betting beyond the halftime window, prizes/fees, public signup, a general casino (only the under-$100 blackjack lifeline exists).
 
 ## 11. M0 spike results (run 2026-11-17 ~04:50 UTC, read-only, public endpoints plus `gcloud storage cat`)
 
@@ -154,7 +154,7 @@ Sample sizes are small and noted. Nothing was written to GCS or deployed.
 
 ## 12. Cash out, live game state, and the critique pass (2026-11-17)
 
-- **Cash out (pregame only, built):** value = full payout x P(every leg still wins on the current board) x (1 - 5%), rounded down, never above the payout. P(leg) is the de-vigged two-sided price, moved from the current line to the line the player holds with a normal model of the final margin / total, so a line that moved in the player's favour can cash out above the stake (closing-line value). Straights and parlays; a round robin cashes out as one group, all or nothing; teasers are not offered. Closes with betting (15 minutes before kickoff) and needs fresh quotes. `store.cash_out` re-prices and refuses with VALUE_CHANGED if the board moved since the quote. The 5% margin and the sigmas (football 13.5 / 13.0, basketball 11 / 15) are placeholders and unvalidated; a normal model ignores key numbers.
+- **Cash out (pregame only, built):** value = full payout x P(every leg still wins on the current board) x (1 - 5%), rounded down, never above the payout. P(leg) is the de-vigged two-sided price, moved from the current line to the line the player holds with a normal model of the final margin / total, so a line that moved in the player's favour can cash out above the stake (closing-line value). Straights and parlays; a round robin cashes out as one group, all or nothing; teasers are not offered. Closes with betting (15 minutes before kickoff) and needs fresh quotes. `store.cash_out` re-prices and refuses with VALUE_CHANGED if the board moved since the quote. The 5% margin is a placeholder. SUPERSEDED (section 13): the sigmas are now fitted (football 15.0 / 15.5, basketball 11.1 / 17.2) and the held line is moved with the margin model (key-number weights on football spreads), not a plain normal; still unvalidated.
 - **In-game cash out (not built):** needs live prices. Only the halftime window will have them (Kalshi, section H); BettingPros freezes at tip-off and ESPN carries no odds on a live game. The engine already takes any quote board, so the halftime feed can feed it later.
 - **Live game state on the cards (UI built, feed not):** score beside each team name, a dot for who has the ball, and a state line (clock, down and distance, red zone) from `GameState`. The ESPN scoreboard supplies status, score and clock for every sport (seen live). Football `situation` was checked on a LIVE payload (EMU at WMU, 2026-11-17): `downDistanceText` ("1st & 10 at EMU 16") is present on a normal down and absent between plays; ESPN sent no possession team id, so the possession dot appears only when ESPN supplies one.
 - **Critique pass:** Impeccable critique 25/40; fixed the color-only selection, undersized slip controls, play-money wording, first-pick warning, board ordering and width, 11px labels, and Pool wording.
