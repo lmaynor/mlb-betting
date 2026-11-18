@@ -125,7 +125,7 @@ describe('LadderCard display states', () => {
     expect(g.premium).toBe(true)
     const html = renderToStaticMarkup(<LadderCard group={g} />)
     expect(html).toContain('MILESTONE · THIN')
-    expect(html).toContain('One-sided · overround unremovable')
+    expect(html).toContain('1-SIDED · FORWARD CONFIRMATION (NO FAIR)')
     expect(html).toContain('vs market')
     expect(html).toContain('Main: 0.5 · Unchanged')
     expect(html).not.toContain('Net EV')

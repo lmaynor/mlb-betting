@@ -405,7 +405,9 @@ export function LadderCard({ group }: { group: LadderGroup }) {
             return (
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="mono text-micro px-1.5 py-0.5 rounded border border-separator-border text-text-secondary">
-                  One-sided · overround unremovable
+                  {group.stat === 'anytime_td'
+                    ? '1-SIDED · FORWARD CONFIRMATION (NO FAIR)'
+                    : 'One-sided · overround unremovable'}
                 </span>
                 {nQuoting >= 2 && (
                   <span className="mono text-micro text-text-secondary">
@@ -414,7 +416,7 @@ export function LadderCard({ group }: { group: LadderGroup }) {
                 )}
                 {rawImplied != null && (
                   <span className="mono text-micro text-text-secondary">
-                    Implied {rawImplied}%
+                    Implied {rawImplied}% · vig included
                   </span>
                 )}
                 {rung.premiumPct != null && (

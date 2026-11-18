@@ -265,6 +265,7 @@ export interface SportProjectionRow {
   n_books: number | null
   model_edge: number | null
   market_ev: number | null
+  cons_disp?: number | null
   confluence: boolean
   edge_capped: boolean
   beezy_score: number
