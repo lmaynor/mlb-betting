@@ -382,3 +382,40 @@ def pooled_consensus(entries: list, stat: str, target: float, min_books: int = 1
     n_exact = sum(1 for d, _, _ in best.values() if d == 0)
     return {"p_over": float(np.median(vals)), "n_books": len(vals), "disp": _mad(vals), "n_exact": n_exact,
             "interpolated": n_exact < len(vals), "books": sorted(best)}
+
+
+# Module 3 (RES-12a): Power-devig routing for alt ladders
+LADDER_DEVIG_BOOKS = frozenset({"novig", "fanduel", "hardrock", "draftkings", "bet365"})
+LADDER_DEVIG_STATS = frozenset({
+    "pass_yds", "rec_yds", "receptions", "rush_yds", "pts", "reb", "sog",
+    "points", "rebounds", "passing_yards", "receiving_yards", "rushing_yards",
+    "shots_on_goal",
+})
+
+
+def ladder_devig_fair(p_over_raw: float, p_under_raw: float, book: str, stat: str) -> tuple[float, float]:
+    """Additive helper: Power-devig routing for skewed continuous-stat ladders.
+
+    Returns the Power-devig fair (method="log") when:
+      1. The book is in LADDER_DEVIG_BOOKS = {"novig", "fanduel", "hardrock", "draftkings", "bet365"}
+      2. The stat is a skewed continuous-stat rung (pass_yds, rec_yds, receptions, rush_yds, pts, reb, sog)
+      3. The proportional fair sits at p_prop <= 0.35 or >= 0.65.
+    Otherwise returns the existing proportional fair.
+
+    NOTE: The rolling 14-day shadow circuit breaker from spec §3.1 is deferred
+    (out of scope for Batch 1; standalone modules only, no live data wiring).
+    """
+    prop_over, prop_under = devig_two_way(p_over_raw, p_under_raw, method="proportional")
+
+    b = canonical_book(book) if book else ""
+    s = (stat or "").lower().strip()
+
+    is_ladder_book = (b in LADDER_DEVIG_BOOKS) or (book.lower() in LADDER_DEVIG_BOOKS if book else False)
+    is_ladder_stat = s in LADDER_DEVIG_STATS
+    is_skewed = (prop_over <= 0.35 or prop_over >= 0.65)
+
+    if is_ladder_book and is_ladder_stat and is_skewed:
+        return devig_two_way(p_over_raw, p_under_raw, method="log")
+
+    return prop_over, prop_under
+
