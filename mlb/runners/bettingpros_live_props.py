@@ -35,7 +35,7 @@ def run(sport: str, days: int | None = None, out: str | None = None) -> dict:
     if os.environ.get("SKIP_STARTUP_JITTER") != "1":
         jitter = float(os.environ.get("BP_STARTUP_JITTER", "0"))
         if jitter <= 0:
-            jitter = round(random.uniform(5.0, 30.0), 1)
+            jitter = round(random.uniform(0.0, 5.0), 1)
         log.info("Startup jitter to spread load: sleeping %.1fs before BettingPros crawl", jitter)
         time.sleep(jitter)
 

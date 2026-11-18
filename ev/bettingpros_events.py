@@ -21,13 +21,17 @@ Storage: Odds/bettingpros_live/{sport}/latest.json = {sport, fetched_at, window,
 replaced by a crawl that produced data (or truthfully found no upcoming games), never by a failed one.
 
 Cost/pace: BettingPros is free but the offers endpoint caps a page at 10 offers, so a busy slate is 100-250 requests per
-sport. fetch_offers_paged already sleeps ~0.8 s (+-40%) between pages; this module adds a pause between markets.
+sport. All requests across the crawl are paced by one shared spacing limiter at the configured delay; markets are
+fetched concurrently across worker threads, so the site sees at most one request per delay interval from the crawl.
 """
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import logging
+import os
 import random
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from statistics import median
@@ -78,11 +82,34 @@ def bp_team(sport: str, code) -> str:
 EMITTED_BOOKS = frozenset(bl.LIVE_BOOKS.values())
 
 
-class _CountingSession:
-    """Wraps a requests session: counts HTTP calls (bp.api_get only uses .get / .headers)."""
+class _SpacingLimiter:
+    """Thread-safe pacing limiter: ensures successive acquire() completions are at least interval seconds apart.
 
-    def __init__(self, sess):
+    No bursting: at most one release per interval."""
+
+    def __init__(self, interval: float = 0.8) -> None:
+        self.interval = max(0.0, float(interval))
+        self._lock = threading.Lock()
+        self._next_slot = 0.0
+
+    def acquire(self) -> None:
+        if self.interval <= 0:
+            return
+        with self._lock:
+            now = time.monotonic()
+            slot = max(now, self._next_slot)
+            self._next_slot = slot + self.interval
+            wait = slot - now
+        if wait > 0:
+            time.sleep(wait)
+
+
+class _CountingSession:
+    """Wraps a requests session: counts HTTP calls (bp.api_get only uses .get / .headers) and paces via limiter."""
+
+    def __init__(self, sess, limiter: _SpacingLimiter | None = None):
         self._s = sess
+        self._limiter = limiter
         self.requests = 0
 
     @property
@@ -90,8 +117,60 @@ class _CountingSession:
         return self._s.headers
 
     def get(self, *a, **k):
+        if self._limiter is not None:
+            self._limiter.acquire()
         self.requests += 1
         return self._s.get(*a, **k)
+
+
+_worker_local = threading.local()
+
+
+def _get_worker_session(api: str, limiter: _SpacingLimiter) -> _CountingSession:
+    sess = getattr(_worker_local, "session", None)
+    if sess is None or getattr(_worker_local, "limiter", None) is not limiter:
+        sess = _CountingSession(bpp.make_session(api), limiter=limiter)
+        _worker_local.session = sess
+        _worker_local.limiter = limiter
+    return sess
+
+
+def _fetch_single_market(
+    api: str,
+    sp: str,
+    label: str,
+    market_id: int,
+    event_ids: list,
+    ds0: str,
+    ev_map: dict,
+    limiter: _SpacingLimiter,
+) -> dict:
+    worker_sess = _get_worker_session(api, limiter)
+    r0 = worker_sess.requests
+    try:
+        offers = bpp.fetch_offers_paged(worker_sess, api, market_id, event_ids, delay=0)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("bettingpros %s %s offers failed: %r", sp, label, str(exc)[:160])
+        return {
+            "label": label,
+            "error": str(exc)[:200],
+            "requests": worker_sess.requests - r0,
+            "offers": [],
+            "rows": [],
+        }
+    builder = (
+        build_per_game_player_rows
+        if label in PER_GAME_PLAYER_MARKETS.get(sp, ())
+        else bpp.build_prop_rows
+    )
+    rows = builder(api, label, market_id, ds0, offers, ev_map)
+    return {
+        "label": label,
+        "error": None,
+        "requests": worker_sess.requests - r0,
+        "offers": offers,
+        "rows": rows,
+    }
 
 
 def _sleep(base: float) -> None:
@@ -277,8 +356,10 @@ def build_events(sport: str, ev_map: dict, rows_by_event: dict, now: datetime, c
 
 def crawl_sport(sport: str, now: datetime | None = None, days: int | None = None, delay: float = 0.8,
                 market_sleep: float = 1.0, day_sleep: float = 0.4, markets: list | None = None, session=None) -> dict:
-    """Crawl one sport's window. Network only through bpp (events / markets / offers). A market that errors is
-    recorded in `errors` and skipped; a failure to list EVENTS raises (the caller must not publish an empty board).
+    """Crawl one sport's window with bounded concurrency. Network only through bpp (events / markets / offers).
+    All HTTP calls are paced by a shared spacing limiter at interval `delay`; market_sleep and day_sleep are
+    superseded by the limiter. A market that errors is recorded in `errors` and skipped; a failure to list EVENTS
+    raises (the caller must not publish an empty board).
 
     -> {sport, fetched_at, window, events, counts, per_market, errors, seconds, requests, newest_quote_update}"""
     sp = sport.lower()
@@ -287,45 +368,66 @@ def crawl_sport(sport: str, now: datetime | None = None, days: int | None = None
     api = sp.upper()
     now = now or datetime.now(timezone.utc)
     t0 = time.monotonic()
-    sess = _CountingSession(session or bpp.make_session(api))
+    limiter = _SpacingLimiter(delay)
+    sess = _CountingSession(session or bpp.make_session(api), limiter=limiter)
     dates = window_dates(now, DEFAULT_DAYS[sp] if days is None else days)
     ev_map: dict = {}
-    for i, ds in enumerate(dates):
+    for ds in dates:
         ev_map.update(bpp.fetch_events_detail(sess, api, ds))        # raises on an API failure: nothing is published
-        if i + 1 < len(dates):
-            _sleep(day_sleep)
     ev_map = bl._upcoming(ev_map, now)
     resolved = bpp.resolve_markets(sess, api, markets) if ev_map else {}
+
+    target_markets = [(label, m) for label, m in resolved.items() if label in bl.LABEL_TO_STAT[sp]]
     rows_by_event: dict = {}
     per_market: dict = {}
     errors: list = []
     newest = ""
-    for label, m in resolved.items():
-        if label not in bl.LABEL_TO_STAT[sp]:
-            continue
-        r0 = sess.requests
+
+    if target_markets:
         try:
-            offers = bpp.fetch_offers_paged(sess, api, m["market_id"], list(ev_map), delay=delay)
-        except Exception as exc:                                                        # noqa: BLE001
-            errors.append({"market": label, "error": str(exc)[:200]})
-            log.warning("bettingpros %s %s offers failed: %r", sp, label, str(exc)[:160])
-            per_market[label] = {"offers": 0, "rows": 0, "requests": sess.requests - r0, "error": True}
-            continue
-        builder = (build_per_game_player_rows if label in PER_GAME_PLAYER_MARKETS.get(sp, ())
-                   else bpp.build_prop_rows)
-        rows = builder(api, label, m["market_id"], dates[0], offers, ev_map)
-        for r in rows:
-            rows_by_event.setdefault(r["event_id"], []).append(r)
-            if r.get("updated") and not r.get("is_open") and str(r["updated"]) > newest:
-                newest = str(r["updated"])
-        per_market[label] = {"offers": len(offers), "rows": len(rows), "requests": sess.requests - r0}
-        _sleep(market_sleep)
+            bp_workers = int(os.environ.get("BP_WORKERS", "6"))
+        except (ValueError, TypeError):
+            bp_workers = 6
+        worker_count = min(len(target_markets), max(1, bp_workers))
+        event_ids = list(ev_map)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=worker_count) as executor:
+            futures = [
+                executor.submit(
+                    _fetch_single_market,
+                    api,
+                    sp,
+                    label,
+                    m["market_id"],
+                    event_ids,
+                    dates[0],
+                    ev_map,
+                    limiter,
+                )
+                for label, m in target_markets
+            ]
+            results = [f.result() for f in futures]
+
+        for res in results:
+            label = res["label"]
+            reqs = res["requests"]
+            if res["error"] is not None:
+                errors.append({"market": label, "error": res["error"]})
+                per_market[label] = {"offers": 0, "rows": 0, "requests": reqs, "error": True}
+                continue
+            rows = res["rows"]
+            for r in rows:
+                rows_by_event.setdefault(r["event_id"], []).append(r)
+                if r.get("updated") and not r.get("is_open") and str(r["updated"]) > newest:
+                    newest = str(r["updated"])
+            per_market[label] = {"offers": len(res["offers"]), "rows": len(rows), "requests": reqs}
+
     events, counts = build_events(sp, ev_map, rows_by_event, now)
     counts["events_upcoming"] = len(ev_map)
+    total_requests = sess.requests + sum(m["requests"] for m in per_market.values())
     return {"sport": sp, "fetched_at": datetime.now(timezone.utc).isoformat(), "window": {"dates": dates},
             "events": events, "counts": counts, "per_market": per_market, "errors": errors,
             "markets_requested": len(resolved), "seconds": round(time.monotonic() - t0, 1),
-            "requests": sess.requests, "newest_quote_update": newest or None}
+            "requests": total_requests, "newest_quote_update": newest or None}
 
 
 def publishable(result: dict) -> tuple[bool, str]:
