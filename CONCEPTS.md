@@ -105,3 +105,43 @@ Holds: `mlb-db-url`, `mlb-gcs-bucket`, `sgo-api-key` (version 3 is current), `di
 
 ### Beezy.FYI
 The public frontend at `beezy.fyi`. Next.js 16 / React 19, deployed on Vercel. Read-only -- connects to Cloud Run public API, never to Cloud SQL directly. Dell 1996 design system: no Tailwind utility classes for layout/color, pure inline styles only.
+
+---
+
+## Bankroll Challenge (play-money contest)
+
+A private, invite-only contest, separate from the betting systems above: no real money, no models, bragging rights only. Contract and decisions: CONTEXT.md section 28, `docs/designs/bowl-bankroll-contest-scope.md`, runbook in `docs/solutions/conventions/contest-launch-and-rollback-runbook.md`.
+
+### Bankroll (contest)
+Balance plus stakes still at risk. Starts at $5,000, bust = out. The balance is a cached sum of an append-only ledger (`contest_ledger`); `store.reconcile` must return `[]`. Money is integer cents everywhere.
+
+### Hidden picks
+A player's picks are invisible to everyone else until each game kicks off. Enforced on the server by `store.visible_bets`; the UI only renders what the API sends. A halftime bet stays hidden until its window closes.
+
+### Slip kinds
+Straight, parlay, teaser (spreads / totals moved by points, fixed payout table), round robin (every k-leg parlay of N picks, up to 11, each its own bet under one group id), and same-game parlay.
+
+### Alt line
+The same game at a different half-point number, priced by the contest from the main line's de-vigged two-sided price through the margin model plus a margin. Spreads and totals only; never inside a teaser or a same-game parlay.
+
+### Margin model
+`contest/margin_model.py`: a discretised normal for the final margin (or total), refit so it reproduces the board's de-vigged probability, with key-number weights on football spreads. Prices alt lines and moves a held line to the current one for cash out. Sigmas come from closing lines (football 15.0 / 15.5, basketball 11.1 / 17.2). UNVALIDATED.
+
+### Key number
+A final football margin that occurs far more often than a normal curve says (3 is about 3.8x its neighbours, 7 about 3.0x). Moving a line across one is worth more than the same distance elsewhere. The out-of-sample test could not show the weights help; they are kept so buying through the 3 is not free.
+
+### Same-game parlay (SGP)
+Two legs on one game (a spread or the moneyline with the total) priced as a PAIR with a Gaussian copula at the measured correlation of the two events (football +/-0.17 for spread x total, basketball +/-0.02), then a margin. The ticket price is quoted by the server and stored on the bet (`contest_bet.ticket_price`). No cash out.
+
+### Cash out
+Selling an open pregame straight or parlay back: payout x P(every leg still wins now) x (1 - 5%), rounded down. Can exceed the stake when the line moved your way. `VALUE_CHANGED` if the board moved since the quote.
+
+### Lifeline (blackjack)
+A hidden blackjack table that opens only while the bankroll is under $100. Server-held deck, 3:2 blackjack, winnings capped so the bankroll never rises above $100 through it. A player is eliminated only when they cannot afford the $1 chip.
+
+### Halftime window
+A short window, while ESPN reports halftime, when straight bets are taken on the full game at Kalshi-derived prices (mid plus a margin, markets wider than 6 cents not offered). Opens after the score is unchanged across two polls and a post-halftime quote exists; closes on a score change, a stale quote, 8 minutes, or leaving halftime. OFF by default; needs a contest rule and `CONTEST_HALFTIME_ENABLED`.
+
+### Organiser
+A Clerk user with `privateMetadata.contest.roles.<slug> = "admin"`: gets `/contest/admin` (rename, adjust, void, settle by hand, invites, open / close, feature switches; every action is logged in `contest_admin_log`). A participant's role is a mirror of their `contest_entry` row; the database is the authority.
+
