@@ -132,5 +132,7 @@ export function slipIssue(s: SlipState, stake: number, balance: number, rules: C
   if (s.robinSizes.some(k => k < 2 || k > Math.min(n, rules.roundRobinMaxPicks))) return 'Pick sizes the number of picks allows'
   const count = robinCount(n, s.robinSizes)
   if (count > rules.roundRobinMaxParlays) return `${count} parlays is over the limit of ${rules.roundRobinMaxParlays}`
+  if (stake < rules.roundRobinMinUnitCents) return perBet(stake * count, rules.roundRobinMinUnitCents, count)       // the per-parlay minimum is the more specific message
+  if (stake * count < rules.minStakeCents) return `A round robin risks at least ${usd(rules.minStakeCents)} in all`
   return perBet(stake * count, rules.roundRobinMinUnitCents, count)
 }

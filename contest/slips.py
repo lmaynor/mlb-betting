@@ -229,6 +229,8 @@ def validate_round_robin(picks: Sequence[Leg], sizes: Sequence[int], unit_cents:
     if count > rules.round_robin_max_parlays:
         raise SlipError("RR_TOO_MANY", f"{count} parlays is over the limit of {rules.round_robin_max_parlays}")
     total = unit_cents * count
+    if total < rules.min_stake_cents:
+        raise SlipError("STAKE_MIN", f"a round robin risks at least {rules.min_stake_cents} cents in all")
     if unit_cents < rules.round_robin_min_unit_cents:
         raise SlipError("STAKE_MIN", f"minimum stake per parlay is {rules.round_robin_min_unit_cents} cents")
     if total > balance_cents:

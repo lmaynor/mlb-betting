@@ -9,8 +9,8 @@ import type { BoardGame, ContestFeed, ContestRules, GameState, LeaderRow, Placed
 // PLACEHOLDER limits and teaser tables: identical to contest/rules.py (football). Replace both from the owner's rulebook.
 export const SAMPLE_RULES: ContestRules = {
   startBankrollCents: 500_000,
-  minStakeCents: 2_500,
-  maxStakeBp: 2_500,
+  minStakeCents: 5_000,
+  maxStakeBp: 10_000,
   parlayMinLegs: 2,
   parlayMaxLegs: 8,
   teaserMinLegs: 2,
@@ -25,7 +25,7 @@ export const SAMPLE_RULES: ContestRules = {
   blackjackMinChipCents: 100,
   cashoutEnabled: true,
   halftimeEnabled: false,
-  halftimeMaxStakeBp: 1000,
+  halftimeMaxStakeBp: 10_000,
   altLinesEnabled: true,
   sgpEnabled: true,
   sgpMarginBp: 700,

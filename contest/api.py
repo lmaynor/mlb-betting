@@ -124,6 +124,27 @@ def register_contest_api(app, get_engine, auth_required, scheduler_auth_required
             return jsonify({"error": {"code": "BAD_REQUEST", "message": "a JSON object body is required"}}), 400
         return run(lambda: service.admin_action(engine(), slug, user_id(), op, body, datetime.now(timezone.utc)))
 
+    @bp.route("/contest-setup", methods=["POST"])
+    def setup_route():
+        if not contest_enabled():
+            return jsonify({"error": {"code": "OFF", "message": "the contest is not enabled"}}), 404
+        err = scheduler_auth_required(request)
+        if err:
+            return err
+        body = request.get_json(silent=True) or {}
+        slug, name = str(body.get("slug") or "").strip(), str(body.get("name") or "").strip()
+        if not slug or not name:
+            return jsonify({"error": {"code": "BAD_REQUEST", "message": "slug and name are required"}}), 400
+        try:
+            res = store.ensure_contest(engine(), slug, name, str(body.get("sport") or "ncaaf"), (str(body.get("invite_code") or "").strip() or None),
+                                       int(body.get("invite_uses", 25)), datetime.now(timezone.utc))
+        except store.ContestError as e:
+            return jsonify({"error": {"code": e.code, "message": e.message}}), 400
+        except Exception:                                          # noqa: BLE001
+            logger.exception("contest setup failed")
+            return jsonify({"error": {"code": "SERVER", "message": "setup failed"}}), 500
+        return jsonify(res)
+
     @bp.route("/contest-refresh", methods=["POST"])
     def refresh_route():
         if not contest_enabled():

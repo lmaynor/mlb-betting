@@ -111,12 +111,12 @@ describe('halftime window', () => {
     const buttons = within(row).getAllByRole('button')
     expect(buttons.every(b => !(b as HTMLButtonElement).disabled)).toBe(true)
   })
-  it('refuses a parlay at the break and a stake over 10 percent', () => {
+  it('refuses a parlay at the break and a stake under the minimum', () => {
     render(<ContestClient feed={open()} />)
     const row = document.querySelector('tr[data-game="12"]') as HTMLElement
     fireEvent.click(within(row).getAllByRole('button')[0])
-    fireEvent.change(screen.getByLabelText(/^Stake/), { target: { value: '600' } })               // 10% of 5,081.82 is 508.18
-    expect(screen.getByRole('region', { name: 'Bet Slip' })).toHaveTextContent('A halftime bet is at most 10% of your bankroll')
+    fireEvent.change(screen.getByLabelText(/^Stake/), { target: { value: '40' } })
+    expect(screen.getByRole('region', { name: 'Bet Slip' })).toHaveTextContent('Minimum stake is $50.00')
     fireEvent.change(screen.getByLabelText(/^Stake/), { target: { value: '100' } })
     fireEvent.click(screen.getByRole('tab', { name: 'Parlay' }))
     expect(screen.getByRole('region', { name: 'Bet Slip' })).toHaveTextContent('Halftime bets are straights only')

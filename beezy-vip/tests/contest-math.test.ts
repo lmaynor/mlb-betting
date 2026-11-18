@@ -95,21 +95,22 @@ describe('slip validation mirrors the engine', () => {
     expect(issue(S('round_robin', picks(11), { robinSizes: [2, 3, 4, 5, 6, 7, 8, 9, 10] }), 500, 5_000_000)).toMatch(/2035 parlays is over the limit of 500/)
     expect(issue(S('round_robin', picks(12), { robinSizes: [2] }), 500)).toMatch(/at most 11 picks/)
     expect(issue(S('round_robin', picks(11), { robinSizes: [2] }), 500)).toBeNull()                   // 55 parlays x $5 = $275
-    expect(issue(S('round_robin', picks(11), { robinSizes: [11] }), 2_500)).toBeNull()                // by 11s is one 11-leg parlay, past the 8-leg parlay cap on purpose
+    expect(issue(S('round_robin', picks(11), { robinSizes: [11] }), 5_000)).toBeNull()                // by 11s is one 11-leg parlay, past the 8-leg parlay cap on purpose
     expect(issue(S('round_robin', picks(4), { robinSizes: [5] }))).toMatch(/sizes/)
     expect(issue(S('round_robin', picks(4), { robinSizes: [2, 3] }), 5_000)).toBeNull()
   })
   it('stakes', () => {
-    expect(issue(S('parlay', picks(2)), 2_499)).toMatch(/Minimum/)
+    // owner 2026-11-17: the minimum is 1% of the $5,000 start ($50), no maximum beyond the balance
+    expect(issue(S('parlay', picks(2)), 4_999)).toMatch(/Minimum/)
     expect(issue(S('parlay', picks(2)), 600_000)).toMatch(/Not enough/)
-    expect(issue(S('parlay', picks(2)), 125_001)).toMatch(/25%/)
-    expect(issue(S('parlay', picks(2)), 125_000)).toBeNull()
-    expect(issue(S('parlay', picks(2)), 2_500, 3_000)).toBeNull()                         // the minimum stake is always allowed
-    expect(issue(S('round_robin', picks(4)), 50_000)).toBe('6 parlays x $500.00 = $3,000.00 is over 25% of your bankroll ($1,250.00)')   // the cap is on the TOTAL
-    expect(issue(S('round_robin', picks(4)), 499)).toBe('Minimum stake is $5.00 per parlay')           // lower than a normal bet's $25 minimum
-    expect(issue(S('round_robin', picks(4)), 500)).toBeNull()
-    expect(issue(S('round_robin', picks(11), { robinSizes: [2] }), 5_000)).toMatch(/55 parlays x \$50.00 = \$2,750.00 is over 25%/)
-    expect(issue(S('straight', [P(1), P(2)]), 70_000)).toMatch(/25%/)                      // 2 x 700 = 1,400
+    expect(issue(S('parlay', picks(2)), 500_000)).toBeNull()                                // the whole balance on one bet is allowed
+    expect(issue(S('parlay', picks(2)), 5_000)).toBeNull()
+    expect(issue(S('round_robin', picks(4)), 499)).toBe('Minimum stake is $5.00 per parlay')           // the per-parlay floor
+    expect(issue(S('round_robin', picks(4)), 500)).toBe('A round robin risks at least $50.00 in all')    // 6 x $5 = $30 is under the slip minimum
+    expect(issue(S('round_robin', picks(4)), 1_000)).toBeNull()                             // 6 x $10 = $60
+    expect(issue(S('round_robin', picks(11), { robinSizes: [2] }), 5_000)).toBeNull()       // 55 x $50 = $2,750: no stake cap
+    expect(issue(S('round_robin', picks(11), { robinSizes: [2] }), 10_000)).toMatch(/55 parlays x \$100.00 = \$5,500.00 is more than your bankroll/)
+    expect(issue(S('straight', [P(1), P(2)]), 70_000)).toBeNull()                           // 2 x $700 = $1,400, no cap
   })
   it('betting closes 15 minutes before kickoff and never on a started game', () => {
     const t = Date.parse('2026-12-19T17:00:00Z')

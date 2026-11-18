@@ -127,3 +127,20 @@ def test_rate_limits_answer_429_with_retry_after_and_are_per_user_and_bucket(tmp
     assert c.get("/api/contest/bowls/feed", headers=H).status_code == 200                          # another bucket is not limited
     clock["t"] = 601.0
     assert c.post("/api/contest/bowls/join", json={"inviteCode": "WELCOME", "displayName": "Alex"}, headers=H).status_code == 200   # the window passed
+
+
+def test_setup_creates_the_contest_and_invite_once_and_never_changes_them(tmp_path, monkeypatch):
+    monkeypatch.setenv("CONTEST_ENABLED", "1")
+    app, engine = make_app(tmp_path)
+    c = app.test_client()
+    ok = {"Authorization": "Bearer ok"}
+    assert c.post("/contest-setup", json={"slug": "new", "name": "New"}).status_code == 401
+    assert c.post("/contest-setup", json={"slug": "new"}, headers=ok).status_code == 400
+    assert c.post("/contest-setup", json={"slug": "new", "name": "New", "sport": "nfl"}, headers=ok).status_code == 400
+    first = c.post("/contest-setup", json={"slug": "new", "name": "New", "sport": "ncaab", "invite_code": "GO", "invite_uses": 7}, headers=ok).json
+    assert first["created"] and first["invite_created"]
+    again = c.post("/contest-setup", json={"slug": "new", "name": "Changed", "sport": "ncaaf", "invite_code": "GO", "invite_uses": 99}, headers=ok).json
+    assert not again["created"] and not again["invite_created"] and again["contest_id"] == first["contest_id"]
+    got = store.contest_by_slug(engine, "new")
+    assert got["name"] == "New" and got["rules"].sport == "ncaab" and got["rules"].min_stake_cents == 5_000
+    assert store.invites_of(engine, first["contest_id"]) == [{"code": "GO", "max_uses": 7, "uses": 0}]

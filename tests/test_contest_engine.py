@@ -146,14 +146,23 @@ def test_structure_rules():
 
 
 def test_stake_rules():
-    assert code(S(stake=2_499)) == "STAKE_MIN"
+    # owner 2026-11-17: the minimum is 1% of the $5,000 start ($50) and there is no maximum beyond the balance itself
+    assert code(S(stake=4_999)) == "STAKE_MIN"
+    ok(S(stake=5_000))
     assert code(S(stake=600_000)) == "INSUFFICIENT"
-    assert code(S(stake=125_001)) == "STAKE_MAX"                 # 25% of 5,000.00 is 1,250.00
-    ok(S(stake=125_000))
-    ok(S(stake=125_000), balance=500_000, open_risk=300_000)     # default open-risk cap is off
-    ok(S(stake=2_500), balance=3_000)                            # the minimum stake is always allowed, even above the % cap
-    assert code(S(stake=3_000), balance=3_000) == "STAKE_MAX"
-    assert code(S(stake=2_500), balance=2_000) == "INSUFFICIENT"
+    ok(S(stake=500_000))                                         # the whole balance on one bet is allowed
+    ok(S(stake=500_000), balance=500_000, open_risk=300_000)     # default open-risk cap is off
+    assert code(S(stake=5_000), balance=4_000) == "INSUFFICIENT"
+    assert ContestRules(sport="ncaaf").min_stake_cents == ContestRules(sport="ncaaf").start_bankroll_cents // 100
+
+
+def test_a_percentage_cap_still_works_when_an_organiser_sets_one():
+    capped = ContestRules(sport="ncaaf", min_stake_cents=2_500, max_stake_bp=2_500)
+    validate_slip(S(stake=125_000), capped, 500_000, 0, NOW, GAMES, None)
+    with pytest.raises(SlipError) as e:
+        validate_slip(S(stake=125_001), capped, 500_000, 0, NOW, GAMES, None)           # 25% of 5,000.00 is 1,250.00
+    assert e.value.code == "STAKE_MAX"
+    validate_slip(S(stake=2_500), capped, 3_000, 0, NOW, GAMES, None)                   # the minimum stake is always allowed, even above the % cap
 
 
 def test_open_risk_cap():
@@ -256,17 +265,21 @@ def test_round_robin_goes_up_to_eleven_picks_even_past_the_parlay_cap():
     G11 = {i: GameInfo(KICK, "scheduled") for i in range(1, 12)}
     assert RULES.parlay_max_legs == 8 and RULES.round_robin_max_picks == 11
     assert len(rr(11, (2,), unit=500, games=G11)) == 55                # by 2s of 11 picks, $5 each = $275 total
-    assert len(rr(11, (11,), unit=2_500, games=G11)) == 1              # a by-11 is one 11-leg parlay (over the 8-leg parlay cap on purpose)
+    assert len(rr(11, (11,), unit=5_000, games=G11)) == 1              # a by-11 is one 11-leg parlay (over the 8-leg parlay cap on purpose)
     assert len(rr(11, (9, 10, 11), unit=500, games=G11)) == 55 + 11 + 1
-    assert rr_code(n=11, sizes=(2,), unit=5_000, games=G11) == "STAKE_MAX"           # 55 x $50 = $2,750 is over 25% of $5,000
+    rr(11, (2,), unit=5_000, games=G11)                                              # 55 x $50 = $2,750 is fine now: no stake cap
+    assert rr_code(n=11, sizes=(2,), unit=10_000, games=G11) == "INSUFFICIENT"       # 55 x $100 = $5,500 is more than the $5,000 balance
     assert rr_code(n=11, sizes=(2,), unit=500, balance=20_000, games=G11) == "INSUFFICIENT"
     assert [sl.stake_cents for sl in rr(11, (2,), unit=500, games=G11)][:2] == [500, 500]
 
 
 def test_round_robin_stake_limits_apply_to_the_total():
-    assert rr_code(n=4, sizes=(2,), unit=50_000, balance=500_000) == "STAKE_MAX"       # 6 x 500 = 3,000 > 25% of 5,000 (1,250)
-    rr(4, (2,), unit=20_000, balance=500_000)                                          # 6 x 200 = 1,200 <= 1,250
+    assert rr_code(n=3, sizes=(2,), unit=500) == "STAKE_MIN"                           # 3 parlays x $5 = $15 is under the $50 minimum for the slip
+    rr(3, (2,), unit=2_000)                                                            # 3 x $20 = $60
     assert rr_code(n=4, sizes=(2,), unit=20_000, balance=100_000) == "INSUFFICIENT"
+    capped = ContestRules(sport="ncaaf", min_stake_cents=2_500, max_stake_bp=2_500)
+    assert rr_code(n=4, sizes=(2,), unit=50_000, balance=500_000, rules=capped) == "STAKE_MAX"   # an organiser's 25% cap still binds the TOTAL
+    rr(4, (2,), unit=20_000, balance=500_000, rules=capped)                            # 6 x 200 = 1,200 <= 1,250
     rules = ContestRules(sport="ncaaf", max_stake_bp=10_000, max_open_risk_bp=3_000)
     assert rr_code(n=4, sizes=(2,), unit=10_000, balance=400_000, open_risk=100_000, rules=rules) == "OPEN_RISK"
 

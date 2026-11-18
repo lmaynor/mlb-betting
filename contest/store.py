@@ -61,6 +61,24 @@ def create_contest(engine, slug: str, name: str, rules: ContestRules, now: datet
                           "en": iso(ends_at) if ends_at else None, "r": rules.to_json(), "ca": iso(now)}).scalar_one()
 
 
+def ensure_contest(engine, slug: str, name: str, sport: str, invite_code: str | None, invite_uses: int, now: datetime) -> dict:
+    """Idempotent first-run setup: create the contest (default rules for the sport) and the invite code ONLY if they do not exist. Never
+    changes an existing contest or invite, so running it twice, or after players have joined, is safe."""
+    if sport not in ("ncaaf", "ncaab"):
+        raise ContestError("BAD_SPORT", "sport is ncaaf or ncaab")
+    existing = contest_by_slug(engine, slug)
+    created = existing is None
+    cid = create_contest(engine, slug, name, ContestRules(sport=sport), now) if created else existing["id"]
+    invite_created = False
+    if invite_code:
+        with engine.connect() as c:
+            have = c.execute(text("SELECT 1 FROM contest_invite WHERE code = :k"), {"k": invite_code}).first() is not None
+        if not have:
+            create_invite(engine, cid, invite_code, invite_uses, now)
+            invite_created = True
+    return {"contest_id": cid, "created": created, "invite_created": invite_created}
+
+
 def create_invite(engine, contest_id: int, code: str, max_uses: int, now: datetime) -> None:
     with engine.begin() as c:
         c.execute(text("INSERT INTO contest_invite (code, contest_id, max_uses, uses, created_at) VALUES (:c, :i, :m, 0, :n)"),
