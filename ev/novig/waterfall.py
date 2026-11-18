@@ -207,8 +207,10 @@ def evaluate_waterfall(
                 rationale=f"Game liability cap exceeded (${current_game_exposure + maker_notional:.2f} > ${per_game_cap:.2f})",
             )
 
-        # Queue position Q = 0 rule: only emit if P_bid >= P_novig_bid
-        if p_bid_candidate >= p_novig_bid:
+        # Queue position Q = 0 rule (RUL-20261118): a tie joins the back of the
+        # FIFO queue (Q > 0); Q=0 requires strictly improving the best bid, so emit
+        # only if P_bid > P_novig_bid and ties fall through to MAKER_BEHIND_BOOK_BID.
+        if p_bid_candidate > p_novig_bid:
             return WaterfallDecision(
                 state="MAKER_WIDE_STINK_BID",
                 reason_code="MAKER_WIDE_STINK_BID_POSTED",

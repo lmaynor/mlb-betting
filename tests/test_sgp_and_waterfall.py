@@ -145,6 +145,47 @@ def test_waterfall_state_2_maker_behind_book_bid_no_bid():
     assert dec.notional == 0.0
 
 
+def test_waterfall_state_2_maker_queue_tie_and_tick_above():
+    """RUL-20261118: a tie joins the back of the FIFO queue (Q > 0); Q=0 requires
+    strictly improving the best bid (P_bid > P_novig_bid)."""
+    # TIE case: candidate 0.465 == book bid 0.465 -> falls through to MAKER_BEHIND_BOOK_BID
+    dec_tie = evaluate_waterfall(
+        p_cons=0.50,
+        p_blend=0.50,
+        p_model=0.51,
+        p_novig_ask=0.55,
+        p_novig_bid=0.465,
+        n_books=5,
+        disp=0.02,
+        stat_kind="count",
+        fee_charged="WHEN_LIVE",
+        l1_ask_dollars=10.0,
+        minutes_to_start=60.0,
+    )
+    assert dec_tie.state == "MAKER_WIDE_STINK_BID"
+    assert dec_tie.reason_code == "MAKER_BEHIND_BOOK_BID"
+    assert dec_tie.p_bid is None
+    assert dec_tie.notional == 0.0
+
+    # ONE TICK ABOVE case: candidate 0.465 > book bid 0.46 -> strictly improves, posted at Q=0
+    dec_above = evaluate_waterfall(
+        p_cons=0.50,
+        p_blend=0.50,
+        p_model=0.51,
+        p_novig_ask=0.55,
+        p_novig_bid=0.46,
+        n_books=5,
+        disp=0.02,
+        stat_kind="count",
+        fee_charged="WHEN_LIVE",
+        l1_ask_dollars=10.0,
+        minutes_to_start=60.0,
+    )
+    assert dec_above.state == "MAKER_WIDE_STINK_BID"
+    assert dec_above.reason_code == "MAKER_WIDE_STINK_BID_POSTED"
+    assert dec_above.p_bid == 0.465
+
+
 def test_waterfall_state_2_hard_cancel_at_t_minus_5m():
     """Resting quote must carry cancel_resting=True inside T-5m."""
     dec = evaluate_waterfall(
