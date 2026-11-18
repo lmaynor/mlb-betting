@@ -65,6 +65,7 @@ REJ_HOT_LINEUP_SCRATCH = "REJ_HOT_LINEUP_SCRATCH"
 REJ_COMBO_LEG_UNVALIDATED = "REJ_COMBO_LEG_UNVALIDATED"
 REJ_SGP_DISABLED = "REJ_SGP_DISABLED"
 REJ_SGP_SAME_PLAYER = "REJ_SGP_SAME_PLAYER"
+REJ_SGP_COLLINEAR = "REJ_SGP_COLLINEAR"
 REJ_COMBO_NOT_LONGSHOT = "REJ_COMBO_NOT_LONGSHOT"
 REJ_LOW_ROI = "REJ_LOW_ROI"
 REJ_NO_EDGE = "REJ_NO_EDGE"
@@ -168,16 +169,58 @@ _SGP_DIFF_PLAYER_MEASURED = {
     ("assists", "assists"): 0.20,
 }
 
+COMBO_STAT_COMPONENTS = {
+    "pra": {"points", "rebounds", "assists"},
+    "pr": {"points", "rebounds"},
+    "pa": {"points", "assists"},
+    "ra": {"rebounds", "assists"},
+}
+
+
+def is_sgp_collinear(stat_a: str, stat_b: str) -> bool:
+    """Return True if a same-player stat pair is in the collinear hard-reject set."""
+    if stat_a in COMBO_STAT_COMPONENTS and stat_b in COMBO_STAT_COMPONENTS[stat_a]:
+        return True
+    if stat_b in COMBO_STAT_COMPONENTS and stat_a in COMBO_STAT_COMPONENTS[stat_b]:
+        return True
+    pair = {stat_a, stat_b}
+    if pair == {"goals", "points"}:
+        return True
+    if pair == {"points", "threes"}:
+        return True
+    return False
+
+
 SGP_CORR_TABLE = {
     **{sgp_corr_key(rel, a, b): v for (a, b), v in _SGP_DIFF_PLAYER_MEASURED.items()
        for rel in (SGP_RELATION_SAME_TEAM_DIFF_PLAYER, SGP_RELATION_CROSS_TEAM)},
     sgp_corr_key(SGP_RELATION_SAME_TEAM_DIFF_PLAYER, "k_over", "nrfi_yes"): 0.22,
-    # Same-player measured cells (Nov 2): previously unreachable -- the pricer hard-rejects same-player combos (REJ_SGP_SAME_PLAYER,
-    # Argon Candidate 2, flag default False) -- and recorded here so the taxonomy holds them for the grade-first path, NOT so the
-    # pricer starts pricing them. Values: sweep Part 3 section 3.2 layer L1 (NBA points x threes 0.70 [0.60, 0.80]; NFL rec_yds x
-    # receptions 0.78 -- the 2026-10-25 analysis table prints 0.76 for the same cell; the sweep's 0.78 is used and the gap is flagged).
+    # Game-line x prop correlations (Batch 2 / RES-12b, pooled under same_team_diff_player;
+    # under legs flip the sign via the direction multiplier in _pair_rho)
+    sgp_corr_key(SGP_RELATION_SAME_TEAM_DIFF_PLAYER, "ml", "pass_tds"): 0.28,
+    sgp_corr_key(SGP_RELATION_SAME_TEAM_DIFF_PLAYER, "ml", "rush_yds"): 0.31,
+    sgp_corr_key(SGP_RELATION_SAME_TEAM_DIFF_PLAYER, "ml", "pass_yds"): -0.08,
+    sgp_corr_key(SGP_RELATION_SAME_TEAM_DIFF_PLAYER, "total", "pass_yds"): 0.34,
+    sgp_corr_key(SGP_RELATION_SAME_TEAM_DIFF_PLAYER, "total", "rec_yds"): 0.26,
+    # Same-player measured cells:
+    # Note: Argon's spec values (0.68 for rec_yds x receptions) differ from the repo's measured
+    # values (0.78 Nov 2 measurement) and the repo's measured values govern.
     sgp_corr_key(SGP_RELATION_SAME_PLAYER, "points", "threes"): 0.70,
     sgp_corr_key(SGP_RELATION_SAME_PLAYER, "rec_yds", "receptions"): 0.78,
+    # Same-player allowlisted pairs (Batch 2 / RES-12b)
+    # NFL
+    sgp_corr_key(SGP_RELATION_SAME_PLAYER, "rush_yds", "anytime_td"): 0.32,
+    sgp_corr_key(SGP_RELATION_SAME_PLAYER, "rec_yds", "anytime_td"): 0.32,
+    # NBA
+    sgp_corr_key(SGP_RELATION_SAME_PLAYER, "points", "rebounds"): 0.18,
+    sgp_corr_key(SGP_RELATION_SAME_PLAYER, "points", "assists"): 0.15,
+    sgp_corr_key(SGP_RELATION_SAME_PLAYER, "rebounds", "assists"): 0.22,
+    # NHL
+    sgp_corr_key(SGP_RELATION_SAME_PLAYER, "goals", "assists"): 0.18,
+    sgp_corr_key(SGP_RELATION_SAME_PLAYER, "sog", "goals"): 0.35,
+    # MLB
+    sgp_corr_key(SGP_RELATION_SAME_PLAYER, "hits", "tb"): 0.72,
+    sgp_corr_key(SGP_RELATION_SAME_PLAYER, "k_over", "outs"): 0.48,
 }
 
 
@@ -233,10 +276,10 @@ class PricerConfig:
     sgp_diff_player_default_rho: float = SGP_DIFF_PLAYER_DEFAULT_RHO
     sgp_mc_draws: int = 100_000
     model_guard: float = 0.15               # |p_model - p_cons| above this => trust the market (winner's curse)
-    # Fee reserve as a multiple of the 0.07 taker formula. Kalshi's fee schedule (kalshi-fee-schedule-2026-07-07.pdf) charges maker orders
-    # M x 0.0175 x C x P x (1-P) and lists KXMVE combos (excluding uncorrelated NFL combos) at maker multiplier 2 / taker 1, i.e. 0.035 =
-    # 0.5 x the taker formula. Assumes the quote creator pays the MAKER rate (the schedule does not say; the demo exchange does not charge) and
-    # does not zero the reserve for NFL cross-game combos (the schedule's "uncorrelated" is undefined and the reserve is < 0.4c there anyway).
+    # Fee schedule multipliers (maker_fee_mult = 0.5 for resting maker quotes; taker_fee_mult = 1.0 for taker fills).
+    maker_fee_mult: float = 0.5
+    taker_fee_mult: float = 1.0
+    # Fee reserve as a multiple of the 0.07 taker formula. Retained for backward compatibility.
     fee_mult: float = 0.5
     # P(yes | the protected twin did not void) is above the base series' P(over): a player who exits hurt after the first half settles a *PROT
     # market at the pre-game fair price instead of NO. That only hurts the LAY on a YES leg (a NO leg is already the favourable side), so the pad
@@ -320,7 +363,8 @@ def leg_from_row(row: dict, now: float | None = None) -> LegFairValue | None:
         stat=str(row.get("stat") or ""),
         strike=_num(row.get("strike"), 0.0), p_cons_yes=p, n_books=int(row.get("n_books") or 0),
         disp=_num(row.get("disp"), 1.0), p_model_yes=_num(row.get("p_model_yes")), pooled=pooled,
-        updated_ts=_ts(row.get("updated_ts", row.get("ts")), now))
+        updated_ts=_ts(row.get("updated_ts", row.get("ts")), now),
+        protected=bool(row.get("protected")))
 
 
 class InMemoryFairBook:
@@ -511,6 +555,16 @@ def _pair_rho(a: LegFairValue, da: int, b: LegFairValue, db: int, cfg: PricerCon
     return max(0.0, base)
 
 
+def pair_rho_true(a: LegFairValue, da: int, b: LegFairValue, db: int, cfg: PricerConfig) -> float | None:
+    """Thin wrapper over _pair_rho(..., signed=True) for unbiased p_true."""
+    return _pair_rho(a, da, b, db, cfg, signed=True)
+
+
+def pair_rho_cons(a: LegFairValue, da: int, b: LegFairValue, db: int, cfg: PricerConfig) -> float | None:
+    """Thin wrapper over _pair_rho(..., signed=False) for conservative strike ceiling."""
+    return _pair_rho(a, da, b, db, cfg, signed=False)
+
+
 def _copula_joint(ps: list[float], R: np.ndarray, draws: int) -> float:
     """P(all events) under a Gaussian copula with correlation R (deterministic: fixed seed, common draws). Never below independence,
     unless R carries a negative correlation (only the unbiased p_true passes one): then the Monte Carlo value stands."""
@@ -623,9 +677,16 @@ class KalshiRFQPricer:
         if n_unpriced > cfg.max_unpriced_legs or (n_unpriced > 0 and not sgp and cfg.bounded_requires_sgp_anchor):
             return _reject(rfq.rfq_id, "combo", REJ_COMBO_LEG_UNVALIDATED, **notes)
         for g in groups.values():
-            players = [fv.player_norm for fv, _, _ in g if fv.player_norm]
-            if len(players) != len(set(players)):
-                return _reject(rfq.rfq_id, "combo", REJ_SGP_SAME_PLAYER, **notes)
+            m = len(g)
+            for i in range(m):
+                for j in range(i + 1, m):
+                    fv_i, _, _ = g[i]
+                    fv_j, _, _ = g[j]
+                    if fv_i.player_norm and fv_j.player_norm and fv_i.player_norm == fv_j.player_norm:
+                        if is_sgp_collinear(fv_i.stat, fv_j.stat):
+                            return _reject(rfq.rfq_id, "combo", REJ_SGP_COLLINEAR, **notes)
+                        if lookup_sgp_rho(SGP_RELATION_SAME_PLAYER, fv_i.stat, fv_j.stat, cfg) is None:
+                            return _reject(rfq.rfq_id, "combo", REJ_SGP_SAME_PLAYER, **notes)
 
         p_true = self._joint(groups, pad=0.0, conservative=False)
         p_cons = self._joint(groups, pad=cfg.leg_safety_pad)
@@ -641,7 +702,7 @@ class KalshiRFQPricer:
         if no_bid <= 0.0:
             return _reject(rfq.rfq_id, "combo", REJ_NO_EDGE, p_cons=round(p_cons, 4), **notes)
         ev = (1.0 - p_true) - no_bid
-        fee = taker_fee(no_bid, 100, cfg.fee_mult) / 100.0
+        fee = taker_fee(no_bid, 100, cfg.maker_fee_mult) / 100.0
         roi = (ev - fee) / no_bid
         snaps = tuple(_snap(fv, side, p) for fv, side, p in resolved)
         notes.update(k=k, same_game=sgp, fee_reserve=round(fee, 5), bounded=n_unpriced > 0)
@@ -676,7 +737,9 @@ class KalshiRFQPricer:
             R = np.eye(m)
             for i in range(m):
                 for j in range(i + 1, m):
-                    rho = _pair_rho(g[i][0], dirs[i], g[j][0], dirs[j], cfg, signed=not conservative)
+                    rho = (pair_rho_cons(g[i][0], dirs[i], g[j][0], dirs[j], cfg)
+                           if conservative
+                           else pair_rho_true(g[i][0], dirs[i], g[j][0], dirs[j], cfg))
                     if rho is None:
                         return None
                     R[i, j] = R[j, i] = rho
