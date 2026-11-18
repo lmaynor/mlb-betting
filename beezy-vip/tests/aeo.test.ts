@@ -36,7 +36,9 @@ describe('robots.txt', () => {
   // RUL-20261115-crawler-policy: training and bulk crawlers are disallowed site-wide; search and retrieval
   // crawlers get canonical pages only, with every query-string URL disallowed (the parameterized
   // /ev/projections space is closed). Unnamed search / user-fetch agents fall under the * group.
-  const TRAINING_BOTS = ['GPTBot', 'Applebot-Extended', 'CCBot', 'Bytespider', 'ClaudeBot', 'Google-Extended', 'Meta-ExternalAgent', 'Amazonbot']
+  // Amended Nov 17, 2026 (Luc): Google-Extended sits with the retrieval crawlers — canonical pages only,
+  // parameterized space still closed to it — so the Gemini app can read and cite canonical pages.
+  const TRAINING_BOTS = ['GPTBot', 'Applebot-Extended', 'CCBot', 'Bytespider', 'ClaudeBot', 'Meta-ExternalAgent', 'Amazonbot']
   const CANONICAL_DISALLOW = ['/*?*', '/api/', '/dashboard', '/login', '/signup', '/admin', '/blocked']
 
   it.each(TRAINING_BOTS)('%s is disallowed site-wide', ua => {
@@ -46,7 +48,7 @@ describe('robots.txt', () => {
     expect(g!.allow).not.toContain('/')
   })
 
-  it.each(['OAI-SearchBot', 'Applebot', '*'])('%s gets canonical pages only', ua => {
+  it.each(['OAI-SearchBot', 'Applebot', 'Google-Extended', '*'])('%s gets canonical pages only', ua => {
     const g = groupFor(ua)
     expect(g).toBeDefined()
     expect(g!.allow).toContain('/')

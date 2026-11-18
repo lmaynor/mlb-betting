@@ -7,6 +7,12 @@
 # One deliberate carry-over from the previous file, not in Argon's verbatim text: each canonical group
 # keeps "Allow: /api/og" ahead of the /api/ disallow, because the og:image URLs live under /api/og and
 # social cards must stay fetchable (longest match wins, so the carve-out survives the prefix disallow).
+#
+# Amendment (Nov 17, 2026, Luc's decision): Google-Extended moved from the training/bulk group to the
+# retrieval group below, so the Gemini app can read and cite beezy's canonical pages. It gets exactly
+# the retrieval shape (canonical pages only, every query-string URL still disallowed), so the
+# anti-enumeration protection that motivated this policy is unchanged. The rest of
+# RUL-20261115-crawler-policy stands.
 
 # Training & bulk scrapers: site-wide disallow
 User-agent: GPTBot
@@ -22,9 +28,6 @@ User-agent: Bytespider
 Disallow: /
 
 User-agent: ClaudeBot
-Disallow: /
-
-User-agent: Google-Extended
 Disallow: /
 
 User-agent: Meta-ExternalAgent
@@ -46,6 +49,17 @@ Disallow: /admin
 Disallow: /blocked
 
 User-agent: Applebot
+Allow: /
+Allow: /api/og
+Disallow: /*?*
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /login
+Disallow: /signup
+Disallow: /admin
+Disallow: /blocked
+
+User-agent: Google-Extended
 Allow: /
 Allow: /api/og
 Disallow: /*?*
