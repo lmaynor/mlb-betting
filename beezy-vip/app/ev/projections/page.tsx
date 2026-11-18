@@ -8,6 +8,7 @@ import { DayToggle } from '@/components/picks/day-toggle'
 import { FilterBar } from '@/components/picks/filter-bar'
 import { GamesStrip } from '@/components/picks/games-strip'
 import { LockedNotice } from '@/components/picks/locked-notice'
+import { ProjectionsBoardSwitch } from '@/components/picks/projections-board-switch'
 import { SportProjectionsBoard } from '@/components/picks/sport-projections-board'
 import { EdgeEvLegend } from '@/components/ui/edge-ev-legend'
 import { limitGameLines } from '@/lib/access-feeds'
@@ -18,6 +19,7 @@ import { applyPickFilters } from '@/lib/board-rows'
 import { siteDateKey } from '@/lib/dates'
 import type { GameProjectionsFeed } from '@/lib/game-lines'
 import { activeFilterCount, parsePickFilters } from '@/lib/picks-filters'
+import { hasCardLayout } from '@/lib/prop-cards'
 import { loadSportBoard } from '@/lib/sport-board-data'
 import { isSportSlug, LIVE_SPORTS, SPORT_PILLARS, type SportSlug } from '@/lib/sports'
 import { GameLinesClient } from '../games/game-lines-client'
@@ -142,6 +144,7 @@ export default async function ProjectionsPage({ searchParams }: Props) {
   const games = withCounts(board.games, board.rows)
   const filtered = activeFilterCount(f) > 0
   const today = siteDateKey()
+  const layoutParam = sp.layout === 'cards' || sp.layout === 'table' ? sp.layout : null
 
   return (
     <main>
@@ -165,8 +168,26 @@ export default async function ProjectionsPage({ searchParams }: Props) {
       <GamesStrip games={games} selected={f.game} today={today} total={board.rows.length} />
       <FilterBar sport={league} kind={league === 'mlb' ? 'player' : undefined} />
       <div className="max-w-page mx-auto p-6">
-        <SportProjectionsBoard sport={league} rows={rows} status={board.status} statusWarn={board.statusWarn} visuals
-          emptyBody={board.rows.length === 0 ? board.emptyBody : 'No rows match these filters. Clear a filter, or pick another game.'} />
+        {hasCardLayout(league) ? (
+          <ProjectionsBoardSwitch
+            sport={league}
+            rows={rows}
+            census={board.rows.length}
+            status={board.status}
+            statusWarn={board.statusWarn}
+            emptyBody={board.rows.length === 0 ? board.emptyBody : 'No rows match these filters. Clear a filter, or pick another game.'}
+            initialLayout={layoutParam}
+          />
+        ) : (
+          <SportProjectionsBoard
+            sport={league}
+            rows={rows}
+            status={board.status}
+            statusWarn={board.statusWarn}
+            visuals
+            emptyBody={board.rows.length === 0 ? board.emptyBody : 'No rows match these filters. Clear a filter, or pick another game.'}
+          />
+        )}
         <LockedNotice locked={board.locked} shown={rows.length} what={`${pillar.shortName} projections`} plan={`The full board is on the ${pillar.shortName} Pass or All-Access Pro.`} />
         <EdgeEvLegend />
         <p className="text-[12px] text-text-secondary leading-[1.55] max-w-[90ch]" style={{ margin: '14px 2px 0' }}>

@@ -246,6 +246,8 @@ export interface SportProjectionRow {
   p_over_model: number | null
   /** market-anchored posterior (display only, unvalidated prior; ev/daily_projections.py blend_p_over) */
   p_over_blend?: number | null
+  /** blended probability for the listed side (blend_p_over for the side; display) */
+  p_blend_side?: number | null
   p_model_side: number | null
   p_mkt_side: number | null
   l5_hit_rate: number | null
