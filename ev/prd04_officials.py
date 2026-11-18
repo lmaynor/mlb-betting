@@ -40,11 +40,11 @@ Slice 2 scope (this module as shipped):
 Slice 3 scope (this module as shipped):
   * the NHL trained skater path (round 3): goals / assists / points rows priced by the TRAINED engine
     (nhl_model == "trained_v1") are Tier 2 at floor 48 -- the board engine's skater rows stay Tier 3, the
-    engine invariant is absolute. The path reprices the blend with the round-3 weights (goals .10 /
-    assists .12 / points .12) in place of the board's BLEND_C_TRAINED, requires blend_ev and market_ev
-    inside [3%, 10%], caps skater odds at +250, and hard-blocks uncertain lineup status. The floor drops
-    to 42 when the trained-skater shadow cohort's mean CLV reaches +1.00% (trained_skater_floor; the
-    judging pass hands the measured value in as skater_cohort_clv).
+    engine invariant is absolute. The path reprices the blend with the measured weights (goals .37 /
+    assists .34 / points .175; reverted Nov 18, 2026 at Luc's direction after Argon's round-3 weights were
+    withdrawn in RUL-20261118 Answer 2), requires blend_ev and market_ev inside [3%, 10%], caps skater odds at
+    +250, and hard-blocks uncertain lineup status. The floor drops to 42 when the trained-skater shadow cohort's
+    mean CLV reaches +1.00% (trained_skater_floor; the judging pass hands the measured value in as skater_cohort_clv).
 
 Tier 3 re-entry bar (round 2, for the record; enforced by whoever judges the shadow tape, not by this gate):
 held-out walk-forward c >= 0.10 (t >= 2.5) on the served engine against the sharp-weighted consensus, plus
@@ -132,7 +132,7 @@ def market_tier(r: dict) -> int:
 
 # -- slice 3: the NHL trained skater path ---------------------------------------------------------------------------
 TRAINED_SKATER_MARKETS = frozenset({("nhl", "goals"), ("nhl", "assists"), ("nhl", "points")})
-TRAINED_SKATER_WEIGHTS = {"goals": 0.10, "assists": 0.12, "points": 0.12}   # round 3, replacing BLEND_C_TRAINED here
+TRAINED_SKATER_WEIGHTS = {"goals": 0.37, "assists": 0.34, "points": 0.175}  # measured BLEND_C_TRAINED skater values (walk-forward, BettingPros 2022-26); the round-3 0.10/0.12/0.12 values were Argon's admitted invention, withdrawn in RUL-20261118 Answer 2, reverted at Luc's direction Nov 18, 2026
 TRAINED_SKATER_FLOOR = 48
 TRAINED_SKATER_FLOOR_CLV = 42
 TRAINED_SKATER_CLV_BAR = 0.01           # the cohort's 7-day mean CLV at +1.00% earns the 42 floor
@@ -166,7 +166,7 @@ def prd04_blend(r: dict) -> tuple:
     """(p_blend_side, blend_ev, blend_c) under the PRD-04 configuration for one row.
 
     Every row except trained skaters keeps the board's stamped blend. A trained skater row is repriced with
-    the round-3 weight in the SAME c-only logit blend the board runs (ev.daily_projections.blend_p_over
+    the trained-skater weight in the SAME c-only logit blend the board runs (ev.daily_projections.blend_p_over
     with (a, b) = (0, 1)): sigmoid(logit(p_mkt) + c * (logit(p_model) - logit(p_mkt))) off the row's stamped
     side probabilities, and blend_ev at the row's best price on its side. (If a pre-blend isotonic
     calibrator is ever registered for these stats -- none is today -- the board's own blend would differ

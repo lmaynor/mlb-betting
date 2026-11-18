@@ -3,8 +3,8 @@
   * engine invariant: only nhl_model == 'trained_v1' goals / assists / points rows enter; the board
     engine's skater rows stay Tier 3;
   * Tier 2 at floor 48, dropping to 42 when the trained-skater shadow cohort's mean CLV reaches +1.00%;
-  * the blend is repriced with the round-3 weights (goals .10 / assists .12 / points .12), not the
-    board's BLEND_C_TRAINED (.37 / .34 / .175);
+  * the blend uses the measured weights (goals .37 / assists .34 / points .175), matching the
+    board's BLEND_C_TRAINED;
   * blend_ev and market_ev inside [3%, 10%], skater odds ceiling +250, lineup hard-block.
 
 Step 0 (read-only, Nov 15, 2026): NHL_TRAINED_PROPS=1 IS set on the Cloud Run job `daily-projections`
@@ -21,18 +21,18 @@ NOW = datetime(2026, 11, 15, 15, 0, tzinfo=timezone.utc)
 
 
 def skater_row(**kw):
-    """A passing trained assists row: p_blend at c=.12 is 0.5147, blend_ev +8.1% at the +110 best price."""
+    """A passing trained assists row: p_blend at c=.34 is 0.5205, blend_ev +9.3% at the +110 best price."""
     r = {
         "sport": "nhl", "stat": "assists", "player": "Leon Draisaitl", "player_norm": "id8477934",
         "team": "EDM", "opp": "CGY", "game_key": "nhl:2026-11-15:CGY@EDM",
         "commence": (NOW + timedelta(hours=4)).isoformat(), "mins_to_start": 240.0,
         "has_line": True, "line": 0.5, "side": "over", "proj_mean": 0.9,
-        "p_model_side": 0.62, "p_mkt_side": 0.50,
+        "p_model_side": 0.56, "p_mkt_side": 0.50,
         "best_over_odds": 110, "best_over_book": "fanduel", "best_under_odds": -130,
         "best_under_book": "draftkings", "n_books": 6, "model_edge": 0.05, "market_ev": 0.05,
         "confluence": True, "edge_capped": False, "beezy_score": 55, "engine": "empirical_ewm_v2",
         "nhl_model": "trained_v1", "validated": False,
-        "p_blend_side": 0.556, "blend_ev": 0.09,          # the board's stamps (BLEND_C_TRAINED .34)
+        "p_blend_side": 0.5205, "blend_ev": 0.093,        # the board's stamps (BLEND_C_TRAINED .34)
         "p_sharp_ref_over": 0.51, "p_sharp_ref_book": "pinnacle", "n_sharp_ref": 1,
         "p_cons_w_over": 0.51, "cons_disp": 0.01, "lineup_status": None,
     }
@@ -62,20 +62,20 @@ def test_board_engine_skater_row_is_blocked_however_good():
 
 # ------------------------------------------------------------------------------------- the repriced blend
 
-def test_trained_blend_uses_the_round3_weights_not_the_board_weights():
+def test_trained_blend_uses_measured_board_weights():
     p_blend, blend_ev, c = P4.prd04_blend(skater_row())
-    assert c == 0.12
-    assert p_blend == pytest.approx(0.5147, abs=1e-3)                # sigmoid(0.12 * logit(0.62))
-    assert blend_ev == pytest.approx(0.0808, abs=1e-3)               # at the +110 best price
+    assert c == 0.34
+    assert p_blend == pytest.approx(0.5205, abs=1e-3)                # sigmoid(0.34 * logit(0.56))
+    assert blend_ev == pytest.approx(0.0930, abs=1e-3)               # at the +110 best price
     v = P4.shadow_verdict(skater_row())
     assert v["blend_c"] == 0.34                                      # the board's BLEND_C_TRAINED, still recorded
-    assert v["blend_c_prd04"] == 0.12 and v["blend_ev_prd04"] == pytest.approx(0.0808, abs=1e-3)
+    assert v["blend_c_prd04"] == 0.34 and v["blend_ev_prd04"] == pytest.approx(0.0930, abs=1e-3)
     assert v["trained_path"] is True
 
 
-def test_trained_goals_weight_is_010():
+def test_trained_goals_weight_is_037():
     _, _, c = P4.prd04_blend(skater_row(stat="goals", p_model_side=0.60, p_mkt_side=0.50))
-    assert c == 0.10
+    assert c == 0.37
 
 
 # ------------------------------------------------------------------------------------- the gate
@@ -98,9 +98,9 @@ def test_trained_skater_floor_drops_to_42_on_the_cohort_clv_rule():
 
 
 def test_trained_skater_blend_band_floor_is_3pct_not_2p5():
-    # goals at c=.10: p_blend 0.5140, blend_ev +2.8% at +100 -- inside the general [2.5%, 10%] band,
+    # goals at c=.37: p_blend 0.5140, blend_ev +2.8% at +100 -- inside the general [2.5%, 10%] band,
     # below the trained path's 3% floor
-    r = skater_row(stat="goals", p_model_side=0.6364, p_mkt_side=0.50, best_over_odds=100,
+    r = skater_row(stat="goals", p_model_side=0.5378, p_mkt_side=0.50, best_over_odds=100,
                    p_sharp_ref_over=0.51)
     v = P4.shadow_verdict(r)
     assert v["blend_ev_prd04"] == pytest.approx(0.028, abs=1e-3)
