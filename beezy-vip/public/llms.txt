@@ -1,0 +1,17 @@
+# beezy.fyi
+
+> beezy.fyi is a quantitative sports analytics and +EV research terminal for MLB, NFL, NHL, and NBA. It publishes model projections with full probability distributions, line shopping across 14+ sportsbooks plus the Kalshi and Novig exchanges, and a public results ledger of every play the models make. beezy.fyi is pre-launch: the waitlist is open and prices lock at launch. Pricing is $0 for the Explorer free tier, $19/mo for a single-sport pass, $39/mo for all-access, or $299/yr for all-access annual.
+
+## Start here
+
+- [Home](https://beezy.fyi/): What beezy.fyi is: the dual-engine terminal (market consensus plus ML projections), the sports covered, and the current pre-launch status.
+- [Pricing](https://beezy.fyi/pricing): The four plans with prices: Explorer $0 free forever, Single-Sport Pass $19/mo, All-Access Pro $39/mo, All-Access Pro Annual $299/yr. Paid access opens at launch; waitlist members lock these prices.
+- [About](https://beezy.fyi/about): What beezy.fyi is, how the models and the +EV scanner work, and how results are tracked and published.
+
+## Free research surfaces
+
+- [Today's Card](https://beezy.fyi/picks): Today's official plays across MLB, NFL, NHL, and NBA, each with its price and edge. The Daily Top 10 is free on the Explorer tier.
+- [Results](https://beezy.fyi/results): The verified public ledger: every settled paper bet from the beezy models and the +EV scanner, with full P&L history, win rates, and edge vs ROI, filterable to the Daily Card plays.
+- [beezy.fyi vs OddsJam and other sports betting tools](https://beezy.fyi/compare/oddsjam-alternative): A comparison table of beezy.fyi against OddsJam, Props.cash, Outlier, Unabated, Pikkit, and Betstamp: price, what each tool is, method, scope, and results transparency.
+- [Models](https://beezy.fyi/models): The model registry: what each projection model does and how it is specified.
+- [Learn](https://beezy.fyi/learn): Written explainers on the methods behind the terminal, including de-vigging, expected value, and market-specific betting mechanics.
