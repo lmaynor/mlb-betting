@@ -190,8 +190,8 @@ def _close_rec(ts, p_cons, nov_over, line=2.5):
 
 def test_closes_sticky_quote_divergence():
     """The ruling's core scenario: consensus moves toward the fill, Novig's own quote
-    never moves.  Consensus-confirm CLV is strongly positive; same-book CLV is exactly
-    the negative drag.  Both must be computable from the same row."""
+    never moves.  Consensus-confirm CLV is strongly positive; same-book CLV is 0.0
+    (net == gross per RUL-20261118).  Both must be computable from the same row."""
     entry = rec()                                            # fill at _prob(-110) ~ 0.5238
     rows = [_filled_row(weighted_fill_price=_prob(-110))]
     series = [entry,
@@ -202,10 +202,25 @@ def test_closes_sticky_quote_divergence():
     assert r["close_state"] == "ok" and r["t15_state"] == "ok"
     assert r["consensus_confirm_clv_pct"] == pytest.approx((0.59 / _prob(-110) - 1) * 100, abs=1e-3)
     assert r["same_book_clv_pct"] == pytest.approx(0.0, abs=1e-9)            # sticky: quote never moved
-    assert r["same_book_clv_net_pct"] == pytest.approx(-0.37, abs=1e-9)     # net of the ruling's drag
+    assert r["same_book_clv_net_pct"] == pytest.approx(0.0, abs=1e-9)        # net == gross (RUL-20261118)
     assert r["moved_quote"] is False
     assert r["consensus_drift_pp"] == pytest.approx((0.59 - 0.55) * 100, abs=1e-3)
     assert r["entry_dislocation_pct"] == pytest.approx((0.55 / _prob(-110) - 1) * 100, abs=1e-3)
+
+
+def test_closes_restated_net_equals_gross():
+    """RUL-20261118: fill_cost_drag is 0.0 and net CLV fields exactly equal gross CLV fields."""
+    assert ShadowConfig().fill_cost_drag == 0.0
+    entry = rec()
+    rows = [_filled_row(weighted_fill_price=_prob(-110))]
+    series = [entry,
+              _close_rec(TS + timedelta(minutes=60), 0.58, _prob(-110)),
+              _close_rec(START - timedelta(minutes=12), 0.59, _prob(-110))]
+    out = closes_mod.attach_closes(rows, series, ShadowConfig())
+    r = out[0]
+    assert r["consensus_confirm_clv_net_pct"] == r["consensus_confirm_clv_pct"]
+    assert r["same_book_clv_net_pct"] == r["same_book_clv_pct"]
+    assert r["same_book_clv_last_net_pct"] == r["same_book_clv_last_pct"]
 
 
 def test_closes_degrade_honestly():

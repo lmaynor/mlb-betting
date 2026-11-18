@@ -25,6 +25,8 @@ Every gate constant is from the two rulings, not a local invention:
 The 0.37% fill-cost drag is an Argon-supplied constant from the CLV ruling.  It is NOT
 derivable from the banked record (NOV-01 models Novig pre-game fees as 0), so the bar
 evaluation reports CLV both with the drag (the ruling's official form) and without it.
+RESTATED Nov 18, 2026 (RUL-20261118): the drag was admitted invented and withdrawn;
+fill_cost_drag is 0.0 and net CLV == gross CLV until a measured fill cost is banked.
 """
 
 from __future__ import annotations
@@ -86,7 +88,7 @@ class ShadowConfig:
     min_order_usd: float = 5.0
 
     # --- CLV (CLV ruling) ---
-    fill_cost_drag: float = 0.0037         # Argon-supplied; see module docstring
+    fill_cost_drag: float = 0.0            # No drag is measured; the 0.0037 was invented and withdrawn (RUL-20261118); gross == net until a measured cost is banked.
     t15_min: float = 15.0                  # same-book close = Novig quote at T-15m
     moved_tick: float = 0.005              # one mid-band Novig grid tick
     sticky_move_rate_max: float = 0.60     # venue classification split

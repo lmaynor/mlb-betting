@@ -16,7 +16,7 @@ The decomposition logged per signal:
                         pp form (P_cons,close - P_cons,entry) * 100 the bar is stated in
   Same-Book CLV       = P_novig,T-15m / P_fill - 1
   Consensus-Confirm   = P_cons,close / P_fill - 1
-Net forms subtract the ruling's 0.37% fill-cost drag.  A last-snapshot same-book variant
+Net forms equal the gross forms (no drag deducted) per the RUL-20261118 restatement.  A last-snapshot same-book variant
 (same_book_clv_last_*) is computed alongside, because the step-b backtest record graded
 same-book CLV against the last pre-commence snapshot; the ruling's T-15m form governs
 the bars and the record's form is kept for reconciliation.
@@ -60,7 +60,6 @@ def attach_closes(rows: list, records: list, cfg: ShadowConfig | None = None) ->
         series.setdefault((r.event_id, r.player_norm, r.stat), []).append(r)
     for v in series.values():
         v.sort(key=lambda r: r.ts)
-    drag_pp = cfg.fill_cost_drag * 100.0
     out = []
     for row in rows:
         if row["status"] != "FILLED":
@@ -92,7 +91,7 @@ def attach_closes(rows: list, records: list, cfg: ShadowConfig | None = None) ->
         r2["consensus_drift_ratio_pct"] = round((p_cons_close - p_cons_entry) / fill * 100.0, 4)
         cc = (p_cons_close / fill - 1.0) * 100.0
         r2["consensus_confirm_clv_pct"] = round(cc, 4)
-        r2["consensus_confirm_clv_net_pct"] = round(cc - drag_pp, 4)
+        r2["consensus_confirm_clv_net_pct"] = round(cc, 4)
         nov_close = _novig_side(close, side)
         if nov_close is None:
             r2["close_state"] = "novig_unquoted_at_close"
@@ -100,7 +99,7 @@ def attach_closes(rows: list, records: list, cfg: ShadowConfig | None = None) ->
             r2["novig_close_prob"] = round(nov_close, 6)
             last = (nov_close / fill - 1.0) * 100.0
             r2["same_book_clv_last_pct"] = round(last, 4)
-            r2["same_book_clv_last_net_pct"] = round(last - drag_pp, 4)
+            r2["same_book_clv_last_net_pct"] = round(last, 4)
             r2["moved_quote_last"] = abs(nov_close - fill) >= cfg.moved_tick
         # T-15m same-book close (the ruling's governing form)
         cutoff = commence - timedelta(minutes=cfg.t15_min)
@@ -120,7 +119,7 @@ def attach_closes(rows: list, records: list, cfg: ShadowConfig | None = None) ->
         r2["novig_t15_prob"] = round(nov_t15, 6)
         sb = (nov_t15 / fill - 1.0) * 100.0
         r2["same_book_clv_pct"] = round(sb, 4)
-        r2["same_book_clv_net_pct"] = round(sb - drag_pp, 4)
+        r2["same_book_clv_net_pct"] = round(sb, 4)
         r2["moved_quote"] = abs(nov_t15 - fill) >= cfg.moved_tick
     return out
 
