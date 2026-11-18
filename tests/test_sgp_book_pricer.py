@@ -184,8 +184,9 @@ def test_three_leg_prediction_uses_defaults_not_the_two_leg_fit():
     assert (pred.rho_used, pred.hold_used) == (arch.rho_book_default, arch.hold_book_default)
 
 
-def test_dead_archetypes_removed():
-    assert "nba_dd_proxy" not in SGP_ARCHETYPES and "nfl_td_yds_stack" not in SGP_ARCHETYPES
+# test_dead_archetypes_removed retired Nov 17, 2026 by Luc's decision under
+# RUL-20261117-profitable-market-spec: nba_dd_proxy and nfl_td_yds_stack were
+# re-admitted to SGP_ARCHETYPES, so the dead-archetype assertion no longer holds.
 
 
 def test_build_sgp_deeplink():

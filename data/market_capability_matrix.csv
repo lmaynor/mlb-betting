@@ -1,0 +1,48 @@
+sport,market_group,junk_filter_gate,primary_execution_mode,combo_role
+nba,Rebounds,Vacated usage, high 3PAr,Intraday pop, Over ladders,SGP leg or NO lay
+nba,Threes,Vacated usage, high 3PAr,Intraday pop, Over ladders,SGP leg or NO lay
+nba,Points,Vacated usage, high 3PAr,Intraday pop, Over ladders,SGP leg or NO lay
+nba,Assists,Block raw model Overs,Synthetic SGP proxy or NO lay,Lay overpriced retail combos
+nba,PRA,Block raw model Overs,Synthetic SGP proxy or NO lay,Lay overpriced retail combos
+nba,PR,Block raw model Overs,Synthetic SGP proxy or NO lay,Lay overpriced retail combos
+nba,PA,Block raw model Overs,Synthetic SGP proxy or NO lay,Lay overpriced retail combos
+nba,RA,Block raw model Overs,Synthetic SGP proxy or NO lay,Lay overpriced retail combos
+nba,DD,Zero low-minute centers,Synthetic SGP (10+R/10+A),Fade public TD lottery legs
+nba,TD,Zero low-minute centers,Synthetic SGP (10+R/10+A),Fade public TD lottery legs
+nba,First Basket,Zero low-minute centers,Synthetic SGP (10+R/10+A),Fade public TD lottery legs
+nfl,Rec Yds,"Role gap, OL intact, aDOT",Split Over/Under ladder taker,Lay grinder and WR3 traps
+nfl,Rush Yds,"Role gap, OL intact, aDOT",Split Over/Under ladder taker,Lay grinder and WR3 traps
+nfl,Carries,"Role gap, OL intact, aDOT",Split Over/Under ladder taker,Lay grinder and WR3 traps
+nfl,Pass Yds,Block Over models ( ),Exchange NO on 300+ yd rungs,Snipe cannibalistic SGPs
+nfl,Pass Comp,Block Over models ( ),Exchange NO on 300+ yd rungs,Snipe cannibalistic SGPs
+nfl,Pass Att,Block Over models ( ),Exchange NO on 300+ yd rungs,Snipe cannibalistic SGPs
+nfl,INT,Block Over models ( ),Exchange NO on 300+ yd rungs,Snipe cannibalistic SGPs
+nfl,Anytime TD,Power devig vs base rate,"Consensus outlier, Exchange NO",Lay multi-TD retail parlays
+nfl,First TD,Power devig vs base rate,"Consensus outlier, Exchange NO",Lay multi-TD retail parlays
+nfl,Kicking Pts,Power devig vs base rate,"Consensus outlier, Exchange NO",Lay multi-TD retail parlays
+nhl,Goalie Saves,"Dual starter gate, PK TOI",Rolling-centered strike,Low-correlation anchor leg
+nhl,Blocked Shots,"Dual starter gate, PK TOI",Rolling-centered strike,Low-correlation anchor leg
+nhl,SOG,"iCF gap, PP1 linemate TOI","Over ladders, Linemate SGP",1+G/1+A proxy vs 2+ Pts
+nhl,Goals,"iCF gap, PP1 linemate TOI","Over ladders, Linemate SGP",1+G/1+A proxy vs 2+ Pts
+nhl,Assists,"iCF gap, PP1 linemate TOI","Over ladders, Linemate SGP",1+G/1+A proxy vs 2+ Pts
+nhl,Points,"iCF gap, PP1 linemate TOI","Over ladders, Linemate SGP",1+G/1+A proxy vs 2+ Pts
+nhl,PP Points,"iCF gap, PP1 linemate TOI","Over ladders, Linemate SGP",1+G/1+A proxy vs 2+ Pts
+mlb,Pitcher Strikeouts,"Pitch count, chase, weather",Main + alt NO lay on 9+ Ks,Same-game K + NRFI + Under
+mlb,Pitcher Outs,"Pitch count, chase, weather",Main + alt NO lay on 9+ Ks,Same-game K + NRFI + Under
+mlb,Earned Runs,"Pitch count, chase, weather",Main + alt NO lay on 9+ Ks,Same-game K + NRFI + Under
+mlb,Home Runs,"Barrel zone, park factor","HR NO lay, Hit+TB SGP proxy",Lay 3-to-5 leg HR parlays
+mlb,Total Bases,"Barrel zone, park factor","HR NO lay, Hit+TB SGP proxy",Lay 3-to-5 leg HR parlays
+mlb,Hits,"Barrel zone, park factor","HR NO lay, Hit+TB SGP proxy",Lay 3-to-5 leg HR parlays
+mlb,Stolen Bases,"Barrel zone, park factor","HR NO lay, Hit+TB SGP proxy",Lay 3-to-5 leg HR parlays
+mlb,NRFI,"Opener flag, lineup lock","Early strike, Kalshi taker",Copula anchor in MLB combos
+mlb,F5,"Opener flag, lineup lock","Early strike, Kalshi taker",Copula anchor in MLB combos
+mlb,Full Game,"Opener flag, lineup lock","Early strike, Kalshi taker",Copula anchor in MLB combos
+soccer,EPL/UCL Totals,Require 5+ two-sided books,Leave-out consensus outlier,Fade 1X2 hot-hand streaks
+soccer,BTTS,Require 5+ two-sided books,Leave-out consensus outlier,Fade 1X2 hot-hand streaks
+soccer,1X2,Require 5+ two-sided books,Leave-out consensus outlier,Fade 1X2 hot-hand streaks
+soccer,Double Chance,Require 5+ two-sided books,Leave-out consensus outlier,Fade 1X2 hot-hand streaks
+soccer,Asian Handicap,Require 5+ two-sided books,Leave-out consensus outlier,Fade 1X2 hot-hand streaks
+soccer,Team Totals,Require 5+ two-sided books,Leave-out consensus outlier,Fade 1X2 hot-hand streaks
+soccer,Shots on Target,Require 5+ two-sided books,Leave-out consensus outlier,Fade 1X2 hot-hand streaks
+soccer,Shots,Require 5+ two-sided books,Leave-out consensus outlier,Fade 1X2 hot-hand streaks
+soccer,Anytime Goal,Require 5+ two-sided books,Leave-out consensus outlier,Fade 1X2 hot-hand streaks

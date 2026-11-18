@@ -393,7 +393,12 @@ def test_same_player_in_one_game_rejected():
     b = book_of(mk_leg("A", GK, "same", stat="rec_yds"), mk_leg("B", GK, "same", stat="receptions"),
                 mk_leg("X", "nfl:2026-10-25:A9@B9", "zz"))
     d = KalshiRFQPricer(b, PricerConfig(allow_same_game_combos=True)).price(combo_rfq(["A", "B", "X"]), NOW)
-    assert d.reason == "REJ_SGP_SAME_PLAYER"
+    assert d.reason != "REJ_SGP_SAME_PLAYER"
+    # Unmeasured same-player pair fails closed
+    b_unmeasured = book_of(mk_leg("A", GK, "same", stat="pass_yds"), mk_leg("B", GK, "same", stat="pass_tds"),
+                           mk_leg("X", "nfl:2026-10-25:A9@B9", "zz"))
+    d_unmeasured = KalshiRFQPricer(b_unmeasured, PricerConfig(allow_same_game_combos=True)).price(combo_rfq(["A", "B", "X"]), NOW)
+    assert d_unmeasured.reason == "REJ_SGP_SAME_PLAYER"
 
 
 def test_parse_rfq_accepts_ws_and_rest_shapes():
@@ -1449,13 +1454,13 @@ def test_sgp_unmeasured_different_player_pairs_use_the_pooled_0081_not_015():
 def test_sgp_unmeasured_same_player_pairs_have_no_default_and_fail_closed():
     from ev.kalshi_rfq_pricer import PricerConfig, _pair_rho, lookup_sgp_rho
     cfg = PricerConfig()
-    assert lookup_sgp_rho("same_player", "points", "rebounds", cfg) is None             # measured same-player cells exist; this pair is not one
+    assert lookup_sgp_rho("same_player", "points", "steals", cfg) is None             # measured same-player cells exist; this pair is not one
     assert lookup_sgp_rho("same_player", "pass_yds", "pass_tds", cfg) is None
     a = mk_leg("A", stat="points", player="p1", team="BUF")
-    assert _pair_rho(a, 1, mk_leg("B", stat="rebounds", player="p1", team="BUF"), 1, cfg) is None
-    assert _pair_rho(a, 1, mk_leg("B", stat="rebounds", player="p1", team="BUF"), 1, cfg, signed=True) is None
+    assert _pair_rho(a, 1, mk_leg("B", stat="steals", player="p1", team="BUF"), 1, cfg) is None
+    assert _pair_rho(a, 1, mk_leg("B", stat="steals", player="p1", team="BUF"), 1, cfg, signed=True) is None
     # ... and the pricer's hard rejection of same-player combos is unchanged (they never reach a numeric rho in the pricing path)
-    d = KalshiRFQPricer(book_of(mk_leg("A", stat="points", player="p1"), mk_leg("B", stat="rebounds", player="p1")),
+    d = KalshiRFQPricer(book_of(mk_leg("A", stat="points", player="p1"), mk_leg("B", stat="steals", player="p1")),
                         PricerConfig(allow_same_game_combos=True)).price(combo_rfq(["A", "B"]), NOW)
     assert not d.quoted and d.reason == "REJ_SGP_SAME_PLAYER"
 

@@ -915,3 +915,95 @@ def save_sgp_candidates(
     }
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2, sort_keys=True)
+
+
+# ------------------------------------------------------------------------------
+# Module 6.2 Function 2: Cross-Game Parlay Amplifier (RES-12b)
+# ------------------------------------------------------------------------------
+
+@dataclass
+class CrossGameParlayAmplifier:
+    legs: List[Any]
+    book: str
+    ev_parlay: float
+    kelly_fraction: float
+
+    def __iter__(self):
+        yield self
+
+    def __getitem__(self, index):
+        if index == 0:
+            return self
+        raise IndexError("CrossGameParlayAmplifier index out of range")
+
+    def __len__(self):
+        return 1
+
+
+def build_cross_game_parlay_amplifiers(
+    ev_signals: Sequence[Any],
+    max_legs: int = 3,
+) -> Optional[CrossGameParlayAmplifier]:
+    """Takes independent single-leg +EV plays (ev >= 4.0%, different games) at the same book,
+    forms the top combination of up to max_legs legs, and computes multiplicative parlay EV
+    and Quarter-Kelly stake sizing.
+    """
+    def _val(s: Any, key: str, default: Any = None) -> Any:
+        if isinstance(s, dict):
+            return s.get(key, default)
+        return getattr(s, key, default)
+
+    qualifying = []
+    for s in ev_signals:
+        ev = float(_val(s, "ev", 0.0))
+        if ev >= 0.04:
+            qualifying.append(s)
+
+    if not qualifying:
+        return None
+
+    by_book: Dict[str, List[Any]] = {}
+    for s in qualifying:
+        b = str(_val(s, "book") or "")
+        by_book.setdefault(b, []).append(s)
+
+    best_amp: Optional[CrossGameParlayAmplifier] = None
+    best_ev = -1.0
+
+    for book, sigs in by_book.items():
+        sigs_by_game: Dict[str, List[Any]] = {}
+        for s in sigs:
+            gid = str(_val(s, "game_id") or "")
+            sigs_by_game.setdefault(gid, []).append(s)
+
+        game_tops = []
+        for gid, g_sigs in sigs_by_game.items():
+            best_in_game = max(g_sigs, key=lambda s: float(_val(s, "ev", 0.0)))
+            game_tops.append(best_in_game)
+
+        game_tops.sort(key=lambda s: float(_val(s, "ev", 0.0)), reverse=True)
+        chosen_legs = game_tops[:max_legs]
+        if len(chosen_legs) < 2:
+            continue
+
+        prod_pd = math.prod(float(_val(s, "p_lambda")) * float(_val(s, "d_book")) for s in chosen_legs)
+        ev_parlay = prod_pd - 1.0
+
+        prod_d = math.prod(float(_val(s, "d_book")) for s in chosen_legs)
+        if prod_d > 1.0 and ev_parlay > 0.0:
+            kelly_fraction = 0.25 * ev_parlay / (prod_d - 1.0)
+        else:
+            kelly_fraction = 0.0
+
+        amp = CrossGameParlayAmplifier(
+            legs=chosen_legs,
+            book=book,
+            ev_parlay=ev_parlay,
+            kelly_fraction=kelly_fraction,
+        )
+
+        if ev_parlay > best_ev:
+            best_ev = ev_parlay
+            best_amp = amp
+
+    return best_amp
