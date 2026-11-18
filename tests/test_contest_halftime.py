@@ -166,9 +166,9 @@ def test_a_started_game_is_closed_until_the_window_opens_and_then_takes_straight
     with pytest.raises(RequestError) as e:                                   # a parlay is not allowed in the window
         service.place(engine, SLUG, "u1", {"kind": "parlay", "picks": [pick, {**pick, "gameId": 2}], "stakeCents": 5_000, "key": "c"}, now)
     assert e.value.code in ("GAME_CLOSED", "NO_GAME", "LEG_COUNT")
-    with pytest.raises(RequestError) as e:                                   # over the 10% cap
-        service.place(engine, SLUG, "u1", {"kind": "straight", "picks": [pick], "stakeCents": 60_000, "key": "d"}, now)
-    assert e.value.code == "STAKE_MAX"
+    with pytest.raises(RequestError) as e:                                   # under the $50 minimum
+        service.place(engine, SLUG, "u1", {"kind": "straight", "picks": [pick], "stakeCents": 4_000, "key": "d"}, now)
+    assert e.value.code == "STAKE_MIN"
     with pytest.raises(RequestError) as e:                                   # the price the player saw is not the one on offer
         service.place(engine, SLUG, "u1", {"kind": "straight", "picks": [{**pick, "price": q.price + 40}], "stakeCents": 5_000, "key": "e"}, now)
     assert e.value.code == "PRICE_CHANGED"

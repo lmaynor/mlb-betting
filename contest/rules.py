@@ -31,8 +31,8 @@ _DEFAULT_ALT_MAX = {"ncaaf": 14.0, "ncaab": 10.0}
 class ContestRules:
     sport: str = "ncaaf"
     start_bankroll_cents: int = 500_000          # $5,000
-    min_stake_cents: int = 2_500                 # PLACEHOLDER
-    max_stake_bp: int = 2_500                    # PLACEHOLDER: max stake per bet, basis points of the current balance (25%)
+    min_stake_cents: int = 5_000                 # owner 2026-11-17: 1% of the $5,000 starting bankroll; every bet (and a round robin's TOTAL) is at least this
+    max_stake_bp: int = 10_000                   # owner 2026-11-17: no stake limit beyond the balance itself (100% of it, basis points)
     max_open_risk_bp: int = 10_000               # PLACEHOLDER: cap on (open stakes + new stake) as bp of total bankroll (100% = off)
     parlay_min_legs: int = 2
     parlay_max_legs: int = 8
@@ -52,7 +52,7 @@ class ContestRules:
     cashout_margin_bp: int = 500                 # PLACEHOLDER: 5% off the fair value of the bet, taken once
     cashout_sigmas: dict = field(default_factory=dict)  # {"spread": pts, "total": pts}; empty -> the sport's placeholder (UNVALIDATED)
     halftime_enabled: bool = False               # the halftime window (contest/halftime.py): OFF until the owner turns it on after the rehearsals
-    halftime_max_stake_bp: int = 1_000           # PLACEHOLDER: a halftime bet is at most 10% of the balance
+    halftime_max_stake_bp: int = 10_000          # owner 2026-11-17: no stake limits (100% of balance); lower it to cap halftime bets on their own
     halftime_quote_max_age_s: int = 90           # a halftime quote older than this closes the window
     halftime_window_cap_s: int = 480             # the window never stays open longer than 8 minutes
     halftime_margin_bp: int = 700                # PLACEHOLDER: 7% on the Kalshi mid, taken once

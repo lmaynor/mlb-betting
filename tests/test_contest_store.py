@@ -258,11 +258,11 @@ def test_busting_eliminates_only_when_nothing_is_pending(world_no_lifeline):
     engine, cid, g = world
     join(world)
     store.adjust(engine, 1, -480_000, "test: leave $200", NOW)                          # balance 20,000
-    # 25% max stake: place the largest legal bet repeatedly until under the $25 minimum
+    # bet a quarter of the balance (never under the $50 minimum) until the balance cannot cover the minimum
     bal = balance(world)
     i = 0
-    while bal >= 2_500:
-        stake = max(2_500, min(bal * 25 // 100, bal))
+    while bal >= 5_000:
+        stake = max(5_000, min(bal * 25 // 100, bal))
         place(world, "u1", "straight", [leg(g[i % 4])], stake=stake, key=f"k{i}")
         bal = balance(world)
         i += 1
@@ -273,7 +273,7 @@ def test_busting_eliminates_only_when_nothing_is_pending(world_no_lifeline):
         store.settle_game(engine, gid, 0, 30, AFTER)                                    # every home -3.5 loses
     with engine.connect() as c:
         status, bal = c.execute(text("SELECT status, balance_cents FROM contest_entry")).one()
-    assert status == "eliminated" and bal < 2_500
+    assert status == "eliminated" and bal < 5_000
     with pytest.raises(store.ContestError) as e:
         place(world, "u1", "straight", [leg(g[0])], key="after")
     assert e.value.code == "ELIMINATED"

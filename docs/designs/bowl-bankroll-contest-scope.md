@@ -33,7 +33,7 @@ OWNER INPUT NEEDED: send the existing annual-contest rulebook. These defaults ar
 
 - Start $5,000. Eliminated when balance < min stake and no pending bets. Eliminated entries stay on the board, greyed.
 - Bet kinds: straight; parlay (2-8 legs); teaser (2-4 legs, spreads/totals only, football 6 / 6.5 / 7 pt, basketball 4 / 4.5 / 5 pt, fixed payout table in config). Max one leg per game per slip (no same-game correlation).
-- Stake limits in contest config: min, max per bet, max total open risk. Proposed: min $25, max 25% of balance per bet.
+- Stake limits in contest config: min, max per bet, max total open risk. Decided 2026-11-17: min $50 (1% of the start), no max beyond the balance (section 15).
 - Pricing: ONE reference price per market for everyone (no line shopping). Proposed: DraftKings from the BettingPros feed, fallback to median onshore line; fixed -110 where the book is flat. A bet records line + price + quote timestamp at placement.
 - Push: straight refunds; parlay/teaser leg drops out; overtime counts; postponed/cancelled -> void after 48 h.
 - Hidden picks: a bet is hidden from everyone but its owner until that leg's game kicks off (per-leg for parlays). Enforced in the API layer, not the UI. Leaderboard shows balance, rank, record, open-risk total only.
@@ -183,3 +183,14 @@ Sample sizes are small and noted. Nothing was written to GCS or deployed.
 - **ESPN and Kalshi terms (recorded, owner review needed):** ESPN's scoreboard is an unofficial, undocumented endpoint with no published terms that grant this use; Kalshi's market data endpoint is public. The contest is private, invite-only and play-money, requests carry a descriptive User-Agent, and one request per day of the window per pass is made. Whether that is acceptable is the owner's call, the same as for the other scraped sources in CONTEXT.md.
 
 **Still open before invites go out:** the real teaser table and stake limits and the prize / tiebreak rules (owner), responsible-play copy (owner), the deploy itself (service first, then Vercel, per CLAUDE.md, only on the owner's go), env on Vercel (`CONTEST_ENABLED`, `CONTEST_SLUG`, `BETTING_API_URL`, `BETTING_API_KEY`) and Cloud Run (`CONTEST_ENABLED`, and optionally the notify and halftime switches), running the scheduler script, the Clerk role write inside the deployed route and the unverified-email refusal, and the halftime rehearsals.
+
+## 15. Owner decisions, 2026-11-17
+
+- **Stakes:** no maximum bet beyond the balance (`max_stake_bp` 10,000, `halftime_max_stake_bp` 10,000); the minimum is 1% of the $5,000 start, $50, per bet and for a round robin's total (each round-robin parlay still needs $5). The elimination floor is unchanged: a player is out when the balance cannot cover the minimum bet (the $1 blackjack chip while the lifeline is on) and nothing is pending.
+- **Teasers:** the placeholder table is kept (section 5 of the analysis doc has the alternatives).
+- **Feeds:** using the ESPN scoreboard and Kalshi public market data is approved.
+- **Responsible gambling:** the help line and link on the contest page are approved as written.
+- **Halftime:** acknowledged; stays OFF until the 11/21 and 12/5 rehearsals.
+- **Turn-on:** `deploy/setup_contest_scheduler.sh START=1` does it all in one go (see its header); `PAUSE=1` reverses it. A new idempotent `POST /contest-setup` (scheduler auth) creates the contest and invite code on first run and never edits an existing contest.
+- **Deploy:** all of main goes out with the normal service deploy; the order is service deploy, then Vercel is already live, then the script with START=1.
+

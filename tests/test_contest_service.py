@@ -123,12 +123,12 @@ def test_a_parlay_a_round_robin_and_several_straights_place(w):
     p1, p2, p3 = pick(1), pick(2), pick(3)
     f = service.place(engine, SLUG, "u1", {"kind": "parlay", "picks": [p1, p2], "stakeCents": 5_000, "key": "p"}, NOW)
     assert f["myBets"][0]["kind"] == "parlay" and len(f["myBets"][0]["legs"]) == 2
-    f = service.place(engine, SLUG, "u1", {"kind": "round_robin", "picks": [p1, p2, p3], "robinSizes": [2], "stakeCents": 1_000, "key": "rr"}, NOW)
+    f = service.place(engine, SLUG, "u1", {"kind": "round_robin", "picks": [p1, p2, p3], "robinSizes": [2], "stakeCents": 2_000, "key": "rr"}, NOW)
     rr = [b for b in f["myBets"] if b["groupId"] == "rr"]
     assert len(rr) == 3 and all(b["kind"] == "parlay" for b in rr)
-    f = service.place(engine, SLUG, "u1", {"kind": "straight", "picks": [p1, p2], "stakeCents": 2_500, "key": "s"}, NOW)
+    f = service.place(engine, SLUG, "u1", {"kind": "straight", "picks": [p1, p2], "stakeCents": 5_000, "key": "s"}, NOW)
     assert sum(1 for b in f["myBets"] if b["kind"] == "straight") == 2
-    assert f["balanceCents"] == 500_000 - 5_000 - 3_000 - 5_000
+    assert f["balanceCents"] == 500_000 - 5_000 - 6_000 - 10_000                 # a $50 parlay, 3 x $20, then two $50 straights
 
 
 def test_an_alt_line_and_an_sgp_place_with_their_server_prices(w):
@@ -139,11 +139,11 @@ def test_an_alt_line_and_an_sgp_place_with_their_server_prices(w):
     joined(w)
     board = store.load_board(engine, cid)
     alt = alt_price("spread", "home", board[(1, "spread", "home")], board[(1, "spread", "away")], 4.5, ContestRules(sport="ncaaf"))
-    f = service.place(engine, SLUG, "u1", {"kind": "straight", "picks": [pick(line=4.5, price=alt)], "stakeCents": 2_500, "key": "alt"}, NOW)
+    f = service.place(engine, SLUG, "u1", {"kind": "straight", "picks": [pick(line=4.5, price=alt)], "stakeCents": 5_000, "key": "alt"}, NOW)
     assert f["myBets"][0]["legs"][0]["line"] == 4.5
     legs = (Leg(1, "spread", "home", 5.5, -112), Leg(1, "total", "over", 47.5, -108))
     ticket = sgp_price(legs, board, ContestRules(sport="ncaaf"))
-    f = service.place(engine, SLUG, "u1", {"kind": "sgp", "picks": [pick(), pick(market="total", side="over", line=47.5, price=-108)], "stakeCents": 2_500, "key": "sgp", "ticketPrice": ticket}, NOW)
+    f = service.place(engine, SLUG, "u1", {"kind": "sgp", "picks": [pick(), pick(market="total", side="over", line=47.5, price=-108)], "stakeCents": 5_000, "key": "sgp", "ticketPrice": ticket}, NOW)
     b = f["myBets"][0]
     assert b["kind"] == "sgp" and b["ticketPrice"] == ticket and b["toWinCents"] > 0
 
