@@ -26,6 +26,7 @@
 
 from __future__ import annotations
 
+import collections
 import glob
 import json
 import os
@@ -38,6 +39,7 @@ from ev.combo_taker_scanner import (
     ComboLiabilityGuard,
     evaluate_combo,
 )
+from ev.combo_taker_window2 import Window2Admission, Window2Fire
 from ev.kalshi_rfq_pricer import LegFairValue
 from ev.kalshi_rfq_replay import MAX_SNAPSHOT_AGE_SEC, epoch
 from mlb.execution.kalshi.fees import taker_fee
@@ -231,10 +233,72 @@ def evaluate_taker_combo(
     return rec
 
 
+# Evaluable-denominator exclusions (RUL-20261119-closeout-plan): combos carrying a leg
+# from these series are graded as their own class and EXCLUDED from the evaluable
+# denominator, because the stack has no sportsbook panel for them (NBA 1Q props,
+# NCAAF game combos). The flag is explicit on every record so no consumer can
+# silently count them in or out.
+DENOMINATOR_EXCLUDED_SERIES = ("KXNBA1Q", "KXNCAAFGAME")
+
+
+def denominator_exclusion(candidate: Any) -> Optional[str]:
+    """Return the excluded series prefix if any leg belongs to one, else None."""
+    legs = getattr(candidate, "legs", None) or []
+    for leg in legs:
+        t = str(getattr(leg, "ticker", "") or "").upper()
+        for prefix in DENOMINATOR_EXCLUDED_SERIES:
+            if t.startswith(prefix):
+                return prefix
+    return None
+
+
+def _meta_leg_exclusion(meta: dict) -> Optional[str]:
+    """Same check for unevaluated items, whose legs live in the meta dict as
+    [ticker, side] pairs or dicts with a market_ticker."""
+    for leg in meta.get("legs", []) or []:
+        t = ""
+        if isinstance(leg, (list, tuple)) and leg:
+            t = str(leg[0] or "")
+        elif isinstance(leg, dict):
+            t = str(leg.get("market_ticker") or leg.get("ticker") or "")
+        t = t.upper()
+        for prefix in DENOMINATOR_EXCLUDED_SERIES:
+            if t.startswith(prefix):
+                return prefix
+    return None
+
+
 def run_candidates(
     candidates_with_meta: Sequence[Any],
     guard: Optional[ComboLiabilityGuard] = None,
+    window2_admission: Optional[Window2Admission] = None,
 ) -> Tuple[List[dict], dict]:
+    """Evaluate candidates through the RFQ taker replay harness.
+
+    Optionally runs Window 2 admission engine on fired candidates when
+    window2_admission is provided.
+
+    Merge convention:
+    - When window2_admission is None: summary["window2"] is None and records have
+      no window2_* keys (preserving legacy behavior).
+    - When window2_admission is provided:
+        - summary["window2"] is populated with n_fires_considered, n_admitted,
+          and per-day admitted counts under "by_day" and "per_day".
+        - Fired records processed by Window 2 receive:
+            window2_admitted (bool)
+            window2_tier (str)
+            window2_score (float)
+            window2_roi_cal (float)
+            window2_rotten_leg_v2 (bool)
+            window2_refusals (list)
+        - Non-fired records and records for days not processed receive:
+            window2_admitted: None
+            window2_tier: None
+            window2_score: None
+            window2_roi_cal: None
+            window2_rotten_leg_v2: None
+            window2_refusals: []
+    """
     if guard is None:
         guard = ComboLiabilityGuard()
 
@@ -243,6 +307,8 @@ def run_candidates(
     n_fires = 0
     n_admitted = 0
     reasons_hist: Dict[str, int] = {}
+    denom_hist: Dict[str, int] = {}
+    fired_candidates: List[Tuple[ComboCandidate, Any]] = []
 
     for item in candidates_with_meta:
         if isinstance(item, tuple) and len(item) == 2:
@@ -280,6 +346,11 @@ def run_candidates(
                 "status": status,
                 "day": meta.get("day"),
             }
+            excl = _meta_leg_exclusion(meta)
+            rec["denominator_excluded"] = excl is not None
+            rec["denominator_exclusion"] = excl
+            if excl is not None:
+                denom_hist[excl] = denom_hist.get(excl, 0) + 1
             records.append(rec)
             continue
 
@@ -298,6 +369,11 @@ def run_candidates(
         )
         rec["day"] = day
         rec["status"] = meta.get("status", "OK")
+        excl = denominator_exclusion(cand)
+        rec["denominator_excluded"] = excl is not None
+        rec["denominator_exclusion"] = excl
+        if excl is not None:
+            denom_hist[excl] = denom_hist.get(excl, 0) + 1
 
         for r in rec["reasons"]:
             reasons_hist[r] = reasons_hist.get(r, 0) + 1
@@ -306,6 +382,7 @@ def run_candidates(
             n_fires += 1
             if rec.get("admitted"):
                 n_admitted += 1
+            fired_candidates.append((cand, day))
         else:
             rec["admitted"] = False
 
@@ -331,6 +408,90 @@ def run_candidates(
         for d, vals in sorted(by_day_dict.items())
     }
 
+    w2_summary: Optional[Dict[str, Any]] = None
+    if window2_admission is not None:
+        # Group FIRED candidates by their meta "day" (records/candidates with day=None group under "unknown")
+        fires_by_day: Dict[str, List[ComboCandidate]] = collections.defaultdict(list)
+        for cand, d_val in fired_candidates:
+            d_key = "unknown" if (d_val is None or d_val == "") else str(d_val)
+            fires_by_day[d_key].append(cand)
+
+        all_decisions: Dict[str, Any] = {}
+        w2_by_day: Dict[str, int] = {}
+        n_w2_fires_considered = 0
+        n_w2_admitted = 0
+
+        for d_key in sorted(fires_by_day.keys()):
+            cands_in_day = fires_by_day[d_key]
+            # Stress inputs: the tape/settled fixtures carry no per-leg stress inputs,
+            # so pass stress=() (rotten_leg_v2 handles missing entries with LegStressInputs defaults).
+            fires = [
+                Window2Fire(
+                    candidate=c,
+                    signal=evaluate_combo(c),
+                    stress=(),
+                    day=d_key,
+                )
+                for c in cands_in_day
+            ]
+            day_decisions = window2_admission.run_day(fires, d_key)
+            n_w2_fires_considered += len(fires)
+            day_admitted = 0
+            for dec in day_decisions:
+                all_decisions[dec.combo_id] = dec
+                if dec.admitted:
+                    day_admitted += 1
+                    n_w2_admitted += 1
+            w2_by_day[d_key] = day_admitted
+
+        # Merge decisions back into harness records with matching combo_id
+        for r in records:
+            cid = r.get("combo_id")
+            if cid in all_decisions:
+                dec = all_decisions[cid]
+                r["window2_admitted"] = bool(dec.admitted)
+                r["window2_tier"] = dec.tier
+                r["window2_score"] = float(dec.score)
+                r["window2_roi_cal"] = float(dec.roi_cal)
+                r["window2_rotten_leg_v2"] = bool(dec.rotten_leg_v2)
+                r["window2_refusals"] = list(dec.refusals)
+            else:
+                r["window2_admitted"] = None
+                r["window2_tier"] = None
+                r["window2_score"] = None
+                r["window2_roi_cal"] = None
+                r["window2_rotten_leg_v2"] = None
+                r["window2_refusals"] = []
+
+        w2_summary = {
+            "n_fires_considered": n_w2_fires_considered,
+            "n_admitted": n_w2_admitted,
+            "by_day": w2_by_day,
+            "per_day": w2_by_day,
+        }
+
+    # Dual-Ledger A/B grading (RUL-20261119-closeout-plan): the same fires graded
+    # three ways, side by side, never blended. Ledger A = every fire, cap-free.
+    # Ledger B = the frozen Window 1 FIFO liability guard's admitted set.
+    # Ledger W2 = the Window 2 shadow portfolio's admitted set (None when the
+    # Window 2 engine was not run). pnl_per_contract is computed pre-guard for
+    # every fire with a known outcome, so all three ledgers grade identical rows.
+    def _ledger(rows: List[dict]) -> dict:
+        vals = [float(r["pnl_per_contract"]) for r in rows if r.get("pnl_per_contract") is not None]
+        return {
+            "n": len(vals),
+            "mean_pnl_per_contract": round(sum(vals) / len(vals), 4) if vals else None,
+        }
+
+    ledgers = {
+        "A_cap_free": _ledger([r for r in records if r.get("fires")]),
+        "B_window1_fifo": _ledger([r for r in records if r.get("admitted")]),
+        "W2_window2_shadow": (
+            _ledger([r for r in records if r.get("window2_admitted")])
+            if window2_admission is not None else None
+        ),
+    }
+
     summary = {
         "n_total": len(candidates_with_meta),
         "n_evaluated": n_evaluated,
@@ -342,7 +503,14 @@ def run_candidates(
             "mean_pnl_per_contract": mean_pnl,
             "by_day": by_day_stats,
         },
+        "ledgers": ledgers,
+        "denominator": {
+            "n_records_excluded": sum(denom_hist.values()),
+            "by_series": dict(sorted(denom_hist.items())),
+            "note": "Excluded-series records are graded as their own class and are NOT part of the evaluable denominator (RUL-20261119).",
+        },
         "note": "Rows share legs/games across combos (clustered; no independence claim).",
+        "window2": w2_summary,
     }
 
     return records, summary
