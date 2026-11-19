@@ -148,7 +148,8 @@ def evaluate_combo(candidate: ComboCandidate, cfg: Optional[PricerConfig] = None
     fee_taker = 0.0 if venue_clean == "novig" else 1.0 * 0.07 * ask_no * (1.0 - ask_no)
 
     net_cons_edge = (1.0 - P_cons_yes) - ask_no - fee_taker
-    roi_no_taker = (net_cons_edge / ask_no) if ask_no > 0 else 0.0
+    # Collateral-inclusive denominator per RUL-20261119 Q5; pre-registration §8 audit finding.
+    roi_no_taker = (net_cons_edge / (ask_no + fee_taker)) if (ask_no + fee_taker) > 0 else 0.0
     net_true_edge = (1.0 - P_true_yes) - ask_no - fee_taker
 
     reasons: List[str] = []
