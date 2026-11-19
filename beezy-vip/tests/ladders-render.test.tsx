@@ -69,7 +69,7 @@ describe('LadderCard display states', () => {
     const html = renderToStaticMarkup(<LadderCard group={g} />)
     expect(html).toContain('VERIFIED DISLOCATION')
     expect(html).toContain('Net EV')
-    expect(html).toContain('Consensus of 4 books (leave-one-out)')
+    expect(html).toContain('Consensus Fair -355 · 78.0% · 4 ref books (leave-one-out)')
     expect(html).toContain('Rung vig: 4.5%')
     expect(html).toContain('Main: Open 58.5 -&gt; Now 64.5 (+6)')
     expect(html).not.toContain('mispriced')

@@ -5,6 +5,11 @@ export const LADDER_MARKET_ORDER = ['rec_yds', 'rush_yds', 'receptions', 'pass_y
 export const LADDER_DISP_MAX = 0.06
 export const LADDER_MIN_REF = 4
 export const NOISE_FLOOR: Record<LadderCategory, number> = { yardage: 2.5, count: 5.0, milestone: 0 }
+export const NOVIG_BOOK = 'novig'
+
+export function isNovigBook(book: string): boolean {
+  return (book ?? '').trim().toLowerCase() === NOVIG_BOOK
+}
 
 export type LadderCategory = 'yardage' | 'count' | 'milestone'
 export type LadderKind = 'curves' | 'milestone'
@@ -16,7 +21,7 @@ export interface LadderBookBar {
   over: number | null
   under: number | null
   ts: string | null
-  /** minutes this book trails the rung's freshest two-sided quote; null when unknown */
+  /** lag in min this book trails the rung's freshest two-sided quote; null when unknown */
   lagMin: number | null
   /** lag > 30: badge stripped; lag > 120: greyed and out of consensus */
   staleBand: 'fresh' | 'stale' | 'grey'
@@ -37,6 +42,7 @@ export interface LadderSide {
   verified: boolean
   /** why the side is not verified (first failing gate), for tests/debug; null when verified */
   gateFail: string | null
+  novigBest: boolean
 }
 
 export interface LadderRung {
@@ -196,6 +202,14 @@ function buildLadderSide(
     }
   }
 
+  let verified = gateFail === null
+  let novigBest = false
+  if (isNovigBook(bestSide.book)) {
+    verified = false
+    gateFail = 'novig_best'
+    novigBest = true
+  }
+
   return {
     side,
     book: bestSide.book,
@@ -204,9 +218,148 @@ function buildLadderSide(
     pConsLoo: bestSide.p_cons_loo,
     dispLoo: bestSide.disp_loo,
     nRefLoo: bestSide.n_ref_loo,
-    verified: gateFail === null,
+    verified,
     gateFail,
+    novigBest,
   }
+}
+
+export function priceOnlySide(bars: LadderBookBar[], side: 'OVER' | 'UNDER'): LadderSide | null {
+  let bestBar: LadderBookBar | null = null
+  let bestPrice: number | null = null
+  let bestDec = -Infinity
+
+  for (const b of bars) {
+    if (isNovigBook(b.book)) continue
+    const price = side === 'OVER' ? b.over : b.under
+    const cap = side === 'OVER' ? b.overCap : b.underCap
+    if (price != null && isFinite(price) && price !== 0 && !cap) {
+      const dec = americanToDecimal(price)
+      if (dec > bestDec) {
+        bestDec = dec
+        bestBar = b
+        bestPrice = price
+      }
+    }
+  }
+
+  if (!bestBar || bestPrice == null) return null
+
+  return {
+    side,
+    book: bestBar.book,
+    american: bestPrice,
+    netEvPct: null,
+    pConsLoo: null,
+    dispLoo: null,
+    nRefLoo: 0,
+    verified: false,
+    gateFail: 'novig_best',
+    novigBest: false,
+  }
+}
+
+export function gateFloorAmerican(pFair: number | null | undefined, category: LadderCategory): number | null {
+  if (category === 'milestone') return null
+  if (pFair == null || typeof pFair !== 'number' || isNaN(pFair) || pFair <= 0 || pFair >= 1) return null
+
+  const e = category === 'count' ? 0.05 : 0.025
+  const d = (1 + e) / pFair
+
+  let A: number
+  if (d >= 2.0) {
+    A = Math.ceil((d - 1) * 100)
+  } else if (d > 1.0) {
+    A = -Math.floor(100 / (d - 1))
+  } else {
+    return null
+  }
+
+  if (A >= 10000 || A <= -5000) return null
+
+  return A
+}
+
+export function rungFairProb(side: LadderSide | null): number | null {
+  if (
+    !side ||
+    side.pConsLoo == null ||
+    side.nRefLoo < LADDER_MIN_REF ||
+    side.dispLoo == null ||
+    side.dispLoo > LADDER_DISP_MAX ||
+    side.novigBest
+  ) {
+    return null
+  }
+  return side.side === 'OVER' ? side.pConsLoo : 1 - side.pConsLoo
+}
+
+export interface RungBarView {
+  book: string
+  priceAm: number
+  otherAm: number | null
+  dec: number
+  lagMin: number | null
+  staleBand: 'fresh' | 'stale' | 'grey'
+  staleOpener: boolean
+  novig: boolean
+  tier: 0 | 1 | 2
+}
+
+export function orderedRungBars(rung: LadderRung, side: 'OVER' | 'UNDER'): RungBarView[] {
+  const items: { view: RungBarView; ts: string | null }[] = []
+
+  for (const b of rung.books) {
+    const price = side === 'OVER' ? b.over : b.under
+    const cap = side === 'OVER' ? b.overCap : b.underCap
+    if (price == null || cap) continue
+
+    const otherPrice = side === 'OVER' ? b.under : b.over
+    const otherCap = side === 'OVER' ? b.underCap : b.overCap
+    const otherAm = (otherCap || otherPrice == null) ? null : otherPrice
+
+    const dec = americanToDecimal(price)
+    const novig = isNovigBook(b.book)
+    const tier: 0 | 1 | 2 = novig ? 2 : (b.staleBand !== 'fresh' || b.staleOpener ? 1 : 0)
+
+    items.push({
+      view: {
+        book: b.book,
+        priceAm: price,
+        otherAm,
+        dec,
+        lagMin: b.lagMin,
+        staleBand: b.staleBand,
+        staleOpener: b.staleOpener,
+        novig,
+        tier,
+      },
+      ts: b.ts,
+    })
+  }
+
+  items.sort((a, b) => {
+    if (a.view.tier !== b.view.tier) {
+      return a.view.tier - b.view.tier
+    }
+    if (b.view.dec !== a.view.dec) {
+      return b.view.dec - a.view.dec
+    }
+    const tA = a.ts ? Date.parse(a.ts) : NaN
+    const tB = b.ts ? Date.parse(b.ts) : NaN
+    const validA = !isNaN(tA)
+    const validB = !isNaN(tB)
+    if (validA && validB) {
+      if (tB !== tA) return tB - tA
+    } else if (validA && !validB) {
+      return -1
+    } else if (!validA && validB) {
+      return 1
+    }
+    return 0
+  })
+
+  return items.map(item => item.view)
 }
 
 function computeDefaultRung(rungs: LadderRung[], modalNow: number | null): number {
@@ -340,7 +493,17 @@ export function groupLadderRows(rows: BoardRow[], nowMs: number): LadderGroup[] 
 
       const over = buildLadderSide(row.best_over, 'OVER', row, bars, freshestAny, category)
       const under = buildLadderSide(row.best_under, 'UNDER', row, bars, freshestAny, category)
-      const hero = selectHero(over, under)
+      let hero = selectHero(over, under)
+
+      if (hero && hero.novigBest) {
+        const otherSide: 'OVER' | 'UNDER' = hero.side === 'OVER' ? 'UNDER' : 'OVER'
+        const otherPayload = hero.side === 'OVER' ? under : over
+        hero =
+          priceOnlySide(bars, hero.side) ??
+          (otherPayload && !otherPayload.novigBest ? otherPayload : null) ??
+          priceOnlySide(bars, otherSide) ??
+          null
+      }
 
       const rungVerified = Boolean(over?.verified || under?.verified)
       const nRef = row.n_ref ?? 0
