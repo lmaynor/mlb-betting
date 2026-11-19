@@ -6,9 +6,12 @@ import { formatOdds } from '@/lib/odds'
 import { fairAmericanOf, STAT_LABEL, type BoardRow } from '@/lib/odds-screen'
 import { bookDisplay, SURFACE_CARD } from '@/lib/tokens'
 import { BookLogo } from '@/components/ui/book-logo'
-import { PlayerHeadshot } from '@/components/ui/sport-assets'
+import { PlayerHeadshot, SportLogo } from '@/components/ui/sport-assets'
 import {
+  gateFloorAmerican,
   ladderGroupFor,
+  orderedRungBars,
+  rungFairProb,
   type LadderCategory,
   type LadderGroup,
   type LadderRung,
@@ -93,32 +96,13 @@ export function LadderCard({ group }: { group: LadderGroup }) {
   const heroPriceStr = heroAm != null ? formatOdds(heroAm) : '--'
 
   // 4. Book bars for the selected rung
-  const visibleBars = rung.books
-    .filter(b => {
-      const p = heroSide === 'OVER' ? b.over : b.under
-      const cap = heroSide === 'OVER' ? b.overCap : b.underCap
-      return p != null && !cap
-    })
-    .map(b => {
-      const p = (heroSide === 'OVER' ? b.over : b.under)!
-      const otherP = heroSide === 'OVER' ? b.under : b.over
-      const otherCap = heroSide === 'OVER' ? b.underCap : b.overCap
-      const dec = americanToDecimal(p)
-      const netPayout = Math.max(0.01, dec - 1)
-      return {
-        book: b.book,
-        heroAm: p,
-        otherAm: otherCap ? null : otherP,
-        dec,
-        netPayout,
-        lagMin: b.lagMin,
-        staleBand: b.staleBand,
-        staleOpener: b.staleOpener,
-      }
-    })
-
-  visibleBars.sort((a, b) => b.dec - a.dec)
-  const bestNetPayout = visibleBars.length > 0 ? visibleBars[0].netPayout : 1
+  const visibleBars = orderedRungBars(rung, heroSide)
+  const tier0Bars = visibleBars.filter(b => b.tier === 0)
+  const normalizerBars = tier0Bars.length > 0 ? tier0Bars : visibleBars
+  const bestNetPayout = normalizerBars.length > 0
+    ? Math.max(...normalizerBars.map(b => Math.max(0.01, b.dec - 1)))
+    : 1
+  const firstTier0Idx = visibleBars.findIndex(b => b.tier === 0)
 
   return (
     <div style={{ ...SURFACE_CARD, padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -132,8 +116,26 @@ export function LadderCard({ group }: { group: LadderGroup }) {
             {group.away} @ {group.home} · {startLabel(group.commence)}{countdownStr}
           </span>
         </div>
-        <div className="mono" style={badgeStyle}>
-          {badgeText}
+        <div className="flex items-center gap-1.5">
+          <div className="mono" style={badgeStyle}>
+            {badgeText}
+          </div>
+          {group.kind === 'curves' && (
+            <span
+              className="mono"
+              style={{
+                fontSize: '11px',
+                fontWeight: 600,
+                padding: '3px 8px',
+                borderRadius: '4px',
+                color: '#9ca3af',
+                background: 'rgba(156,163,175,0.08)',
+                border: '1px solid rgba(156,163,175,0.25)',
+              }}
+            >
+              FORWARD SHADOW · UNGRADED
+            </span>
+          )}
         </div>
       </div>
 
@@ -151,7 +153,10 @@ export function LadderCard({ group }: { group: LadderGroup }) {
             <PlayerHeadshot sport="nfl" id={group.headshotId} name={group.player} size={36} />
           </span>
           <div>
-            <div className="text-[15px] font-semibold text-text-primary leading-[1.25]">{group.player}</div>
+            <div className="text-[15px] font-semibold text-text-primary leading-[1.25] flex items-center gap-1.5">
+              {Boolean(group.team) && <SportLogo sport="nfl" team={group.team} size={20} />}
+              <span>{group.player}</span>
+            </div>
             <div className="mono text-compact text-neutral-400 flex items-center gap-1.5 mt-[3px]">
               <span>{STAT_LABEL[group.stat] ?? group.stat}</span>
             </div>
@@ -310,13 +315,14 @@ export function LadderCard({ group }: { group: LadderGroup }) {
       {/* Book bars for the selected rung */}
       <div className="flex flex-col gap-2 pt-1.5 border-t border-t-[color:var(--color-border-table)]">
         {visibleBars.map((bar, idx) => {
-          const ratio = Math.max(0.12, Math.min(1.0, bar.netPayout / bestNetPayout))
-          const isBest = idx === 0
+          const netPayout = Math.max(0.01, bar.dec - 1)
+          const ratio = Math.max(0.12, Math.min(1.0, netPayout / bestNetPayout))
+          const isBest = idx === firstTier0Idx
           return (
             <div
               key={`${bar.book}-${idx}`}
               className="flex items-center gap-2.5"
-              style={{ opacity: bar.staleBand === 'grey' ? 0.45 : 1 }}
+              style={{ opacity: bar.novig ? 0.55 : bar.staleBand === 'grey' ? 0.45 : 1 }}
             >
               <div className="w-8 flex justify-center shrink-0">
                 <BookLogo book={bar.book} size={20} />
@@ -326,7 +332,7 @@ export function LadderCard({ group }: { group: LadderGroup }) {
                   style={{
                     width: `${Math.round(ratio * 100)}%`,
                     height: '100%',
-                    background: isBest && rung.verified ? GREEN : isBest ? SKY : '#334155',
+                    background: !bar.novig && isBest && rung.verified ? GREEN : !bar.novig && isBest ? SKY : '#334155',
                     borderRadius: '4px',
                   }}
                 />
@@ -336,10 +342,10 @@ export function LadderCard({ group }: { group: LadderGroup }) {
                   style={{
                     fontSize: '12px',
                     fontWeight: 600,
-                    color: isBest && rung.verified ? GREEN : 'var(--color-text-primary)',
+                    color: !bar.novig && isBest && rung.verified ? GREEN : 'var(--color-text-primary)',
                   }}
                 >
-                  {formatOdds(bar.heroAm)}
+                  {formatOdds(bar.priceAm)}
                 </span>
                 {bar.otherAm != null && (
                   <span className="text-[11px] text-text-secondary ml-1.5">
@@ -349,6 +355,18 @@ export function LadderCard({ group }: { group: LadderGroup }) {
               </div>
               {/* Extras */}
               <div className="flex items-center gap-1.5 shrink-0">
+                {bar.novig && (
+                  <span
+                    className="mono text-[10px] text-text-secondary"
+                    style={{
+                      padding: '1px 5px',
+                      borderRadius: '3px',
+                      border: `1px solid ${HAIR}`,
+                    }}
+                  >
+                    Novig · Depth n/a
+                  </span>
+                )}
                 {bar.staleBand !== 'fresh' && (
                   <span
                     className="mono text-[10px]"
@@ -437,29 +455,51 @@ export function LadderCard({ group }: { group: LadderGroup }) {
 
           // Non-milestone: verified
           if (rung.state === 'verified') {
-            const pConsLoo = hero?.pConsLoo
-            const fairProb = pConsLoo != null ? (heroSide === 'OVER' ? pConsLoo : 1 - pConsLoo) : null
+            const fairProb = rungFairProb(hero)
             const fairAm = fairProb != null ? fairAmericanOf(fairProb) : null
             const fairStr = fairAm != null ? formatOdds(fairAm) : '--'
+            const probPct = fairProb != null ? (fairProb * 100).toFixed(1) : '--'
+            const nRefLoo = hero?.nRefLoo ?? 0
+
+            const floorAm = gateFloorAmerican(fairProb, group.category)
+            const floorLabel = group.category === 'count' ? '+5.0%' : '+2.5%'
+            const isBelowFloor =
+              heroAm != null &&
+              floorAm != null &&
+              americanToDecimal(heroAm) < americanToDecimal(floorAm)
+
             return (
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="mono font-semibold" style={{ color: GREEN }}>
+                <span
+                  className="mono font-semibold"
+                  style={{ color: isBelowFloor ? 'var(--color-text-secondary)' : GREEN }}
+                >
                   Net EV {signed(hero?.netEvPct ?? 0)}%
                 </span>
                 <span className="mono text-micro text-text-secondary">
-                  Fair {fairStr} · Consensus of {hero?.nRefLoo ?? 0} books (leave-one-out)
+                  Consensus Fair {fairStr} · {probPct}% · {nRefLoo} ref books (leave-one-out)
                 </span>
+                {floorAm != null && (
+                  <span className="mono text-micro text-text-secondary">
+                    Gate floor ({floorLabel}): {formatOdds(floorAm)}
+                    {isBelowFloor ? ` · Below floor (Best: ${heroPriceStr})` : ''}
+                  </span>
+                )}
               </div>
             )
           }
 
           // Non-milestone: market
           if (rung.state === 'market') {
-            const isFloorOrBelow = hero?.netEvPct != null && hero.netEvPct < NOISE_FLOOR[group.category]
-            if (rung.nRef >= 4 && isFloorOrBelow) {
+            const fairProb = rungFairProb(hero)
+            if (fairProb != null) {
+              const fairAm = fairAmericanOf(fairProb)
+              const fairStr = fairAm != null ? formatOdds(fairAm) : '--'
+              const probPct = (fairProb * 100).toFixed(1)
+              const nRefLoo = hero?.nRefLoo ?? 0
               return (
-                <span className="mono text-text-secondary text-[11px]">
-                  In line with market
+                <span className="mono text-micro text-text-secondary">
+                  Consensus Fair {fairStr} · {probPct}% · {nRefLoo} ref books (leave-one-out)
                 </span>
               )
             }
@@ -493,8 +533,8 @@ export function LadderCard({ group }: { group: LadderGroup }) {
           )
         })()}
 
-        {/* Rung Vig pill: whenever rungVig != null AND (state is verified or a premium badge shows) */}
-        {rung.rungVig != null && (rung.state === 'verified' || rung.premiumPct != null) && (
+        {/* Rung Vig pill: render whenever rung.rungVig != null */}
+        {rung.rungVig != null && (
           <span className="mono text-micro px-1.5 py-0.5 rounded border border-separator-border text-text-secondary">
             Rung vig: {(rung.rungVig <= 1 ? rung.rungVig * 100 : rung.rungVig).toFixed(1)}%
           </span>
