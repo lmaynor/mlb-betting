@@ -105,3 +105,15 @@ export function resolveLayout(input: {
 export function cockpitHref(r: BoardRow): string {
   return `/edge?sport=${r.sport}&prop=${encodeURIComponent(`proj|${r.sport}|${r.key}`)}`
 }
+
+export const PROP_DISP_MAX = 0.06
+
+export function propCardStatus(r: BoardRow): 'OFFICIAL PLAY' | 'CANDIDATE · CONFLUENCE' | 'MODEL PROJECTION' {
+  if (r.tier === 'official') return 'OFFICIAL PLAY'
+  if (r.confluence) return 'CANDIDATE · CONFLUENCE'
+  return 'MODEL PROJECTION'
+}
+
+export function evBadgeHighlighted(r: BoardRow): boolean {
+  return (r.marketEv ?? 0) > 0 && r.disp != null && r.disp <= PROP_DISP_MAX
+}

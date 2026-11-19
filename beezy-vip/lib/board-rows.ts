@@ -63,6 +63,8 @@ export interface BoardRow {
   engine?: string | null
   /** the backend's verdict on the row (ev/model_picks.py): 'official' = a daily play. Null for MLB rows and boards written before the stamp. */
   tier?: 'official' | 'tracked' | null
+  /** consensus dispersion stamped by the feed: MAD of per-book de-vigged fairs at the row's line */
+  disp?: number | null
   /** the model's own 10th / 90th percentile for the stat, in the stat's unit; null when the board does not carry them */
   p10?: number | null
   p90?: number | null
@@ -140,6 +142,7 @@ export function fromSportProjections(rows: SportProjectionRow[]): BoardRow[] {
       result: null,
       engine: rowEngineLabel(r),
       tier: r.pick_tier ?? null,
+      disp: r.cons_disp ?? null,
       p10: r.proj_p10 ?? null,
       p90: r.proj_p90 ?? null,
     }
