@@ -43,6 +43,7 @@ from ev.kalshi_rfq_replay import (
     store_from_game_lines,
     store_from_raw,
 )
+from ev.combo_taker_window2 import Window2Admission
 from ev.kalshi_rfq_taker_replay import (
     candidate_from_legs,
     commence_lookup,
@@ -64,6 +65,7 @@ def main(argv=None) -> int:
     p_settled.add_argument("--cache-dir", default=None, help="local cache directory for raw snapshots")
     p_settled.add_argument("--max-age-min", type=float, default=120.0, help="max snapshot age in minutes")
     p_settled.add_argument("--no-raw", action="store_true", help="skip raw all-book prop payloads")
+    p_settled.add_argument("--window2", action="store_true", help="enable Window 2 admission engine")
 
     p_tape = sub.add_parser("tape", help="replay banked demo recorder tape")
     p_tape.add_argument("--tape-dir", required=True, help="directory containing tape *.jsonl files")
@@ -73,6 +75,7 @@ def main(argv=None) -> int:
     p_tape.add_argument("--cache-dir", default=None, help="local cache directory for raw snapshots")
     p_tape.add_argument("--max-age-min", type=float, default=120.0, help="max snapshot age in minutes")
     p_tape.add_argument("--no-raw", action="store_true", help="skip raw all-book prop payloads")
+    p_tape.add_argument("--window2", action="store_true", help="enable Window 2 admission engine")
 
     args = ap.parse_args(argv)
 
@@ -142,7 +145,11 @@ def main(argv=None) -> int:
         )
         candidates_with_meta.append((cand, {**f, "status": status}))
 
-    records, summary = run_candidates(candidates_with_meta)
+    window2_admission = Window2Admission() if getattr(args, "window2", False) else None
+    records, summary = run_candidates(
+        candidates_with_meta,
+        window2_admission=window2_admission,
+    )
 
     if args.out:
         with open(args.out, "w", encoding="utf-8") as fh:
