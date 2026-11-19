@@ -1,0 +1,316 @@
+league,canonical_abbr,alias
+nba,ATL,ATL
+nba,ATL,Atlanta Hawks
+nba,ATL,Atlanta
+nba,BOS,BOS
+nba,BOS,Boston Celtics
+nba,BOS,Boston
+nba,BKN,BKN
+nba,BKN,BRK
+nba,BKN,NJN
+nba,BKN,Brooklyn Nets
+nba,BKN,Brooklyn
+nba,CHA,CHA
+nba,CHA,CHH
+nba,CHA,Charlotte Hornets
+nba,CHA,Charlotte
+nba,CHI,CHI
+nba,CHI,Chicago Bulls
+nba,CHI,Chicago
+nba,CLE,CLE
+nba,CLE,Cleveland Cavaliers
+nba,CLE,Cleveland
+nba,DAL,DAL
+nba,DAL,Dallas Mavericks
+nba,DAL,Dallas
+nba,DEN,DEN
+nba,DEN,Denver Nuggets
+nba,DEN,Denver
+nba,DET,DET
+nba,DET,Detroit Pistons
+nba,DET,Detroit
+nba,GSW,GSW
+nba,GSW,GS
+nba,GSW,Golden State Warriors
+nba,GSW,Golden State
+nba,HOU,HOU
+nba,HOU,Houston Rockets
+nba,HOU,Houston
+nba,IND,IND
+nba,IND,Indiana Pacers
+nba,IND,Indiana
+nba,LAC,LAC
+nba,LAC,Los Angeles Clippers
+nba,LAC,LA Clippers
+nba,LAL,LAL
+nba,LAL,Los Angeles Lakers
+nba,LAL,LA Lakers
+nba,MEM,MEM
+nba,MEM,Memphis Grizzlies
+nba,MEM,Memphis
+nba,MIA,MIA
+nba,MIA,Miami Heat
+nba,MIA,Miami
+nba,MIL,MIL
+nba,MIL,Milwaukee Bucks
+nba,MIL,Milwaukee
+nba,MIN,MIN
+nba,MIN,Minnesota Timberwolves
+nba,MIN,Minnesota
+nba,NOP,NOP
+nba,NOP,NO
+nba,NOP,NOH
+nba,NOP,New Orleans Pelicans
+nba,NOP,New Orleans
+nba,NYK,NYK
+nba,NYK,NY
+nba,NYK,New York Knicks
+nba,NYK,New York
+nba,OKC,OKC
+nba,OKC,Oklahoma City Thunder
+nba,OKC,Oklahoma City
+nba,ORL,ORL
+nba,ORL,Orlando Magic
+nba,ORL,Orlando
+nba,PHI,PHI
+nba,PHI,Philadelphia 76ers
+nba,PHI,Philadelphia
+nba,PHX,PHX
+nba,PHX,PHO
+nba,PHX,Phoenix Suns
+nba,PHX,Phoenix
+nba,POR,POR
+nba,POR,Portland Trail Blazers
+nba,POR,Portland
+nba,SAC,SAC
+nba,SAC,Sacramento Kings
+nba,SAC,Sacramento
+nba,SAS,SAS
+nba,SAS,SA
+nba,SAS,San Antonio Spurs
+nba,SAS,San Antonio
+nba,TOR,TOR
+nba,TOR,Toronto Raptors
+nba,TOR,Toronto
+nba,UTA,UTA
+nba,Utah Jazz,Utah Jazz
+nba,UTA,Utah Jazz
+nba,UTA,Utah
+nba,WAS,WAS
+nba,WAS,WSH
+nba,WAS,Washington Wizards
+nba,WAS,Washington
+nhl,ANA,ANA
+nhl,ANA,Anaheim Ducks
+nhl,ARI,ARI
+nhl,ARI,Arizona Coyotes
+nhl,BOS,BOS
+nhl,BOS,Boston Bruins
+nhl,BUF,BUF
+nhl,BUF,Buffalo Sabres
+nhl,CAR,CAR
+nhl,CAR,Carolina Hurricanes
+nhl,CBJ,CBJ
+nhl,CBJ,Columbus Blue Jackets
+nhl,CGY,CGY
+nhl,CGY,Calgary Flames
+nhl,CHI,CHI
+nhl,CHI,Chicago Blackhawks
+nhl,COL,COL
+nhl,COL,Colorado Avalanche
+nhl,DAL,DAL
+nhl,DAL,Dallas Stars
+nhl,DET,DET
+nhl,DET,Detroit Red Wings
+nhl,EDM,EDM
+nhl,EDM,Edmonton Oilers
+nhl,FLA,FLA
+nhl,FLA,Florida Panthers
+nhl,LAK,LAK
+nhl,LAK,LA
+nhl,LAK,Los Angeles Kings
+nhl,MIN,MIN
+nhl,MIN,Minnesota Wild
+nhl,MTL,MTL
+nhl,MTL,MON
+nhl,MTL,Montreal Canadiens
+nhl,NJD,NJD
+nhl,NJD,NJ
+nhl,NJD,New Jersey Devils
+nhl,NSH,NSH
+nhl,NSH,Nashville Predators
+nhl,NYI,NYI
+nhl,NYI,New York Islanders
+nhl,NYR,NYR
+nhl,NYR,New York Rangers
+nhl,OTT,OTT
+nhl,OTT,Ottawa Senators
+nhl,PHI,PHI
+nhl,PHI,Philadelphia Flyers
+nhl,PIT,PIT
+nhl,PIT,Pittsburgh Penguins
+nhl,SEA,SEA
+nhl,SEA,Seattle Kraken
+nhl,SJS,SJS
+nhl,SJS,SJ
+nhl,SJS,San Jose Sharks
+nhl,STL,STL
+nhl,STL,St. Louis Blues
+nhl,STL,St Louis Blues
+nhl,TBL,TBL
+nhl,TBL,TB
+nhl,TBL,Tampa Bay Lightning
+nhl,TOR,TOR
+nhl,TOR,Toronto Maple Leafs
+nhl,UTA,UTA
+nhl,UTA,Utah Hockey Club
+nhl,VAN,VAN
+nhl,VAN,Vancouver Canucks
+nhl,VGK,VGK
+nhl,VGK,VEG
+nhl,VGK,Vegas Golden Knights
+nhl,WPG,WPG
+nhl,WPG,Winnipeg Jets
+nhl,WSH,WSH
+nhl,WSH,WAS
+nhl,WSH,Washington Capitals
+nfl,ARI,ARI
+nfl,ARI,Arizona Cardinals
+nfl,ATL,ATL
+nfl,ATL,Atlanta Falcons
+nfl,BAL,BAL
+nfl,BAL,Baltimore Ravens
+nfl,BUF,BUF
+nfl,BUF,Buffalo Bills
+nfl,CAR,CAR
+nfl,CAR,Carolina Panthers
+nfl,CHI,CHI
+nfl,CHI,Chicago Bears
+nfl,CIN,CIN
+nfl,CIN,Cincinnati Bengals
+nfl,CLE,CLE
+nfl,CLE,Cleveland Browns
+nfl,DAL,DAL
+nfl,DAL,Dallas Cowboys
+nfl,DEN,DEN
+nfl,DEN,Denver Broncos
+nfl,DET,DET
+nfl,DET,Detroit Lions
+nfl,GB,GB
+nfl,GB,Green Bay Packers
+nfl,HOU,HOU
+nfl,HOU,Houston Texans
+nfl,IND,IND
+nfl,IND,Indianapolis Colts
+nfl,JAX,JAX
+nfl,JAX,JAC
+nfl,JAX,Jacksonville Jaguars
+nfl,KC,KC
+nfl,KC,Kansas City Chiefs
+nfl,LV,LV
+nfl,LV,OAK
+nfl,LV,Las Vegas Raiders
+nfl,LAC,LAC
+nfl,LAC,SD
+nfl,LAC,Los Angeles Chargers
+nfl,LAR,LAR
+nfl,LAR,LA
+nfl,LAR,Los Angeles Rams
+nfl,MIA,MIA
+nfl,MIA,Miami Dolphins
+nfl,MIN,MIN
+nfl,MIN,Minnesota Vikings
+nfl,NE,NE
+nfl,NE,New England Patriots
+nfl,NO,NO
+nfl,NO,New Orleans Saints
+nfl,NYG,NYG
+nfl,NYG,New York Giants
+nfl,NYJ,NYJ
+nfl,NYJ,New York Jets
+nfl,PHI,PHI
+nfl,PHI,Philadelphia Eagles
+nfl,PIT,PIT
+nfl,PIT,Pittsburgh Steelers
+nfl,SF,SF
+nfl,SF,San Francisco 49ers
+nfl,SEA,SEA
+nfl,SEA,Seattle Seahawks
+nfl,TB,TB
+nfl,TB,Tampa Bay Buccaneers
+nfl,TEN,TEN
+nfl,TEN,Tennessee Titans
+nfl,WAS,WAS
+nfl,WAS,WSH
+nfl,WAS,Washington Commanders
+mlb,ARI,ARI
+mlb,ARI,AZ
+mlb,ARI,Arizona Diamondbacks
+mlb,ATL,ATL
+mlb,ATL,Atlanta Braves
+mlb,BAL,BAL
+mlb,BAL,Baltimore Orioles
+mlb,BOS,BOS
+mlb,BOS,Boston Red Sox
+mlb,CHC,CHC
+mlb,CHC,Chicago Cubs
+mlb,CWS,CWS
+mlb,CWS,CHW
+mlb,CWS,Chicago White Sox
+mlb,CIN,CIN
+mlb,CIN,Cincinnati Reds
+mlb,CLE,CLE
+mlb,CLE,Cleveland Guardians
+mlb,COL,COL
+mlb,COL,Colorado Rockies
+mlb,DET,DET
+mlb,DET,Detroit Tigers
+mlb,HOU,HOU
+mlb,HOU,Houston Astros
+mlb,KC,KC
+mlb,KC,KCR
+mlb,KC,Kansas City Royals
+mlb,LAA,LAA
+mlb,LAA,ANA
+mlb,LAA,Los Angeles Angels
+mlb,LAD,LAD
+mlb,LAD,LA
+mlb,LAD,Los Angeles Dodgers
+mlb,MIA,MIA
+mlb,MIA,FLA
+mlb,MIA,Miami Marlins
+mlb,MIL,MIL
+mlb,MIL,Milwaukee Brewers
+mlb,MIN,MIN
+mlb,MIN,Minnesota Twins
+mlb,NYM,NYM
+mlb,NYM,New York Mets
+mlb,NYY,NYY
+mlb,NYY,New York Yankees
+mlb,OAK,OAK
+mlb,OAK,ATH
+mlb,OAK,Oakland Athletics
+mlb,PHI,PHI
+mlb,PHI,Philadelphia Phillies
+mlb,PIT,PIT
+mlb,PIT,Pittsburgh Pirates
+mlb,SD,SD
+mlb,SD,SDP
+mlb,SD,San Diego Padres
+mlb,SF,SF
+mlb,SF,SFG
+mlb,SF,San Francisco Giants
+mlb,SEA,SEA
+mlb,SEA,Seattle Mariners
+mlb,STL,STL
+mlb,STL,St. Louis Cardinals
+mlb,TB,TB
+mlb,TB,TBR
+mlb,TB,Tampa Bay Rays
+mlb,TEX,TEX
+mlb,TEX,Texas Rangers
+mlb,TOR,TOR
+mlb,TOR,Toronto Blue Jays
+mlb,WSH,WSH
+mlb,WSH,WAS
+mlb,WSH,Washington Nationals
