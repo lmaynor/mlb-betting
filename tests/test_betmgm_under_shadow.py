@@ -333,3 +333,291 @@ def test_finalize_close_pairing(tmp_path):
     h = rows_by_player["Al Horford"]
     assert h["outcome_under"] == "void"
     assert h["flat_pnl_1u"] is None
+
+
+def _make_finalize_trigger(**kw) -> dict:
+    base = {
+        "ruling": SH.RULING,
+        "run_id": "r_test",
+        "banked_at": "2026-11-25T07:00:00Z",
+        "game_date": "2026-11-24",
+        "game_key": "101",
+        "sport": "nba",
+        "stat": "points",
+        "player_id": 1001,
+        "player_name": "Jayson Tatum",
+        "player_norm": "jayson tatum",
+        "team_abbr": "BOS",
+        "home_abbr": "BOS",
+        "away_abbr": "NYK",
+        "side": "under",
+        "line_mgm": 24.5,
+        "t_trigger": "2026-11-25T07:00:00Z",
+        "commence_ts": "2026-11-24T23:30:00Z",
+        "minutes_to_start": -450.0,
+        "odds_under_mgm": -110,
+        "odds_over_mgm": -110,
+        "dec_under_mgm": 1.909091,
+        "p_imp_under_mgm": 0.52381,
+        "p_imp_over_mgm": 0.52381,
+        "two_sided_sum_mgm": 1.04762,
+        "p_devig_under_mgm": 0.5,
+        "line_cons": 24.5,
+        "line_diff": 0.0,
+        "line_eq_cons": True,
+        "n_ref_books": 4,
+        "p_cons_under_at_mgm_line": 0.5,
+        "cons_dispersion": 0.01,
+        "cons_median_age_min": 0.0,
+        "mu": 23.5,
+        "disp": 4.5,
+        "family": "normal",
+        "p_dist_under": 0.58,
+        "gate_delta": 0.056,
+        "ev_net": 0.107,
+        "gate_bucket": "5pp",
+        "t_close": None,
+        "mgm_present_at_close": None,
+        "line_mgm_close": None,
+        "odds_under_mgm_close": None,
+        "p_imp_under_mgm_close": None,
+        "line_cons_close": None,
+        "p_cons_under_close": None,
+        "n_ref_books_close": None,
+        "actual_stat": None,
+        "outcome_under": None,
+        "flat_pnl_1u": None,
+    }
+    base.update(kw)
+    return base
+
+
+def test_settle_canon_helpers():
+    """Verify settle_canon_name and settle_canon_team behavior."""
+    assert SH.settle_canon_name("Jabari Smith Jr.") == "jabari smith"
+    assert SH.settle_canon_name("Jabari Smith") == "jabari smith"
+    assert SH.settle_canon_name("Ken Griffey Jr. II") == "ken griffey"
+    assert SH.settle_canon_name("John Smith III") == "john smith"
+    assert SH.settle_canon_name("Otto Porter Jr") == "otto porter"
+    assert SH.settle_canon_name("") == ""
+    assert SH.settle_canon_name(None) == ""
+
+    assert SH.settle_canon_team("nhl", "LA") == "LAK"
+    assert SH.settle_canon_team("nhl", "NJ") == "NJD"
+    assert SH.settle_canon_team("nhl", "SJ") == "SJS"
+    assert SH.settle_canon_team("nhl", "TB") == "TBL"
+    assert SH.settle_canon_team("nhl", "LAK") == "LAK"
+    assert SH.settle_canon_team("nhl", "BOS") == "BOS"
+
+    assert SH.settle_canon_team("nba", "GSW") == "GS"
+    assert SH.settle_canon_team("nba", "NYK") == "NY"
+    assert SH.settle_canon_team("nba", "BOS") == "BOS"
+
+
+def test_finalize_settlement_suffix_rescue(tmp_path):
+    """NBA trigger named 'Jabari Smith' (no suffix) matches master row 'Jabari Smith Jr.' via alias fallback."""
+    store = make_store(f"dir:{tmp_path}")
+    et_day = "2026-11-24"
+
+    trig = _make_finalize_trigger(
+        game_date=et_day,
+        sport="nba",
+        stat="points",
+        player_name="Jabari Smith",
+        player_norm="jabari smith",
+        team_abbr="HOU",
+        home_abbr="HOU",
+        away_abbr="SAS",
+        line_mgm=14.5,
+        commence_ts="2026-11-24T23:30:00Z",
+    )
+    SH.write_chunk(store, [trig], "run_suffix_rescue")
+
+    master_df = pd.DataFrame([
+        {
+            "date": "2026-11-24",
+            "name": "Jabari Smith Jr.",
+            "team_abbr": "HOU",
+            "game_id": 101,
+            "played": 1,
+            "points": 12,
+            "rebounds": 6,
+            "assists": 2,
+            "three_points_made": 1,
+        }
+    ])
+    store.put("NBA/player_boxscores_master.csv", master_df.to_csv(index=False).encode("utf-8"))
+
+    summary = SH.finalize_day(store, et_day)
+    assert summary["triggers"] == 1
+    assert summary["settled"] == 1
+    assert summary["unresolved"] == 0
+    assert summary["alias_rescued"] == 1
+
+    fin_bytes = gzip.decompress(store.read(f"{SH.PREFIX}/finalized/{et_day}.jsonl.gz")).decode("utf-8")
+    fin_rows = [json.loads(line) for line in fin_bytes.splitlines() if line.strip()]
+    assert len(fin_rows) == 1
+    r = fin_rows[0]
+    assert r["player_name"] == "Jabari Smith"
+    assert r["actual_stat"] == 12.0
+    assert r["outcome_under"] == "win"
+    assert r["flat_pnl_1u"] == pytest.approx(1.909091 - 1.0)
+
+
+def test_finalize_settlement_nhl_team_dialect_rescue(tmp_path):
+    """NHL trigger with team_abbr 'LA' matches master row with 'LAK' via alias fallback."""
+    store = make_store(f"dir:{tmp_path}")
+    et_day = "2026-11-24"
+
+    trig = _make_finalize_trigger(
+        game_date=et_day,
+        sport="nhl",
+        stat="points",
+        player_name="Anze Kopitar",
+        player_norm="anze kopitar",
+        team_abbr="LA",
+        home_abbr="LA",
+        away_abbr="ANA",
+        line_mgm=1.5,
+        commence_ts="2026-11-24T23:00:00Z",
+    )
+    SH.write_chunk(store, [trig], "run_nhl_dialect_rescue")
+
+    master_df = pd.DataFrame([
+        {
+            "date": "2026-11-24",
+            "name": "Anze Kopitar",
+            "team_abbr": "LAK",
+            "game_id": 201,
+            "played": 1,
+            "points": 1,
+            "assists": 1,
+        }
+    ])
+    store.put("NHL/skater_boxscores_master.csv", master_df.to_csv(index=False).encode("utf-8"))
+
+    summary = SH.finalize_day(store, et_day)
+    assert summary["triggers"] == 1
+    assert summary["settled"] == 1
+    assert summary["unresolved"] == 0
+    assert summary["alias_rescued"] == 1
+
+    fin_bytes = gzip.decompress(store.read(f"{SH.PREFIX}/finalized/{et_day}.jsonl.gz")).decode("utf-8")
+    fin_rows = [json.loads(line) for line in fin_bytes.splitlines() if line.strip()]
+    assert len(fin_rows) == 1
+    r = fin_rows[0]
+    assert r["player_name"] == "Anze Kopitar"
+    assert r["actual_stat"] == 1.0
+    assert r["outcome_under"] == "win"
+    assert r["flat_pnl_1u"] == pytest.approx(1.909091 - 1.0)
+
+
+def test_finalize_settlement_exact_match_untouched(tmp_path):
+    """A trigger whose name/team already match exactly settles with alias_rescued == 0."""
+    store = make_store(f"dir:{tmp_path}")
+    et_day = "2026-11-24"
+
+    trig = _make_finalize_trigger(
+        game_date=et_day,
+        sport="nba",
+        stat="points",
+        player_name="Jayson Tatum",
+        player_norm="jayson tatum",
+        team_abbr="BOS",
+        home_abbr="BOS",
+        away_abbr="NYK",
+        line_mgm=24.5,
+        commence_ts="2026-11-24T23:30:00Z",
+    )
+    SH.write_chunk(store, [trig], "run_exact_match")
+
+    master_df = pd.DataFrame([
+        {
+            "date": "2026-11-24",
+            "name": "Jayson Tatum",
+            "team_abbr": "BOS",
+            "game_id": 101,
+            "played": 1,
+            "points": 20,
+            "rebounds": 5,
+            "assists": 4,
+            "three_points_made": 2,
+        }
+    ])
+    store.put("NBA/player_boxscores_master.csv", master_df.to_csv(index=False).encode("utf-8"))
+
+    summary = SH.finalize_day(store, et_day)
+    assert summary["triggers"] == 1
+    assert summary["settled"] == 1
+    assert summary["unresolved"] == 0
+    assert summary["alias_rescued"] == 0
+
+    fin_bytes = gzip.decompress(store.read(f"{SH.PREFIX}/finalized/{et_day}.jsonl.gz")).decode("utf-8")
+    fin_rows = [json.loads(line) for line in fin_bytes.splitlines() if line.strip()]
+    assert len(fin_rows) == 1
+    r = fin_rows[0]
+    assert r["actual_stat"] == 20.0
+    assert r["outcome_under"] == "win"
+
+
+def test_finalize_settlement_ambiguous_canonical_stays_unresolved(tmp_path):
+    """Two master rows differing only by suffix for one suffix-less trigger stay unresolved."""
+    store = make_store(f"dir:{tmp_path}")
+    et_day = "2026-11-24"
+
+    trig = _make_finalize_trigger(
+        game_date=et_day,
+        sport="nba",
+        stat="points",
+        player_name="Alex Smith",
+        player_norm="alex smith",
+        team_abbr="BOS",
+        home_abbr="BOS",
+        away_abbr="NYK",
+        line_mgm=15.5,
+        commence_ts="2026-11-24T23:30:00Z",
+    )
+    SH.write_chunk(store, [trig], "run_ambiguous")
+
+    # Master has two rows differing only by suffix ("Alex Smith Jr." and "Alex Smith Sr.")
+    # for suffix-less trigger "Alex Smith". Exact match yields 0, canonical fallback yields 2
+    # candidates -> ambiguous, stays unresolved with alias_rescued == 0.
+    master_df = pd.DataFrame([
+        {
+            "date": "2026-11-24",
+            "name": "Alex Smith Jr.",
+            "team_abbr": "BOS",
+            "game_id": 101,
+            "played": 1,
+            "points": 12,
+            "rebounds": 4,
+            "assists": 2,
+            "three_points_made": 1,
+        },
+        {
+            "date": "2026-11-24",
+            "name": "Alex Smith Sr.",
+            "team_abbr": "BOS",
+            "game_id": 102,
+            "played": 1,
+            "points": 18,
+            "rebounds": 5,
+            "assists": 3,
+            "three_points_made": 2,
+        },
+    ])
+    store.put("NBA/player_boxscores_master.csv", master_df.to_csv(index=False).encode("utf-8"))
+
+    summary = SH.finalize_day(store, et_day)
+    assert summary["triggers"] == 1
+    assert summary["settled"] == 0
+    assert summary["unresolved"] == 1
+    assert summary["alias_rescued"] == 0
+
+    fin_bytes = gzip.decompress(store.read(f"{SH.PREFIX}/finalized/{et_day}.jsonl.gz")).decode("utf-8")
+    fin_rows = [json.loads(line) for line in fin_bytes.splitlines() if line.strip()]
+    assert len(fin_rows) == 1
+    r = fin_rows[0]
+    assert r["actual_stat"] is None
+    assert r["outcome_under"] is None
+    assert r["flat_pnl_1u"] is None
