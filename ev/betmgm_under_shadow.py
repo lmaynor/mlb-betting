@@ -144,6 +144,29 @@ def settler_norm_name(s) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
+SETTLE_SUFFIX_TOKENS = {"jr", "sr", "ii", "iii", "iv", "v"}
+NHL_TEAM_DIALECT = {"LA": "LAK", "NJ": "NJD", "SJ": "SJS", "TB": "TBL"}
+
+
+def settle_canon_name(s) -> str:
+    """Normalize name dropping trailing generational suffix tokens."""
+    norm = settler_norm_name(s)
+    tokens = norm.split()
+    while tokens and tokens[-1] in SETTLE_SUFFIX_TOKENS:
+        tokens.pop()
+    return " ".join(tokens)
+
+
+def settle_canon_team(sport: str, abbr: str) -> str:
+    """Map team abbreviation to canonical master dialect for given sport."""
+    sp = sport.lower() if isinstance(sport, str) else ""
+    if sp == "nhl":
+        return NHL_TEAM_DIALECT.get(abbr, abbr)
+    if sp == "nba":
+        return NBA_TEAM_ALIAS.get(abbr, abbr)
+    return abbr
+
+
 # --------------------------------------------------------------------------- pure core
 def implied(odds: int | float) -> float:
     """American odds -> implied probability."""
@@ -952,6 +975,7 @@ def finalize_day(store, et_day: str, dry_run: bool = False) -> dict:
         "pushes": 0,
         "voids": 0,
         "unresolved": 0,
+        "alias_rescued": 0,
         "dry_run": dry_run,
     }
 
@@ -993,6 +1017,18 @@ def finalize_day(store, et_day: str, dry_run: bool = False) -> dict:
             d_val = str(getattr(row, "date", ""))
             s_name = settler_norm_name(name_val)
             master_index[sp].setdefault((s_name, d_val), []).append(row)
+
+    # Pre-index masters by (settle_canon_name, date)
+    master_canon_index: dict[str, dict[tuple, list]] = {"nba": {}, "nhl": {}}
+    for sp in ("nba", "nhl"):
+        m_df = masters[sp]
+        if m_df.empty:
+            continue
+        for row in m_df.itertuples(index=False):
+            name_val = getattr(row, "name", "")
+            d_val = str(getattr(row, "date", ""))
+            c_name = settle_canon_name(name_val)
+            master_canon_index[sp].setdefault((c_name, d_val), []).append(row)
 
     enriched_rows = []
     for trig in day_triggers:
@@ -1176,6 +1212,21 @@ def finalize_day(store, et_day: str, dry_run: bool = False) -> dict:
             c for c in m_cands
             if getattr(c, "team_abbr", "") in (m_team_req, row["team_abbr"], row["home_abbr"], row["away_abbr"])
         ]
+
+        if len(valid_mcands) != 1:
+            canon_teams = {
+                settle_canon_team(sp, row["team_abbr"]),
+                settle_canon_team(sp, row["home_abbr"]),
+                settle_canon_team(sp, row["away_abbr"]),
+            }
+            fb_cands = master_canon_index[sp].get((settle_canon_name(trig_pname), target_date), [])
+            fb_valid = [
+                c for c in fb_cands
+                if settle_canon_team(sp, getattr(c, "team_abbr", "")) in canon_teams
+            ]
+            if len(fb_valid) == 1:
+                valid_mcands = fb_valid
+                summary["alias_rescued"] += 1
 
         if len(valid_mcands) == 1:
             cand = valid_mcands[0]
