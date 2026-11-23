@@ -4,6 +4,8 @@ const nextConfig: NextConfig = {
   // Retired routes. /sports/[sport] became /picks/[sport] for every sport (see lib/ia.ts).
   async redirects() {
     return [
+      // AEO-02 / RUL-20261123: /tools is retired; /ev is the live +EV scanner and is anonymously readable
+      { source: '/tools', destination: '/ev', permanent: true },
       { source: '/sports/:sport', destination: '/picks/:sport', permanent: true },
       // the +EV Terminal was folded into the Odds Terminal; the screen now lives at /ev
       { source: '/ev/odds', has: [{ type: 'query', key: 'view', value: 'game_lines' }], destination: '/ev/games', permanent: true },
