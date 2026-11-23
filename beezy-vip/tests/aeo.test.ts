@@ -76,6 +76,7 @@ describe('sitemap', () => {
     const entries = sitemapEntries()
     for (const a of ARTICLES) expect(entries.find(e => e.path === `/learn/${a.slug}`)?.lastmod).toBe(a.dateModified)
     expect(entries.find(e => e.path === '/ev')?.lastmod).toBeUndefined()
+    expect(entries.find(e => e.path === '/picks/games')?.lastmod).toBeUndefined()
     const today = new Date().toISOString().slice(0, 10)
     expect(entries.filter(e => e.lastmod === today && !ARTICLES.some(a => a.dateModified === today))).toEqual([])
   })
