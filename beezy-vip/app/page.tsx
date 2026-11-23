@@ -1,12 +1,14 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { Hero }             from '@/components/landing/hero'
+import { StoryBlock }       from '@/components/landing/story-block'
 import { CommandCenter }     from '@/components/landing/command-center'
 import { HowItWorks } from '@/components/landing/how-it-works'
 import { ModelsGrid }       from '@/components/landing/models-grid'
 import { RecentPicksTable } from '@/components/landing/recent-picks-table'
 import { PricingSummary } from '@/components/landing/pricing-summary'
 import { DiscordFollowCTA } from '@/components/landing/discord-follow-cta'
+import { getLedgerSummary } from '@/lib/ledger-summary'
 
 export const revalidate = 300
 
@@ -16,13 +18,18 @@ export const metadata: Metadata = {
     'Find mispriced sportsbook lines with beezy.fyi. Market-derived +EV alerts, player prop projections and a public paper-tracked results ledger for NFL, NBA, NHL and MLB.',
 }
 
-export default function HomePage() {
+export default async function HomePage() {
+  const summary = await getLedgerSummary().catch(() => null)
+
   return (
     <div className="max-w-page mx-auto py-0 px-6">
       <Suspense fallback={
         <div style={{ marginTop: "28px" }} className="reveal h-[320px] rounded-control border border-separator-border bg-background-primary-default" />
       }>
         <Hero />
+      </Suspense>
+      <Suspense fallback={null}>
+        <StoryBlock summary={summary} />
       </Suspense>
       <Suspense fallback={null}>
         <CommandCenter />

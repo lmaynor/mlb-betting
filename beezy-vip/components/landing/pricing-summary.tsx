@@ -26,7 +26,6 @@ export function PricingSummary() {
           </Link>
         ))}
       </div>
-      {PRE_LAUNCH && <p className="mt-2 text-caption-2-regular text-text-secondary">Pre-launch: paid plans open after the 200-bet gate. Prices lock at launch.</p>}
     </section>
   )
 }
