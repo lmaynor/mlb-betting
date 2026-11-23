@@ -4,7 +4,7 @@
 
 import { useState, useMemo } from 'react'
 import { useMounted } from '@/lib/use-mounted'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { SystemBadge, ResultPill, PnL } from '@/components/ui/primitives'
 import { formatOdds } from '@/lib/odds'
@@ -13,6 +13,7 @@ import { SYSTEM_COLOR, SYSTEM_LABEL as _SYS_LABEL, pickLabel, bookText } from '@
 import { Matchup } from '@/components/ui/matchup'
 import { formatDateKey, siteDateKey } from '@/lib/dates'
 import type { Bet, SystemStats, BankrollPoint } from '@/lib/types'
+import type { LedgerSummary } from '@/lib/ledger-summary'
 import { collapseBooks } from '@/lib/dedupe'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine,
@@ -248,6 +249,7 @@ export function ResultsClient({
   curve = [],
   dailyPicks = [],
   asOf,
+  summary = null,
 }: {
   initialPicks: Bet[]
   initialStats: SystemStats[]
@@ -255,11 +257,16 @@ export function ResultsClient({
   dailyPicks?: Bet[]
   /** Central-time date the totals were read, rendered next to them so every figure carries its own date. */
   asOf?: string
+  summary?: LedgerSummary | null
 }) {
+  const router = useRouter()
   const sp = useSearchParams()
   const dateFilter = sp.get('date') ?? null
-  // The canonical record opens on the Official Daily Card (Decision 19); ?population=all and ?population=ev widen it.
-  const [population, setPopulation] = useState<'daily' | 'all' | 'ev'>(() => (sp.get('population') === 'all' ? 'all' : sp.get('population') === 'ev' ? 'ev' : 'daily'))
+  // The canonical record now opens on All Time (AEO-02), with the Daily Card one click away; explicit ?population=daily and ?population=ev still win.
+  const [population, setPopulation] = useState<'daily' | 'all' | 'ev'>(() => {
+    const p = sp.get('population')
+    return p === 'daily' ? 'daily' : p === 'ev' ? 'ev' : 'all'
+  })
 
   const [system,  setSystem]  = useState('ALL')
   const [result,  setResult]  = useState('ALL')
@@ -310,6 +317,18 @@ export function ResultsClient({
     () => buildPnLChart(initialPicks, system), [initialPicks, system]
   )
   const edgeRows = useMemo(() => buildEdgeChart(filtered), [filtered])
+
+  const activeFilterLabel = useMemo(() => {
+    const parts: string[] = []
+    if (population === 'daily') parts.push('Official Daily Card')
+    if (population === 'ev') parts.push('+EV Alerts')
+    if (system !== 'ALL') parts.push(SYSTEM_LABEL[system] ?? system)
+    if (result !== 'ALL') parts.push(result)
+    if (dateFilter) parts.push(dateFilter)
+    return parts.length > 0 ? parts.join(', ') : 'current'
+  }, [population, system, result, dateFilter])
+
+  const totalGradedCount = summary?.totalGraded ?? initialPicks.length
   const pageCount = Math.ceil(filtered.length / PAGE_SIZE)
   const pageIndex = Math.min(page, Math.max(0, pageCount - 1))
   const pageStart = pageIndex * PAGE_SIZE
@@ -345,7 +364,7 @@ export function ResultsClient({
   )
 
   return (
-    <div className="mx-auto max-w-page px-6 py-6">
+    <div className="mx-auto max-w-page px-6 pb-6">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3">
         <h1 className="text-title-2-bold text-text-primary">Results</h1>
         <span className="mono text-caption-1-regular text-text-secondary">{filtered.length} bets shown &middot; {asOf ? `as of ${asOf} \u00b7 ` : ''}Central Time &middot; paper</span>
@@ -629,10 +648,23 @@ export function ResultsClient({
       {/* Bets table */}
       {filtered.length === 0 ? (
         <div className={cx('px-5 py-16 text-center', CARD)}>
-          <p className="mb-1.5 text-body-semibold text-text-primary">No bets match these filters</p>
-          <p className="mb-3.5 text-body-2-regular text-text-secondary">Try a different system or result, or reset the filters.</p>
-          <button className="mono button-press-motion cursor-pointer rounded-2lg border border-border-button-default bg-transparent px-3.5 py-1.5 text-mini text-text-secondary hover:bg-background-primary-hover" onClick={() => { setSystem('ALL'); setResult('ALL'); setPage(0) }}>
-            Reset filters
+          <p className="mb-3.5 text-body-semibold text-text-primary">
+            No graded plays match the active filter ({activeFilterLabel}). Showing 0 filtered rows out of {totalGradedCount.toLocaleString()} total graded plays.
+          </p>
+          <button
+            type="button"
+            className="mono button-press-motion cursor-pointer rounded-2lg border border-border-button-default bg-transparent px-3.5 py-1.5 text-mini text-text-secondary hover:bg-background-primary-hover"
+            onClick={() => {
+              setPopulation('all')
+              setSystem('ALL')
+              setResult('ALL')
+              setPage(0)
+              if (sp.toString()) {
+                router.replace('/results')
+              }
+            }}
+          >
+            Reset filters to All Time
           </button>
         </div>
       ) : (
