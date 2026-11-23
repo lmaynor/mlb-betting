@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom'
-/** Results population selector (IA S5): the canonical record opens on the Official Daily Card;
- *  ?population=all widens to every tracked paper bet, ?population=ev narrows to the +EV alert pool. */
+/** Results population selector (AEO-02): the canonical record opens on All Time;
+ *  ?population=daily narrows to the Official Daily Card, ?population=ev narrows to the +EV alert pool. */
 import { render, screen } from '@testing-library/react'
 import { ResultsClient } from '@/app/results/results-client'
 import type { Bet } from '@/lib/types'
@@ -32,13 +32,13 @@ const evBet = bet({
 })
 
 describe('Results population selector', () => {
-  it('opens on the Official Daily Card by default', () => {
+  it('opens on All Time by default (AEO-02)', () => {
     mockParams = new URLSearchParams()
     render(<ResultsClient initialPicks={[mlbBet, dailyBet, evBet]} initialStats={[]} dailyPicks={[dailyBet]} />)
+    expect(screen.queryAllByText(/Gerrit Cole/).length).toBeGreaterThan(0)
     expect(screen.queryAllByText(/Jalen Duren/).length).toBeGreaterThan(0)
-    expect(screen.queryAllByText(/Gerrit Cole/)).toHaveLength(0)
-    expect(screen.queryAllByText(/Igor Shesterkin/)).toHaveLength(0)
-    expect(screen.getByRole('button', { name: /Official Daily Card \(1\)/ })).toBeInTheDocument()
+    expect(screen.queryAllByText(/Igor Shesterkin/).length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: /All Tracked Paper \(3\)/ })).toBeInTheDocument()
   })
 
   it('?population=all shows the whole ledger and marks the rows that were Daily Card plays', () => {
