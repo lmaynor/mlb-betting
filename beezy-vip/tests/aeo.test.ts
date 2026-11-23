@@ -1,5 +1,6 @@
 import { readFileSync } from 'fs'
 import { join } from 'path'
+import nextConfig from '../next.config'
 import { ARTICLES } from '../lib/articles-static'
 import { articleLd, asOfLabel, jsonLdString, ORGANIZATION_LD } from '../lib/seo'
 import { buildSitemapXml, sitemapEntries } from '../lib/sitemap'
@@ -146,5 +147,17 @@ describe('pricing JSON-LD and entity pages', () => {
     const py = readFileSync(join(__dirname, '../../scripts/submit_indexnow.py'), 'utf8')
     const key = /^KEY = "([0-9a-f]{32})"/m.exec(py)![1]
     expect(readFileSync(join(__dirname, `../public/${key}.txt`), 'utf8')).toBe(key)
+  })
+})
+
+describe('redirects (AEO-02 Item 4)', () => {
+  it('permanently redirects /tools to /ev', async () => {
+    expect(nextConfig.redirects).toBeDefined()
+    const redirects = await nextConfig.redirects!()
+    expect(redirects).toContainEqual({
+      source: '/tools',
+      destination: '/ev',
+      permanent: true,
+    })
   })
 })
