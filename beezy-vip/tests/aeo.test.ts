@@ -148,6 +148,14 @@ describe('pricing JSON-LD and entity pages', () => {
     const key = /^KEY = "([0-9a-f]{32})"/m.exec(py)![1]
     expect(readFileSync(join(__dirname, `../public/${key}.txt`), 'utf8')).toBe(key)
   })
+
+  it('ensures compare page source contains no bracketed slots and has verified competitor details', () => {
+    const compareSrc = readFileSync(join(__dirname, '../app/compare/oddsjam-alternative/page.tsx'), 'utf8')
+    expect(compareSrc.match(/\[[A-Z_]+\]/g)).toBeNull()
+    expect(compareSrc).not.toContain('(pre-launch)')
+    expect(compareSrc).toContain('November 23, 2026')
+    expect(compareSrc).toContain('beezy vs. OddsJam & BettingPros: Pricing, Projections & Public Ledger ($0–$39/mo)')
+  })
 })
 
 describe('redirects (AEO-02 Item 4)', () => {
