@@ -36,10 +36,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ev.kalshi_rfq_replay import (
     CompositeStore,
     SnapshotStore,
+    bestbook_ladder_snapshots,
     fetch_cycle_frames,
     load_combos,
     raw_game_line_snapshots,
     raw_prop_snapshots,
+    store_from_bestbook_ladders,
     store_from_game_lines,
     store_from_raw,
 )
@@ -107,6 +109,13 @@ def main(argv=None) -> int:
                 gl = raw_game_line_snapshots(sport, days, cache_dir=args.cache_dir)
                 print(f"game lines {sport}: {len(gl)} snapshots", file=sys.stderr)
                 stores.append(store_from_game_lines(sport, gl))
+        # RUL-20261123 item 15: NFL game lines enter the taker fair book via the BestBook ladder
+        # store (latest-only, stamped at fetched_at -- prices combos created after the stamp,
+        # silent before it; NFL has no banked game-line history to replay).
+        bb = bestbook_ladder_snapshots("nfl")
+        print(f"bestbook nfl game lines: {len(bb)} snapshots", file=sys.stderr)
+        if bb:
+            stores.append(store_from_bestbook_ladders("nfl", bb))
 
     store = CompositeStore(stores)
     print(f"store snapshots: {len(store)} | tickers banked: {len(store.tickers)}", file=sys.stderr)
