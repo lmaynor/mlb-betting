@@ -226,6 +226,8 @@ class RoiCalibrator:
         family_betas: Dict[str, np.ndarray],
         family_row_counts: Dict[str, int],
         x_cap: Optional[float],
+        family_fire_counts: Optional[Dict[str, int]] = None,
+        counts_basis: str = "evaluated_fallback",
     ) -> None:
         self.cfg = cfg
         self.pooled_beta = pooled_beta
@@ -233,16 +235,34 @@ class RoiCalibrator:
         self.family_row_counts = family_row_counts
         self.x_cap = x_cap
         self._hinge_x = math.log(1.0 + cfg.hinge_roi)
+        # RUL-20261123 item 4: the EB combination weight's n_f is the family's SETTLED FIRES
+        # (pre-registration section 6: "n_f the family's settled fires in the estimation population"),
+        # not its settled evaluated rows. counts_basis records the unit family_fire_counts is in:
+        # "fires" when the fit rows carried fire flags (the wired shadow path always does), or
+        # "evaluated_fallback" when no row carried one (legacy callers whose row population is the
+        # fire population by construction). build_shadow_admission refuses the fallback so the live
+        # shadow path always knows its unit.
+        # RATIFIED (Luc, Nov 24, 2026): fires-based n_f as implemented here. The alternative --
+        # the evaluated-units equivalent (k_0 = 250 / min_rows = 75, matching section 7's stated
+        # 250-evaluated ~= 100-fires equivalence) -- was considered and not taken. Fires was chosen
+        # because section 6's words name settled fires and it leaves every locked config value
+        # untouched.
+        self.family_fire_counts = dict(family_fire_counts) if family_fire_counts is not None else dict(family_row_counts)
+        self.counts_basis = counts_basis
 
     def predict(self, roi_claimed: float, family: str) -> float:
         x_raw = math.log(1.0 + min(max(float(roi_claimed), self.cfg.roi_input_floor), self.cfg.r_max))
         x = min(x_raw, self.x_cap) if self.x_cap is not None else x_raw
 
-        family_rows = self.family_row_counts.get(family, 0)
-        if family_rows < self.cfg.eb_family_min_rows:
+        # n_f = the family's settled fires (item 4; see __init__). family_row_counts (evaluated rows)
+        # still gates whether a family curve was FIT at all -- a family can only reach w > 0 with
+        # >= eb_family_min_rows fires, and fires are a subset of evaluated rows, so the curve exists
+        # whenever the weight is nonzero.
+        family_fires = self.family_fire_counts.get(family, 0)
+        if family_fires < self.cfg.eb_family_min_rows:
             w = 0.0
         else:
-            w = family_rows / (family_rows + self.cfg.eb_k0)
+            w = family_fires / (family_fires + self.cfg.eb_k0)
 
         pooled_val = _eval_curve(self.pooled_beta, x, self._hinge_x)
         if family in self.family_betas and w > 0.0:
@@ -268,6 +288,7 @@ def fit_calibrator(
     hinge_x = math.log(1.0 + cfg.hinge_roi)
 
     parsed_rows: List[Dict[str, Any]] = []
+    any_fire_flags = False
     for r in rows:
         ask_no = float(r["ask_no"])
         fee = 0.07 * ask_no * (1.0 - ask_no)
@@ -278,11 +299,18 @@ def fit_calibrator(
         realized_roi = pnl / collateral
         roi_claimed = float(r["roi_claimed"])
         x = math.log(1.0 + min(max(roi_claimed, cfg.roi_input_floor), cfg.r_max))
+        # Item 4: a row's fire status rides on "is_fire" (or the banked records' "fires" key). The
+        # flag is only read here for the EB weight's unit; the fit itself still uses EVERY settled
+        # evaluated row, exactly as pre-registration section 6 specifies for the estimation population.
+        is_fire = r.get("is_fire", r.get("fires"))
+        if is_fire is not None:
+            any_fire_flags = True
         parsed_rows.append({
             "x": x,
             "y": realized_roi,
             "w": collateral,
             "family": str(r.get("family", "GAME_LINE")),
+            "is_fire": bool(is_fire),
         })
 
     if not parsed_rows:
@@ -304,11 +332,20 @@ def fit_calibrator(
 
     # Family fits
     family_row_counts: Dict[str, int] = collections.defaultdict(int)
+    family_fire_counts: Dict[str, int] = collections.defaultdict(int)
     family_betas: Dict[str, np.ndarray] = {}
     family_groups: Dict[str, List[Dict[str, Any]]] = collections.defaultdict(list)
     for r in parsed_rows:
         family_groups[r["family"]].append(r)
         family_row_counts[r["family"]] += 1
+        if r["is_fire"]:
+            family_fire_counts[r["family"]] += 1
+    if not any_fire_flags:
+        # No row carried a fire flag: the caller's population is the fire population by construction
+        # (legacy fixtures), so the counts coincide. The wired shadow path never lands here --
+        # build_shadow_admission raises on this basis instead of silently mixing units.
+        family_fire_counts = collections.defaultdict(int, family_row_counts)
+    counts_basis = "fires" if any_fire_flags else "evaluated_fallback"
 
     for fam, f_rows in family_groups.items():
         if len(f_rows) >= cfg.eb_family_min_rows:
@@ -343,7 +380,74 @@ def fit_calibrator(
         family_betas=family_betas,
         family_row_counts=dict(family_row_counts),
         x_cap=x_cap,
+        family_fire_counts=dict(family_fire_counts),
+        counts_basis=counts_basis,
     )
+
+
+# -----------------------------------------------------------------------------
+# 2c-ii. Shadow-path wiring (RUL-20261123 item 2)
+# -----------------------------------------------------------------------------
+
+def accrue_settled_rows(book: FamilyTrustBook, rows: Sequence[Dict[str, Any]]) -> Dict[str, int]:
+    """Accrue SETTLED rows into a FamilyTrustBook -> counts accrued.
+
+    Row shape: {"family": str, "day": str, "is_fire": bool, "pnl_per_contract": float | None}.
+    Every row accrues as one settled EVALUATED combo for its family; rows with is_fire accrue as a
+    settled FIRE as well and must carry pnl_per_contract (a fire without a settled pnl is a caller
+    bug and raises -- fail loudly, never silently skip).
+
+    Two rules the pre-registration leaves to the implementation, fixed here:
+    - SETTLED-ONLY ACCRUAL LAG: a row may be accrued only after its outcome is known, and the caller
+      accrues a day's rows only AFTER that day's admission decisions are made (run_candidates does
+      exactly this). A family's regime on day D therefore reflects settlements through day D-1 at
+      the latest -- never the day being decided. This matches section 7's ">= 7 distinct SETTLED
+      game days" and keeps the shadow honest: no same-day outcome can lift its own family.
+    - MIXED-FAMILY ATTRIBUTION: a combo accrues ONLY to its single weakest-link family label (the
+      combo_family() label: the family of the weakest-regime leg, first such leg on ties) -- the
+      same label its admission decision carries. It never accrues fractionally or to every leg's
+      family: the trust book prices the combo as one unit, so its outcome grades one unit.
+    """
+    n_eval = n_fire = 0
+    for r in rows:
+        fam = str(r["family"])
+        day = str(r["day"])
+        book.add_evaluated(fam, day)
+        n_eval += 1
+        if r.get("is_fire", r.get("fires")):
+            pnl = r.get("pnl_per_contract")
+            if pnl is None:
+                raise ValueError(f"settled fire row for family {fam} day {day} carries no pnl_per_contract")
+            book.add_fire(fam, day, float(pnl))
+            n_fire += 1
+    return {"evaluated": n_eval, "fires": n_fire}
+
+
+def build_shadow_admission(
+    fit_rows: Sequence[Dict[str, Any]],
+    cfg: Optional[Window2Config] = None,
+    cold_start: bool = True,
+) -> Window2Admission:
+    """Build the WIRED Window2Admission for the Ledger B-shadow path (RUL-20261123 item 2).
+
+    Fits the RoiCalibrator on the settled fit rows and seeds the FamilyTrustBook by accruing those
+    same rows (they are history: settled, and all decided before the shadow run starts, so the
+    settled-only lag is respected). Raises on an empty population or on rows without fire flags --
+    the shadow path must never run on an uncalibrated engine or on mixed EB units, and it must
+    never silently fall back to raw roi_no_taker (the pre-staging CLI constructed Window2Admission()
+    bare, which did exactly that).
+    """
+    if not fit_rows:
+        raise ValueError("build_shadow_admission: no settled fit rows -- refusing to wire an uncalibrated shadow")
+    cfg = cfg or Window2Config()
+    calibrator = fit_calibrator(fit_rows, cfg)
+    if calibrator.counts_basis != "fires":
+        raise ValueError(
+            "build_shadow_admission: fit rows carry no fire flags, so the EB weight's unit is "
+            "ambiguous (evaluated rows vs settled fires). Supply is_fire/fires on every row.")
+    book = FamilyTrustBook(cfg)
+    accrue_settled_rows(book, fit_rows)
+    return Window2Admission(cfg=cfg, calibrator=calibrator, trust_book=book, cold_start=cold_start)
 
 
 # -----------------------------------------------------------------------------
@@ -372,8 +476,15 @@ def rotten_leg_v2(
     signal: ComboNoSignal,
     stress: Sequence[Optional[LegStressInputs]],
     cfg: Window2Config,
+    timing_approx: bool = False,
 ) -> RottenLegV2Result:
-    """Stressed counterfactual worst-leg test (shadow-only)."""
+    """Stressed counterfactual worst-leg test (shadow-only).
+
+    timing_approx (RUL-20261123 item 7): the candidate's game-start times are synthetic
+    (now + 3600 stamped because no commence time was known), so mins_to_tip is not evidence about
+    the real tip. The near staleness pad (+0.030) is conditioned on VERIFIED proximity to tip
+    (age > 30 min AND mins_to_tip <= 120); with synthetic timing that branch must not fire -- the
+    far pad (+0.010, age alone) still applies."""
     legs = candidate.legs
     m = len(legs)
     if m == 0:
@@ -405,7 +516,8 @@ def rotten_leg_v2(
 
         pad = (
             cfg.stale_pad_near
-            if (s.age_sec > cfg.stale_near_age_sec and mins_to_tip <= cfg.stale_near_mins_to_tip)
+            if (s.age_sec > cfg.stale_near_age_sec and mins_to_tip <= cfg.stale_near_mins_to_tip
+                and not timing_approx)
             else (cfg.stale_pad_far if s.age_sec > cfg.stale_far_age_sec else 0.0)
         )
         p_hi_j = min(0.99, max(comps) + pad)
@@ -468,6 +580,11 @@ class Window2Fire:
     signal: ComboNoSignal
     stress: Tuple[Optional[LegStressInputs], ...] = ()
     day: str = ""
+    # RUL-20261123 item 7: True when the candidate's game-start times are synthetic (stamped
+    # now + 3600 because no commence time was known). Such a fire's mins_to_tip is exactly 60.0 by
+    # construction and must not satisfy the Tier A T-60m release (the Tier B reservation stays in
+    # force for it) nor V2's verified-proximity staleness branch.
+    timing_approx: bool = False
 
 
 @dataclass
@@ -521,13 +638,21 @@ class Window2Admission:
         if not firing_items:
             return []
 
-        # 1. Window 1 shadow comparison: fresh ComboLiabilityGuard, now_ts order,
-        # stake = min(15.0, ask_no * 100.0) set on a copy of candidate.
+        # 1. Window 1 shadow comparison: fresh ComboLiabilityGuard, now_ts order, stake set on a
+        # copy of candidate. RUL-20261123 item 14(b): the stake is FEE-INCLUSIVE collateral --
+        # the largest whole-contract position (<= 100 contracts) whose stake + taker fee fits the
+        # $15 per-combo collateral cap. The pre-fix stake = min($15, ask_no * 100) excluded the
+        # fee, so the guard's ledgers understated true collateral by up to ~7% (~$1.05) and the
+        # cap bound looser than the pre-registration's collateral definition. The fee uses this
+        # module's closed form (the module fence bars execution-module imports); the harness path
+        # uses the canonical taker_fee for the identical computation.
         w1_guard = ComboLiabilityGuard()
         w1_admitted_map: Dict[str, bool] = {}
         w1_ordered = sorted(firing_items, key=lambda f: (f.candidate.now_ts, f.candidate.combo_id))
         for f in w1_ordered:
             ask_no = f.signal.ask_no
+            unit = ask_no + 0.07 * ask_no * (1.0 - ask_no)
+            n_contracts = min(100, int(15.0 // unit)) if unit > 0.0 else 0
             cand_copy = ComboCandidate(
                 combo_id=f.candidate.combo_id,
                 venue=f.candidate.venue,
@@ -536,7 +661,7 @@ class Window2Admission:
                 age_since_creation_sec=f.candidate.age_since_creation_sec,
                 is_rfq_live=f.candidate.is_rfq_live,
                 now_ts=f.candidate.now_ts,
-                stake=min(15.0, ask_no * 100.0),
+                stake=n_contracts * unit,
             )
             w1_admitted_map[f.candidate.combo_id] = w1_guard.admit(cand_copy, f.signal)
 
@@ -569,6 +694,16 @@ class Window2Admission:
 
         effective_game_cap = min(self.cfg.game_cap_dollars, self.cfg.game_pool_fraction * self.cfg.daily_pool)
 
+        def _v2(fire: Window2Fire) -> Tuple[RottenLegV2Result, bool]:
+            """rotten_leg_v2 with per-combo exception isolation (RUL-20261123 item 6): a fire whose
+            stress evaluation raises is failed CLOSED by the caller, never allowed to abort the day."""
+            try:
+                return rotten_leg_v2(fire.candidate, fire.signal, fire.stress, self.cfg,
+                                     timing_approx=fire.timing_approx), False
+            except Exception:  # noqa: BLE001 -- isolation is the point; the caller refuses the combo
+                return RottenLegV2Result(flag=False, conditions=("EVALUATION_ERROR",), edge_stress=0.0,
+                                         worst_leg_index=-1, p_hi=()), True
+
         for bkey in sorted_batch_keys:
             batch_fires = batches[bkey]
             batch_start_ts = float(bkey * self.cfg.batch_window_sec)
@@ -582,42 +717,128 @@ class Window2Admission:
                 fam_info_map: Dict[str, Tuple[str, str, float]] = {}
                 roi_cal_map: Dict[str, float] = {}
 
+                # RUL-20261123 item 6: per-combo exception isolation. Scoring one combo (family
+                # classification raises ValueError on an unknown-sport player leg; the calibrator
+                # can raise on a malformed row) must fail THAT combo closed, never abort the day.
+                errored: List[Window2Fire] = []
                 for f in remaining:
                     cid = f.candidate.combo_id
                     cand = f.candidate
+                    try:
+                        cand_leg_keys = {(leg.game_id, leg.player_norm, leg.stat) for leg in cand.legs}
+                        cand_games = {leg.game_id for leg in cand.legs if leg.game_id}
 
-                    cand_leg_keys = {(leg.game_id, leg.player_norm, leg.stat) for leg in cand.legs}
-                    cand_games = {leg.game_id for leg in cand.legs if leg.game_id}
+                        n_shared = sum(
+                            1
+                            for af in admitted_fires_today
+                            if cand_leg_keys & {(l.game_id, l.player_norm, l.stat) for l in af.candidate.legs}
+                        )
+                        n_game = sum(
+                            1
+                            for af in admitted_fires_today
+                            if cand_games & {l.game_id for l in af.candidate.legs if l.game_id}
+                        )
 
-                    n_shared = sum(
-                        1
-                        for af in admitted_fires_today
-                        if cand_leg_keys & {(l.game_id, l.player_norm, l.stat) for l in af.candidate.legs}
+                        n_shared_map[cid] = n_shared
+                        n_game_map[cid] = n_game
+
+                        discount = 1.0 / (1.0 + self.cfg.lambda_leg * n_shared + self.cfg.lambda_game * n_game)
+                        discounts[cid] = discount
+
+                        fam_label, regime, tau_fam = combo_family(cand.legs, self.trust_book)
+                        fam_info_map[cid] = (fam_label, regime, tau_fam)
+
+                        roi_claimed = f.signal.roi_no_taker
+                        if self.calibrator is not None:
+                            roi_cal = self.calibrator.predict(roi_claimed, fam_label)
+                        else:
+                            roi_cal = roi_claimed
+                        roi_cal_map[cid] = roi_cal
+
+                        score = roi_cal * tau_fam * discount
+                        scores[cid] = score
+                    except Exception:  # noqa: BLE001 -- fail this combo closed, keep the day alive
+                        errored.append(f)
+
+                for f in errored:
+                    remaining.remove(f)
+                    cid = f.candidate.combo_id
+                    v2_res, _ = _v2(f)
+                    decisions.append(
+                        Window2Decision(
+                            combo_id=cid,
+                            day=f.day if f.day else day,
+                            batch_start_ts=batch_start_ts,
+                            tier="B",
+                            family=fam_info_map.get(cid, ("UNKNOWN", "ACCRUING", 0.0))[0],
+                            family_regime=fam_info_map.get(cid, ("UNKNOWN", "ACCRUING", 0.0))[1],
+                            tau_fam=fam_info_map.get(cid, ("UNKNOWN", "ACCRUING", 0.0))[2],
+                            roi_claimed=f.signal.roi_no_taker,
+                            roi_cal=roi_cal_map.get(cid, 0.0),
+                            sizing_roi=0.0,
+                            score=scores.get(cid, 0.0),
+                            n_shared_leg=n_shared_map.get(cid, 0),
+                            n_game=n_game_map.get(cid, 0),
+                            discount=discounts.get(cid, 1.0),
+                            contracts=0,
+                            collateral=0.0,
+                            admitted=False,
+                            refusals=("EVALUATION_ERROR",),
+                            rotten_leg_v2=v2_res.flag,
+                            rotten_leg_v2_conditions=v2_res.conditions,
+                            edge_stress=v2_res.edge_stress,
+                            legacy_rotten_leg=f.signal.has_rotten_leg,
+                            window1_admitted=w1_admitted_map.get(cid),
+                        )
                     )
-                    n_game = sum(
-                        1
-                        for af in admitted_fires_today
-                        if cand_games & {l.game_id for l in af.candidate.legs if l.game_id}
-                    )
+                if not remaining:
+                    break
 
-                    n_shared_map[cid] = n_shared
-                    n_game_map[cid] = n_game
-
-                    discount = 1.0 / (1.0 + self.cfg.lambda_leg * n_shared + self.cfg.lambda_game * n_game)
-                    discounts[cid] = discount
-
-                    fam_label, regime, tau_fam = combo_family(cand.legs, self.trust_book)
-                    fam_info_map[cid] = (fam_label, regime, tau_fam)
-
-                    roi_claimed = f.signal.roi_no_taker
+                # RUL-20261123 item 5: sign-inversion guard. S_i = ROI^cal * tau / (1 + ...) ranks a
+                # NEGATIVE calibrated ROI *higher* the more concentrated the combo is (dividing a
+                # negative by a larger denominator moves it toward zero from below). A combo
+                # calibrated to <= 0 is therefore refused outright here -- it can never be admitted
+                # and can never outrank a positive-ROI^cal combo through the denominator.
+                nonpositive = [f for f in remaining if roi_cal_map[f.candidate.combo_id] <= 0.0]
+                for f in nonpositive:
+                    remaining.remove(f)
+                    cid = f.candidate.combo_id
+                    fam_label, regime, tau_fam = fam_info_map[cid]
+                    roi_cal = roi_cal_map[cid]
                     if self.calibrator is not None:
-                        roi_cal = self.calibrator.predict(roi_claimed, fam_label)
+                        sizing_roi = self.calibrator.sizing_value(f.signal.roi_no_taker, fam_label, self.cold_start)
                     else:
-                        roi_cal = roi_claimed
-                    roi_cal_map[cid] = roi_cal
-
-                    score = roi_cal * tau_fam * discount
-                    scores[cid] = score
+                        sizing_roi = roi_cal * (self.cfg.cold_start_haircut if self.cold_start else 1.0)
+                    v2_res, _ = _v2(f)
+                    decisions.append(
+                        Window2Decision(
+                            combo_id=cid,
+                            day=f.day if f.day else day,
+                            batch_start_ts=batch_start_ts,
+                            tier="B",
+                            family=fam_label,
+                            family_regime=regime,
+                            tau_fam=tau_fam,
+                            roi_claimed=f.signal.roi_no_taker,
+                            roi_cal=roi_cal,
+                            sizing_roi=sizing_roi,
+                            score=scores[cid],
+                            n_shared_leg=n_shared_map[cid],
+                            n_game=n_game_map[cid],
+                            discount=discounts[cid],
+                            contracts=0,
+                            collateral=0.0,
+                            admitted=False,
+                            refusals=("NONPOSITIVE_CALIBRATED_ROI",),
+                            rotten_leg_v2=v2_res.flag,
+                            rotten_leg_v2_conditions=v2_res.conditions,
+                            edge_stress=v2_res.edge_stress,
+                            legacy_rotten_leg=f.signal.has_rotten_leg,
+                            window1_admitted=w1_admitted_map.get(cid),
+                        )
+                    )
+                if not remaining:
+                    break
 
                 # Select candidate with max S_i (tiebreaker: earlier now_ts, then combo_id)
                 best_fire = min(
@@ -646,8 +867,40 @@ class Window2Admission:
                 else:
                     sizing_roi = roi_cal * (self.cfg.cold_start_haircut if self.cold_start else 1.0)
 
-                v2_res = rotten_leg_v2(cand, sig, best_fire.stress, self.cfg)
+                v2_res, v2_errored = _v2(best_fire)
                 dec_day = best_fire.day if best_fire.day else day
+
+                # Item 6: a fire whose stress evaluation raised is refused, never admitted
+                # unflagged and never allowed to abort the day.
+                if v2_errored:
+                    decisions.append(
+                        Window2Decision(
+                            combo_id=cid,
+                            day=dec_day,
+                            batch_start_ts=batch_start_ts,
+                            tier="B",
+                            family=fam_label,
+                            family_regime=regime,
+                            tau_fam=tau_fam,
+                            roi_claimed=roi_claimed,
+                            roi_cal=roi_cal,
+                            sizing_roi=sizing_roi,
+                            score=score,
+                            n_shared_leg=n_shared,
+                            n_game=n_game,
+                            discount=discount,
+                            contracts=0,
+                            collateral=0.0,
+                            admitted=False,
+                            refusals=("EVALUATION_ERROR",),
+                            rotten_leg_v2=False,
+                            rotten_leg_v2_conditions=("EVALUATION_ERROR",),
+                            edge_stress=0.0,
+                            legacy_rotten_leg=sig.has_rotten_leg,
+                            window1_admitted=w1_admitted_map.get(cid),
+                        )
+                    )
+                    continue
 
                 # Circuit breaker check
                 if regime == "CIRCUIT_BROKEN":
@@ -737,9 +990,13 @@ class Window2Admission:
                         failed_caps.append("PLAYER_CAP")
                         break
 
-                # Tier B reservation checks (when total caps passed)
+                # Tier B reservation checks (when total caps passed). RUL-20261123 item 7: a
+                # timing_approx fire's mins_to_tip is exactly 60.0 by construction (synthetic
+                # start = now + 3600), which silently satisfied the T-60m release and let it eat
+                # the reserved 60%. Synthetic timing is not a release: the reservation stays in
+                # force for such fires until a verified start time says otherwise.
                 if len(failed_caps) == 0:
-                    if tier == "B" and mins_to_tip > self.cfg.release_mins_to_tip:
+                    if tier == "B" and (mins_to_tip > self.cfg.release_mins_to_tip or best_fire.timing_approx):
                         frac = self.cfg.tier_b_cap_fraction
                         res_failed = False
 

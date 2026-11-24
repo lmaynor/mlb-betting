@@ -30,7 +30,21 @@ import collections
 import glob
 import json
 import os
+from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from zoneinfo import ZoneInfo
+
+# Window 2 day bucketing is America/New_York (RUL-20261123 item 8; see run_candidates).
+ET = ZoneInfo("America/New_York")
+
+
+def window2_day_key(candidate: Any) -> str:
+    """The Window 2 pool day of a candidate: the ET calendar date of its EARLIEST leg's game
+    start (a multi-game combo charges to its earliest leg's day). Falls back to the ET date of
+    the candidate's creation time when no leg carries a start."""
+    starts = [leg.game_start_ts for leg in candidate.legs if getattr(leg, "game_start_ts", None)]
+    anchor = min(starts) if starts else candidate.now_ts
+    return datetime.fromtimestamp(anchor, ET).date().isoformat()
 
 from ev.capability_mask import apply_capability_mask
 from ev.combo_taker_scanner import (
@@ -39,7 +53,7 @@ from ev.combo_taker_scanner import (
     ComboLiabilityGuard,
     evaluate_combo,
 )
-from ev.combo_taker_window2 import Window2Admission, Window2Fire
+from ev.combo_taker_window2 import LegStressInputs, Window2Admission, Window2Fire, accrue_settled_rows, combo_family
 from ev.kalshi_rfq_pricer import LegFairValue
 from ev.kalshi_rfq_replay import MAX_SNAPSHOT_AGE_SEC, epoch
 from mlb.execution.kalshi.fees import taker_fee
@@ -110,24 +124,25 @@ def leg_to_combo_leg(
 
 
 def commence_lookup(store: Any, t: float, max_age: float = MAX_SNAPSHOT_AGE_SEC) -> Callable[[str], float | None]:
+    """game_key -> commence ts, from the point-in-time snapshot in force at t ONLY.
+
+    RUL-20261123 item 7: the pre-fix lookup fell back to the union of ALL snapshots' commence
+    maps, including snapshots taken AFTER t -- a look-ahead: a game whose start was only recorded
+    by a later sweep was treated as known at t. The fallback is removed. A game missing from the
+    in-force snapshot now yields None, and candidate_from_legs stamps the candidate
+    timing_approx (synthetic start = t + 3600), which the Window 2 engine treats as unverified
+    timing (no Tier A release, no V2 near-staleness branch)."""
     stores = store.stores if hasattr(store, "stores") else [store]
     primary_map: Dict[str, float] = {}
-    fallback_map: Dict[str, float] = {}
 
     for s in stores:
         if hasattr(s, "snapshot_index"):
             idx = s.snapshot_index(t, max_age)
             if idx is not None and len(s._snaps[idx]) > 3 and s._snaps[idx][3]:
                 primary_map.update(s._snaps[idx][3])
-        if hasattr(s, "_snaps"):
-            for snap in s._snaps:
-                if len(snap) > 3 and snap[3]:
-                    fallback_map.update(snap[3])
 
     def _lookup(game_key: str) -> float | None:
-        if game_key in primary_map:
-            return primary_map[game_key]
-        return fallback_map.get(game_key)
+        return primary_map.get(game_key)
 
     return _lookup
 
@@ -147,6 +162,7 @@ def candidate_from_legs(
         return None, "UNPRICED_LEG"
 
     combo_legs: List[ComboLeg] = []
+    stress_inputs: List[LegStressInputs] = []
     timing_approx = False
 
     for ticker, side in legs_with_sides:
@@ -168,6 +184,19 @@ def candidate_from_legs(
             return None, "MASK_ERROR"
 
         combo_legs.append(leg)
+        # RUL-20261123 item 11: carry the leg's V2 stress inputs out of the fair value instead of
+        # discarding them (the harness previously passed stress=() to every Window2Fire, so V2's
+        # Condition A could never trigger). disp and age come straight off the LegFairValue;
+        # p_max is the per-book maximum the index retained (None where the source collapses to a
+        # consensus row -- the component then drops out of the stress max, never fabricated).
+        # q_kalshi stays None here: Kalshi's own single-leg prices exist only on the live
+        # recorder's tape, which is not wired yet -- a typed empty slot, not a synthesized value.
+        stress_inputs.append(LegStressInputs(
+            p_max=(float(fv.p_max) if getattr(fv, "p_max", None) is not None else None),
+            q_kalshi=None,
+            disp=(float(fv.disp) if fv.disp is not None else None),
+            age_sec=max(0.0, float(t) - float(fv.updated_ts or 0.0)),
+        ))
 
     cand = ComboCandidate(
         combo_id=str(combo_id),
@@ -180,6 +209,7 @@ def candidate_from_legs(
         stake=None,
     )
     cand.timing_approx = timing_approx
+    cand.stress_inputs = tuple(stress_inputs)
     return cand, "OK"
 
 
@@ -223,7 +253,15 @@ def evaluate_taker_combo(
 
     if guard is not None:
         if signal.fires:
-            liability = min(15.0, signal.ask_no * 100.0)
+            # RUL-20261123 item 14(b): fee-inclusive collateral. The pre-fix liability
+            # min($15, ask_no * 100) excluded the taker fee, so the guard's per-combo / player /
+            # game ledgers understated the position's true collateral by up to ~7% (~$1.05 at
+            # the cap) and the $15 cap bound looser than the pre-registration's collateral
+            # definition. Now: the largest whole-contract position (<= 100 contracts) whose
+            # stake + canonical taker fee fits $15, charged at that full collateral.
+            unit = signal.ask_no + taker_fee(signal.ask_no, 1.0)
+            n_contracts = min(100, int(15.0 // unit)) if unit > 0.0 else 0
+            liability = n_contracts * unit
             candidate.stake = liability
             admitted = guard.admit(candidate, signal)
             rec["admitted"] = admitted
@@ -309,6 +347,7 @@ def run_candidates(
     reasons_hist: Dict[str, int] = {}
     denom_hist: Dict[str, int] = {}
     fired_candidates: List[Tuple[ComboCandidate, Any]] = []
+    evaluated_items: List[Tuple[ComboCandidate, dict]] = []
 
     for item in candidates_with_meta:
         if isinstance(item, tuple) and len(item) == 2:
@@ -386,6 +425,7 @@ def run_candidates(
         else:
             rec["admitted"] = False
 
+        evaluated_items.append((cand, rec))
         records.append(rec)
 
     admitted_graded = [
@@ -410,27 +450,46 @@ def run_candidates(
 
     w2_summary: Optional[Dict[str, Any]] = None
     if window2_admission is not None:
-        # Group FIRED candidates by their meta "day" (records/candidates with day=None group under "unknown")
+        # RUL-20261123 item 2: the Ledger B-shadow path must run WIRED -- a fitted calibrator and
+        # an accruing trust book. A bare Window2Admission() (calibrator=None) silently ranks on
+        # raw roi_no_taker with every family pinned at the 0.75 de-rank; refuse it loudly here
+        # (the engine itself stays permissive for unit tests; the shadow path is the boundary).
+        if window2_admission.calibrator is None:
+            raise ValueError(
+                "run_candidates: window2_admission has no calibrator -- the shadow path must be "
+                "wired via build_shadow_admission(fit_rows); refusing to rank on raw roi_no_taker")
+
+        # RUL-20261123 item 8: Window 2 day bucketing is the ET CALENDAR DAY OF THE EARLIEST
+        # LEG'S GAME START (window2_day_key). A multi-game combo charges to its earliest leg's
+        # ET day pool, and the earliest leg's mins_to_tip is what the engine's gates already use
+        # (min over legs). The harness record's own "day" (the settlement/close day the fixtures
+        # carry) is NOT touched: Window 1 grading keeps its frozen day definition; only the
+        # Window 2 block re-buckets.
         fires_by_day: Dict[str, List[ComboCandidate]] = collections.defaultdict(list)
-        for cand, d_val in fired_candidates:
-            d_key = "unknown" if (d_val is None or d_val == "") else str(d_val)
-            fires_by_day[d_key].append(cand)
+        for cand, _d_val in fired_candidates:
+            fires_by_day[window2_day_key(cand)].append(cand)
+        settled_by_day: Dict[str, List[Tuple[ComboCandidate, dict]]] = collections.defaultdict(list)
+        for cand, rec in evaluated_items:
+            if rec.get("yes_won") is not None:
+                settled_by_day[window2_day_key(cand)].append((cand, rec))
 
         all_decisions: Dict[str, Any] = {}
         w2_by_day: Dict[str, int] = {}
         n_w2_fires_considered = 0
         n_w2_admitted = 0
 
-        for d_key in sorted(fires_by_day.keys()):
-            cands_in_day = fires_by_day[d_key]
-            # Stress inputs: the tape/settled fixtures carry no per-leg stress inputs,
-            # so pass stress=() (rotten_leg_v2 handles missing entries with LegStressInputs defaults).
+        for d_key in sorted(set(fires_by_day.keys()) | set(settled_by_day.keys())):
+            cands_in_day = fires_by_day.get(d_key, [])
+            # Stress inputs ride on the candidate from candidate_from_legs (item 11: disp / age /
+            # p_max off the fair values; q_kalshi stays an empty slot until the live recorder is
+            # wired). Candidates built by hand carry none and get stress=() as before.
             fires = [
                 Window2Fire(
                     candidate=c,
                     signal=evaluate_combo(c),
-                    stress=(),
+                    stress=tuple(getattr(c, "stress_inputs", ()) or ()),
                     day=d_key,
+                    timing_approx=bool(getattr(c, "timing_approx", False)),
                 )
                 for c in cands_in_day
             ]
@@ -443,6 +502,26 @@ def run_candidates(
                     day_admitted += 1
                     n_w2_admitted += 1
             w2_by_day[d_key] = day_admitted
+
+            # Item 2 trust accrual, settled-only lag: this day's settled rows accrue into the
+            # trust book only AFTER the day's decisions, so a family's regime for day D reflects
+            # settlements through D-1 (see accrue_settled_rows for the lag + attribution rules).
+            # A combo whose family cannot be classified (unknown-sport player leg) already failed
+            # closed in the engine; it accrues nowhere.
+            accrual_rows: List[dict] = []
+            for cand, rec in settled_by_day.get(d_key, []):
+                try:
+                    fam_label, _regime, _tau = combo_family(cand.legs, window2_admission.trust_book)
+                except Exception:  # noqa: BLE001 -- unclassifiable: accrues nowhere, by design
+                    continue
+                accrual_rows.append({
+                    "family": fam_label,
+                    "day": d_key,
+                    "is_fire": bool(rec.get("fires")),
+                    "pnl_per_contract": rec.get("pnl_per_contract"),
+                })
+            if accrual_rows:
+                accrue_settled_rows(window2_admission.trust_book, accrual_rows)
 
         # Merge decisions back into harness records with matching combo_id
         for r in records:

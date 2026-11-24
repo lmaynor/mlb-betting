@@ -43,7 +43,7 @@ from ev.kalshi_rfq_replay import (
     store_from_game_lines,
     store_from_raw,
 )
-from ev.combo_taker_window2 import Window2Admission
+from ev.combo_taker_window2 import build_shadow_admission
 from ev.kalshi_rfq_taker_replay import (
     candidate_from_legs,
     commence_lookup,
@@ -65,7 +65,10 @@ def main(argv=None) -> int:
     p_settled.add_argument("--cache-dir", default=None, help="local cache directory for raw snapshots")
     p_settled.add_argument("--max-age-min", type=float, default=120.0, help="max snapshot age in minutes")
     p_settled.add_argument("--no-raw", action="store_true", help="skip raw all-book prop payloads")
-    p_settled.add_argument("--window2", action="store_true", help="enable Window 2 admission engine")
+    p_settled.add_argument("--window2", action="store_true", help="enable Window 2 admission engine (wired shadow: needs --fit-rows)")
+    p_settled.add_argument("--fit-rows", default=None,
+                           help="settled fit rows jsonl for the wired Window 2 shadow (family/day/is_fire/"
+                                "ask_no/roi_claimed/pnl_per_contract per row; see scripts/rfq_recompute_roi_claimed.py)")
 
     p_tape = sub.add_parser("tape", help="replay banked demo recorder tape")
     p_tape.add_argument("--tape-dir", required=True, help="directory containing tape *.jsonl files")
@@ -75,7 +78,9 @@ def main(argv=None) -> int:
     p_tape.add_argument("--cache-dir", default=None, help="local cache directory for raw snapshots")
     p_tape.add_argument("--max-age-min", type=float, default=120.0, help="max snapshot age in minutes")
     p_tape.add_argument("--no-raw", action="store_true", help="skip raw all-book prop payloads")
-    p_tape.add_argument("--window2", action="store_true", help="enable Window 2 admission engine")
+    p_tape.add_argument("--window2", action="store_true", help="enable Window 2 admission engine (wired shadow: needs --fit-rows)")
+    p_tape.add_argument("--fit-rows", default=None,
+                        help="settled fit rows jsonl for the wired Window 2 shadow (see the settled subcommand)")
 
     args = ap.parse_args(argv)
 
@@ -145,7 +150,21 @@ def main(argv=None) -> int:
         )
         candidates_with_meta.append((cand, {**f, "status": status}))
 
-    window2_admission = Window2Admission() if getattr(args, "window2", False) else None
+    # RUL-20261123 item 2: --window2 builds the WIRED shadow (fitted calibrator + seeded trust
+    # book) from settled fit rows. The pre-staging driver constructed Window2Admission() bare,
+    # which ranked the shadow on raw roi_no_taker with every family pinned at the 0.75 de-rank
+    # and the trust book never fed -- the locked package was not what ran. No fit rows, no
+    # shadow: fail loudly instead of silently degrading.
+    window2_admission = None
+    if getattr(args, "window2", False):
+        if not args.fit_rows:
+            ap.error("--window2 requires --fit-rows (settled fit rows for the wired shadow; "
+                     "see scripts/rfq_recompute_roi_claimed.py)")
+        with open(args.fit_rows, encoding="utf-8") as fh:
+            fit_rows = [json.loads(line) for line in fh if line.strip()]
+        window2_admission = build_shadow_admission(fit_rows)
+        print(f"window2 shadow wired: {len(fit_rows)} fit rows, calibrator counts_basis="
+              f"{window2_admission.calibrator.counts_basis}", file=sys.stderr)
     records, summary = run_candidates(
         candidates_with_meta,
         window2_admission=window2_admission,

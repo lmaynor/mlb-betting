@@ -22,12 +22,25 @@ import os
 import pytest
 
 from ev.combo_taker_scanner import evaluate_combo
-from ev.combo_taker_window2 import Window2Admission, Window2Fire
+from ev.combo_taker_window2 import Window2Admission, Window2Fire, build_shadow_admission
 from ev.kalshi_rfq_pricer import InMemoryFairBook, LegFairValue
 from ev.kalshi_rfq_taker_replay import candidate_from_legs, run_candidates
 
 T0 = 1_800_000_000.0
 DAY = "2026-10-25"
+
+
+def _fit_rows(family: str, n: int = 60):
+    """Settled fit rows for the WIRED shadow (RUL-20261123 item 2): run_candidates refuses a
+    bare Window2Admission() -- the shadow must carry a fitted calibrator and a seeded trust
+    book. Realized ROI is strongly positive so calibrated predictions stay > 0."""
+    return [{"family": family, "day": f"2026-10-{10 + (i % 8):02d}", "is_fire": True,
+             "ask_no": 0.55, "roi_claimed": 0.05 + 0.01 * (i % 40), "pnl_per_contract": 0.18}
+            for i in range(n)]
+
+
+def _wired(family: str) -> Window2Admission:
+    return build_shadow_admission(_fit_rows(family))
 
 
 def _leg(ticker: str, game_key: str, stat: str = "total", strike: float = 45.5,
@@ -96,9 +109,9 @@ def test_window2_merge_matches_direct_engine():
         _cand(book, "c2", [("T1", "yes"), ("T2", "yes")], t=T0 + 10.0),
     ]
     items = [(c, {"day": DAY, "yes_won": False}) for c in cands]
-    records, summary = run_candidates(items, window2_admission=Window2Admission())
+    records, summary = run_candidates(items, window2_admission=_wired("GAME_LINE"))
 
-    direct = Window2Admission().run_day(
+    direct = _wired("GAME_LINE").run_day(
         [Window2Fire(candidate=c, signal=evaluate_combo(c), stress=(), day=DAY) for c in cands],
         DAY,
     )
@@ -117,7 +130,7 @@ def test_window1_admission_unchanged_by_window2():
     cands = [_cand(book, f"c{i}", [("T1", "yes"), ("T2", "yes")], t=T0 + i * 10.0) for i in range(3)]
     items = [(c, {"day": DAY, "yes_won": True}) for c in cands]
     recs_plain, _ = run_candidates(items)
-    recs_w2, _ = run_candidates(items, window2_admission=Window2Admission())
+    recs_w2, _ = run_candidates(items, window2_admission=_wired("GAME_LINE"))
     assert [r["admitted"] for r in recs_plain] == [r["admitted"] for r in recs_w2]
     assert [r["fires"] for r in recs_plain] == [r["fires"] for r in recs_w2]
 
@@ -135,7 +148,7 @@ def test_dual_ledgers_grade_their_own_subsets():
     for i in range(6):
         cand = _cand(book, f"combo_{i}", [(f"P{i}", "yes"), (f"Q{i}", "yes")], t=T0 + i * 10.0)
         items.append((cand, {"day": DAY, "yes_won": False}))
-    records, summary = run_candidates(items, window2_admission=Window2Admission())
+    records, summary = run_candidates(items, window2_admission=_wired("NFL_PROP"))
     led = summary["ledgers"]
     assert led["A_cap_free"]["n"] == 6
     assert led["B_window1_fifo"]["n"] == 5

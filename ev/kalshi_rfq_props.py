@@ -42,10 +42,11 @@ def _mad(x) -> float:
 
 class _PlayerStat:
     """One player's rungs for one stat in one game."""
-    __slots__ = ("rungs", "curve", "anchor_n", "anchor_disp", "_ladder", "_ladder_args", "curve_range")
+    __slots__ = ("rungs", "rung_p_max", "curve", "anchor_n", "anchor_disp", "_ladder", "_ladder_args", "curve_range")
 
     def __init__(self):
         self.rungs: dict[float, tuple[float, int, float]] = {}      # point -> (median P(over), n two-sided books, MAD)
+        self.rung_p_max: dict[float, float] = {}                    # point -> max de-vigged P(over) across books (RUL-20261123 item 11: V2 p_j,max)
         self.curve = None
         self.anchor_n = 0
         self.anchor_disp = 0.0
@@ -107,23 +108,35 @@ class PropFairIndex:
         if ps is None:
             return None, "no_stat"
         exact = ps.rungs.get(p.strike)
+        # p_j,max for the V2 stress (pre-registration section 5): the leg's own rung's max where the rung is
+        # quoted; for curve / ladder resolutions the max over the anchor rungs behind the estimate (an upper
+        # envelope, the conservative direction for a stress input); None when no per-book values survive.
+        anchor_vals = [v for pt, v in ps.rung_p_max.items()
+                       if ps.curve_range and ps.curve_range[0] <= pt <= ps.curve_range[1]]
+        anchor_p_max = max(anchor_vals) if anchor_vals else None
         if exact is not None and exact[1] >= CURVE_MIN_BOOKS:
             p_over, n, disp, pooled, why = exact[0], exact[1], exact[2], False, "exact"
+            p_max = ps.rung_p_max.get(p.strike)
         elif ps.curve is not None and ps.curve_range and ps.curve_range[0] <= p.strike <= ps.curve_range[1] and ps.curve(p.strike) is not None:
             p_over, n, disp, pooled, why = ps.curve(p.strike), ps.anchor_n, ps.anchor_disp, True, "curve"          # interpolation across quoted lines
+            p_max = anchor_p_max
         elif ps.ladder is not None and ps.ladder.speaks(p.strike):
             lad = ps.ladder                                                                                       # outside the quoted lines: the ladder fit
             base = max([r[2] for r in ps.rungs.values() if r[1] >= CURVE_MIN_BOOKS] or [0.02])
             p_over, n, pooled, why = lad.p_over(p.strike), max(r[1] for r in ps.rungs.values()), True, "ladder"
             disp = base + DISP_PER_SD * lad.distance(p.strike) + 0.25 * lad.rmse
+            p_max = max(ps.rung_p_max.values()) if ps.rung_p_max else None
         elif ps.ladder is None and ps.curve is not None and ps.curve(p.strike) is not None:
             p_over, n, disp, pooled, why = ps.curve(p.strike), ps.anchor_n, ps.anchor_disp, True, "curve"          # no ladder fit: legacy end-segment extrapolation
+            p_max = anchor_p_max
         elif exact is not None:
             p_over, n, disp, pooled, why = exact[0], exact[1], exact[2], False, "thin"
+            p_max = ps.rung_p_max.get(p.strike)
         else:
             return None, "no_rung"
         return LegFairValue(ticker=p.ticker, sport=p.sport, game_key=p.game_key, market_class="player_prop", player_norm=pn,
                             stat=p.stat, strike=p.strike, p_cons_yes=float(p_over), n_books=int(n), disp=float(disp),
+                            p_max=(float(p_max) if p_max is not None else None),
                             p_model_yes=None, pooled=pooled, updated_ts=self.updated_ts, protected=p.protected,
                             team=p.team), why          # the ticker's team code: feeds the SGP relation taxonomy (sgp_relation)
 
@@ -222,6 +235,7 @@ def build_sport_prop_index(sport: str, events: list | None, now: datetime | floa
             ps = game["data"].setdefault((pn, stat), _PlayerStat())
             share = len(one_sided.get((pn, stat, point), ())) / max(len(vals), 1)
             ps.rungs[point] = (float(statistics.median(vals)), len(vals), _mad(vals) + ONE_SIDED_DISP * share)
+            ps.rung_p_max[point] = float(max(vals))
             by_ps[(pn, stat)] = ps
         for (pn, stat), ps in by_ps.items():
             ps.finalize(stat, sport)
