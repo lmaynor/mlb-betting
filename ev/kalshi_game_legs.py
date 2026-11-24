@@ -400,9 +400,11 @@ def slate_rows(slate: list, sport: str, now: float, team_code=None, valid_codes=
                     spr.setdefault(key, []).append(fair)
 
         def add(ticker, market_class, stat, strike, vals, player=None):
+            # p_max (RUL-20261123 item 11): max de-vigged P(over) across books at this directly-quoted rung;
+            # interpolated rows below carry no p_max (no per-book values survive the interpolation).
             rows.append({"ticker": ticker, "sport": sport, "game_key": gk, "market_class": market_class, "player_norm": player,
                          "stat": stat, "strike": strike, "p_yes": float(statistics.median(vals)), "n_books": len(vals),
-                         "disp": _mad(vals), "updated_ts": now})
+                         "disp": _mad(vals), "p_max": float(max(vals)), "updated_ts": now})
 
         if ml:
             vals = list(ml.values())
@@ -410,7 +412,8 @@ def slate_rows(slate: list, sport: str, now: float, team_code=None, valid_codes=
             for code, p in ((home, p_home), (away, 1.0 - p_home)):
                 r_dict = {"ticker": f"{adapter.series('ml')}-{tail}-{code}", "sport": sport, "game_key": gk,
                           "market_class": "game_ml", "player_norm": None, "stat": "ml", "strike": 0.0, "p_yes": p,
-                          "n_books": len(vals), "disp": _mad(vals), "updated_ts": now}
+                          "n_books": len(vals), "disp": _mad(vals),
+                          "p_max": float(max(vals) if code == home else 1.0 - min(vals)), "updated_ts": now}
                 p_mod = model_markets.get(("NHL_ML", "home" if code == home else "away", None))
                 if p_mod is not None:
                     r_dict["p_model_yes"] = p_mod
@@ -426,7 +429,7 @@ def slate_rows(slate: list, sport: str, now: float, team_code=None, valid_codes=
             ticker = f"{adapter.series('spread')}-{tail}-{code}{int(line + 0.5)}"
             r_dict = {"ticker": ticker, "sport": sport, "game_key": gk, "market_class": "game_spread", "player_norm": None,
                       "stat": "spread", "strike": line, "p_yes": float(statistics.median(vals)), "n_books": len(vals),
-                      "disp": _mad(vals), "updated_ts": now}
+                      "disp": _mad(vals), "p_max": float(max(vals)), "updated_ts": now}
             if p_mod is not None:
                 r_dict["p_model_yes"] = p_mod
             rows.append(r_dict)

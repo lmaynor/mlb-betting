@@ -303,6 +303,11 @@ class LegFairValue:
     pooled: bool                    # consensus came from the adjacent-half-point pooled fallback
     updated_ts: float               # epoch seconds
     is_hot_scratch: bool = False
+    # RUL-20261123 item 11: the highest de-vigged YES probability among the consensus books for this leg (the V2
+    # stress input p_j,max, pre-registration section 5). Populated where the source retains per-book values (raw
+    # prop-index exact rungs, directly-quoted game-line rungs); None where it does not (cycle-frame consensus
+    # rows, interpolated / curve rungs) -- consumers treat None as "component missing", never as 0.
+    p_max: float | None = None
     p_true_yes: float | None = None  # blended truth; defaults to blend(p_cons, p_model) in __post_init__
     protected: bool = False         # a <SERIES>PROT ticker (void-on-first-half-exit twin): see PricerConfig.prot_yes_pad
     team: str | None = None         # player's team code when known (prop ticker / feed row `team`); drives the SGP relation taxonomy
@@ -362,7 +367,7 @@ def leg_from_row(row: dict, now: float | None = None) -> LegFairValue | None:
         player_norm=row.get("player_norm") or None, team=(str(row["team"]) if row.get("team") else None),
         stat=str(row.get("stat") or ""),
         strike=_num(row.get("strike"), 0.0), p_cons_yes=p, n_books=int(row.get("n_books") or 0),
-        disp=_num(row.get("disp"), 1.0), p_model_yes=_num(row.get("p_model_yes")), pooled=pooled,
+        disp=_num(row.get("disp"), 1.0), p_max=_num(row.get("p_max")), p_model_yes=_num(row.get("p_model_yes")), pooled=pooled,
         updated_ts=_ts(row.get("updated_ts", row.get("ts")), now),
         protected=bool(row.get("protected")))
 
