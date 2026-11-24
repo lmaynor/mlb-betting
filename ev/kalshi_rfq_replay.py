@@ -330,16 +330,48 @@ def commence_map(sport: str, events) -> dict:
     return out
 
 
+def _nfl_raw_capture_ts(key: str, fallback_ts: float) -> float:
+    """Capture time of one EVSweep NFL raw file, from its NAME: .../raw/{ET day}/{event}_{HHMMSS}.json.
+
+    Dossier T-3 / RUL-20261123 item 15: the objects' GCS `updated` stamps do NOT track capture
+    time -- the whole prefix was bulk-re-uploaded on 2026-11-12 (every 2026-10-24 file's stamp
+    sits inside one 6-second window that day), so keying snapshots by `updated` collapses weeks
+    of sweeps into a single snapshot stamped after the fact, useless for point-in-time replay.
+    The filename's HHMMSS is the sweep's UTC time-of-day (verified against the cycle frames'
+    own ts: folder 2026-10-24, file _010136 <-> frame ts 2026-10-25T01:01:36Z), and the folder
+    day is the sweep's ET calendar date -- so the capture instant is the candidate (folder day
+    or the next UTC day, at HHMMSS UTC) whose ET date equals the folder day. Unparseable names
+    keep the object stamp."""
+    import re
+    from datetime import datetime, time as _time, timedelta, timezone
+    from zoneinfo import ZoneInfo
+    m = re.search(r"/raw/(\d{4}-\d{2}-\d{2})/[^/]*_(\d{6})\.json$", key)
+    if not m:
+        return fallback_ts
+    try:
+        day = datetime.strptime(m.group(1), "%Y-%m-%d").date()
+        tod = _time(int(m.group(2)[0:2]), int(m.group(2)[2:4]), int(m.group(2)[4:6]))
+    except ValueError:
+        return fallback_ts
+    et = ZoneInfo("America/New_York")
+    for delta in (0, 1):
+        cand = datetime.combine(day + timedelta(days=delta), tod, tzinfo=timezone.utc)
+        if cand.astimezone(et).date() == day:
+            return cand.timestamp()
+    return fallback_ts
+
+
 def raw_prop_snapshots(sport: str, days, *, cache_dir: str | None = None, storage=None, workers: int = 12, cluster_sec: float = 300.0):
     """Banked RAW ParlayAPI prop payloads (every book, every quoted line incl. alternates) -> [(ts, events)], time-ordered.
     nba / nhl: OddsAccum/{sport_key}/raw/{day}/props_{HHMM}.json (a list of events per snapshot).
-    nfl: EVSweep/nfl_props/raw/{day}/{event}_{HHMMSS}.json, one file per event per sweep cycle; files within `cluster_sec` form one cycle."""
+    nfl: EVSweep/nfl_props/raw/{day}/{event}_{HHMMSS}.json, one file per event per sweep cycle; files within `cluster_sec` form one cycle.
+    NFL snapshot times come from the FILENAMES, not the objects' write stamps (see _nfl_raw_capture_ts)."""
     import json
     from concurrent.futures import ThreadPoolExecutor
     keyed = []
     for d in days:
         if sport == "nfl":
-            keyed += [(k, ts) for k, ts in _list_with_ts(f"EVSweep/nfl_props/raw/{d}/", storage) if k.endswith(".json")]
+            keyed += [(k, _nfl_raw_capture_ts(k, ts)) for k, ts in _list_with_ts(f"EVSweep/nfl_props/raw/{d}/", storage) if k.endswith(".json")]
         else:
             keyed += [(k, ts) for k, ts in _list_with_ts(f"OddsAccum/{PARLAY_KEYS[sport]}/raw/{d}/props_", storage) if k.endswith(".json")]
     keyed.sort(key=lambda x: x[1])
@@ -416,6 +448,51 @@ def store_from_bettingpros_ladders(sport: str, snaps) -> SnapshotStore:
         from ev.sports.ncaa_teams import NCAAF_KALSHI_CODES, NCAAB_KALSHI_CODES
         census = NCAAF_KALSHI_CODES if sport == "ncaaf" else NCAAB_KALSHI_CODES
         rows, _ = slate_rows(events, sport, ts, team_code=lambda c, _c=census: c, valid_codes=census)
+        commence = {}
+        for ev in events:
+            start = datetime.fromisoformat(str(ev["commence_time"]).replace("Z", "+00:00"))
+            commence[kx_game_key(sport, start.date().isoformat(), ev["away_team"], ev["home_team"])] = start.timestamp()
+        out.append((ts, [lf for lf in (leg_from_row(r, ts) for r in rows) if lf is not None], None, commence))
+    return SnapshotStore(out, sport=sport)
+
+
+def bestbook_ladder_snapshots(sport: str):
+    """The BestBook live game-line ladders for one sport -> [(fetched_at epoch, games)] (0 or 1 entries).
+
+    RUL-20261123 item 15: NFL game lines have NO banked history (the EVSweep banks props only, and
+    raw_game_line_snapshots covers NBA/NHL only), which is why the taker fair book priced 0.0% of
+    117,041 NFL game-line leg occurrences. BestBook's hourly crawl keeps only a `latest` file, so
+    this yields a single snapshot stamped at the file's own fetched_at -- the same point-in-time
+    honesty as the BettingPros NCAA store: it prices combos created after the stamp and is silent
+    (NO_SNAPSHOT) for anything earlier. It does not manufacture a history that was never banked;
+    the unlock is live-forward, plus whatever the crawl banks from here on."""
+    from datetime import datetime, timezone
+    from ev import bestbook_events
+    games, meta = bestbook_events.read_latest_game_lines(
+        sport, datetime.now(timezone.utc), max_age_min=10 ** 9)
+    if not games:
+        return []
+    stamp = datetime.fromisoformat(str(meta["fetched_at"]).replace("Z", "+00:00"))
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    return [(stamp.timestamp(), games)]
+
+
+def store_from_bestbook_ladders(sport: str, snaps) -> SnapshotStore:
+    """[(ts, BestBook ladder games)] -> SnapshotStore of NFL (or NBA/NHL) game / spread / total legs, built through
+    the SAME conversion the live fair book uses (ev.kalshi_game_banked.events_from_bestbook -> ev.kalshi_game_legs.slate_rows,
+    identity team_code: BestBook team names ARE Kalshi codes), with per-game commence times so a started game is
+    never priced."""
+    from datetime import datetime, timezone
+    from ev.kalshi_game_banked import events_from_bestbook
+    from ev.kalshi_game_legs import ADAPTERS, slate_rows
+    from ev.kalshi_map import game_key as kx_game_key
+    out = []
+    for ts, games in snaps:
+        now_dt = datetime.fromtimestamp(ts, timezone.utc)
+        events, _ = events_from_bestbook(sport, games, now_dt)
+        codes = ADAPTERS[sport].codes
+        rows, _ = slate_rows(events, sport, ts, team_code=lambda c, _c=codes: c if c in _c else None)
         commence = {}
         for ev in events:
             start = datetime.fromisoformat(str(ev["commence_time"]).replace("Z", "+00:00"))
