@@ -272,7 +272,8 @@ def test_pp_points_is_a_live_market_with_labels_and_blend_weights():
     # MOD-02 (2026-11-24): nhl sog moved 0.30 -> 0.29 from the board-engine refit
     assert dp.BLEND_C_BY_SPORT_STAT["nhl"] == {"sog": 0.29, "saves": 0.15, "blocked_shots": 0.00, "points": 0.03,
                                                "goals": 0.03, "assists": 0.06, "pp_points": 0.00}
-    assert dp.blend_c("nhl", "sog") == 0.29 and dp.blend_c("nfl", "rec_yds") == dp.BLEND_C
+    # MOD-04e E0(iii) (2026-11-25): NFL now has an explicit "default": 0.00 entry (was BLEND_C)
+    assert dp.blend_c("nhl", "sog") == 0.29 and dp.blend_c("nfl", "rec_yds") == 0.00
 
 
 def test_every_nhl_market_produces_a_valid_row_and_uses_its_blend_weight():
