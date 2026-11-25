@@ -985,6 +985,10 @@ def _extract_own_injuries(injuries: pd.DataFrame, target_max_sw: tuple[int, int]
     st_map: dict[str, str] = {}
     wt_map: dict[str, float] = {}
     for pid, st in zip(inj[pcol].astype(str), inj[scol].astype(str)):
+        if not isinstance(st, str):
+            # Missing report_status (NaN) survives astype(str) as a float
+            # under the pandas string dtype; it carries no injury info.
+            continue
         clean = st.strip()
         if not clean or clean.lower() == "nan":
             continue
