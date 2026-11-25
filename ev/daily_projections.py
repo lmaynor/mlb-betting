@@ -24,9 +24,12 @@ Inputs beyond the game-log masters (2026-10-17):
   games    payload `games` lists every upcoming game of the window, priced or not.
   archive  every compute merges its rows into EVSweep/{sport}_props/archive/{Central game day}.json (the Yesterday board).
 
-WHAT THE ENGINE IS (and is not). The trained research models (nfl/models/props.py, nhl/props/train.py,
+WHAT THE ENGINE IS (and is not). The offline research models (nfl/models/props.py, nhl/props/train.py,
 nba/props/train.py) keep their artifacts LOCAL (never in GCS, never in the Cloud Run image), so the live board cannot
-load them. It runs an empirical estimator instead -- engine "empirical_ewm_v2":
+load them. Rows priced by a sport-specific trained or hierarchical pricer carry that pricer's own engine id
+("nhl_trained_v1" for served NHL trained-model rows, "hierarchical_v1" for NHL / NFL hierarchical rows, "hier_v1" for
+NBA hierarchical rows); "empirical_ewm_v2" is the explicit EWM fallback label for any row priced by the empirical
+estimator below (and payload `engine` via `engine_id(sport)` summarizes the mix configured for that sport):
 
     mu    = w * EWM(value) + (1-w) * EWM(value)/EWM(usage) * projected usage          (usage = targets / carries /
             attempts / TOI / minutes; w = 0.5, STAT_PARAMS overrides where validated), then x an opponent-allowed
@@ -91,6 +94,8 @@ _CT = ZoneInfo("America/Chicago")               # the site clock: archive days a
 
 ENGINE = "empirical_ewm_v2"
 ENGINE_NFL_HIER = _hl.ENGINE            # "hierarchical_v1": served for NFL only when NFL_ENGINE=hierarchical (default off)
+ENGINE_NHL_HIER = "hierarchical_v1"     # NHL rows priced by nhl.props.hierarchical (nhl_model == "hierarchical_v1")
+ENGINE_NHL_TRAINED = "nhl_trained_v1"   # NHL rows priced by nhl.props.serve_trained (nhl_model == "trained_v1")
 SPORTS = ("nfl", "nhl", "nba")
 OUT_KEY = "EVSweep/{sport}_props/projections_latest.json"
 ARCHIVE_KEY = "EVSweep/{sport}_props/archive/{day}.json"      # {day} = the game's America/Chicago start date
@@ -133,11 +138,17 @@ STAT_PARAMS = {
 
 
 def engine_id(sport: str) -> str:
-    """The engine id of a sport's board payload. NFL is "empirical_ewm_v2+hierarchical_v1" (a mix; each row carries its own
-    `engine`) only when NFL_ENGINE=hierarchical AND at least one stat is allowlisted; otherwise the legacy id. The hierarchical
-    engine changes the price of the stats it serves, so it ships OFF and only for stats whose held-out evidence cleared the
-    adoption bar (nfl/props/hierarchical_allowlist.json;
-    docs/solutions/conventions/nfl-hierarchical-engine-adoption.md)."""
+    """The engine id of a sport's board payload, summarizing the mix that can price its rows under the current
+    configuration (each row's `engine` carries the per-row truth):
+      * nba: "hier_v1"
+      * nhl: "hierarchical_v1+nhl_trained_v1" when NHL_TRAINED_PROPS is on, else "hierarchical_v1"
+      * nfl: "empirical_ewm_v2+hierarchical_v1" only when NFL_ENGINE=hierarchical AND at least one stat is allowlisted
+             (docs/solutions/conventions/nfl-hierarchical-engine-adoption.md); otherwise "empirical_ewm_v2"
+      * anything else: "empirical_ewm_v2" (explicit EWM fallback)."""
+    if sport == "nhl":
+        return f"{ENGINE_NHL_HIER}+{ENGINE_NHL_TRAINED}" if trained_enabled() else ENGINE_NHL_HIER
+    if sport == "nba":
+        return NBA_MODEL
     if sport == "nfl" and _hl.enabled() and _hl.allowed_stats():
         return f"{ENGINE}+{ENGINE_NFL_HIER}"
     return ENGINE
@@ -1861,6 +1872,20 @@ def project_nhl(stat: str, rows: list, sdef: tuple, logs: GameLogs, team, opp, a
     return proj, None, info
 
 
+def _row_engine(extra: dict, nb, hier) -> str:
+    """The engine id that actually priced one row (derived once in make_row)."""
+    if hier is not None:
+        return ENGINE_NFL_HIER
+    if nb is not None:
+        return NBA_MODEL
+    nhl_model = extra.get("nhl_model")
+    if nhl_model == "trained_v1":
+        return ENGINE_NHL_TRAINED
+    if nhl_model == "hierarchical_v1":
+        return ENGINE_NHL_HIER
+    return ENGINE
+
+
 def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team, opp, gk, start, mins,
              has_line: bool = True, roster=None, all_quotes=None) -> dict | None:
     family = PROJECT_STATS[sport][stat]
@@ -1922,29 +1947,31 @@ def make_row(sport, stat, player, pn, rows, sdef, logs, line, cons, at_pt, team,
     else:
         p_model_over = p_over(family, mu, line, ctx, sd_mu=mu_raw) if line is not None else None
         p_floor, p_ceil = proj_range(family, mu, ctx, sd_mu=mu_raw)
-    engine = ENGINE
+    hier = None
     if sport == "nfl" and team is not None and _hl.stat_enabled(stat):
         env_t = logs.env_lines().get((team, start.astimezone(_ET).date().isoformat())) if start is not None else None
         hier = _price_hier(stat, rows, team, opp, env_t, logs, coef, mu_raw, start)
         if hier is not None:
-            engine = ENGINE_NFL_HIER
             mu, mu_raw, mult = hier.mean, hier.mean, hier.vol_mult
             p_model_over = hier.p_over(line) if line is not None else None
             p_floor, p_ceil = (None, None) if family == "anytime" else (hier.dist.ppf(0.10), hier.dist.ppf(0.90))
+    engine = _row_engine(extra, nb, hier)
     form = cf.shape_form(rows, sdef, line)
     p_mkt_over = cons.p_over if cons is not None else None
     # NHL trained saves hardening (Argon Props D1 / Pack 4 D1 / Data D2; nhl.props.saves_hardening):
-    # 28-day log-odds centering + rolling residual calibration replace the raw model probability BEFORE
-    # the blend and every edge below is computed; the gate inputs are stamped on the row for
+    # the served probability is the trained model's raw price (train/serve parity with the NHL paper
+    # track, MOD-01); the hardened (28-day centered + market-recalibrated) price is stamped as
+    # saves_p_hardened for the record and is NOT served. Gate inputs are still stamped on the row for
     # ev.model_picks.qualifies. Other stats / engines are untouched.
     saves_hard = None
     if sport == "nhl" and stat == "saves" and extra.get("nhl_model") == "trained_v1" and p_model_over is not None:
-        p_model_over, saves_hard = _saves_hardening_fields(logs, p_model_over, p_mkt_over, team, player, as_of)
+        p_hardened, saves_hard = _saves_hardening_fields(logs, p_model_over, p_mkt_over, team, player, as_of)
+        saves_hard["saves_p_hardened"] = _f(p_hardened)
     n_books = cons.n_books if cons is not None else (len(_real(at_pt)) if at_pt else None)
     best = best_prices(at_pt) if at_pt else {"over": None, "under": None}
     ef = edge_fields(p_model_over, p_mkt_over, best, cons.n_books if cons is not None else None)
     if saves_hard is not None:
-        # the price gate's inputs: the (hardened) model's side edge over the median consensus and the
+        # the price gate's inputs: the served raw model's side edge over the median consensus and the
         # number of books behind that median (ev.props.build_consensus p_over IS the per-book median)
         saves_hard.update(saves_median_edge=None if ef["model_edge"] is None else round(float(ef["model_edge"]), 6),
                           saves_median_n_books=None if cons is None else int(cons.n_books))

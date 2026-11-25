@@ -195,7 +195,7 @@ def test_build_line_rows_nba_end_to_end():
     assert r["side"] == "over" and r["model_edge"] > 0 and r["market_ev"] > 0 and r["confluence"] is True
     assert 0 < r["beezy_score"] <= 100 and r["score_basis"] == "confluence"
     assert r["l10_hit_rate"] is not None and r["szn_avg"] is not None
-    assert r["validated"] is False and r["engine"] == dp.ENGINE
+    assert r["validated"] is False and r["engine"] == dp.NBA_MODEL
     assert st["events"] == 1 and st["rows"] == len(rows)
 
 
@@ -339,7 +339,7 @@ def test_run_sport_writes_json(monkeypatch):
     monkeypatch.setattr(st, "write_bytes", lambda data, key: written.setdefault(key, data))
     dp.run_sport("nba", NOW, logs=nba_logs(), events=[event(FAIR)], meta={}, games=[], write=True)
     payload = json.loads(written["EVSweep/nba_props/projections_latest.json"])
-    assert payload["engine"] == dp.ENGINE and payload["rows"]
+    assert payload["engine"] == dp.engine_id("nba") and payload["rows"]
 
 
 def test_run_sport_rejects_unknown_sport():
@@ -468,7 +468,8 @@ def test_every_projectable_stat_produces_a_valid_row(sport):
         assert 0.0 <= r["p_over_model"] <= 1.0 and 0.0 <= r["p_over_market"] <= 1.0
         assert r["l5_hit_rate"] is not None and r["l10_hit_rate"] is not None
         assert isinstance(r["beezy_score"], int) and 0 <= r["beezy_score"] <= 100
-        assert r["validated"] is False and r["engine"] == dp.ENGINE
+        expected_engine = {"nfl": dp.ENGINE, "nhl": dp.ENGINE_NHL_HIER, "nba": dp.NBA_MODEL}[sport]
+        assert r["validated"] is False and r["engine"] == expected_engine
         lo, hi = sorted((r["p_over_model"], r["p_over_market"]))
         assert lo - 1e-3 <= r["p_over_blend"] <= hi + 1e-3                # the blend sits between its two inputs
 
