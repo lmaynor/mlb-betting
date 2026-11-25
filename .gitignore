@@ -75,3 +75,6 @@ EV_Alerts/
 
 # Generated props market-residual raw results (summary tables stay committed)
 docs/analysis/props_market_residual_*_results.json
+
+# MOD-04 working data & local model bundles
+data/mod04/
