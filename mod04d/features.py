@@ -73,6 +73,54 @@ NBA_FEATURE_COLS: tuple[str, ...] = (
 )
 
 
+# Key minutes/usage columns that must carry real signal in any frame used to
+# fit or score. env_* columns are deliberately excluded: they are NaN by
+# design when no pre-lock snapshot is attached.
+KEY_NBA_FEATURE_COLS: tuple[str, ...] = (
+    "min_l5",
+    "min_l15",
+    "min_ewm",
+    "fga_per_min_l5",
+    "fga_per_min_l15",
+    "fga_per_min_ewm",
+    "fta_per_min_l5",
+    "fta_per_min_l15",
+    "fta_per_min_ewm",
+    "fg3a_per_min_l5",
+    "fg3a_per_min_l15",
+    "fg3a_per_min_ewm",
+    "pace_factor",
+    "n_prior_games",
+)
+
+
+def validate_feature_frame(df: pd.DataFrame, *, context: str = "feature frame") -> None:
+    """Positive contract gate: key feature columns must exist and carry signal.
+
+    `assert_no_leak_columns` is a blocklist: it rejects forbidden columns but
+    says nothing about required ones, so a frame whose minutes/usage columns
+    are entirely NaN passes it silently. That is exactly how the 2026-11-25
+    Cluster (d) bank shipped a single league-average distribution as a
+    "model": every key feature was NaN and nothing downstream complained.
+    This gate is the positive counterpart and raises ValueError when a key
+    column is missing or has no finite value in the frame.
+    """
+    if df is None or len(df) == 0:
+        raise ValueError(f"{context}: empty frame; refusing to fit/score on no rows")
+    missing = [c for c in KEY_NBA_FEATURE_COLS if c not in df.columns]
+    if missing:
+        raise ValueError(f"{context}: missing key feature columns: {missing}")
+    dead = [
+        c
+        for c in KEY_NBA_FEATURE_COLS
+        if not np.isfinite(pd.to_numeric(df[c], errors="coerce")).any()
+    ]
+    if dead:
+        raise ValueError(
+            f"{context}: key feature columns carry no finite values (all-NaN): {dead}"
+        )
+
+
 def assert_no_leak_columns(df: pd.DataFrame) -> None:
     """Hard runtime schema gate (U1): raise ValueError if any column matches forbidden patterns."""
     if df is None:
@@ -108,6 +156,52 @@ def _col(df: pd.DataFrame, candidates: Iterable[str]) -> pd.Series:
         if c in df.columns:
             return pd.to_numeric(df[c], errors="coerce")
     return pd.Series(np.nan, index=df.index, dtype=float)
+
+
+def _parse_minutes(values: pd.Series) -> pd.Series:
+    """Parse a minutes column to float minutes.
+
+    Production boxscore masters store minutes as 'MM:SS' strings ('32:15');
+    `pd.to_numeric(..., errors='coerce')` turns every such value into NaN,
+    which silently zeroed the entire minutes/usage feature family (and, via
+    the minutes>0 played filter, inflated n_prior_games with DNP rows).
+    Accepts numeric values, plain-number strings, 'MM:SS' and 'H:MM:SS'.
+    """
+    if pd.api.types.is_numeric_dtype(values):
+        return pd.to_numeric(values, errors="coerce").astype(float)
+    s = values.astype("string").str.strip()
+    out = pd.to_numeric(s, errors="coerce")
+    colon = out.isna() & s.str.contains(":", na=False)
+    if bool(colon.any()):
+        parts = s[colon].str.split(":", expand=True)
+        total = pd.Series(0.0, index=parts.index)
+        n_parts = parts.shape[1]
+        for i in range(n_parts):
+            # Last component is seconds; the first is minutes ('MM:SS') or
+            # hours ('H:MM:SS'): weights 60^(n-2-i) give minutes.
+            comp = pd.to_numeric(parts[i], errors="coerce").fillna(0.0)
+            total = total + comp * (60.0 ** (n_parts - 2 - i))
+        out.loc[colon] = total
+    return out.astype(float)
+
+
+def _normalize_boxscores(boxscores: pd.DataFrame) -> pd.DataFrame:
+    """Normalize production-master column conventions to the feature contract.
+
+    - team: masters carry `team_abbr`; the feature contract reads `team`.
+      Without this, team is None for every player and pace falls back to the
+      league default for the whole slate.
+    - minutes: masters carry 'MM:SS' strings; parse to float minutes.
+
+    Returns a copy; the caller's frame is untouched.
+    """
+    box = boxscores.copy()
+    if "team" not in box.columns and "team_abbr" in box.columns:
+        box["team"] = box["team_abbr"]
+    mcol = _min_col(box)
+    if mcol is not None:
+        box[mcol] = _parse_minutes(box[mcol])
+    return box
 
 
 def _filter_snapshots(
@@ -360,6 +454,8 @@ def build_pregame_features(
         snapshots = snapshots if snapshots is not None else boxscores.get("snapshots")
         boxscores = boxscores["boxscores"]
 
+    boxscores = _normalize_boxscores(boxscores)
+
     target_ts = pd.Timestamp(target_date).tz_localize(None).normalize()
     target_str = target_ts.strftime("%Y-%m-%d")
 
@@ -424,15 +520,24 @@ def build_rolling_training_frame(
     snapshots: pd.DataFrame | None = None,
     min_prior_games: int = 5,
     cutoff_hour_utc: int = 23,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> pd.DataFrame:
     """Build walk-forward pregame feature rows for every date in `boxscores` by calling `build_pregame_features` per date.
 
     Returns features + metadata (`date`, `player_id`) with NO forbidden columns; caller joins targets separately.
+    `start_date`/`end_date` (YYYY-MM-DD) optionally restrict which game dates
+    get feature rows; the full `boxscores` history is still used as the
+    lookback for every date.
     """
     dcol = _date_col(boxscores)
     b = boxscores.copy()
     b["_dstr"] = pd.to_datetime(b[dcol]).dt.tz_localize(None).dt.strftime("%Y-%m-%d")
     dates = sorted(b["_dstr"].unique())
+    if start_date is not None:
+        dates = [d for d in dates if d >= str(start_date)[:10]]
+    if end_date is not None:
+        dates = [d for d in dates if d <= str(end_date)[:10]]
     parts: list[pd.DataFrame] = []
     for d in dates:
         day_players = b.loc[b["_dstr"] == d, ["player_id"]].drop_duplicates()
