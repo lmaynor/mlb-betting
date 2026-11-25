@@ -269,9 +269,10 @@ def test_pp_points_is_a_live_market_with_labels_and_blend_weights():
     assert dp.PROJECT_STATS["nhl"]["pp_points"] == "negbin"
     assert dp.STAT_LABEL["pp_points"] == "PP Points" and "pp_points" in dp.ROTATION_MIN_USAGE["nhl"]
     # PRD-04 unification (2026-11-15): the unfitted priors blocked_shots / pp_points are 0.00 in the unified table
-    assert dp.BLEND_C_BY_SPORT_STAT["nhl"] == {"sog": 0.30, "saves": 0.15, "blocked_shots": 0.00, "points": 0.03,
+    # MOD-02 (2026-11-24): nhl sog moved 0.30 -> 0.29 from the board-engine refit
+    assert dp.BLEND_C_BY_SPORT_STAT["nhl"] == {"sog": 0.29, "saves": 0.15, "blocked_shots": 0.00, "points": 0.03,
                                                "goals": 0.03, "assists": 0.06, "pp_points": 0.00}
-    assert dp.blend_c("nhl", "sog") == 0.30 and dp.blend_c("nfl", "rec_yds") == dp.BLEND_C
+    assert dp.blend_c("nhl", "sog") == 0.29 and dp.blend_c("nfl", "rec_yds") == dp.BLEND_C
 
 
 def test_every_nhl_market_produces_a_valid_row_and_uses_its_blend_weight():

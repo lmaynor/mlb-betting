@@ -60,9 +60,10 @@ def test_nba_blend_constants_are_the_empirical_walk_forward_values():
     # and the accessor the board actually prices with returns them
     for stat, c in (("rebounds", 0.14), ("threes", 0.07), ("assists", 0.00), ("points", 0.06), ("pra", 0.06)):
         assert DP.blend_c("nba", stat) == c, stat
-    # PRD-04 unification: every unfitted market (the old priors ra / pr / pa / steals / blocks) is 0.00
+    # PRD-04 unification: every unfitted market (the old priors ra / pr / pa / steals / blocks) was 0.00;
+    # MOD-02 (2026-11-24): nba blocks moved 0.00 -> 0.03 on the board-engine holdout-gated refit
     assert nba["ra"] == 0.00 and nba["pr"] == 0.00 and nba["pa"] == 0.00
-    assert nba["steals"] == 0.00 and nba["blocks"] == 0.00
+    assert nba["steals"] == 0.00 and nba["blocks"] == 0.03
 
 
 # ----------------------------------------------------------------------------------------------- D4 NHL
