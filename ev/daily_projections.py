@@ -232,10 +232,16 @@ def load_trained(now: datetime | None = None) -> dict:
 #   particular for every market that is official-eligible today (threes .07, rebounds .14, saves .15), so the live card
 #   is untouched. nhl sog (.30) and nhl saves (.15) stay as priors pending a board-engine fit -- see
 #   BLEND_PRIOR_PENDING_BOARD_FIT below.
+#   MOD-02 RECALIBRATION 2026-11-24 (board-engine refit, scripts/mod02_refit_grade.py; fit Nov 2-15, holdout Nov 16-24 all
+#   priced rows, gate = beat the served blend with slope in [0.75, 1.33]): nhl sog .30 -> .29 (holdout dLL -0.0001, z -1.95;
+#   slope 1.02) and nba blocks .00 -> .03 (dLL -0.0002; slope 0.98; provisional, re-grade when n doubles). Every other fitted
+#   family FAILED the gate on this cycle and keeps its current value (rebounds fit .13 slope 1.68; threes fit .00 no holdout
+#   improvement; assists fit .16 slope 1.49; points LEVEL-ONLY c=0 no improvement and worse ECE; pra c=0 failed) — do not read
+#   this table as unexamined; it is examined and mostly unchanged on purpose.
 BLEND_C_BY_SPORT_STAT = {
     "nba": {"threes": 0.07, "rebounds": 0.14, "assists": 0.00, "ra": 0.00, "pr": 0.00, "pa": 0.00, "pra": 0.06,
-            "points": 0.06, "steals": 0.00, "blocks": 0.00},
-    "nhl": {"sog": 0.30, "saves": 0.15, "blocked_shots": 0.00, "points": 0.03, "goals": 0.03, "assists": 0.06,
+            "points": 0.06, "steals": 0.00, "blocks": 0.03},
+    "nhl": {"sog": 0.29, "saves": 0.15, "blocked_shots": 0.00, "points": 0.03, "goals": 0.03, "assists": 0.06,
             "pp_points": 0.00},
 }
 # (sport, stat) entries whose weight is a PRIOR pending a fit on the serving board engine, not a measurement on it
@@ -247,7 +253,11 @@ BLEND_PRIOR_PENDING_BOARD_FIT = frozenset({("nhl", "sog"), ("nhl", "saves")})
 # MEASURED on those models (docs/analysis/nhl_trained_serving_2026-11-01.md, BettingPros 2022-10..2026-10, walk-forward refits): goals +0.37
 # (t 5.8), assists +0.34 (t 6.9), points +0.175 (t 3.5); saves pooled +0.75 but +0.37 / +1.02 / +0.35 by season, so the weakest season's
 # value is used. Information, not money: the skater markets' ROI5 at the best price is -0.2% / -0.3% / -1.5%.
-BLEND_C_TRAINED = {"nhl": {"goals": 0.37, "assists": 0.34, "points": 0.175, "saves": 0.35}}
+# MOD-02 2026-11-24: points .175 -> .43 from the board-engine refit (fit Nov 2-15 on trained_v1 rows, holdout Nov 16-24 PASS:
+# dLL -0.0004, slope 1.07, ECE .017 vs .019). The .175 above was the BettingPros walk-forward value; the board fit supersedes it
+# for serving. Provisional per the era rule: re-grade on the next slate cycle before any further move. assists keeps .34 (both
+# an (a,b) map at fixed c and a c-grid refit to .37 FAILED the holdout gate).
+BLEND_C_TRAINED = {"nhl": {"goals": 0.37, "assists": 0.34, "points": 0.43, "saves": 0.35}}
 # Per-stat intercept / slope of the blend, logit(p) = a + b logit(mkt) + c (logit(model) - logit(mkt)) (what the model-vs-market studies
 # FIT; blend_p_over's default a = 0, b = 1 is the c-only form). Empty = every stat keeps (0, 1). Filled only from a real refit
 # (scripts/nba_engine_vs_market.py), never by hand.

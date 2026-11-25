@@ -56,7 +56,8 @@ def test_an_intercept_offsets_a_biased_model_so_the_blend_has_the_markets_mean()
 # -------------------------------------------------------------------------------------------- trained-model weights
 def test_trained_nhl_rows_use_the_measured_trained_weights_and_everything_else_is_unchanged():
     assert dp.blend_c("nhl", "goals") == 0.03 and dp.blend_c("nhl", "goals", trained=True) == 0.37
-    assert dp.blend_c("nhl", "assists", trained=True) == 0.34 and dp.blend_c("nhl", "points", trained=True) == 0.175
+    # MOD-02 (2026-11-24): trained points moved 0.175 -> 0.43 from the board-engine refit (assists keeps 0.34)
+    assert dp.blend_c("nhl", "assists", trained=True) == 0.34 and dp.blend_c("nhl", "points", trained=True) == 0.43
     assert dp.blend_c("nhl", "saves", trained=True) == 0.35                          # weakest season, not the pooled +0.75
     assert dp.blend_c("nhl", "sog", trained=True) == dp.blend_c("nhl", "sog")         # not a trained stat -> the engine's own entry
     assert dp.blend_c("nba", "threes", trained=True) == 0.07          # Argon props D3 walk-forward value (was 0.19)

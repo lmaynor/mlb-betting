@@ -55,13 +55,15 @@ def saves_row(**kw):
 def test_unified_table_values():
     nba, nhl = DP.BLEND_C_BY_SPORT_STAT["nba"], DP.BLEND_C_BY_SPORT_STAT["nhl"]
     assert nba["assists"] == 0.00
-    for stat in ("ra", "pr", "pa", "steals", "blocks"):
+    for stat in ("ra", "pr", "pa", "steals"):
         assert nba[stat] == 0.00, stat                       # unfitted priors zeroed
+    # MOD-02 (2026-11-24): nba blocks moved 0.00 -> 0.03 and nhl sog moved 0.30 -> 0.29 (board-engine refit)
+    assert nba["blocks"] == 0.03
     for stat in ("blocked_shots", "pp_points"):
         assert nhl[stat] == 0.00, stat
     # fitted values unchanged -- including every market official-eligible today
     assert (nba["threes"], nba["rebounds"], nba["points"], nba["pra"]) == (0.07, 0.14, 0.06, 0.06)
-    assert (nhl["sog"], nhl["saves"], nhl["goals"], nhl["assists"], nhl["points"]) == (0.30, 0.15, 0.03, 0.06, 0.03)
+    assert (nhl["sog"], nhl["saves"], nhl["goals"], nhl["assists"], nhl["points"]) == (0.29, 0.15, 0.03, 0.06, 0.03)
     assert DP.BLEND_PRIOR_PENDING_BOARD_FIT == frozenset({("nhl", "sog"), ("nhl", "saves")})
 
 

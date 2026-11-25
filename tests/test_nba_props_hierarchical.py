@@ -328,8 +328,9 @@ def test_blend_weights_are_per_sport_and_stat_with_defaults():
     # zeroed assists (decayed to noise) and every unfitted prior (ra / blocks / ...)
     assert dp.blend_c("nba", "threes") == 0.07 and dp.blend_c("nba", "rebounds") == 0.14 and dp.blend_c("nba", "assists") == 0.00
     assert dp.blend_c("nba", "pra") == 0.06 and dp.blend_c("nba", "points") == 0.06
-    assert dp.blend_c("nba", "ra") == 0.00 and dp.blend_c("nba", "blocks") == 0.00
-    assert dp.blend_c("nhl", "sog") == 0.30 and dp.blend_c("nhl", "goals") == 0.03       # NHL goals measured +0.03 (nhl_engine_vs_market)
+    # MOD-02 (2026-11-24): nba blocks moved 0.00 -> 0.03 and nhl sog moved 0.30 -> 0.29 (board-engine refit)
+    assert dp.blend_c("nba", "ra") == 0.00 and dp.blend_c("nba", "blocks") == 0.03
+    assert dp.blend_c("nhl", "sog") == 0.29 and dp.blend_c("nhl", "goals") == 0.03       # NHL goals measured +0.03 (nhl_engine_vs_market)
     assert dp.blend_c("nhl", "shots_unlisted") == dp.BLEND_C
     assert dp.blend_c("nfl", "rec_yds") == dp.BLEND_C and dp.blend_c("nfl", "anytime_td") == dp.BLEND_C   # NFL untouched
     assert dp.blend_c("mlb", "k") == dp.BLEND_C and dp.blend_c(None, None) == dp.BLEND_C
