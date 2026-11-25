@@ -332,7 +332,8 @@ def test_blend_weights_are_per_sport_and_stat_with_defaults():
     assert dp.blend_c("nba", "ra") == 0.00 and dp.blend_c("nba", "blocks") == 0.03
     assert dp.blend_c("nhl", "sog") == 0.29 and dp.blend_c("nhl", "goals") == 0.03       # NHL goals measured +0.03 (nhl_engine_vs_market)
     assert dp.blend_c("nhl", "shots_unlisted") == dp.BLEND_C
-    assert dp.blend_c("nfl", "rec_yds") == dp.BLEND_C and dp.blend_c("nfl", "anytime_td") == dp.BLEND_C   # NFL untouched
+    # MOD-04e E0(iii) (2026-11-25): NFL now has an explicit "default": 0.00 entry (was BLEND_C)
+    assert dp.blend_c("nfl", "rec_yds") == 0.00 and dp.blend_c("nfl", "anytime_td") == 0.00
     assert dp.blend_c("mlb", "k") == dp.BLEND_C and dp.blend_c(None, None) == dp.BLEND_C
     hi = dp.blend_p_over(0.70, 0.50, sport="nba", stat="threes")
     lo = dp.blend_p_over(0.70, 0.50, sport="nba", stat="points")

@@ -238,11 +238,14 @@ def load_trained(now: datetime | None = None) -> dict:
 #   family FAILED the gate on this cycle and keeps its current value (rebounds fit .13 slope 1.68; threes fit .00 no holdout
 #   improvement; assists fit .16 slope 1.49; points LEVEL-ONLY c=0 no improvement and worse ECE; pra c=0 failed) — do not read
 #   this table as unexamined; it is examined and mostly unchanged on purpose.
+#   MOD-04 Cluster (e) E0(iii), Nov 25, 2026: c = 0.00 for NFL families until a family earns weight through the
+#   pre-registered gate (nfl sub-table uses "default": 0.00 so every NFL stat resolves to 0.00 instead of BLEND_C).
 BLEND_C_BY_SPORT_STAT = {
     "nba": {"threes": 0.07, "rebounds": 0.14, "assists": 0.00, "ra": 0.00, "pr": 0.00, "pa": 0.00, "pra": 0.06,
             "points": 0.06, "steals": 0.00, "blocks": 0.03},
     "nhl": {"sog": 0.29, "saves": 0.15, "blocked_shots": 0.00, "points": 0.03, "goals": 0.03, "assists": 0.06,
             "pp_points": 0.00},
+    "nfl": {"default": 0.00},
 }
 # (sport, stat) entries whose weight is a PRIOR pending a fit on the serving board engine, not a measurement on it
 # (PRD-04 slice 1): sog's .30 is the trained model's measured c applied to board rows; saves' .15 is the prior kept
