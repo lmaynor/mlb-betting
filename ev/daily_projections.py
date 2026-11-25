@@ -2818,6 +2818,14 @@ def _finish(payload: dict, sport: str, write: bool, now: datetime | None = None)
         except Exception as exc:                                                       # noqa: BLE001
             log.warning("projections write failed for %s: %s", sport, exc)
         write_archive(payload, now or datetime.now(timezone.utc))
+        try:
+            import os
+            if os.environ.get("ALL_ROWS_BANK") == "1":
+                from ev import all_rows_store
+                root = os.environ.get("ALL_ROWS_ROOT", "EVSweep/all_rows")
+                all_rows_store.bank_payload(payload, "daily_projections", root)
+        except Exception as exc:                                                       # noqa: BLE001
+            log.warning("all_rows banking failed for %s: %s", sport, exc)
     log.info("PROJECTIONS %s", json.dumps({k: payload[k] for k in ("sport", "status", "count", "lines_source", "summary")},
                                           default=str))
     return payload
