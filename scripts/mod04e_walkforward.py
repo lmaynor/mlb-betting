@@ -12,6 +12,14 @@ Fold protocol (strictly expanding/rolling pre-week):
 
 Usage:
   python3 scripts/mod04e_walkforward.py --seasons 2024,2025 --out /tmp/mod04e/wf.json
+
+Resilient chunked mode (per scored season, checkpointed):
+  python3 scripts/mod04e_walkforward.py --seasons 2024 --out wf2024.json \
+      --rows-out rows2024.jsonl --feat-cache /path/feat_cache --progress
+  python3 scripts/mod04e_walkforward.py --seasons 2025 --out wf2025.json \
+      --rows-out rows2025.jsonl --feat-cache /path/feat_cache --progress
+  python3 scripts/mod04e_walkforward.py --seasons 2024,2025 \
+      --merge-rows rows2024.jsonl,rows2025.jsonl --out wf.json
 """
 from __future__ import annotations
 
@@ -19,7 +27,9 @@ import argparse
 import json
 import math
 import os
+import pickle
 import sys
+import time
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
@@ -299,6 +309,117 @@ def compute_metrics(
     }
 
 
+def _utc_ts() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def progress_log(msg: str, enabled: bool = True) -> None:
+    """Timestamped progress line (flushed), so a killed run still leaves a trail."""
+    if enabled:
+        print(f"[{_utc_ts()}] {msg}", flush=True)
+
+
+def append_fold_rows(
+    path: str | Path,
+    *,
+    family: str,
+    season: int,
+    week: int,
+    y: Iterable[float],
+    pm: Iterable[float],
+    pk: Iterable[float],
+    px: Iterable[float],
+) -> None:
+    """Append one fold's scored rows to a JSONL checkpoint file (flush + fsync).
+
+    Pure I/O for resilient chunked runs: the values written are exactly the rows
+    the in-memory path feeds to compute_metrics. Non-finite values (e.g. a NaN
+    XGBoost prob) are stored as null; build_families_from_rows converts back.
+    """
+    def _clean(vals: Iterable[float]) -> list:
+        out = []
+        for v in vals:
+            fv = float(v)
+            out.append(fv if math.isfinite(fv) else None)
+        return out
+
+    rec = {
+        "family": str(family),
+        "season": int(season),
+        "week": int(week),
+        "y": _clean(y),
+        "pm": _clean(pm),
+        "pk": _clean(pk),
+        "px": _clean(px),
+    }
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with p.open("a") as fh:
+        fh.write(json.dumps(rec) + "\n")
+        fh.flush()
+        os.fsync(fh.fileno())
+
+
+def build_families_from_rows(
+    rows_paths: Iterable[str | Path],
+    families: Optional[list[str]] = None,
+) -> dict[str, Any]:
+    """Rebuild the per-family metrics dict from append_fold_rows checkpoint files.
+
+    Concatenates each family's fold rows in file order and calls compute_metrics
+    with the same arguments run_walkforward would use (px passed only for
+    families with an XGBoost spec), so merged metrics are identical to a
+    single-process run over the same rows. Requested families with no
+    checkpointed rows get the same empty-metrics entry run_walkforward emits
+    for an empty consensus frame.
+    """
+    grouped: dict[str, dict[str, list]] = {}
+    for rp in rows_paths:
+        rp = Path(rp)
+        if not rp.exists():
+            continue
+        for line in rp.read_text().splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            rec = json.loads(line)
+            g = grouped.setdefault(str(rec["family"]), {"y": [], "pm": [], "pk": [], "px": []})
+            for key in ("y", "pm", "pk", "px"):
+                g[key].extend(rec[key])
+
+    def _metrics_for(fam: str) -> dict[str, Any]:
+        g = grouped.get(fam)
+        if g is None:
+            return {"market": MARKET_MAP.get(fam), **compute_metrics([], [], [])}
+
+        def _arr(vals: list) -> np.ndarray:
+            return np.array([np.nan if v is None else float(v) for v in vals], dtype=float)
+
+        return {
+            "market": MARKET_MAP.get(fam),
+            **compute_metrics(
+                _arr(g["y"]),
+                _arr(g["pm"]),
+                _arr(g["pk"]),
+                _arr(g["px"]) if XGB_SPEC_MAP.get(fam) is not None else None,
+            ),
+        }
+
+    requested = list(families) if families is not None else list(MARKET_MAP.keys())
+    out: dict[str, Any] = {fam: _metrics_for(fam) for fam in requested}
+    for fam in grouped:
+        if fam not in out:
+            out[fam] = _metrics_for(fam)
+    return out
+
+
+def _feat_cache_paths(feat_cache: Optional[str], sw: tuple[int, int]) -> Optional[tuple[Path, Path]]:
+    if not feat_cache:
+        return None
+    cdir = Path(feat_cache)
+    return cdir / f"feat_{sw[0]}_{sw[1]:02d}.pkl", cdir / f"lbl_{sw[0]}_{sw[1]:02d}.pkl"
+
+
 def load_bp_market_cached(
     market_slug: str,
     dates: Iterable[str],
@@ -337,6 +458,9 @@ def run_walkforward(
     families: list[str] = list(MARKET_MAP.keys()),
     limit_weeks: Optional[int] = None,
     cache_dir: str = BP_CACHE_DIR,
+    rows_out: Optional[str] = None,
+    feat_cache: Optional[str] = None,
+    progress: bool = False,
 ) -> dict[str, Any]:
     """Run full walk-forward evaluation across requested seasons and families."""
     min_train_season = min(seasons) - 3
@@ -373,6 +497,10 @@ def run_walkforward(
         "rosters_weekly": rosters_weekly,
         "players": players,
     }
+    progress_log(
+        f"data loaded: {len(schedules)} schedule rows, load_seasons={load_seasons}, {len(folds)} folds",
+        progress,
+    )
 
     # Pre-build per-(season, week) features & labels strictly per date
     sw_feat: dict[tuple[int, int], pd.DataFrame] = {}
@@ -385,6 +513,14 @@ def run_walkforward(
     for r in sw_dates.itertuples(index=False):
         sw = (int(r.season), int(r.week))
         if sw not in needed_sw:
+            continue
+        cache_paths = _feat_cache_paths(feat_cache, sw)
+        if cache_paths is not None and cache_paths[0].exists() and cache_paths[1].exists():
+            with cache_paths[0].open("rb") as fh:
+                sw_feat[sw] = pickle.load(fh)
+            with cache_paths[1].open("rb") as fh:
+                sw_lbl[sw] = pickle.load(fh)
+            progress_log(f"features {sw}: cache hit ({len(sw_feat[sw])} rows)", progress)
             continue
         day_feats = []
         for gdate in sorted(set(r.gameday_s)):
@@ -404,6 +540,14 @@ def run_walkforward(
             )
             sw_feat[sw] = f_all
             sw_lbl[sw] = l_all
+            if cache_paths is not None:
+                cache_paths[0].parent.mkdir(parents=True, exist_ok=True)
+                with cache_paths[0].open("wb") as fh:
+                    pickle.dump(f_all, fh)
+                with cache_paths[1].open("wb") as fh:
+                    pickle.dump(l_all, fh)
+            progress_log(f"features {sw}: built ({len(f_all)} rows)", progress)
+    progress_log(f"feature pre-build done: {len(sw_feat)} season-weeks in memory", progress)
 
     # Build XGBoost props_features frame once if any requested family has an XGB spec
     pf_frame: Optional[pd.DataFrame] = None
@@ -436,6 +580,7 @@ def run_walkforward(
 
     for fam in families:
         mkt_slug = MARKET_MAP[fam]
+        progress_log(f"family {fam}: loading BettingPros market {mkt_slug}", progress)
         bp_raw = load_bp_market_cached(mkt_slug, scored_dates, cache_dir=cache_dir)
         cons = consensus_from_bp(bp_raw)
         if cons.empty:
@@ -496,6 +641,7 @@ def run_walkforward(
             else:
                 xgb_disp = None
 
+            _i0 = len(all_y)
             for idx, row in sc_f.iterrows():
                 gdate = str(row["game_date"])[:10]
                 c_day = cons_by_date.get(gdate)
@@ -529,6 +675,22 @@ def run_walkforward(
                 all_pk.append(p_k)
                 all_px.append(p_x)
 
+            if rows_out is not None and len(all_y) > _i0:
+                append_fold_rows(
+                    rows_out,
+                    family=fam,
+                    season=season_s,
+                    week=week_w,
+                    y=all_y[_i0:],
+                    pm=all_pm[_i0:],
+                    pk=all_pk[_i0:],
+                    px=all_px[_i0:],
+                )
+            progress_log(
+                f"fold {fam} {season_s} wk{week_w}: +{len(all_y) - _i0} rows (family total {len(all_y)})",
+                progress,
+            )
+
         report["families"][fam] = {
             "market": mkt_slug,
             **compute_metrics(all_y, all_pm, all_pk, all_px if xgb_spec is not None else None),
@@ -543,6 +705,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--families", default=",".join(MARKET_MAP.keys()), help="Comma-separated MOD-04e families")
     ap.add_argument("--limit-weeks", type=int, default=None, help="Limit weeks per scored season for smoke runs")
     ap.add_argument("--cache-dir", default=BP_CACHE_DIR, help=f"Local BP cache dir (default: {BP_CACHE_DIR})")
+    ap.add_argument("--rows-out", default=None, help="Optional JSONL checkpoint file: each scored fold's rows are appended (flush+fsync) as it completes")
+    ap.add_argument("--feat-cache", default=None, help="Optional directory caching per-(season, week) feature/label frames (pickle) so a restarted chunk resumes its pre-build")
+    ap.add_argument("--progress", action="store_true", help="Print timestamped progress lines (data load, per-week features, per-fold rows)")
+    ap.add_argument("--merge-rows", default=None, help="Merge mode: comma-separated rows checkpoint files to combine into the final report at --out (no walk-forward run)")
     ap.add_argument("--out", required=True, help="Output JSON path")
     args = ap.parse_args(argv)
 
@@ -552,7 +718,38 @@ def main(argv: Optional[list[str]] = None) -> int:
         if f not in MARKET_MAP:
             ap.error(f"Unknown family {f!r}; expected subset of {list(MARKET_MAP)}")
 
-    res = run_walkforward(seasons=seasons, families=families, limit_weeks=args.limit_weeks, cache_dir=args.cache_dir)
+    if args.merge_rows:
+        rows_paths = [p.strip() for p in args.merge_rows.split(",") if p.strip()]
+        merged_families = build_families_from_rows(rows_paths, families=families)
+        # n_folds via the same fold construction run_walkforward uses
+        m_sched = nfl_read.load("schedules")
+        m_load = list(range(min(seasons) - 3, max(seasons) + 1))
+        m_sched = m_sched[m_sched["season"].isin(m_load)].copy()
+        m_reg = m_sched[m_sched.get("game_type", "REG") == "REG"].copy() if "game_type" in m_sched.columns else m_sched
+        m_sw = sorted({(int(s), int(w)) for s, w in zip(m_reg["season"], m_reg["week"])})
+        m_folds = iter_walkforward_folds(m_sw, scored_seasons=seasons, limit_weeks=args.limit_weeks)
+        res = {
+            "engine_id": mod_mdl.ENGINE_ID,
+            "seasons": seasons,
+            "limit_weeks": args.limit_weeks,
+            "n_folds": len(m_folds),
+            "families": merged_families,
+        }
+        out_path = Path(args.out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(res, indent=2))
+        print(f"Wrote merged walk-forward report to {out_path} from {len(rows_paths)} rows files")
+        return 0
+
+    res = run_walkforward(
+        seasons=seasons,
+        families=families,
+        limit_weeks=args.limit_weeks,
+        cache_dir=args.cache_dir,
+        rows_out=args.rows_out,
+        feat_cache=args.feat_cache,
+        progress=args.progress,
+    )
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(res, indent=2))

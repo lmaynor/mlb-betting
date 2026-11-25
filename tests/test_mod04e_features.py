@@ -151,6 +151,34 @@ def test_same_day_only_player_gets_no_row_and_cutoff_respected():
     assert wr1["implied_team_total"] == pytest.approx(27.25)
 
 
+def test_extract_own_injuries_tolerates_missing_status():
+    # Regression (E1 walk-forward crash, Nov 25 2026): nflverse injury rows
+    # with a missing report_status reach _extract_own_injuries as float NaN
+    # even after astype(str) under the pandas string dtype, and st.strip()
+    # raised AttributeError, killing the run on its first scored week.
+    inj = pd.DataFrame([
+        {"gsis_id": "P_A", "season": 2024, "week": 2, "report_status": "Out"},
+        {"gsis_id": "P_B", "season": 2024, "week": 2, "report_status": None},
+        {"gsis_id": "P_C", "season": 2024, "week": 2, "report_status": float("nan")},
+        {"gsis_id": "P_D", "season": 2024, "week": 2, "report_status": "Questionable"},
+    ])
+    st_map, wt_map = F._extract_own_injuries(inj, (2024, 2))
+    assert st_map == {"P_A": "OUT", "P_D": "QUESTIONABLE"}
+    assert wt_map == {"P_A": 1.0, "P_D": 0.4}
+
+    # End to end: a missing-status row in the slate's injury frame must not
+    # crash the feature build nor mark the player injured.
+    frames = _synthetic_frames()
+    extra = pd.DataFrame([
+        {"gsis_id": "P_QB1", "team": "KC", "season": 2024, "week": 2, "report_status": None,
+         "date_modified": "2024-09-14T15:00:00Z"},
+    ])
+    frames["injuries"] = pd.concat([frames["injuries"], extra], ignore_index=True)
+    feat = F.build_pregame_features("2024-09-15", "2024-09-15T15:30:00Z", frames)
+    qb1 = feat[feat["player_id"] == "P_QB1"].iloc[0]
+    assert qb1["injury_status"] == "ACTIVE"
+
+
 def test_schema_gate_rejects_banned_columns():
     df = pd.DataFrame({"player_id": ["P1"], "targets_ewm": [5.0]})
     F.assert_feature_schema(df)  # clean passes
