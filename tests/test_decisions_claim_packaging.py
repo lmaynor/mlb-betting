@@ -162,7 +162,7 @@ def test_package_evidence_directory_pointer_attaches_listing(tmp_path: Path) -> 
 def test_package_evidence_tiny_budget_forces_truncation_marker(tmp_path: Path) -> None:
     """Tiny budget_tokens forces truncation marker and sets truncated=True."""
     doc_file = tmp_path / "long_doc.md"
-    doc_file.write_text("A" * 1000, encoding="utf-8")
+    doc_file.write_text("A" * 20000, encoding="utf-8")
 
     claim = {
         "claim_id": "C06",
@@ -171,8 +171,14 @@ def test_package_evidence_tiny_budget_forces_truncation_marker(tmp_path: Path) -
         "evidence": "Baseline evidence prose.",
     }
 
-    # With budget_tokens=150, the 1000-char document cannot fit in full
-    packaged = package_evidence(claim, extra_roots=[tmp_path], budget_tokens=150)
+    # budget_tokens=1000 is far below the 20,000-char document's token cost
+    # (~5,700 tokens), so the document cannot fit in full, yet comfortably
+    # above the fixed packaging overhead (claim header + artifact header +
+    # truncation marker). That overhead scales with the tmp_path length, and
+    # the old budget of 150 sat within a few tokens of it, so the test's
+    # outcome flipped with the environment's path length (proven Nov 24,
+    # 2026: pass under a short TMPDIR, fail under a long one).
+    packaged = package_evidence(claim, extra_roots=[tmp_path], budget_tokens=1000)
 
     assert len(packaged["attached"]) == 1
     assert packaged["attached"][0]["truncated"] is True
