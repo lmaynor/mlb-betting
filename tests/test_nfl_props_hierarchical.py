@@ -451,7 +451,8 @@ def test_daily_projections_routes_per_stat_through_the_allowlist(monkeypatch):
     assert other["engine"] == dp.ENGINE                                                 # not allowlisted: legacy price
     monkeypatch.setenv("NFL_HIER_STATS", "none")
     assert dp.engine_id("nfl") == dp.ENGINE and dp.make_row(*args("rec_yds", "wr1"))["engine"] == dp.ENGINE
-    assert dp.engine_id("nhl") == dp.ENGINE                                             # other sports are untouched
+    monkeypatch.delenv("NHL_TRAINED_PROPS", raising=False)
+    assert dp.engine_id("nhl") == dp.ENGINE_NHL_HIER                                    # other sports keep their own engine: MOD-01 truthful labeling made NHL's id hierarchical_v1 (see tests/test_daily_projections_engine_labels.py); the NFL flags must not leak into it
 
 
 def test_hierarchical_failure_falls_back_to_the_legacy_price(monkeypatch):
