@@ -15,7 +15,7 @@ import pandas as pd
 
 from mod04d import nhl_scoring
 from mod04d.distributions import blend_probs, pmf_mean, pmf_p_over
-from mod04d.features import assert_no_leak_columns
+from mod04d.features import assert_no_leak_columns, validate_feature_frame
 
 FAMILY_ENGINE_MAP: dict[str, str] = {
     "nba_points": "mod04_nba_points_shadow_v1",
@@ -77,6 +77,41 @@ def _score_model(
     return pmf, mu, alpha
 
 
+# Below this many rows, identical leaf assignments from a small fit are
+# ordinary and exact-constant parameters prove nothing; every real daily
+# bank is far larger (the 2026-11-25 slate was 109 rows).
+CONSTANT_GUARD_MIN_ROWS = 10
+
+
+def _assert_varying_params(
+    family: str, mu: np.ndarray, alpha: np.ndarray | None
+) -> None:
+    """Fail loudly on a constant-parameter slate.
+
+    A bank-sized slate whose fitted (mu, alpha) are each a single repeated
+    value is one league-average distribution evaluated at each line, never a
+    valid model bank. This is the output signature of a degenerate fit (e.g.
+    fitting on raw boxscores, where the only usable feature is a constant
+    structural mu) and it banked silently on 2026-11-25 before this guard.
+    """
+    mu = np.asarray(mu, dtype=float)
+    finite_mu = mu[np.isfinite(mu)]
+    if finite_mu.size >= CONSTANT_GUARD_MIN_ROWS and np.unique(finite_mu).size <= 1:
+        raise ValueError(
+            f"shadow bank for {family}: mu is constant ({finite_mu[0]}) across "
+            f"{finite_mu.size} rows; refusing to bank a constant-parameter slate"
+        )
+    if alpha is not None:
+        alpha = np.asarray(alpha, dtype=float)
+        finite_alpha = alpha[np.isfinite(alpha)]
+        if finite_alpha.size >= CONSTANT_GUARD_MIN_ROWS and np.unique(finite_alpha).size <= 1:
+            raise ValueError(
+                f"shadow bank for {family}: alpha is constant ({finite_alpha[0]}) "
+                f"across {finite_alpha.size} rows; refusing to bank a "
+                "constant-parameter slate"
+            )
+
+
 def build_shadow_rows(
     family: str,
     slate_features: pd.DataFrame,
@@ -100,9 +135,14 @@ def build_shadow_rows(
     n = len(slate_features)
     if n == 0:
         return []
+    if family.startswith("nba_"):
+        # Positive gate: the leak blocklist cannot see all-NaN key features.
+        validate_feature_frame(slate_features, context=f"shadow slate for {family}")
 
     engine = _resolve_engine(family, model)
     pmf, mu_arr, alpha_arr = _score_model(family, slate_features, model, k_max=k_max)
+    if n >= CONSTANT_GUARD_MIN_ROWS:
+        _assert_varying_params(family, mu_arr, alpha_arr)
 
     if lines is None:
         line_arr = np.full(n, DEFAULT_LINES[family], dtype=float)

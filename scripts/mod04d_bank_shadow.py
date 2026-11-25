@@ -20,8 +20,58 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from mod04d import nba_points, nba_threes, nhl_scoring  # noqa: E402
-from mod04d.features import build_pregame_features  # noqa: E402
+from mod04d.features import (  # noqa: E402
+    build_pregame_features,
+    build_rolling_training_frame,
+    validate_feature_frame,
+)
 from mod04d.shadow import FAMILY_ENGINE_MAP, build_shadow_rows, write_shadow_file  # noqa: E402
+
+# NBA shadow fits train on leak-proof rolling pregame features over the game
+# dates in this window before the bank date (full boxscore history is still
+# used as lookback). 75 days roughly matches one quarter-season of form.
+TRAIN_WINDOW_DAYS = 75
+
+
+def _build_training_frame(box_df: pd.DataFrame, family: str, target_date: str) -> pd.DataFrame:
+    """Build the fit frame the NBA models were designed for.
+
+    The previous code fit `nba_points.fit` / `fit_threes` directly on the RAW
+    boxscore master. A raw master has none of the engineered feature columns,
+    so the only usable 'feature' was the derived structural mu, itself built
+    entirely from fallback constants: the fitted model was a single
+    league-average distribution, and every banked slate carried one constant
+    (mu, alpha). Fit instead on `build_rolling_training_frame` output joined
+    to each date's realized targets, exactly as the walk-forward harness does.
+    """
+    dcol = "game_date" if "game_date" in box_df.columns else "date"
+    box = box_df.copy()
+    box["_d"] = pd.to_datetime(box[dcol]).dt.strftime("%Y-%m-%d")
+    end = pd.Timestamp(target_date) - pd.Timedelta(days=1)
+    start = end - pd.Timedelta(days=TRAIN_WINDOW_DAYS - 1)
+    feats = build_rolling_training_frame(
+        box_df,
+        min_prior_games=5,
+        start_date=start.strftime("%Y-%m-%d"),
+        end_date=end.strftime("%Y-%m-%d"),
+    )
+    if len(feats) == 0:
+        raise ValueError(
+            f"No rolling training rows in window {start.date()}..{end.date()} for {family}"
+        )
+    if family == "nba_points":
+        tgt = box[["_d", "player_id", "points"]].rename(columns={"_d": "date"})
+    else:
+        tgt = box[
+            ["_d", "player_id", "three_points_made", "three_points_attempted"]
+        ].rename(
+            columns={"_d": "date", "three_points_made": "fg3m", "three_points_attempted": "fg3a"}
+        )
+    frame = feats.merge(tgt, on=["date", "player_id"], how="inner").reset_index(drop=True)
+    if len(frame) == 0:
+        raise ValueError(f"Training frame empty after target join for {family} on {target_date}")
+    validate_feature_frame(frame, context=f"training frame for {family}")
+    return frame
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -102,10 +152,15 @@ def main(argv: list[str] | None = None) -> int:
         model = nhl_scoring.load_bundle(lambda k: (mdir / k).read_bytes(), prefix="")
     elif box_file is not None and box_file.exists():
         box_df = _read_table(box_file)
+        train_frame = _build_training_frame(box_df, args.family, args.date)
+        print(
+            f"Fit frame for {args.family}: {len(train_frame)} rows "
+            f"({train_frame['date'].min()}..{train_frame['date'].max()})"
+        )
         if args.family == "nba_points":
-            model = nba_points.fit(box_df)
+            model = nba_points.fit(train_frame)
         else:
-            model = nba_threes.fit_threes(box_df)
+            model = nba_threes.fit_threes(train_frame)
     else:
         print(
             f"ERROR: Local --boxscores-path required to fit shadow {args.family} model from local data.",
