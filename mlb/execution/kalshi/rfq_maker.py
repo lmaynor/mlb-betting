@@ -32,6 +32,7 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo
 
+from ev.kalshi_rfq_filter import FilterConfig, RFQFilterState, classify_rfq_record
 from mlb.execution.kalshi.client import KalshiAPIError
 from mlb.execution.kalshi.fees import taker_fee
 from mlb.execution.kalshi.ledger import Ledger, now_iso
@@ -585,6 +586,9 @@ class RFQTape:
         # Day summary accumulators (design section 2i), keyed by UTC day.
         self._sum_day: str | None = None
         self._sum = self._fresh_summary()
+        # Ratified RUL-20261125 ingest filter (Window-1 shadow mode).
+        self._filter_state = RFQFilterState()
+        self._filter_cfg = FilterConfig()
 
     def path(self) -> str:
         day = datetime.fromtimestamp(self._clock(), timezone.utc).date().isoformat()
@@ -629,7 +633,8 @@ class RFQTape:
     def _fresh_summary() -> dict:
         return {"records_by_kind": {}, "fires": 0, "evaluated": 0, "in_denominator": 0,
                 "by_family": {}, "by_excluded_series_class": {}, "preview_10": 0,
-                "followup_records": 0, "creator_counts": {}, "flagged_creators": {}}
+                "followup_records": 0, "creator_counts": {}, "flagged_creators": {},
+                "by_primary_class": {}, "by_disposition": {}, "fires_deduped": 0}
 
     def _account(self, record: dict) -> None:
         """Day-summary accounting (design section 2i) on every append, with automatic rollover: when the
@@ -665,6 +670,12 @@ class RFQTape:
             s["creator_counts"][str(cid)] = s["creator_counts"].get(str(cid), 0) + 1
             if record.get("creator_flagged"):
                 s["flagged_creators"][str(cid)] = s["creator_counts"][str(cid)]
+        pc = str(record.get("primary_class") or "UNCLASSIFIED")
+        s["by_primary_class"][pc] = s["by_primary_class"].get(pc, 0) + 1
+        disp = str(record.get("disposition") or "UNCLASSIFIED")
+        s["by_disposition"][disp] = s["by_disposition"].get(disp, 0) + 1
+        if record.get("disposition") == "ADMITTED_FIRE" and not record.get("is_dup_creator_combo"):
+            s["fires_deduped"] += 1
 
     def day_summary(self, day: str | None = None) -> dict:
         """The accumulated section 2i counters for `day` (default: the current accumulated day)."""
@@ -681,7 +692,10 @@ class RFQTape:
                 "flagged_creators": dict(s["flagged_creators"]),
                 "top_creators": [{"creator_id": c, "count": n} for c, n in top],
                 "followup_records": s["followup_records"],
-                "followup_attach_rate": (s["followup_records"] / evaluated) if evaluated else 0.0}
+                "followup_attach_rate": (s["followup_records"] / evaluated) if evaluated else 0.0,
+                "by_primary_class": dict(s["by_primary_class"]),
+                "by_disposition": dict(s["by_disposition"]),
+                "fires_deduped": s["fires_deduped"]}
 
     def write_day_summary(self, day: str | None = None) -> dict | None:
         """Write the day summary sidecar: {prefix}/{day}/day_summary.json in storage mode (through the
@@ -781,13 +795,20 @@ class RFQTape:
         dlegs = list(decision.legs or ())
         family = _leg_family_label(dlegs[0].get("sport"), dlegs[0].get("player_norm")) if dlegs else None
         legs = [self._enrich_leg(snap, ts, q_by_ticker) for snap in dlegs]
-        self.append({
+        if q_by_ticker is None:
+            leg_quotes = None
+        else:
+            leg_quotes = {}
+            for tk in dict.fromkeys(t for t in leg_tickers if t):
+                q_ts, q_bid, q_ask = self._unpack_quote(q_by_ticker.get(tk))
+                leg_quotes[tk] = {"ts": q_ts, "bid": q_bid, "ask": q_ask}
+        record = {
             # v1 payload, unchanged.
             "kind": "rfq", "ts": ts, "rfq": rfq_msg, "plan": decision.action,
             "reason": decision.reason, "yes_bid": decision.yes_bid, "no_bid": decision.no_bid,
             "p_yes_true": decision.p_yes_true, "p_yes_cons": decision.p_yes_cons,
             "ev_per_contract": decision.ev_per_contract, "roi": decision.roi_on_collateral,
-            "legs": legs, "notes": decision.notes,
+            "legs": legs, "leg_quotes": leg_quotes, "notes": decision.notes,
             # v2 additions.
             "tape_schema": 2,
             "book_build_id": self._book_build_id,
@@ -826,7 +847,23 @@ class RFQTape:
             "creator_count_10m": creator_count_10m,
             "creator_flagged": creator_flagged,
             "creator_flag_since_ts": creator_flag_since_ts,
-        })
+        }
+        try:
+            record.update(classify_rfq_record(record, self._filter_state, self._filter_cfg))
+        except Exception as e:                                      # noqa: BLE001 -- classifier must never break recording
+            log.warning("RFQ filter classification failed for %s: %r", record.get("rfq_id"), e)
+            record.setdefault("primary_class", "UNCLASSIFIED")
+        self.append(record)
+
+    @staticmethod
+    def _unpack_quote(q) -> tuple:
+        """Normalize a q_by_ticker entry ({ts, bid, ask} dict or (ts, bid, ask) tuple) to (ts, bid, ask)."""
+        if isinstance(q, (tuple, list)):
+            q_ts, q_bid, q_ask = (list(q) + [None, None, None])[:3]
+            return q_ts, q_bid, q_ask
+        if isinstance(q, dict):
+            return q.get("ts"), q.get("bid"), q.get("ask")
+        return None, None, None
 
     def _enrich_leg(self, snap: dict, ts: float, q_by_ticker) -> dict:
         """One decision leg snapshot (already enriched by ev.kalshi_rfq_pricer._snap) plus the v2 tape
@@ -839,12 +876,7 @@ class RFQTape:
         team_canon = _canon_team(leg.get("team"))
         fv_ts = leg.get("fv_updated_ts")
         q = (q_by_ticker or {}).get(ticker) if ticker else None
-        if isinstance(q, (tuple, list)):
-            q_ts, q_bid, q_ask = (list(q) + [None, None, None])[:3]
-        elif isinstance(q, dict):
-            q_ts, q_bid, q_ask = q.get("ts"), q.get("bid"), q.get("ask")
-        else:
-            q_ts = q_bid = q_ask = None
+        q_ts, q_bid, q_ask = self._unpack_quote(q)
         if q_bid is not None and q_ask is not None:
             q_mid = (float(q_bid) + float(q_ask)) / 2.0
         elif q_bid is not None:
