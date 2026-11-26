@@ -25,6 +25,7 @@ Conventions that differ from the pasted spec (deliberate):
 
 from __future__ import annotations
 
+import hashlib
 import math
 import re
 import time
@@ -385,6 +386,17 @@ class InMemoryFairBook:
 
     def __len__(self) -> int:
         return len(self._legs)
+
+    def vintage_id(self) -> str:
+        """Tape schema v2 book_build_id: a short fingerprint of the current book vintage -- sha256 over
+        (leg count, min updated_ts, max updated_ts) of the legs currently loaded, first 16 hex chars.
+        "empty" when no legs are loaded. Two books with the same leg count and the same freshness span
+        share an id; that is deliberate (it identifies the feed vintage, not the full book contents)."""
+        if not self._legs:
+            return "empty"
+        stamps = [leg.updated_ts for leg in self._legs.values()]
+        payload = f"{len(stamps)}:{min(stamps)}:{max(stamps)}".encode("ascii")
+        return hashlib.sha256(payload).hexdigest()[:16]
 
     def replace_all(self, legs) -> int:
         new = {leg.ticker: leg for leg in legs}
@@ -757,9 +769,18 @@ class KalshiRFQPricer:
 
 
 def _snap(fv: LegFairValue, side: str, p_leg: float) -> dict:
-    """Per-leg baseline stored with the quote; the last-look shield compares against it."""
+    """Per-leg baseline stored with the quote; the last-look shield compares against it.
+
+    Tape schema v2 (additive): the LegFairValue fields the design materializes at write time ride beside
+    the v1 keys -- sport, market_class, stat, strike, team, disp, p_max, p_cons_yes, p_model_yes, pooled,
+    is_hot_scratch, protected and fv_updated_ts (= fv.updated_ts, the fair-value age input). p_max /
+    p_model_yes stay None where the source carries no such component (null = missing, never 0)."""
     return {"ticker": fv.ticker, "game_key": fv.game_key, "player_norm": fv.player_norm, "side": side,
-            "p_leg": round(p_leg, 6), "p_true_yes": round(fv.p_true_yes, 6), "n_books": fv.n_books}
+            "p_leg": round(p_leg, 6), "p_true_yes": round(fv.p_true_yes, 6), "n_books": fv.n_books,
+            "sport": fv.sport, "market_class": fv.market_class, "stat": fv.stat, "strike": fv.strike,
+            "team": fv.team, "disp": fv.disp, "p_max": fv.p_max, "p_cons_yes": fv.p_cons_yes,
+            "p_model_yes": fv.p_model_yes, "pooled": fv.pooled, "is_hot_scratch": fv.is_hot_scratch,
+            "protected": fv.protected, "fv_updated_ts": fv.updated_ts}
 
 
 def load_feed_rows(source: str) -> tuple[list[dict], float | None]:

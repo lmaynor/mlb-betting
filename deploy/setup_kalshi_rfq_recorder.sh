@@ -43,6 +43,7 @@ case "$RFQ_ENV" in
     TASK_TIMEOUT=86400; TAPE_PREFIX="Kalshi/rfq_tape/production"
     SECRETS=(kalshi-prod-api-key-id kalshi-prod-private-key)
     SECRET_MAP="KALSHI_PROD_API_KEY_ID=kalshi-prod-api-key-id:latest,KALSHI_PROD_PRIVATE_KEY_PEM=kalshi-prod-private-key:latest"
+    GIT_SHA_ENV=",KALSHI_RFQ_GIT_SHA=${GIT_SHA:-unknown}"   # tape schema v2 run header: code identity on every record
     MAX_UNPRICED_LEGS="${MAX_UNPRICED_LEGS:-16}" ;;      # record-only: would-be quotes for every combo (bounded, sound upper bound)
   demo)
     JOB="mlb-kalshi-rfq-recorder-demo"; SCHED=""
@@ -50,6 +51,7 @@ case "$RFQ_ENV" in
     TASK_TIMEOUT=3600; TAPE_PREFIX="Kalshi/rfq_tape/demo"
     SECRETS=(kalshi-demo-api-key-id kalshi-demo-private-key)
     SECRET_MAP="KALSHI_API_KEY_ID=kalshi-demo-api-key-id:latest,KALSHI_PRIVATE_KEY_PEM=kalshi-demo-private-key:latest"
+    GIT_SHA_ENV=""
     MAX_UNPRICED_LEGS="${MAX_UNPRICED_LEGS:-16}" ;;     # exploration: price long combos from the legs we can price (upper bound)
   *) echo "ERROR: RFQ_ENV must be production-readonly or demo"; exit 1 ;;
 esac
@@ -74,7 +76,7 @@ done
 flags=(
   --image="$IMAGE" --region="$REGION" --service-account="$SA_EMAIL"
   --set-secrets="MLB_GCS_BUCKET=mlb-gcs-bucket:latest,PARLAY_API_KEY=parlay-api-key:latest,${SECRET_MAP}"
-  --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION},KALSHI_RFQ_ENV=${RFQ_ENV},KALSHI_RFQ_MODE=record,KALSHI_RFQ_TAPE_PREFIX=${TAPE_PREFIX},KALSHI_RFQ_MAX_UNPRICED_LEGS=${MAX_UNPRICED_LEGS},KALSHI_RFQ_ALLOW_SAME_GAME=1,KALSHI_RFQ_GAME_SPORTS=nfl:nba:nhl,KALSHI_RFQ_GAME_MARKETS=h2h:spreads:totals,KALSHI_RFQ_PROP_SPORTS=nfl:nba:nhl,KALSHI_RFQ_GAME_BUDGET=${GAME_BUDGET:-120}"
+  --set-env-vars="GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION},KALSHI_RFQ_ENV=${RFQ_ENV},KALSHI_RFQ_MODE=record,KALSHI_RFQ_TAPE_PREFIX=${TAPE_PREFIX},KALSHI_RFQ_MAX_UNPRICED_LEGS=${MAX_UNPRICED_LEGS},KALSHI_RFQ_ALLOW_SAME_GAME=1,KALSHI_RFQ_GAME_SPORTS=nfl:nba:nhl,KALSHI_RFQ_GAME_MARKETS=h2h:spreads:totals,KALSHI_RFQ_PROP_SPORTS=nfl:nba:nhl,KALSHI_RFQ_GAME_BUDGET=${GAME_BUDGET:-120}${GIT_SHA_ENV}"
   --command="python"
   --args="scripts/kalshi_rfq_daemon.py,--mode,record,--env,${RFQ_ENV},--max-runtime-sec,${MAX_RUNTIME_SEC}"
   --memory=512Mi --cpu=1 --task-timeout=${TASK_TIMEOUT} --max-retries=0 --parallelism=1 --tasks=1 --quiet

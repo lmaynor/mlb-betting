@@ -20,15 +20,20 @@ other venues sharing a ledger. Like RiskGate, it is MANUAL-RESET-ONLY.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
+from zoneinfo import ZoneInfo
 
 from mlb.execution.kalshi.client import KalshiAPIError
+from mlb.execution.kalshi.fees import taker_fee
 from mlb.execution.kalshi.ledger import Ledger, now_iso
 from mlb.execution.kalshi.risk import KILL_KEY, RiskGate
 
@@ -466,6 +471,92 @@ class _Stub:
 
 
 # ---------------------------------------------------------------------------------------------- tape
+# Tape schema v2 canonicalization tables, mirrored from the RES-17 settlement fix in
+# ev/betmgm_under_shadow.py (SETTLE_SUFFIX_TOKENS and NHL_TEAM_DIALECT, lines ~147-155 there): the tape
+# canonicalizes player / team identity AT WRITE TIME so settlement joins are equalities on stored keys,
+# not re-derivations per reader (rfq-tape-storage-design-2026-11-24.md section 2g).
+SETTLE_SUFFIX_TOKENS = {"jr", "sr", "ii", "iii", "iv", "v"}
+TEAM_DIALECT = {"LA": "LAK", "NJ": "NJD", "SJ": "SJS", "TB": "TBL"}
+
+# Per-leg family labels, mirroring ev.combo_taker_window2.leg_family semantics.
+_SPORT_TO_FAMILY = {"nba": "NBA_PROP", "nhl": "NHL_PROP", "nfl": "NFL_PROP"}
+
+
+def _canon_player(name) -> str | None:
+    """player_norm with trailing generational suffix tokens stripped (case-insensitive, token-wise,
+    repeatedly; a trailing '.' or ',' on the suffix token is ignored). None stays None."""
+    if not name:
+        return None
+    tokens = str(name).split()
+    while tokens and tokens[-1].strip(".,").lower() in SETTLE_SUFFIX_TOKENS:
+        tokens.pop()
+    return " ".join(tokens)
+
+
+def _canon_team(code) -> str | None:
+    """Team code mapped through the RES-17 dialect table; unmapped codes pass through, None stays None."""
+    if not code:
+        return None
+    return TEAM_DIALECT.get(str(code), str(code))
+
+
+def _series_of(ticker) -> str:
+    """The series prefix of a Kalshi ticker: everything before the first '-'."""
+    return str(ticker or "").split("-", 1)[0]
+
+
+def _leg_family_label(sport, player_norm) -> str | None:
+    """ev.combo_taker_window2.leg_family semantics without the raise: a player leg maps by sport
+    (nba -> NBA_PROP, nhl -> NHL_PROP, nfl -> NFL_PROP); an unknown sport WITH a player returns None
+    (the tape never raises on flow it is only recording); a leg with no player is a GAME_LINE."""
+    if player_norm:
+        return _SPORT_TO_FAMILY.get(str(sport or "").lower())
+    return "GAME_LINE"
+
+
+def _excluded_series_class(tickers) -> str:
+    """Ratified Window 1 denominator exclusion (pre-registration item 10): 'KXNBA1Q' / 'KXNCAAFGAME' /
+    'both' / 'none', by the series prefix of the given tickers."""
+    series = {_series_of(t) for t in tickers if t}
+    nba1q = "KXNBA1Q" in series
+    ncaaf = "KXNCAAFGAME" in series
+    if nba1q and ncaaf:
+        return "both"
+    if nba1q:
+        return "KXNBA1Q"
+    if ncaaf:
+        return "KXNCAAFGAME"
+    return "none"
+
+
+def _decimal_or_none(x):
+    if x is None:
+        return None
+    try:
+        return Decimal(str(x))
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _float_or_none(x):
+    d = _decimal_or_none(x)
+    return float(d) if d is not None else None
+
+
+def _w2_day_of(legs) -> str | None:
+    """Window 2 pool bucket: the min parseable YYYY-MM-DD date across the decision legs' game_key values
+    shaped '{sport}:{date}:{...}', else None."""
+    days = []
+    for leg in legs or ():
+        parts = str((leg or {}).get("game_key") or "").split(":")
+        if len(parts) >= 2:
+            try:
+                days.append(datetime.strptime(parts[1], "%Y-%m-%d").date().isoformat())
+            except ValueError:
+                continue
+    return min(days) if days else None
+
+
 class RFQTape:
     """Append-only JSONL tape (data/kalshi_rfq/rfq_tape_{day}.jsonl): every RFQ seen, our would-be quote, and -- once
     the follow-up runs -- what actually traded on that market afterwards. Costs $0 at risk and measures our
@@ -483,12 +574,140 @@ class RFQTape:
         self._seq = 0
         self._last_flush = clock()
         self._lock = threading.Lock()
+        # Tape schema v2 run context (set by the daemon at startup; stamped on the kind:"run" header).
+        self._git_sha: str | None = None
+        self._config_hash: str | None = None
+        self._book_build_id: str | None = None
+        self._run_written = False
+        # Creator rolling state (design section 2f): per-creator deque of receipt ts + flag episode start.
+        self._creator_ts: dict[str, deque] = {}
+        self._creator_flag_since: dict[str, float] = {}
+        # Day summary accumulators (design section 2i), keyed by UTC day.
+        self._sum_day: str | None = None
+        self._sum = self._fresh_summary()
 
     def path(self) -> str:
         day = datetime.fromtimestamp(self._clock(), timezone.utc).date().isoformat()
         return os.path.join(self.dir, f"rfq_tape_{day}.jsonl")
 
+    # ---- tape schema v2: run context, creator rolling state, day summary ----
+    def set_run_context(self, git_sha, config_hash) -> None:
+        self._git_sha, self._config_hash = git_sha, config_hash
+
+    def set_book_build_id(self, x) -> None:
+        self._book_build_id = x
+
+    def record_run(self, extra: dict) -> None:
+        """Write the kind:"run" header exactly once (subsequent calls are no-ops): code + config + book
+        identity for every record that follows, per design section 2."""
+        if self._run_written:
+            return
+        self._run_written = True
+        rec = {"kind": "run", "tape_schema": 2, "ts": self._clock(), "git_sha": self._git_sha,
+               "config_hash": self._config_hash, "book_build_id": self._book_build_id}
+        rec.update(extra or {})
+        self.append(rec)
+
+    def _creator_state(self, creator_id: str, ts: float) -> tuple[int, bool, float | None]:
+        """Rolling 10-min creator counts as of this record (design section 2f). The ratified spam rule:
+        >= 60 requests in a rolling 10-min window sustained across 2 consecutive windows, i.e. the
+        trailing [ts-600, ts] count AND the preceding [ts-1200, ts-600) count are both >= 60."""
+        dq = self._creator_ts.setdefault(creator_id, deque())
+        dq.append(ts)
+        while dq and dq[0] < ts - 1200.0:
+            dq.popleft()
+        count_10m = sum(1 for t in dq if ts - 600.0 <= t <= ts)
+        count_prev = sum(1 for t in dq if ts - 1200.0 <= t < ts - 600.0)
+        flagged = count_prev >= 60 and count_10m >= 60
+        if flagged:
+            since = self._creator_flag_since.setdefault(creator_id, ts)
+            return count_10m, True, since
+        self._creator_flag_since.pop(creator_id, None)
+        return count_10m, False, None
+
+    @staticmethod
+    def _fresh_summary() -> dict:
+        return {"records_by_kind": {}, "fires": 0, "evaluated": 0, "in_denominator": 0,
+                "by_family": {}, "by_excluded_series_class": {}, "preview_10": 0,
+                "followup_records": 0, "creator_counts": {}, "flagged_creators": {}}
+
+    def _account(self, record: dict) -> None:
+        """Day-summary accounting (design section 2i) on every append, with automatic rollover: when the
+        record's UTC day differs from the accumulated day, the finished day's summary is written first."""
+        try:
+            ts = float(record.get("ts") or self._clock())
+        except (TypeError, ValueError):
+            ts = self._clock()
+        day = datetime.fromtimestamp(ts, timezone.utc).date().isoformat()
+        if self._sum_day is None:
+            self._sum_day = day
+        elif day != self._sum_day:
+            self.write_day_summary(self._sum_day)
+            self._sum_day = day
+            self._sum = self._fresh_summary()
+        s = self._sum
+        kind = str(record.get("kind") or "")
+        s["records_by_kind"][kind] = s["records_by_kind"].get(kind, 0) + 1
+        if kind == "followup":
+            s["followup_records"] += 1
+        if kind != "rfq":
+            return
+        s["evaluated"] += 1
+        s["fires"] += 1 if record.get("is_fire") else 0
+        s["in_denominator"] += 1 if record.get("in_denominator") else 0
+        s["preview_10"] += 1 if record.get("preview_10") else 0
+        fam = record.get("family")
+        s["by_family"][str(fam)] = s["by_family"].get(str(fam), 0) + 1
+        exc = str(record.get("excluded_series_class") or "none")
+        s["by_excluded_series_class"][exc] = s["by_excluded_series_class"].get(exc, 0) + 1
+        cid = record.get("creator_id")
+        if cid:
+            s["creator_counts"][str(cid)] = s["creator_counts"].get(str(cid), 0) + 1
+            if record.get("creator_flagged"):
+                s["flagged_creators"][str(cid)] = s["creator_counts"][str(cid)]
+
+    def day_summary(self, day: str | None = None) -> dict:
+        """The accumulated section 2i counters for `day` (default: the current accumulated day)."""
+        s = self._sum
+        evaluated = s["evaluated"]
+        top = sorted(s["creator_counts"].items(), key=lambda kv: (-kv[1], kv[0]))[:20]
+        return {"day": day or self._sum_day, "tape_schema": 2,
+                "records_by_kind": dict(s["records_by_kind"]), "fires": s["fires"],
+                "evaluated": evaluated, "in_denominator": s["in_denominator"],
+                "by_family": dict(s["by_family"]),
+                "by_excluded_series_class": dict(s["by_excluded_series_class"]),
+                "preview_10": s["preview_10"],
+                "preview_10_share": (s["preview_10"] / evaluated) if evaluated else 0.0,
+                "flagged_creators": dict(s["flagged_creators"]),
+                "top_creators": [{"creator_id": c, "count": n} for c, n in top],
+                "followup_records": s["followup_records"],
+                "followup_attach_rate": (s["followup_records"] / evaluated) if evaluated else 0.0}
+
+    def write_day_summary(self, day: str | None = None) -> dict | None:
+        """Write the day summary sidecar: {prefix}/{day}/day_summary.json in storage mode (through the
+        same writer as the chunks), {dir}/day_summary_{day}.json locally. Best-effort: failures are
+        logged, never raised. Tracked at day level only; the per-rfq attach rate is the derived
+        layer's job."""
+        day = day or self._sum_day or datetime.fromtimestamp(self._clock(), timezone.utc).date().isoformat()
+        summary = self.day_summary(day)
+        try:
+            payload = (json.dumps(summary, default=str, sort_keys=True, ensure_ascii=True) + "\n").encode("ascii")
+            if self.prefix is None:
+                os.makedirs(self.dir, exist_ok=True)
+                with open(os.path.join(self.dir, f"day_summary_{day}.json"), "wb") as fh:
+                    fh.write(payload)
+            else:
+                writer = self._writer
+                if writer is None:
+                    from mlb_core.storage import write_bytes as writer
+                writer(payload, f"{self.prefix}/{day}/day_summary.json")
+        except Exception as e:                                          # noqa: BLE001 -- sidecar, never fatal
+            log.warning("day summary write for %s failed: %r", day, e)
+            return None
+        return summary
+
     def append(self, record: dict) -> None:
+        self._account(record)
         line = json.dumps(record, default=str, sort_keys=True, ensure_ascii=True) + "\n"
         if self.prefix is None:
             os.makedirs(self.dir, exist_ok=True)
@@ -527,16 +746,138 @@ class RFQTape:
         self._last_flush = self._clock()
         return len(lines)
 
-    def record_rfq(self, rfq_msg: dict, decision) -> None:
-        self.append({"kind": "rfq", "ts": self._clock(), "rfq": rfq_msg, "plan": decision.action,
-                     "reason": decision.reason, "yes_bid": decision.yes_bid, "no_bid": decision.no_bid,
-                     "p_yes_true": decision.p_yes_true, "p_yes_cons": decision.p_yes_cons,
-                     "ev_per_contract": decision.ev_per_contract, "roi": decision.roi_on_collateral,
-                     "legs": list(decision.legs), "notes": decision.notes})
+    def record_rfq(self, rfq_msg: dict, decision, *, q_by_ticker=None) -> None:
+        """One kind:"rfq" record: the v1 payload byte-identical in name and value, plus the tape schema
+        v2 fields materialized at write time (design sections 2a-2g). Null means the component is not
+        knowable at record time in the recorder path -- never fabricated, never 0."""
+        ts = self._clock()
+        rfq_msg = rfq_msg or {}
+        raw_legs = rfq_msg.get("mve_selected_legs") or rfq_msg.get("legs") or []
+        leg_tickers = [str(l.get("market_ticker") or l.get("ticker") or "") for l in raw_legs if isinstance(l, dict)]
+        market_ticker = str(rfq_msg.get("market_ticker") or "")
+        # Hoisted scalars (2a).
+        target_dec = _decimal_or_none(rfq_msg.get("target_cost_dollars"))
+        # $10-preview exclusion (2b): exact DECIMAL compare ("10.0000" == 10.00), never a float compare;
+        # an absent field is the contract-sized class, not a preview.
+        preview_10 = target_dec is not None and target_dec == Decimal("10.00")
+        excluded = _excluded_series_class(leg_tickers or [market_ticker])
+        if raw_legs:
+            pairs = sorted(f"{t}|{str(l.get('side') or '').lower()}"
+                           for l, t in zip(raw_legs, leg_tickers) if isinstance(l, dict))
+            combo_id = hashlib.sha256(",".join(pairs).encode("ascii", "replace")).hexdigest()
+        else:
+            combo_id = hashlib.sha256(market_ticker.encode("ascii", "replace")).hexdigest()
+        creator_id = rfq_msg.get("creator_id")
+        if creator_id:
+            creator_count_10m, creator_flagged, creator_flag_since_ts = self._creator_state(str(creator_id), ts)
+        else:
+            creator_count_10m, creator_flagged, creator_flag_since_ts = None, False, None
+        # Money (2e): the NO ask the ROI was computed on, and the canonical taker fee on it.
+        ask_no = decision.no_bid if decision.action == "QUOTE" else None
+        fee = taker_fee(ask_no, 1.0) if ask_no else None
+        # Combo family (2b): under a cold trust book every family is ACCRUING, so the weakest-link label
+        # is the FIRST leg's label in leg order; per-leg families are stored below so scoring can
+        # recompute the exact weakest link against the real trust book.
+        dlegs = list(decision.legs or ())
+        family = _leg_family_label(dlegs[0].get("sport"), dlegs[0].get("player_norm")) if dlegs else None
+        legs = [self._enrich_leg(snap, ts, q_by_ticker) for snap in dlegs]
+        self.append({
+            # v1 payload, unchanged.
+            "kind": "rfq", "ts": ts, "rfq": rfq_msg, "plan": decision.action,
+            "reason": decision.reason, "yes_bid": decision.yes_bid, "no_bid": decision.no_bid,
+            "p_yes_true": decision.p_yes_true, "p_yes_cons": decision.p_yes_cons,
+            "ev_per_contract": decision.ev_per_contract, "roi": decision.roi_on_collateral,
+            "legs": legs, "notes": decision.notes,
+            # v2 additions.
+            "tape_schema": 2,
+            "book_build_id": self._book_build_id,
+            "rfq_id": str(rfq_msg.get("id") or rfq_msg.get("rfq_id") or ""),
+            "creator_id": creator_id,
+            # Kalshi's own timestamp when the message carries one; null when absent, never backfilled
+            # with our receipt ts (absence is itself the recorded fact).
+            "created_ts": rfq_msg.get("created_ts"),
+            "target_cost_dollars_num": float(target_dec) if target_dec is not None else None,
+            "contracts_fp_num": _float_or_none(rfq_msg.get("contracts_fp", rfq_msg.get("contracts"))),
+            "n_legs": len(raw_legs) if raw_legs else 1,
+            "is_combo": bool(raw_legs),
+            "collection_ticker": rfq_msg.get("mve_collection_ticker"),
+            "combo_id": combo_id,
+            "preview_10": preview_10,
+            "excluded_series_class": excluded,
+            "in_denominator": (not preview_10 and excluded == "none"),
+            "family": family,
+            # tier is decided by the Window 2 admission path, not at record time: null here.
+            "tier": None,
+            # Record-mode fire: the pricing engine would have quoted this RFQ.
+            "is_fire": decision.action == "QUOTE",
+            "bounded": bool((decision.notes or {}).get("bounded")),
+            # Synthetic-start timing is a harness concept; the recorder's fair book carries no
+            # commence provenance, so timing_approx is not knowable at record time: null.
+            "timing_approx": None,
+            "day_utc": datetime.fromtimestamp(ts, timezone.utc).date().isoformat(),
+            "day_et": datetime.fromtimestamp(ts, ZoneInfo("America/New_York")).date().isoformat(),
+            "w2_day": _w2_day_of(dlegs),
+            # LegFairValue carries no commence time, so neither earliest commence nor mins-to-tip can
+            # be computed at record time: both null.
+            "earliest_commence_ts": None,
+            "mins_to_tip_min": None,
+            "ask_no": ask_no,
+            "taker_fee_per_contract": fee,
+            "creator_count_10m": creator_count_10m,
+            "creator_flagged": creator_flagged,
+            "creator_flag_since_ts": creator_flag_since_ts,
+        })
+
+    def _enrich_leg(self, snap: dict, ts: float, q_by_ticker) -> dict:
+        """One decision leg snapshot (already enriched by ev.kalshi_rfq_pricer._snap) plus the v2 tape
+        fields: series, per-leg family, fair-value age, canonical settlement identity (2g) and the
+        Kalshi single-leg quote captured at intake (2d)."""
+        leg = dict(snap or {})
+        ticker = leg.get("ticker")
+        series = _series_of(ticker)
+        player_canon = _canon_player(leg.get("player_norm"))
+        team_canon = _canon_team(leg.get("team"))
+        fv_ts = leg.get("fv_updated_ts")
+        q = (q_by_ticker or {}).get(ticker) if ticker else None
+        if isinstance(q, (tuple, list)):
+            q_ts, q_bid, q_ask = (list(q) + [None, None, None])[:3]
+        elif isinstance(q, dict):
+            q_ts, q_bid, q_ask = q.get("ts"), q.get("bid"), q.get("ask")
+        else:
+            q_ts = q_bid = q_ask = None
+        if q_bid is not None and q_ask is not None:
+            q_mid = (float(q_bid) + float(q_ask)) / 2.0
+        elif q_bid is not None:
+            q_mid = float(q_bid)
+        elif q_ask is not None:
+            q_mid = float(q_ask)
+        else:
+            q_mid = None
+        strike = leg.get("strike")
+        leg.update({
+            "series": series,
+            "family": _leg_family_label(leg.get("sport"), leg.get("player_norm")),
+            # Fair-value age at receipt; null when the snap carries no fv_updated_ts.
+            "age_sec": (ts - float(fv_ts)) if fv_ts is not None else None,
+            "player_norm_canon": player_canon,
+            "team_canon": team_canon,
+            "settle_key": "|".join([series, str(leg.get("game_key") or ""), player_canon or "",
+                                    team_canon or "", str(leg.get("stat") or ""),
+                                    "" if strike is None else str(strike), str(leg.get("side") or "")]),
+            # The recorder never default-prices a leg: unpriced legs are dropped by the pricer and the
+            # combo is flagged bounded at combo level, so no leg here is ever an assumed leg.
+            "assumed_leg": False,
+            "pricing_source": "book",
+            "q_kalshi_bid": q_bid,
+            "q_kalshi_ask": q_ask,
+            "q_kalshi": q_mid,
+            "q_kalshi_ts": q_ts,
+        })
+        return leg
 
     def record_trades(self, rfq_id: str, market_ticker: str, trades: list[dict], since_ts: float) -> None:
-        self.append({"kind": "followup", "ts": self._clock(), "rfq_id": rfq_id, "market_ticker": market_ticker,
-                     "since_ts": since_ts, "trades": trades})
+        self.append({"kind": "followup", "tape_schema": 2, "ts": self._clock(), "rfq_id": rfq_id,
+                     "market_ticker": market_ticker, "since_ts": since_ts, "trades": trades})
 
 
 def _trades_for(client, market_ticker: str, since_ts: float) -> list[dict]:
@@ -574,10 +915,57 @@ class RFQRecorder:
     trade tape for that market. Never quotes, never touches the ledger, never needs a risk gate."""
     FOLLOWUP_SEC = 15.0
 
+    Q_TTL_SEC = 5.0
+
     def __init__(self, pricer, tape: RFQTape, client=None, schedule=None, clock=time.time):
         self.pricer, self.tape, self.client, self._clock = pricer, tape, client, clock
         self._schedule = schedule            # schedule(delay_sec, fn); the daemon injects loop.call_later
         self._seen: set[str] = set()
+        self._q_cache: dict[str, tuple] = {}  # ticker -> (ts, yes_bid, yes_ask); tape v2 q_kalshi capture
+
+    def _q_for_ticker(self, ticker: str) -> dict | None:
+        """Kalshi's own single-leg YES bid/ask for `ticker` at intake (design section 2d / section 5
+        decision 1): yes_bid = max yes_dollars price, yes_ask = 1 - max no_dollars price, from the public
+        orderbook. Cached for Q_TTL_SEC. Evidence only, never fatal: any failure or odd shape degrades
+        to no q data (all four q fields null on the leg)."""
+        try:
+            now = self._clock()
+            hit = self._q_cache.get(ticker)
+            if hit is not None and now - hit[0] < self.Q_TTL_SEC:
+                return {"ts": hit[0], "bid": hit[1], "ask": hit[2]}
+            request = getattr(self.client, "request", None)
+            if request is None:
+                return None
+            data = request("GET", f"/markets/{ticker}/orderbook", auth=False) or {}
+            book = (data.get("orderbook_fp") or {}) if isinstance(data, dict) else {}
+            def _best(rows):
+                prices = []
+                for row in rows or []:
+                    try:
+                        prices.append(float(row[0]))
+                    except (TypeError, ValueError, IndexError):
+                        continue
+                return max(prices) if prices else None
+            yes_bid = _best(book.get("yes_dollars"))
+            no_best = _best(book.get("no_dollars"))
+            yes_ask = (1.0 - no_best) if no_best is not None else None
+            self._q_cache[ticker] = (now, yes_bid, yes_ask)
+            return {"ts": now, "bid": yes_bid, "ask": yes_ask}
+        except Exception:                                              # noqa: BLE001 -- evidence only, never fatal
+            return None
+
+    def _q_by_ticker(self, rfq) -> dict | None:
+        """q capture for every distinct ticker in the parsed RFQ (leg tickers, or the market ticker for
+        a single-market RFQ). None when there is no client or nothing could be fetched."""
+        if self.client is None:
+            return None
+        tickers = [l.ticker for l in rfq.legs] if rfq.is_combo else [rfq.market_ticker]
+        out: dict = {}
+        for tk in dict.fromkeys(t for t in tickers if t):
+            q = self._q_for_ticker(tk)
+            if q is not None:
+                out[tk] = q
+        return out or None
 
     def on_event(self, typ: str, msg: dict, received_ts: float | None = None):
         if typ != "rfq_created":
@@ -589,7 +977,9 @@ class RFQRecorder:
         self._seen.add(rfq.rfq_id)
         now = self._clock()
         d = self.pricer.price(rfq, now)
-        self.tape.record_rfq(msg, d)
+        # q_kalshi capture at intake, only now that the decision will actually be recorded (post-dedupe).
+        q_by_ticker = self._q_by_ticker(rfq) if self.client is not None else None
+        self.tape.record_rfq(msg, d, q_by_ticker=q_by_ticker)
         if self.client is not None and self._schedule is not None:
             self._schedule(self.FOLLOWUP_SEC, lambda: self._followup(rfq, now))
         return d

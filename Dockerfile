@@ -45,6 +45,11 @@ COPY contest/       ./contest/
 COPY scripts/backfill_ev_history.py ./scripts/backfill_ev_history.py
 # Kalshi RFQ recorder (Cloud Run Job mlb-kalshi-rfq-recorder, deploy/setup_kalshi_rfq_recorder.sh): production-readonly, GET-only.
 COPY scripts/kalshi_rfq_daemon.py ./scripts/kalshi_rfq_daemon.py
+# Tape schema v2 derived-Parquet finalize: the daemon imports scripts.rfq_tape_finalize at record-mode
+# startup (previous-day finalize rides the job lifecycle). Without this COPY the in-image import fails
+# with ModuleNotFoundError (seen on the 2026-11-24 verification run); the repo-root run on a dev
+# checkout masks it. Guarded by tests/test_rfq_image_packaging.py.
+COPY scripts/rfq_tape_finalize.py ./scripts/rfq_tape_finalize.py
 # NBA designation banker (official injury reports; disabled by default -- needs --execute + MINUTES_RUN_ENABLED=1).
 COPY scripts/bank_nba_designations.py ./scripts/bank_nba_designations.py
 COPY scripts/bank_first_scorer.py ./scripts/bank_first_scorer.py

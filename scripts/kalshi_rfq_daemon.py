@@ -25,6 +25,7 @@ Requires `pip install websockets` for the stream. Spec and design notes: docs/an
 
 import argparse
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -32,6 +33,7 @@ import signal
 import sys
 import time
 from dataclasses import replace
+from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -250,6 +252,35 @@ async def amain(args) -> int:
     tape_dir = args.tape_dir or ("data/kalshi_rfq" if rfq_env == "demo" else "data/kalshi_rfq/production")
     tape_prefix = args.tape_gcs_prefix or os.environ.get("KALSHI_RFQ_TAPE_PREFIX") or None
     tape = RFQTape(tape_dir, storage_prefix=tape_prefix)
+
+    def _stamp_book() -> None:
+        """Tape schema v2: keep the tape's book_build_id on the current fair-book vintage."""
+        if mode == "record":
+            tape.set_book_build_id(book.vintage_id())
+
+    if mode == "record":
+        # Tape schema v2 run header: trace every record to the exact code + config + book that made it.
+        _cfg_src = {k: v for k, v in sorted(os.environ.items()) if k.startswith("KALSHI_RFQ_")}
+        _cfg_src.update({"env": rfq_env, "mode": mode, "feed": args.feed,
+                         "tape_prefix": tape_prefix, "max_unpriced_legs": max_unpriced,
+                         "allow_same_game": allow_sgp, "quote_single_leg": bool(args.quote_single_leg)})
+        tape.set_run_context(
+            git_sha=os.environ.get("KALSHI_RFQ_GIT_SHA") or os.environ.get("GIT_SHA") or "unknown",
+            config_hash=hashlib.sha256(json.dumps(_cfg_src, sort_keys=True, default=str).encode()).hexdigest())
+        _stamp_book()
+        tape.record_run({"env": rfq_env, "mode": mode, "feed": args.feed})
+        if tape_prefix:
+            async def _finalize_prev_day() -> None:
+                """Build yesterday's derived Parquet layer (design section 3: the finalize rides the
+                existing daily job). Fire-and-forget: never blocks or breaks stream start."""
+                try:
+                    from scripts.rfq_tape_finalize import finalize_day
+                    prev = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
+                    out = await asyncio.to_thread(finalize_day, prev, tape_prefix)
+                    log.info("tape finalize for %s: %s", prev, json.dumps(out, default=str))
+                except Exception as e:             # noqa: BLE001 -- derived layer is rebuildable, never fatal
+                    log.warning("tape finalize for the previous day failed: %r", e)
+            asyncio.ensure_future(_finalize_prev_day())
     if mode == "record":
         handler = RFQRecorder(pricer, tape, client,
                               schedule=lambda delay, fn: loop.call_later(delay, lambda: loop.run_in_executor(None, fn)))
@@ -284,6 +315,7 @@ async def amain(args) -> int:
             await asyncio.sleep(args.reload_sec)
             try:
                 await asyncio.to_thread(feed.refresh_props)
+                _stamp_book()
             except Exception as e:                         # noqa: BLE001 -- keep the last good book; staleness gate rejects
                 log.warning("fair book reload failed (keeping previous): %r", e)
 
@@ -292,6 +324,7 @@ async def amain(args) -> int:
             await asyncio.sleep(args.banked_reload_sec)
             try:
                 await asyncio.to_thread(feed.refresh_banked)
+                _stamp_book()
             except Exception as e:                         # noqa: BLE001
                 log.warning("banked game legs reload failed (keeping previous): %r", e)
         await asyncio.Event().wait()                       # nothing banked: idle (gather() must not finish)
@@ -301,6 +334,7 @@ async def amain(args) -> int:
             await asyncio.sleep(args.game_reload_sec)
             try:
                 await asyncio.to_thread(feed.refresh_games)
+                _stamp_book()
             except Exception as e:                         # noqa: BLE001
                 log.warning("game legs reload failed (keeping previous): %r", e)
 
@@ -345,6 +379,10 @@ async def amain(args) -> int:
             t.cancel()
         await asyncio.gather(main_task, stop_task, return_exceptions=True)
         await asyncio.to_thread(tape.flush)
+        try:
+            tape.write_day_summary()                       # section 2i sidecar for the final day (best-effort)
+        except Exception as e:                             # noqa: BLE001
+            log.warning("final day summary write failed: %r", e)
         if maker is not None and live:
             log.info("shutdown: cancelled %d open quotes", maker.cancel_all_open_quotes())
     return 0
