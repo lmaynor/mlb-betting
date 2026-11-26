@@ -383,6 +383,19 @@ async def _run_live_async(args) -> int:
                 log.warning("rfq poll failed: %r", exc)
             await asyncio.sleep(args.poll_sec)
 
+    async def sweep():
+        # Rollover: release settled fills and refresh the balance so the same
+        # capital can work the next game's pregame window.
+        while True:
+            await asyncio.sleep(60.0)
+            try:
+                rows = await asyncio.to_thread(client.get_settlements)
+                done = await asyncio.to_thread(quoter.sweep_settlements, rows)
+                if done:
+                    log.info("settlement sweep released %d quote(s): %s", len(done), done)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("settlement sweep failed: %r", exc)
+
     async def reload_props():
         while True:
             await asyncio.sleep(args.reload_sec)
@@ -407,7 +420,7 @@ async def _run_live_async(args) -> int:
             await asyncio.Event().wait()
 
     loop = asyncio.get_running_loop()
-    main_task = asyncio.ensure_future(asyncio.gather(stream.run(), poll(), reload_props(), reload_banked()))
+    main_task = asyncio.ensure_future(asyncio.gather(stream.run(), poll(), reload_props(), reload_banked(), sweep()))
     stop_task = asyncio.ensure_future(deadline())
     for sig in (signal.SIGTERM, signal.SIGINT):
         try:

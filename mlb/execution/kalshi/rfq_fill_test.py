@@ -644,20 +644,57 @@ class FillTestQuoter:
                 self.exposure.release(q["quote_id"])
             return res
 
-    def settle(self, quote_id: str, won: bool) -> None:
+    def settle(self, quote_id: str, won: bool | None) -> None:
         with self._lock:
             q = self.ledger.get_quote(quote_id)
             self.exposure.settle(quote_id)
+            # ROLLOVER (Luc, Nov 26, 2026): settlement frees the collateral AND the
+            # aggregate cap re-reads the live balance, so the same capital can work
+            # the next game's pregame window instead of staying locked all day.
+            try:
+                self.balance = float(self.balance_provider())
+            except Exception:  # noqa: BLE001 -- keep the last known balance on a failed re-read
+                log.warning("balance refresh after settlement of %s failed", quote_id, exc_info=True)
             self.decision_log.record({
                 "event": "SETTLED",
                 "rfq_id": q["rfq_id"] if q else "",
                 "quote_id": quote_id,
                 "outcome": "SETTLED",
                 "reason": "",
-                "won": bool(won),
+                "won": won,
+                "balance": self.balance,
                 "committed_after": self.exposure.committed(),
                 "ts": self._clock(),
             })
+
+    def sweep_settlements(self, settlements) -> list[str]:
+        """Release filled-unsettled exposure for every quote whose market has settled.
+
+        `settlements` rows are Kalshi /portfolio/settlements dicts carrying `ticker`
+        and `market_result` ("yes"/"no"). `won` is graded against the ledger's held
+        side when it is one-sided, else logged as None (offline grading joins the
+        tape's settlement stream regardless). Returns the settled quote ids.
+        """
+        results: dict[str, str] = {}
+        for row in settlements or ():
+            if isinstance(row, dict):
+                ticker, result = row.get("ticker"), row.get("market_result")
+                if ticker and result in ("yes", "no"):
+                    results[str(ticker)] = str(result)
+        settled: list[str] = []
+        with self._lock:
+            for quote_id in list(self.exposure.filled_unsettled):
+                q = self.ledger.get_quote(quote_id)
+                if q is None:
+                    continue
+                result = results.get(str(q.get("market_ticker") or ""))
+                if result is None:
+                    continue
+                held = q.get("held_side")
+                won = (result == held) if held in ("yes", "no") else None
+                self.settle(quote_id, won)
+                settled.append(quote_id)
+        return settled
 
 
 def build_prod_client(

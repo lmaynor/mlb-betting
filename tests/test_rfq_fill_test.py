@@ -506,6 +506,51 @@ def test_taper_ceiling():
     assert ev_zero.outcome == "SKIPPED" and ev_zero.reason == "STALE_ZERO"
 
 
+# ------------------------------------------- 4b. rollover: settlement releases capital
+def test_rollover_settlement_releases_capital(tmp_path):
+    balance_cell = {"v": 21.00}
+    decisions = {
+        rid: _canned_decision(rid, no_bid=0.50, p_yes_true=0.01, contracts=9.8, collateral=4.90)
+        for rid in ("r1", "r2", "r3", "r4", "r5")
+    }
+    # decisions= (not a hand-built pricer) so the quoter's maker last-look re-prices
+    # against the populated fair book _make_quoter wires up.
+    quoter, client, log_path = _make_quoter(
+        tmp_path, decisions=decisions, balance_fn=lambda: balance_cell["v"]
+    )
+
+    # Four fills commit $19.60 of the $21 aggregate cap.
+    for i, rid in enumerate(("r1", "r2", "r3", "r4"), start=1):
+        ev = quoter.on_rfq_created(_combo_msg(rid))
+        assert ev.outcome == "QUOTED"
+        quoter.on_quote_accepted({"quote_id": f"q-{i}", "rfq_id": rid})
+        assert quoter.on_quote_executed({"quote_id": f"q-{i}"}) == "FILLED"
+    assert quoter.exposure.committed() == pytest.approx(19.60)
+
+    # The fifth fire cannot fit: only $1.40 of headroom remains.
+    ev5 = quoter.on_rfq_created(_combo_msg("r5"))
+    assert ev5.outcome == "SKIPPED" and ev5.reason == "AGGREGATE_CAP"
+
+    # r1's game settles (held side "no" wins). Kalshi credits the account; the
+    # sweep must release r1's collateral AND refresh the balance from live.
+    balance_cell["v"] = 24.50
+    settled = quoter.sweep_settlements([{"ticker": "KXMVE-r1", "market_result": "no"}])
+    assert settled == ["q-1"]
+    assert quoter.exposure.committed() == pytest.approx(14.70)
+    assert quoter.balance == pytest.approx(24.50)
+
+    # The same capital now works the next window: r5 quotes.
+    ev5b = quoter.on_rfq_created(_combo_msg("r5"))
+    assert ev5b.outcome == "QUOTED"
+
+    # The settlement is banked in the decision log with the refreshed balance.
+    entries = [json.loads(line) for line in log_path.read_text(encoding="ascii").splitlines()]
+    settled_entries = [e for e in entries if e.get("event") == "SETTLED" and e.get("quote_id") == "q-1"]
+    assert len(settled_entries) == 1
+    assert settled_entries[0]["won"] is True
+    assert settled_entries[0]["balance"] == pytest.approx(24.50)
+
+
 # ----------------------------------------------------------------------- 5. tip-off gate
 def test_tipoff_gate_unit_and_quoter(tmp_path):
     gate = TipoffGate(buffer_sec=600.0, max_snapshot_age_sec=180.0)
