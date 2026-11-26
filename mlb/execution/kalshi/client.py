@@ -8,9 +8,12 @@ Auth (same scheme as ~/market-maker's wsAuth.ts / the SDK's KalshiAuth):
 
 Public market-data GETs are sent unsigned. Orders/fills/balance are signed.
 
-SAFETY: only the demo environment is wired. Constructing a client for any other env
-raises ProductionNotEnabled -- there is deliberately no code path to real money here.
-Credentials come from the environment / a caller-named env file; they are never logged.
+SAFETY: demo, public-data (unsigned GETs), and production-readonly (signed GETs only) are
+available by default. Production quoting (`production-quotes`) exists ONLY behind the
+`KALSHI_PROD_QUOTES_ARMED=1` environment variable (nothing in this codebase arms it by default);
+constructing a client for any unrecognised env or without the required arm flag raises
+ProductionNotEnabled. Credentials come from the environment / a caller-named env file; they
+are never logged.
 """
 
 from __future__ import annotations
@@ -36,6 +39,10 @@ PUBLIC_DATA_ENV = "public-data"
 # BEFORE any network call, so no order / quote / confirm / cancel can leave this client even by mistake.
 PROD_READONLY_ENV = "production-readonly"
 PROD_READONLY_URL = "https://external-api.kalshi.com/trade-api/v2"
+# SIGNED full production quoting access -- gated by PROD_QUOTES_ARM_ENV == "1" in os.environ.
+PROD_QUOTES_ENV = "production-quotes"
+PROD_QUOTES_URL = "https://external-api.kalshi.com/trade-api/v2"
+PROD_QUOTES_ARM_ENV = "KALSHI_PROD_QUOTES_ARMED"
 
 
 class ProductionNotEnabled(RuntimeError):
@@ -94,6 +101,14 @@ class KalshiClient:
             if not (key_id and private_key_pem):
                 raise ProductionNotEnabled("read-only production client needs credentials (signed GETs)")
             base_url = base_url or PROD_READONLY_URL
+        elif env == PROD_QUOTES_ENV:
+            if not (key_id and private_key_pem):
+                raise ProductionNotEnabled("production quotes client needs credentials")
+            if os.environ.get(PROD_QUOTES_ARM_ENV) != "1":
+                raise ProductionNotEnabled(
+                    f"production quotes refused: set {PROD_QUOTES_ARM_ENV}=1 to arm live quoting"
+                )
+            base_url = base_url or PROD_QUOTES_URL
         elif env != "demo":
             raise ProductionNotEnabled(
                 f"KALSHI env {env!r} refused: this executor is DEMO-only until the owner "
