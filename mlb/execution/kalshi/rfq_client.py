@@ -30,7 +30,7 @@ import random
 import time
 
 from mlb.execution.kalshi.client import (
-    KalshiAPIError, KalshiClient, PROD_READONLY_ENV, ProductionNotEnabled, sign,
+    KalshiAPIError, KalshiClient, PROD_QUOTES_ENV, PROD_READONLY_ENV, ProductionNotEnabled, sign,
 )
 
 log = logging.getLogger("kalshi_exec.rfq")
@@ -38,7 +38,8 @@ log = logging.getLogger("kalshi_exec.rfq")
 WS_PATH = "/trade-api/ws/v2"
 WS_URLS = {"demo": "wss://external-api-ws.demo.kalshi.co" + WS_PATH,
            # the stream only ever SUBSCRIBES (receive-only); quoting goes through REST, which the read-only client lacks
-           PROD_READONLY_ENV: "wss://external-api-ws.kalshi.com" + WS_PATH}
+           PROD_READONLY_ENV: "wss://external-api-ws.kalshi.com" + WS_PATH,
+           PROD_QUOTES_ENV: "wss://external-api-ws.kalshi.com" + WS_PATH}
 CONFIRM_TIMEOUT_S = 2.0          # must beat the 3 s HVM / combo confirm window
 MAX_QUOTE_PRICE = 0.99
 
@@ -94,20 +95,8 @@ class RFQReadOnlyClient(_RFQReads, KalshiClient):
         super().__init__(PROD_READONLY_ENV, key_id, private_key_pem, **kw)
 
 
-class RFQClient(_RFQReads, KalshiClient):
-    """Signed REST methods for /communications/*. Demo only (inherited guard + an explicit one here)."""
-
-    def __init__(self, env: str, key_id: str | None, private_key_pem: bytes | None, **kw):
-        if env != "demo":
-            raise ProductionNotEnabled(
-                f"RFQ client env {env!r} refused: RFQ quoting is DEMO-only until the owner explicitly "
-                "enables production.")
-        super().__init__(env, key_id, private_key_pem, **kw)
-
-    # ---- queries ----
-    def get_quotes(self, status: str = "open") -> list[dict]:
-        data = self.request("GET", "/communications/quotes", params={"status": status})
-        return data.get("quotes", []) or []
+class _RFQQuoting:
+    """Quoting methods shared by the demo RFQ client and the armed production RFQ quote client."""
 
     # ---- quoting ----
     def create_quote(self, rfq_id: str, yes_bid_fp: str, no_bid_fp: str, rest_remainder: bool = False,
@@ -129,6 +118,33 @@ class RFQClient(_RFQReads, KalshiClient):
 
     def delete_quote(self, quote_id: str) -> dict:
         return self.request("DELETE", f"/communications/quotes/{quote_id}")
+
+
+class RFQClient(_RFQReads, _RFQQuoting, KalshiClient):
+    """Signed REST methods for /communications/*. Demo only (inherited guard + an explicit one here)."""
+
+    def __init__(self, env: str, key_id: str | None, private_key_pem: bytes | None, **kw):
+        if env != "demo":
+            raise ProductionNotEnabled(
+                f"RFQ client env {env!r} refused: RFQ quoting is DEMO-only until the owner explicitly "
+                "enables production.")
+        super().__init__(env, key_id, private_key_pem, **kw)
+
+    # ---- queries ----
+    def get_quotes(self, status: str = "open") -> list[dict]:
+        data = self.request("GET", "/communications/quotes", params={"status": status})
+        return data.get("quotes", []) or []
+
+
+class RFQProdQuoteClient(_RFQReads, _RFQQuoting, KalshiClient):
+    """Signed production RFQ quoting client. Arm-flag enforcement lives in KalshiClient."""
+
+    def __init__(self, key_id: str | None, private_key_pem: bytes | None, **kw):
+        super().__init__(PROD_QUOTES_ENV, key_id, private_key_pem, **kw)
+
+    def get_quotes(self, status: str = "open") -> list[dict]:
+        data = self.request("GET", "/communications/quotes", params={"status": status})
+        return data.get("quotes", []) or []
 
 
 # --------------------------------------------------------------------------------------------- WebSocket
@@ -159,7 +175,9 @@ class KalshiRFQStream:
     def __init__(self, env: str, key_id: str, private_key, on_event, *, connect=None, sleep=asyncio.sleep,
                  ping_interval: float = 10.0, max_attempts: int | None = None):
         if env not in WS_URLS:
-            raise ProductionNotEnabled(f"RFQ stream env {env!r} refused: demo / production-readonly only.")
+            raise ProductionNotEnabled(
+                f"RFQ stream env {env!r} refused: demo / production-readonly / production-quotes only."
+            )
         self.url, self.key_id, self._key, self.on_event = WS_URLS[env], key_id, private_key, on_event
         self._connect, self._sleep = connect, sleep
         self.ping_interval, self.max_attempts = ping_interval, max_attempts
@@ -225,5 +243,5 @@ class KalshiRFQStream:
             await self._sleep(backoff_delay(attempt))
 
 
-__all__ = ["RFQClient", "RFQReadOnlyClient", "KalshiRFQStream", "KalshiAPIError", "QuoteInvariantError", "validate_quote_prices",
-           "ws_headers", "backoff_delay", "WS_URLS", "CONFIRM_TIMEOUT_S"]
+__all__ = ["RFQClient", "RFQProdQuoteClient", "RFQReadOnlyClient", "KalshiRFQStream", "KalshiAPIError",
+           "QuoteInvariantError", "validate_quote_prices", "ws_headers", "backoff_delay", "WS_URLS", "CONFIRM_TIMEOUT_S"]
