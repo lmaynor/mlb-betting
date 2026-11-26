@@ -318,7 +318,9 @@ async def _run_live_async(args) -> int:
     flag_source = GcsFlagSource()
 
     leagues = split_sports(args.espn_leagues) or ("nfl",)
-    poller = EspnGameStatePoller(leagues=leagues, poll_interval_sec=cfg.poll_interval_sec)
+    poller = EspnGameStatePoller(
+        base_url=args.espn_base_url, leagues=leagues, poll_interval_sec=cfg.poll_interval_sec
+    )
     poller.poll_once()
     poller.start()
 
@@ -470,6 +472,10 @@ def build_parser() -> argparse.ArgumentParser:
     live.add_argument("--decision-log", default="data/kalshi_rfq/fill_test_decisions.jsonl")
     live.add_argument("--decision-log-prefix", default=None)
     live.add_argument("--espn-leagues", default="nfl,nba,nhl")
+    # Default is the canonical host; site.api.espn.com is Akamai-blocked from some
+    # egress IPs (verified Nov 26, 2026 from the dev VM) -- site.web.api.espn.com
+    # serves identical payloads there. Pick per placement at enablement time.
+    live.add_argument("--espn-base-url", default="https://site.api.espn.com")
     live.add_argument("--game-sports", default="nfl,nba,nhl")
     live.add_argument("--prop-sports", default="nfl,nba,nhl")
     live.add_argument("--poll-sec", type=float, default=5.0)
