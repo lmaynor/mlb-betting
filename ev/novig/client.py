@@ -1,9 +1,13 @@
 """
-ev.novig.client -- Novig REST client (public catalog + signed trading), PAPER ONLY.
+ev.novig.client -- Novig REST client (public catalog + signed trading).
 
   * Public read-only catalog (/v3/public/*) needs no key and is served from production (read-only market data).
-  * Trading is signed (NOVIG-V3) and only the paper sandbox (https://api.paper.novig.com, $10,000 play money) is
-    allowed: production is refused (NovigProductionNotEnabled) until the owner explicitly enables it.
+  * Paper sandbox (https://api.paper.novig.com, $10,000 play money) allows signed trading in paper mode.
+  * Production read-only (`production-readonly`, https://api.novig.com) requires credentials (key_id +
+    private_key_pem) and allows signed GET requests only; every non-GET request is refused BEFORE any network
+    call by raising NovigProductionNotEnabled.
+  * Production (`production`, https://api.novig.com) requires credentials AND `NOVIG_PROD_ARMED=1` in
+    os.environ; otherwise construction raises NovigProductionNotEnabled. Nothing arms it by default.
   * IMPORTANT (docs): "A replayed place always places again" -- there is NO idempotency. A POST is never retried
     blindly; after an ambiguous submit the caller must reconcile (list orders by clientId) before sending again.
 Prices are STRINGS on a 3-band grid; qty is whole contracts; a winning contract pays 1 cent.
@@ -13,6 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 import uuid
 from decimal import ROUND_DOWN, ROUND_UP, Decimal
@@ -26,8 +31,12 @@ log = logging.getLogger("ev.novig")
 
 PAPER_URL = "https://api.paper.novig.com"
 PUBLIC_DATA_URL = "https://api.novig.com"          # read-only /v3/public/* market data
+PROD_URL = "https://api.novig.com"                 # production REST API (same host as PUBLIC_DATA_URL)
 PUBLIC_ENV = "public-data"
 PAPER_ENV = "paper"
+PROD_READONLY_ENV = "production-readonly"
+PROD_ENV = "production"
+PROD_ARM_ENV = "NOVIG_PROD_ARMED"
 CENT = Decimal("0.01")                              # dollars paid by one winning contract
 
 
@@ -102,6 +111,18 @@ class NovigClient:
             self.base = PUBLIC_DATA_URL
         elif env == PAPER_ENV:
             self.base = PAPER_URL
+        elif env == PROD_READONLY_ENV:
+            if not (key_id and private_key_pem):
+                raise NovigProductionNotEnabled("production-readonly client requires key_id and private_key_pem")
+            self.base = PROD_URL
+        elif env == PROD_ENV:
+            if not (key_id and private_key_pem):
+                raise NovigProductionNotEnabled("production client requires key_id and private_key_pem")
+            if os.environ.get(PROD_ARM_ENV) != "1":
+                raise NovigProductionNotEnabled(
+                    f"production refused: set {PROD_ARM_ENV}=1 to arm live production trading"
+                )
+            self.base = PROD_URL
         else:
             raise NovigProductionNotEnabled(
                 f"Novig env {env!r} refused: paper sandbox only until the owner explicitly enables production.")
@@ -116,6 +137,10 @@ class NovigClient:
         method = method.upper()
         if self.env == PUBLIC_ENV and (signed or method != "GET" or not path.startswith("/v3/public/")):
             raise NovigProductionNotEnabled("the public-data client may only GET /v3/public/* (read-only)")
+        if self.env == PROD_READONLY_ENV and method != "GET":
+            raise NovigProductionNotEnabled(
+                f"{method} {path} refused: the production-readonly client is GET-only; ordering is disabled"
+            )
         raw_query = urlencode(sorted((params or {}).items()))
         raw_body = json.dumps(body, separators=(",", ":")).encode() if body is not None else b""
         idempotent = method == "GET"
