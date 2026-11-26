@@ -984,13 +984,19 @@ def _extract_own_injuries(injuries: pd.DataFrame, target_max_sw: tuple[int, int]
     inj = inj.drop_duplicates(pcol, keep="last")
     st_map: dict[str, str] = {}
     wt_map: dict[str, float] = {}
-    for pid, st in zip(inj[pcol].astype(str), inj[scol].astype(str)):
-        if not isinstance(st, str):
-            # Missing report_status (NaN) survives astype(str) as a float
-            # under the pandas string dtype; it carries no injury info.
-            continue
-        clean = st.strip()
-        if not clean or clean.lower() == "nan":
+    for pid, raw_st in zip(inj[pcol].astype(str), inj[scol]):
+        # Detect a missing report_status on the RAW value, before any
+        # string conversion: under pandas 2.x object dtype, astype(str)
+        # turns None into the literal string 'None' (which would leak in
+        # as status 'NONE'), while under the pandas 3.x string dtype a
+        # missing value survives astype(str) as float NaN. Both carry no
+        # injury info and are skipped here.
+        if not isinstance(raw_st, str):
+            if pd.isna(raw_st):
+                continue
+            raw_st = str(raw_st)
+        clean = raw_st.strip()
+        if not clean or clean.lower() in ("nan", "none"):
             continue
         st_map[pid] = clean.upper()
         wt_map[pid] = float(_OUT_WEIGHT.get(clean.lower(), 0.0))
