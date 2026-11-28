@@ -25,6 +25,9 @@ Requires `pip install websockets` for the stream. Spec and design notes: docs/an
 
 import argparse
 import asyncio
+from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
+from decimal import Decimal, InvalidOperation
 import hashlib
 import json
 import logging
@@ -32,6 +35,7 @@ import os
 import signal
 import sys
 import time
+import zlib
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
@@ -205,6 +209,201 @@ def make_game_client(sports: str):
     return ParlayApiClient(), sports
 
 
+INTAKE_SHARDS = 8
+INTAKE_QUEUE_MAXSIZE = 50_000
+PREVIEW_ID_CAP = 250_000
+EXECUTOR_WORKERS = 24
+QUEUE_FULL_WARN_INTERVAL_SEC = 30.0
+
+_PREVIEW_10_STRS = frozenset(("10.0000", "10.00", "10.0", "10"))
+_TEN_DOLLARS = Decimal("10.00")
+
+
+def is_preview_10_msg(msg: dict) -> bool:
+    """True iff raw `target_cost_dollars` equals Decimal('10.00') (mirrors RFQTape.record_rfq)."""
+    if not isinstance(msg, dict):
+        return False
+    raw = msg.get("target_cost_dollars")
+    if raw is None:
+        return False
+    if isinstance(raw, str):
+        if raw in _PREVIEW_10_STRS:
+            return True
+    elif not isinstance(raw, bool) and raw in (10, 10.0):
+        return True
+    try:
+        return Decimal(str(raw)) == _TEN_DOLLARS
+    except (InvalidOperation, ValueError):
+        return False
+
+
+def extract_rfq_id(typ: str, msg: dict) -> str:
+    """Extract the RFQ identifier for sharding and preview delete matching."""
+    if not isinstance(msg, dict):
+        return ""
+    if typ in ("rfq_created", "rfq_deleted"):
+        return str(msg.get("id") or msg.get("rfq_id") or "")
+    return str(msg.get("rfq_id") or msg.get("id") or msg.get("quote_id") or "")
+
+
+def parse_created_ts(val) -> float | None:
+    """Parse Kalshi created_ts (epoch float/int/str or ISO-8601 string) to UTC epoch seconds."""
+    if val is None or isinstance(val, bool):
+        return None
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        pass
+    try:
+        dt = datetime.fromisoformat(str(val).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def format_heartbeat(connects: int, book_legs: int, stats: dict) -> str:
+    """Format the watchdog heartbeat log line with shard depths, drop counters, and intake lag."""
+    lag = stats.get("intake_lag_sec")
+    lag_s = f"{lag:.3f}s" if lag is not None else "none"
+    return (
+        f"heartbeat: connects={connects} rfqs_seen={stats['rfqs_seen']} book_legs={book_legs} "
+        f"q_max={stats['q_max']} q_depths={stats['q_depths']} "
+        f"enqueued={stats['enqueued']} processed={stats['processed']} "
+        f"dropped_preview_creates={stats['dropped_preview_creates']} "
+        f"dropped_preview_deletes={stats['dropped_preview_deletes']} "
+        f"dropped_queue_full={stats['dropped_queue_full']} "
+        f"intake_lag={lag_s}"
+    )
+
+
+class IntakePipeline:
+    """Decoupled O(1) producer -> N sharded bounded queues -> threaded consumer workers.
+
+    Drops exact-$10 preview creates (and their matching deletes) at intake so the classification
+    and orderbook lookup workers never see them.
+    """
+
+    def __init__(self, handler, *, n_shards: int = INTAKE_SHARDS, maxsize: int = INTAKE_QUEUE_MAXSIZE,
+                 preview_cap: int = PREVIEW_ID_CAP, warn_interval_sec: float = QUEUE_FULL_WARN_INTERVAL_SEC,
+                 clock=time.monotonic, wall_clock=time.time):
+        self.handler = handler
+        self.n_shards = max(1, int(n_shards))
+        self.maxsize = int(maxsize)
+        self._preview_cap = max(1, int(preview_cap))
+        self._warn_interval_sec = float(warn_interval_sec)
+        self._clock = clock
+        self._wall_clock = wall_clock
+        self._queues = [asyncio.Queue(maxsize=self.maxsize) for _ in range(self.n_shards)]
+        self._preview_ids: OrderedDict[str, None] = OrderedDict()
+        self._seen_creates = 0
+        self._enqueued = 0
+        self._processed = 0
+        self._dropped_preview_creates = 0
+        self._dropped_preview_deletes = 0
+        self._dropped_queue_full = 0
+        self._last_created_ts: float | None = None
+        self._last_full_warn: float = -float("inf")
+        self._workers: list[asyncio.Task] = []
+
+    def shard_for(self, rfq_id: str) -> int:
+        return zlib.crc32(rfq_id.encode("utf-8", "replace")) % self.n_shards
+
+    def enqueue(self, typ: str, msg: dict, ts: float) -> bool:
+        """O(1) producer path: preview drop check, then non-blocking put_nowait into the RFQ's shard."""
+        rfq_id = extract_rfq_id(typ, msg)
+        if typ == "rfq_created":
+            self._seen_creates += 1
+            if is_preview_10_msg(msg):
+                self._dropped_preview_creates += 1
+                if rfq_id and rfq_id not in self._preview_ids:
+                    if len(self._preview_ids) >= self._preview_cap:
+                        self._preview_ids.popitem(last=False)
+                    self._preview_ids[rfq_id] = None
+                return False
+        elif typ == "rfq_deleted":
+            if rfq_id and rfq_id in self._preview_ids:
+                self._preview_ids.pop(rfq_id, None)
+                self._dropped_preview_deletes += 1
+                return False
+
+        shard = self.shard_for(rfq_id)
+        q = self._queues[shard]
+        try:
+            q.put_nowait((typ, msg, ts))
+        except asyncio.QueueFull:
+            self._dropped_queue_full += 1
+            now_m = self._clock()
+            if now_m - self._last_full_warn >= self._warn_interval_sec:
+                self._last_full_warn = now_m
+                log.warning("intake queue full (shard=%d maxsize=%d dropped_queue_full=%d): dropping %s",
+                            shard, q.maxsize, self._dropped_queue_full, typ)
+            return False
+        self._enqueued += 1
+        return True
+
+    async def on_event(self, typ: str, msg: dict, ts: float) -> None:
+        self.enqueue(typ, msg, ts)
+
+    def start(self) -> list[asyncio.Task]:
+        if not self._workers:
+            self._workers = [
+                asyncio.create_task(self._worker(i), name=f"rfq-intake-{i}")
+                for i in range(self.n_shards)
+            ]
+        return self._workers
+
+    async def _worker(self, shard_idx: int) -> None:
+        q = self._queues[shard_idx]
+        while True:
+            typ, msg, ts = await q.get()
+            try:
+                await asyncio.to_thread(self.handler.on_event, typ, msg, ts)
+            except Exception as e:                             # noqa: BLE001 -- bad event must never kill shard worker
+                log.warning("intake worker %d error on %s: %r", shard_idx, typ, e)
+            finally:
+                self._processed += 1
+                if typ == "rfq_created" and isinstance(msg, dict):
+                    cts = parse_created_ts(msg.get("created_ts"))
+                    if cts is not None:
+                        self._last_created_ts = cts
+                q.task_done()
+
+    async def drain(self) -> None:
+        await asyncio.gather(*(q.join() for q in self._queues))
+
+    async def stop(self) -> None:
+        if not self._workers:
+            return
+        for w in self._workers:
+            w.cancel()
+        await asyncio.gather(*self._workers, return_exceptions=True)
+        self._workers.clear()
+
+    def counters(self) -> dict[str, int]:
+        return {
+            "enqueued": self._enqueued,
+            "processed": self._processed,
+            "dropped_preview_creates": self._dropped_preview_creates,
+            "dropped_preview_deletes": self._dropped_preview_deletes,
+            "dropped_queue_full": self._dropped_queue_full,
+        }
+
+    def stats(self, now: float | None = None) -> dict:
+        depths = [q.qsize() for q in self._queues]
+        now_ts = self._wall_clock() if now is None else now
+        lag = (now_ts - self._last_created_ts) if self._last_created_ts is not None else None
+        out = self.counters()
+        out.update({
+            "rfqs_seen": self._seen_creates,
+            "q_depths": depths,
+            "q_max": max(depths) if depths else 0,
+            "intake_lag_sec": lag,
+        })
+        return out
+
+
 async def amain(args) -> int:
     rfq_env, mode = resolve_run(args)
     live = mode == "live"
@@ -249,6 +448,8 @@ async def amain(args) -> int:
                                                 quote_single_leg=args.quote_single_leg, max_unpriced_legs=max_unpriced))
     log.info("pricer: max_unpriced_legs=%d game_sports=%s", max_unpriced, list(game_sports))
     loop = asyncio.get_running_loop()
+    executor = ThreadPoolExecutor(max_workers=EXECUTOR_WORKERS, thread_name_prefix="rfq-worker")
+    loop.set_default_executor(executor)
     tape_dir = args.tape_dir or ("data/kalshi_rfq" if rfq_env == "demo" else "data/kalshi_rfq/production")
     tape_prefix = args.tape_gcs_prefix or os.environ.get("KALSHI_RFQ_TAPE_PREFIX") or None
     tape = RFQTape(tape_dir, storage_prefix=tape_prefix)
@@ -282,8 +483,11 @@ async def amain(args) -> int:
                     log.warning("tape finalize for the previous day failed: %r", e)
             asyncio.ensure_future(_finalize_prev_day())
     if mode == "record":
-        handler = RFQRecorder(pricer, tape, client,
-                              schedule=lambda delay, fn: loop.call_later(delay, lambda: loop.run_in_executor(None, fn)))
+        handler = RFQRecorder(
+            pricer, tape, client,
+            schedule=lambda delay, fn: loop.call_soon_threadsafe(
+                loop.call_later, delay, lambda: loop.run_in_executor(None, fn)),
+        )
         maker = None
     else:
         ledger = RFQLedger(args.db)
@@ -293,19 +497,15 @@ async def amain(args) -> int:
         if gate.killed:
             log.error("RFQ kill switch is SET (%s); no quotes until reset", gate.kill_reason)
 
-    seen = {"n": 0}
-
-    async def on_event(typ, msg, ts):                      # REST calls block: keep them off the event loop
-        seen["n"] += typ == "rfq_created"
-        await asyncio.to_thread(handler.on_event, typ, msg, ts)
-
-    stream = KalshiRFQStream(rfq_env, key_id, load_private_key(pem), on_event)
+    intake = IntakePipeline(handler)
+    tape.set_intake_counters_fn(intake.counters)
+    stream = KalshiRFQStream(rfq_env, key_id, load_private_key(pem), intake.on_event)
 
     async def poll():
         while True:
             try:
                 for rfq in await asyncio.to_thread(client.get_rfqs, "open"):
-                    await on_event("rfq_created", rfq, time.time())
+                    await intake.on_event("rfq_created", rfq, time.time())
             except Exception as e:                         # noqa: BLE001 -- the stream is the primary feed
                 log.warning("rfq poll failed: %r", e)
             await asyncio.sleep(args.poll_sec)
@@ -350,7 +550,7 @@ async def amain(args) -> int:
         if stream.connects == 0:
             raise RuntimeError("RFQ stream never connected in 120 s: egress blocked or credentials rejected")
         while True:
-            log.info("heartbeat: connects=%d rfqs_seen=%d book_legs=%d", stream.connects, seen["n"], len(book))
+            log.info("%s", format_heartbeat(stream.connects, len(book), intake.stats()))
             await asyncio.sleep(300)
 
     async def deadline():
@@ -361,6 +561,7 @@ async def amain(args) -> int:
         else:
             await asyncio.Event().wait()
 
+    intake.start()
     main_task = asyncio.ensure_future(asyncio.gather(stream.run(), poll(), reload(), reload_banked(), reload_games(), flusher(),
                                                   watchdog()))
     stop_task = asyncio.ensure_future(deadline())
@@ -378,6 +579,7 @@ async def amain(args) -> int:
         for t in (main_task, stop_task):
             t.cancel()
         await asyncio.gather(main_task, stop_task, return_exceptions=True)
+        await intake.stop()
         await asyncio.to_thread(tape.flush)
         try:
             tape.write_day_summary()                       # section 2i sidecar for the final day (best-effort)

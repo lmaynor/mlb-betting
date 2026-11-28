@@ -558,13 +558,22 @@ def _w2_day_of(legs) -> str | None:
     return min(days) if days else None
 
 
+_INTAKE_COUNTER_KEYS = (
+    "enqueued",
+    "processed",
+    "dropped_preview_creates",
+    "dropped_preview_deletes",
+    "dropped_queue_full",
+)
+
+
 class RFQTape:
     """Append-only JSONL tape (data/kalshi_rfq/rfq_tape_{day}.jsonl): every RFQ seen, our would-be quote, and -- once
     the follow-up runs -- what actually traded on that market afterwards. Costs $0 at risk and measures our
     theoretical market share and mark-out before any live quote exists."""
 
     def __init__(self, directory: str = "data/kalshi_rfq", clock=time.time, *, storage_prefix: str | None = None,
-                 writer=None, flush_sec: float = 30.0):
+                 writer=None, flush_sec: float = 30.0, intake_counters_fn=None):
         """Local JSONL by default. With `storage_prefix` (e.g. 'Kalshi/rfq_tape/production') records are buffered and
         written as immutable chunk objects {prefix}/{day}/{HHMMSS}_{n}.jsonl through `writer(bytes, key)` (default
         mlb_core.storage.write_bytes): GCS objects are not appendable and a Cloud Run Job's disk dies with it, so the
@@ -574,7 +583,10 @@ class RFQTape:
         self._buf: list[str] = []
         self._seq = 0
         self._last_flush = clock()
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
+        self._flush_lock = threading.Lock()
+        self._intake_counters_fn = intake_counters_fn
+        self._last_intake_counts = {k: 0 for k in _INTAKE_COUNTER_KEYS}
         # Tape schema v2 run context (set by the daemon at startup; stamped on the kind:"run" header).
         self._git_sha: str | None = None
         self._config_hash: str | None = None
@@ -589,6 +601,11 @@ class RFQTape:
         # Ratified RUL-20261125 ingest filter (Window-1 shadow mode).
         self._filter_state = RFQFilterState()
         self._filter_cfg = FilterConfig()
+
+    def set_intake_counters_fn(self, fn) -> None:
+        """Register a callable returning cumulative intake counters for flush-time delta emission."""
+        with self._lock:
+            self._intake_counters_fn = fn
 
     def path(self) -> str:
         day = datetime.fromtimestamp(self._clock(), timezone.utc).date().isoformat()
@@ -679,23 +696,24 @@ class RFQTape:
 
     def day_summary(self, day: str | None = None) -> dict:
         """The accumulated section 2i counters for `day` (default: the current accumulated day)."""
-        s = self._sum
-        evaluated = s["evaluated"]
-        top = sorted(s["creator_counts"].items(), key=lambda kv: (-kv[1], kv[0]))[:20]
-        return {"day": day or self._sum_day, "tape_schema": 2,
-                "records_by_kind": dict(s["records_by_kind"]), "fires": s["fires"],
-                "evaluated": evaluated, "in_denominator": s["in_denominator"],
-                "by_family": dict(s["by_family"]),
-                "by_excluded_series_class": dict(s["by_excluded_series_class"]),
-                "preview_10": s["preview_10"],
-                "preview_10_share": (s["preview_10"] / evaluated) if evaluated else 0.0,
-                "flagged_creators": dict(s["flagged_creators"]),
-                "top_creators": [{"creator_id": c, "count": n} for c, n in top],
-                "followup_records": s["followup_records"],
-                "followup_attach_rate": (s["followup_records"] / evaluated) if evaluated else 0.0,
-                "by_primary_class": dict(s["by_primary_class"]),
-                "by_disposition": dict(s["by_disposition"]),
-                "fires_deduped": s["fires_deduped"]}
+        with self._lock:
+            s = self._sum
+            evaluated = s["evaluated"]
+            top = sorted(s["creator_counts"].items(), key=lambda kv: (-kv[1], kv[0]))[:20]
+            return {"day": day or self._sum_day, "tape_schema": 2,
+                    "records_by_kind": dict(s["records_by_kind"]), "fires": s["fires"],
+                    "evaluated": evaluated, "in_denominator": s["in_denominator"],
+                    "by_family": dict(s["by_family"]),
+                    "by_excluded_series_class": dict(s["by_excluded_series_class"]),
+                    "preview_10": s["preview_10"],
+                    "preview_10_share": (s["preview_10"] / evaluated) if evaluated else 0.0,
+                    "flagged_creators": dict(s["flagged_creators"]),
+                    "top_creators": [{"creator_id": c, "count": n} for c, n in top],
+                    "followup_records": s["followup_records"],
+                    "followup_attach_rate": (s["followup_records"] / evaluated) if evaluated else 0.0,
+                    "by_primary_class": dict(s["by_primary_class"]),
+                    "by_disposition": dict(s["by_disposition"]),
+                    "fires_deduped": s["fires_deduped"]}
 
     def write_day_summary(self, day: str | None = None) -> dict | None:
         """Write the day summary sidecar: {prefix}/{day}/day_summary.json in storage mode (through the
@@ -721,14 +739,14 @@ class RFQTape:
         return summary
 
     def append(self, record: dict) -> None:
-        self._account(record)
         line = json.dumps(record, default=str, sort_keys=True, ensure_ascii=True) + "\n"
-        if self.prefix is None:
-            os.makedirs(self.dir, exist_ok=True)
-            with open(self.path(), "a", encoding="ascii") as fh:
-                fh.write(line)
-            return
         with self._lock:
+            self._account(record)
+            if self.prefix is None:
+                os.makedirs(self.dir, exist_ok=True)
+                with open(self.path(), "a", encoding="ascii") as fh:
+                    fh.write(line)
+                return
             self._buf.append(line)
             due = self._clock() - self._last_flush >= self.flush_sec
         if due:
@@ -738,27 +756,43 @@ class RFQTape:
         """Write the buffered records as one chunk object. -> records written (0 when empty / local mode / failed)."""
         if self.prefix is None:
             return 0
-        with self._lock:
-            if not self._buf:
-                self._last_flush = self._clock()
-                return 0
-            lines, self._buf = self._buf, []
-            self._seq += 1
-            seq = self._seq
-        ts = datetime.fromtimestamp(self._clock(), timezone.utc)
-        key = f"{self.prefix}/{ts.date().isoformat()}/{ts.strftime('%H%M%S')}_{seq:05d}.jsonl"
-        try:
-            writer = self._writer
-            if writer is None:
-                from mlb_core.storage import write_bytes as writer
-            writer("".join(lines).encode("ascii"), key)
-        except Exception as e:                                          # noqa: BLE001 -- keep the records, retry next flush
-            log.warning("tape flush to %s failed (%d records kept): %r", key, len(lines), e)
+        with self._flush_lock:
             with self._lock:
-                self._buf = lines + self._buf
-            return 0
-        self._last_flush = self._clock()
-        return len(lines)
+                counter_rec = None
+                counter_line = None
+                cur_counts = None
+                if self._intake_counters_fn is not None:
+                    raw_counts = self._intake_counters_fn() or {}
+                    cur_counts = {k: int(raw_counts.get(k, 0)) for k in _INTAKE_COUNTER_KEYS}
+                    delta = {k: cur_counts[k] - self._last_intake_counts[k] for k in _INTAKE_COUNTER_KEYS}
+                    if any(v != 0 for v in delta.values()):
+                        counter_rec = {"kind": "intake_counters", "tape_schema": 2, "ts": self._clock(), **delta}
+                        counter_line = json.dumps(counter_rec, default=str, sort_keys=True, ensure_ascii=True) + "\n"
+                if not self._buf and counter_line is None:
+                    self._last_flush = self._clock()
+                    return 0
+                lines, self._buf = self._buf, []
+                self._seq += 1
+                seq = self._seq
+            payload_lines = lines + ([counter_line] if counter_line is not None else [])
+            ts = datetime.fromtimestamp(self._clock(), timezone.utc)
+            key = f"{self.prefix}/{ts.date().isoformat()}/{ts.strftime('%H%M%S')}_{seq:05d}.jsonl"
+            try:
+                writer = self._writer
+                if writer is None:
+                    from mlb_core.storage import write_bytes as writer
+                writer("".join(payload_lines).encode("ascii"), key)
+            except Exception as e:                                      # noqa: BLE001 -- keep the records, retry next flush
+                log.warning("tape flush to %s failed (%d records kept): %r", key, len(lines), e)
+                with self._lock:
+                    self._buf = lines + self._buf
+                return 0
+            with self._lock:
+                if counter_rec is not None and cur_counts is not None:
+                    self._last_intake_counts = cur_counts
+                    self._account(counter_rec)
+                self._last_flush = self._clock()
+            return len(payload_lines)
 
     def record_rfq(self, rfq_msg: dict, decision, *, q_by_ticker=None) -> None:
         """One kind:"rfq" record: the v1 payload byte-identical in name and value, plus the tape schema
@@ -783,7 +817,8 @@ class RFQTape:
             combo_id = hashlib.sha256(market_ticker.encode("ascii", "replace")).hexdigest()
         creator_id = rfq_msg.get("creator_id")
         if creator_id:
-            creator_count_10m, creator_flagged, creator_flag_since_ts = self._creator_state(str(creator_id), ts)
+            with self._lock:
+                creator_count_10m, creator_flagged, creator_flag_since_ts = self._creator_state(str(creator_id), ts)
         else:
             creator_count_10m, creator_flagged, creator_flag_since_ts = None, False, None
         # Money (2e): the NO ask the ROI was computed on, and the canonical taker fee on it.
@@ -849,7 +884,8 @@ class RFQTape:
             "creator_flag_since_ts": creator_flag_since_ts,
         }
         try:
-            record.update(classify_rfq_record(record, self._filter_state, self._filter_cfg))
+            with self._lock:
+                record.update(classify_rfq_record(record, self._filter_state, self._filter_cfg))
         except Exception as e:                                      # noqa: BLE001 -- classifier must never break recording
             log.warning("RFQ filter classification failed for %s: %r", record.get("rfq_id"), e)
             record.setdefault("primary_class", "UNCLASSIFIED")

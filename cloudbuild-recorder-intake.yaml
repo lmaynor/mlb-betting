@@ -1,0 +1,27 @@
+# One-off build for the recorder intake-fix image (2026-11-27).
+# Builds the new tag with layer cache from :latest, pushes it to GCR for
+# provenance, and uploads a docker-save tarball to the mlb-data bucket's
+# deploy-artifacts/ prefix, which is how kalshi-recorder-1 loads images
+# (its service account has no registry rights).
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    env:
+      - 'DOCKER_BUILDKIT=0'
+    args:
+      - '-c'
+      - |
+        docker pull gcr.io/concrete-crow-445205-m4/mlb-betting:latest || echo "no previous image to cache from"
+        docker build --cache-from gcr.io/concrete-crow-445205-m4/mlb-betting:latest -t gcr.io/concrete-crow-445205-m4/mlb-betting:rfq-recorder-v3-20261127intake .
+        docker save gcr.io/concrete-crow-445205-m4/mlb-betting:rfq-recorder-v3-20261127intake | gzip > /workspace/recorder-image-20261127intake.tar.gz
+        ls -la /workspace/recorder-image-20261127intake.tar.gz
+  - name: 'gcr.io/cloud-builders/gsutil'
+    args:
+      - 'cp'
+      - '/workspace/recorder-image-20261127intake.tar.gz'
+      - 'gs://concrete-crow-445205-m4-mlb-data/deploy-artifacts/recorder-image-20261127intake.tar.gz'
+images:
+  - 'gcr.io/concrete-crow-445205-m4/mlb-betting:rfq-recorder-v3-20261127intake'
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 1800s
